@@ -1,0 +1,13 @@
+go 1.25.0
+
+use (
+	./admin-cli
+	./auth-server
+	./dn-launcher
+	./game-manager
+	./gateway
+	./legacy-api
+	./master-server
+	./mmogbrain
+	./shared
+)

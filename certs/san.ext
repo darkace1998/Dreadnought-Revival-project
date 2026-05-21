@@ -1,0 +1,2 @@
+[SAN]
+subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:10.0.0.73,IP:127.0.0.1

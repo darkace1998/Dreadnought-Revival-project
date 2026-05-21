@@ -1,0 +1,25 @@
+# Runtime data
+run/
+
+# Documentation with sensitive data
+SERVER_RUNNING.md
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+*.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+bin/

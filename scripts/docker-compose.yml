@@ -1,0 +1,150 @@
+version: "3.8"
+
+services:
+  auth-server:
+    build:
+      context: ./auth-server
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/auth-server
+    environment:
+      - ADDR=:8081
+      - DB_PATH=/data/auth.db
+      - JWT_SECRET=${JWT_SECRET:-changeme-dreadnought-jwt-secret}
+      - ADMIN_KEY=${ADMIN_KEY:-changeme-admin-key}
+    volumes:
+      - ./data:/data
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  legacy-api:
+    build:
+      context: ./legacy-api
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/legacy-api
+    environment:
+      - ADDR=:8082
+      - DB_PATH=/data/legacy.db
+      - JWT_SECRET=${JWT_SECRET:-changeme-dreadnought-jwt-secret}
+    volumes:
+      - ./data:/data
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    depends_on:
+      - auth-server
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mmogbrain:
+    build:
+      context: ./mmogbrain
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/mmogbrain
+    environment:
+      - ADDR=:8083
+      - DB_PATH=/data/mmog.db
+      - JWT_SECRET=${JWT_SECRET:-changeme-dreadnought-jwt-secret}
+      - ADMIN_KEY=${ADMIN_KEY:-changeme-admin-key}
+      - GAME_MGR_URL=http://game-manager:8085
+      - PLAYERS_PER_MATCH=${PLAYERS_PER_MATCH:-10}
+      - FIRMAMENT_ADDR=:48843
+      - FIRMAMENT_CERT=/certs/firmament.crt
+      - FIRMAMENT_KEY=/certs/firmament.key
+      - GATEWAY_ADDR=:65443
+      - GATEWAY_CERT=/certs/server.crt
+      - GATEWAY_KEY=/certs/server.key
+    ports:
+      - "8083:8083"
+      - "48843:48843"
+      - "65443:65443"
+    volumes:
+      - ./data:/data
+      - ../certs:/certs:ro
+    restart: unless-stopped
+    depends_on:
+      - game-manager
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  master-server:
+    build:
+      context: ./master-server
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/master-server
+    environment:
+      - ADDR=:8084
+      - DB_PATH=/data/master.db
+    ports:
+      - "8084:8084"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8084/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  game-manager:
+    build:
+      context: ./game-manager
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/game-manager
+    environment:
+      - ADDR=:8085
+      - MASTER_URL=http://master-server:8084
+      - SERVER_IP=${SERVER_IP:-127.0.0.1}
+      - GAME_BINARY=/game/DreadGame-Win64-Shipping.exe
+      - WINE_EXE=${WINE_EXE:-wine}
+    volumes:
+      - /src/Dreadnought/DreadGame/DreadGame/Binaries/Win64:/game:ro
+    ports:
+      - "8085:8085"
+      - "7777-7877:7777-7877/udp"
+    restart: unless-stopped
+    depends_on:
+      - master-server
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8085/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: ../Dockerfile.service
+    image: dn-ps/gateway
+    environment:
+      - HTTP_ADDR=:80
+      - HTTPS_ADDR=:443
+      - TLS_CERT=/certs/server.crt
+      - TLS_KEY=/certs/server.key
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    depends_on:
+      - auth-server
+      - legacy-api
+      - mmogbrain
+      - master-server
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

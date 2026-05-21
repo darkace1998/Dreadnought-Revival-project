@@ -1,0 +1,78 @@
+version: "2"
+linters:
+  enable:
+    
+    - dupl
+    - funlen
+    - goconst
+    - gocyclo
+    - gosec
+    - unconvert
+  disable:
+    - gochecknoglobals
+    - gochecknoinits
+    - lll
+    - cyclop
+  settings:
+    cyclop:
+      max-complexity: 15
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    funlen:
+      lines: 200
+      statements: 100
+    gocyclo:
+      min-complexity: 40
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gosec:
+      excludes:
+        - G103
+    govet:
+      enable:
+        - printf
+        - shift
+        - structtag
+      disable:
+        - composites
+        - unsafeptr
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - gosec
+        path: .*\.go
+        text: Use of unsafe calls should be audited
+      - linters:
+          - govet
+        path: _test\.go
+        text: possible misuse of unsafe.Pointer
+      - linters:
+          - cyclop
+        path: _test\.go
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples/*
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/darkace1998/Golang-Vulkan-api
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples/*
