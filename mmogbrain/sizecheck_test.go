@@ -19,16 +19,17 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":            140,
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           233,
-	"YA_GetTechTree":               19697,
-	"YA_GetPlayerProgression":      635,
+	"YA_GetTechTree":               21139,
+	"YA_GetPlayerProgression":      835,
 	"YA_GetPlayerPurchases":        292,
 	"YA_FleetEligibility":          305,
 	"YA_Tune":                      75,
-	"YA_GetSeasonData":             1092,
+	"YA_GetSeasonData":             1073,
 	"YA_PlayerGet":                 1452,
 	"YA_PlayerFleets":              656,
-	"YA_GetSeasonProgress":         56,
-	"YA_GetPlayersInformation":     1195,
+	"YA_GetSeasonProgress":         146,
+	"YA_GetPlayersInformation":     324,
+	"YA_CheckReturn":               134,
 	"YA_AnalyticsBeginTransaction": 96,
 	"YA_AnalyticsEvent":            85,
 	"YA_SaveCtAData":               82,
@@ -70,6 +71,7 @@ func TestPayloadSizesVerify(t *testing.T) {
 		"YA_GetPlayersInformation": func() []byte {
 			return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayersInformationPayload(pid, nil))
 		},
+		"YA_CheckReturn": func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogCheckReturnPayload()) },
 		"YA_AnalyticsBeginTransaction": func() []byte {
 			return buildMmogResponseFrame(reqID, 0x0320, buildMmogAnalyticsBeginTransactionPayload("test-txid"))
 		},

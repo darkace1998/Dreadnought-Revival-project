@@ -691,7 +691,7 @@ func TestGatewayBootstrapPinsSharedStarterIdentityListsAndOwnedMetadata(t *testi
 	}
 
 	shipIDs := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids")
-	wantShipIDs := runtimeStarterShipIDsFromShared(t)
+	wantShipIDs := dreadconfig.StarterInventoryShipIDs()
 	if len(shipIDs) != len(wantShipIDs) {
 		t.Fatalf("starter_ship_ids count = %d, want %d", len(shipIDs), len(wantShipIDs))
 	}
@@ -871,8 +871,8 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	if got := len(ownedItems); got != len(starterOwnedInventorySeeds()) {
 		t.Fatalf("owned item count after YA_PlayerGet = %d, want %d", got, len(starterOwnedInventorySeeds()))
 	}
-	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(runtimeStarterShipIDsFromShared(t)) {
-		t.Fatalf("starter_ship_ids count after YA_PlayerGet = %d, want %d", len(starterShips), len(runtimeStarterShipIDsFromShared(t)))
+	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
+		t.Fatalf("starter_ship_ids count after YA_PlayerGet = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
 	}
 	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 		t.Fatalf("starter_loadout_ids count after YA_PlayerGet = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
@@ -920,8 +920,8 @@ func TestGatewayBootstrapHandlersWaitForPlayerDataReady(t *testing.T) {
 			if got := len(gatewayJSONArray(t, payload[gatewayKeyOwnedItems], gatewayKeyOwnedItems)); got != len(starterOwnedInventorySeeds()) {
 				t.Fatalf("owned item count after quick readiness = %d, want %d", got, len(starterOwnedInventorySeeds()))
 			}
-			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(runtimeStarterShipIDsFromShared(t)) {
-				t.Fatalf("starter_ship_ids count after quick readiness = %d, want %d", len(starterShips), len(runtimeStarterShipIDsFromShared(t)))
+			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
+				t.Fatalf("starter_ship_ids count after quick readiness = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
 			}
 			if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 				t.Fatalf("starter_loadout_ids count after quick readiness = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))

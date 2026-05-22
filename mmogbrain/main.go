@@ -564,15 +564,6 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 
-			if suppressMmogBootstrapObserverResponse(requestName) {
-				log.WithFields(logrus.Fields{
-					"remote":  remote,
-					"request": hex.EncodeToString(frame.requestID[:]),
-					"name":    requestName,
-				}).Info("mmog: suppressed observer-only bootstrap response")
-				continue
-			}
-
 			response := buildMmogRequestResponseFrame(frame.requestID, frame.msgType, requestName, state.playerPID, frame.payload)
 			if err := writeMmogAppResponse(log, conn, remote, frame.requestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
@@ -585,15 +576,6 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		}
 	}
 	return nil
-}
-
-func suppressMmogBootstrapObserverResponse(requestName string) bool {
-	switch requestName {
-	case "YA_GetDailyContractsData", "YA_GetSeasonProgress":
-		return true
-	default:
-		return false
-	}
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *mmogStreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
@@ -811,6 +793,7 @@ type mmogShipSeed struct {
 
 type mmogShipLoadoutSeed struct {
 	ship              mmogShipSeed
+	fleetShipID       int32
 	playerLoadoutID   int32
 	precastLoadoutID  int32
 	nativeLoadoutID   string
@@ -829,6 +812,13 @@ func (loadout mmogShipLoadoutSeed) loadoutID() int32 {
 		return loadout.playerLoadoutID
 	}
 	return loadout.precastLoadoutID
+}
+
+func (loadout mmogShipLoadoutSeed) effectiveFleetShipID() int32 {
+	if loadout.fleetShipID != 0 {
+		return loadout.fleetShipID
+	}
+	return loadout.ship.id
 }
 
 func (loadout mmogShipLoadoutSeed) entryID() string {
@@ -862,6 +852,13 @@ var nativeStarterLoadoutIDsByPrecastID = map[int32]string{
 	33489423: "Default__VH_DreadnoughtMedium_Loadout_BP_C",
 	33489263: "Default__VH_SniperMedium_T1_Loadout_BP_C",
 	33489264: "Default__VH_SupportMedium_T1_Loadout_BP_C",
+}
+
+var fleetStarterShipIDsByPrecastID = map[int32]int32{
+	33489262: 33489198,
+	33489423: 33489239,
+	33489263: 33489199,
+	33489264: 33489200,
 }
 
 func nativeStarterLoadoutID(precastLoadoutID int32) (string, bool) {
@@ -1083,7 +1080,7 @@ func (fleet mmogFleetSeed) flagshipIndex() int32 {
 		return fleet.flagshipLoadoutIndex
 	}
 	for idx, loadout := range fleet.shipLoadouts {
-		if loadout.ship.id == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
+		if loadout.effectiveFleetShipID() == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
 			return int32(idx)
 		}
 	}
@@ -1093,7 +1090,7 @@ func (fleet mmogFleetSeed) flagshipIndex() int32 {
 func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
 	var flagship []mmogShipLoadoutSeed
 	for _, loadout := range fleet.shipLoadouts {
-		if loadout.ship.id == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
+		if loadout.effectiveFleetShipID() == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
 			flagship = []mmogShipLoadoutSeed{loadout}
 			break
 		}
@@ -1108,7 +1105,7 @@ func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
 	fleet.shipLoadouts = flagship
 	fleet.flagshipLoadoutIndex = 0
 	if len(fleet.shipLoadouts) > 0 {
-		fleet.flagshipShipID = fleet.shipLoadouts[0].ship.id
+		fleet.flagshipShipID = fleet.shipLoadouts[0].effectiveFleetShipID()
 		fleet.flagshipLoadoutID = fleet.shipLoadouts[0].loadoutID()
 	}
 	return fleet
@@ -1117,7 +1114,7 @@ func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
 func (fleet mmogFleetSeed) shipIDs() []int32 {
 	ids := make([]int32, 0, len(fleet.shipLoadouts))
 	for _, loadout := range fleet.shipLoadouts {
-		ids = append(ids, loadout.ship.id)
+		ids = append(ids, loadout.effectiveFleetShipID())
 	}
 	return ids
 }
@@ -1169,9 +1166,10 @@ var lockedT1Ships = []mmogShipSeed{
 }
 
 func allT1Ships() []mmogShipSeed {
-	ships := make([]mmogShipSeed, 0, len(starterShips)+len(lockedT1Ships))
+	installerStarterShips := starterBootstrapShips()
+	ships := make([]mmogShipSeed, 0, len(installerStarterShips)+len(starterShips)+len(lockedT1Ships))
 	seen := make(map[int32]struct{}, cap(ships))
-	for _, group := range [][]mmogShipSeed{starterShips, lockedT1Ships} {
+	for _, group := range [][]mmogShipSeed{installerStarterShips, starterShips, lockedT1Ships} {
 		for _, ship := range group {
 			if _, ok := seen[ship.id]; ok {
 				continue
@@ -1267,9 +1265,9 @@ func starterShipLoadouts() []mmogShipLoadoutSeed {
 		if !ok {
 			panic("missing shared starter loadout identity")
 		}
-		ship, ok := runtimeStarterShipForInstallerShipID(sharedLoadout.ShipID)
+		ship, ok := starterBootstrapShipByID(sharedLoadout.ShipID)
 		if !ok {
-			panic("missing runtime starter ship")
+			panic("missing starter bootstrap ship")
 		}
 		loadoutMeta, ok := dreadconfig.ItemByID(sharedLoadout.LoadoutID)
 		if !ok {
@@ -1281,6 +1279,7 @@ func starterShipLoadouts() []mmogShipLoadoutSeed {
 		}
 		loadouts = append(loadouts, mmogShipLoadoutSeed{
 			ship:              ship,
+			fleetShipID:       fleetStarterShipIDsByPrecastID[sharedLoadout.LoadoutID],
 			precastLoadoutID:  sharedLoadout.LoadoutID,
 			nativeLoadoutID:   nativeID,
 			loadoutIndex:      0,
@@ -1455,13 +1454,13 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogLeaveMatchmakingPayload(requestName, playerPID)
 	case "YA_QueryRooms":
 		return buildMmogQueryRoomsPayload()
-	case "YA_RoomStart", "YA_CustomRoomStartMatch", "YA_CustomRoomStartMatchCountdown",
+	case "YA_RoomStart", "YA_CustomRoomCreate", "YA_CustomRoomStartMatch", "YA_CustomRoomStartMatchCountdown",
 		"YA_CustomRoomCancelMatchCountdown", "YA_CustomRoomUserJoin", "YA_CustomRoomUserLeave",
 		"YA_CustomRoomUserReturn", "YA_CustomRoomUserRemove", "YA_CustomRoomUserSwitchTeam",
 		"YA_CustomRoomChangeHost", "YA_CustomRoomChangeSettings", "YA_CustomRoomUpdate",
 		"YA_CustomRoomInvite", "YA_CustomRoomAnalyticsInvite", "YA_CustomRoomEnterFleetSelect",
 		"YA_CustomRoomExitFleetSelect", "YA_RequeuingRoomStart":
-		return buildMmogRoomSuccessPayload(requestName)
+		return buildMmogRoomSuccessPayload(mmogRoomResponseName(requestName))
 	case "YA_SquadInvite", "YA_SquadAccept", "YA_SquadLeave", "YA_SquadEliteStatusUpdate":
 		return buildMmogSquadPayload(requestName, playerPID)
 	case "YA_Chat", "YA_GlobalChat", "YA_LanguageChat", "YA_ChatStatus", "YA_ChatMergeRequest",
@@ -1656,6 +1655,35 @@ func buildMmogRoomSuccessPayload(requestName string) []byte {
 	return b
 }
 
+func mmogRoomResponseName(requestName string) string {
+	switch requestName {
+	case "YA_CustomRoomCreate":
+		return "YA_CustomRoomCreateResponse"
+	case "YA_CustomRoomStartMatch":
+		return "YA_CustomRoomStartMatchResponse"
+	case "YA_CustomRoomUserJoin":
+		return "YA_CustomRoomUserJoinResponse"
+	case "YA_CustomRoomUserLeave":
+		return "YA_CustomRoomUserLeaveResponse"
+	case "YA_CustomRoomUserReturn":
+		return "YA_CustomRoomUserReturnResponse"
+	case "YA_CustomRoomUserSwitchTeam":
+		return "YA_CustomRoomUserSwitchTeamResponse"
+	case "YA_CustomRoomChangeHost":
+		return "YA_CustomRoomChangeHostResponse"
+	case "YA_CustomRoomChangeSettings":
+		return "YA_CustomRoomChangeSettingsResponse"
+	case "YA_CustomRoomUpdate":
+		return "YA_CustomRoomUpdateResponse"
+	case "YA_CustomRoomEnterFleetSelect":
+		return "YA_CustomRoomEnterFleetSelectResponse"
+	case "YA_CustomRoomExitFleetSelect":
+		return "YA_CustomRoomExitFleetSelectResponse"
+	default:
+		return requestName
+	}
+}
+
 func buildMmogSquadPayload(requestName string, playerPID string) []byte {
 	var b []byte
 	var stack []int
@@ -1830,13 +1858,14 @@ func appendMmogStaticFleetMaintenanceConfig(b []byte, stack []int) ([]byte, []in
 
 func appendMmogStaticFleetSlotEntry(b []byte, stack []int, loadout mmogShipLoadoutSeed, flagshipShipID int32) ([]byte, []int) {
 	loadoutID := loadout.loadoutID()
+	fleetShipID := loadout.effectiveFleetShipID()
 	b, stack = appendMmogUnnamedObjectStart(b, stack)
-	b = appendMmogInt32Field(b, "ShipID", loadout.ship.id)
-	b = appendMmogInt32Field(b, "shipID", loadout.ship.id)
+	b = appendMmogInt32Field(b, "ShipID", fleetShipID)
+	b = appendMmogInt32Field(b, "shipID", fleetShipID)
 	b = appendMmogInt32Field(b, "LoadoutID", loadoutID)
 	b = appendMmogInt32Field(b, "loadoutID", loadoutID)
 	b = appendMmogInt32Field(b, "Position", loadout.position)
-	b = appendMmogBoolField(b, "bIsFlagship", loadout.ship.id == flagshipShipID)
+	b = appendMmogBoolField(b, "bIsFlagship", fleetShipID == flagshipShipID)
 	b = appendMmogInt32Field(b, "Status", 0)
 	b, stack = appendMmogObjectEnd(b, stack)
 	return b, stack
@@ -1893,57 +1922,45 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte
 	var stack []int
-	seasonsJSON := mustMarshalSeasonTableJSON(mmogSeasonTablePayload{
-		Seasons: []mmogSeasonTableRow{
-			{
-				SeasonID:    "PVE_Season1",
-				Name:        "Miner Inconvenience",
-				Description: "Season 1 long Description",
-				StartDate:   "2018-05-07T09:45:00Z",
-				EndDate:     "2018-05-16T16:59:59Z",
-				RewardLevel: 1,
-				Category:    "PvE",
-				Status:      "Active",
-				Amount:      0,
-				Currency:    "",
-				Flags:       0,
-			},
-			{
-				SeasonID:    "PVE_Season3",
-				Name:        "Battleship Down",
-				Description: "Season 3 long Description",
-				StartDate:   "2018-02-06T00:00:00Z",
-				EndDate:     "2018-02-14T23:59:59Z",
-				RewardLevel: 1,
-				Category:    "PvE",
-				Status:      "Inactive",
-				Amount:      0,
-				Currency:    "",
-				Flags:       0,
-			},
+	seasonsJSON := mustMarshalSeasonTableJSON([]mmogSeasonDataTableRow{
+		{
+			RowName:      "PVE_Season1",
+			Active:       true,
+			Name:         "Miner Inconvenience",
+			DescShort:    "Season 1 short Description",
+			DescLong:     "Season 1 long Description",
+			ImageLarge:   "",
+			ImageSmall:   "",
+			RewardLevels: []map[string]any{},
 		},
-		CurrentSeason: "PVE_Season1",
+		{
+			RowName:      "PVE_Season3",
+			Active:       false,
+			Name:         "Battleship Down",
+			DescShort:    "Season 3 short Description",
+			DescLong:     "Season 3 long Description",
+			ImageLarge:   "",
+			ImageSmall:   "",
+			RewardLevels: []map[string]any{},
+		},
 	})
-	eventsJSON := mustMarshalSeasonTableJSON(mmogEventTablePayload{
-		Events: []mmogEventTableRow{
-			{
-				EventID:     "PVE_S1E1",
-				Name:        "Incident Management",
-				Description: "Miner Inconvenience - Incident Management",
-				StartDate:   "2018-05-16T16:00:00Z",
-				EndDate:     "2018-05-16T16:19:59Z",
-				RewardLevel: 1,
-				Category:    "PvE",
-				Status:      "Active",
-				GameModes:   []string{"YGMT_HORDE"},
-				Amount:      1,
-				Currency:    "",
-				SeasonID:    "PVE_Season1",
-				Season:      "PVE_Season1",
-				MSeason:     "PVE_Season1",
-			},
+	eventsJSON := mustMarshalSeasonTableJSON([]mmogEventDataTableRow{
+		{
+			RowName:       "PVE_S1E1",
+			Name:          "Incident Management",
+			DescShort:     "Miner Inconvenience - Incident Management",
+			DescLong:      "Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics.",
+			Map:           "",
+			MapParameters: "",
+			GameMode:      "YGMT_HORDE",
+			Color:         mmogDataTableColor{R: 160, G: 144, B: 131, A: 255},
+			ImageSmall:    "",
+			ImageLarge:    "",
+			RewardLevels:  []map[string]any{},
+			StartDate:     "2018.05.16-16.00.00",
+			EndDate:       "2018.05.16-16.19.59",
+			Season:        "PVE_Season1",
 		},
-		ActiveEvent: "PVE_S1E1",
 	})
 
 	b = appendMmogStringField(b, "RT", "YA_GetSeasonData")
@@ -1956,45 +1973,39 @@ func buildMmogSeasonDataPayload() []byte {
 	return b
 }
 
-type mmogSeasonTablePayload struct {
-	Seasons       []mmogSeasonTableRow `json:"Seasons"`
-	CurrentSeason string               `json:"CurrentSeason"`
+type mmogSeasonDataTableRow struct {
+	RowName      string           `json:"Name"`
+	Active       bool             `json:"m_active"`
+	Name         string           `json:"m_name"`
+	DescShort    string           `json:"m_descShort"`
+	DescLong     string           `json:"m_descLong"`
+	ImageLarge   string           `json:"m_imageLarge"`
+	ImageSmall   string           `json:"m_imageSmall"`
+	RewardLevels []map[string]any `json:"m_rewardLevels"`
 }
 
-type mmogSeasonTableRow struct {
-	SeasonID    string `json:"SeasonID"`
-	Name        string `json:"Name"`
-	Description string `json:"Description"`
-	StartDate   string `json:"start_date"`
-	EndDate     string `json:"end_date"`
-	RewardLevel int32  `json:"RewardLevel"`
-	Category    string `json:"Category"`
-	Status      string `json:"Status"`
-	Amount      int32  `json:"Amount"`
-	Currency    string `json:"Currency"`
-	Flags       int32  `json:"Flags"`
+type mmogEventDataTableRow struct {
+	RowName       string             `json:"Name"`
+	Name          string             `json:"m_name"`
+	DescShort     string             `json:"m_descShort"`
+	DescLong      string             `json:"m_descLong"`
+	Map           string             `json:"m_map"`
+	MapParameters string             `json:"m_mapParameters"`
+	GameMode      string             `json:"m_gameMode"`
+	Color         mmogDataTableColor `json:"m_color"`
+	ImageSmall    string             `json:"m_imageSmall"`
+	ImageLarge    string             `json:"m_imageLarge"`
+	RewardLevels  []map[string]any   `json:"m_rewardLevels"`
+	StartDate     string             `json:"m_startDate"`
+	EndDate       string             `json:"m_endDate"`
+	Season        string             `json:"m_season"`
 }
 
-type mmogEventTablePayload struct {
-	Events      []mmogEventTableRow `json:"Events"`
-	ActiveEvent string              `json:"ActiveEvent"`
-}
-
-type mmogEventTableRow struct {
-	EventID     string   `json:"EventID"`
-	Name        string   `json:"Name"`
-	Description string   `json:"Description"`
-	StartDate   string   `json:"start_date"`
-	EndDate     string   `json:"end_date"`
-	RewardLevel int32    `json:"RewardLevel"`
-	Category    string   `json:"Category"`
-	Status      string   `json:"Status"`
-	GameModes   []string `json:"GameModes"`
-	Amount      int32    `json:"Amount"`
-	Currency    string   `json:"Currency"`
-	SeasonID    string   `json:"SeasonID,omitempty"`
-	Season      string   `json:"Season,omitempty"`
-	MSeason     string   `json:"m_season,omitempty"`
+type mmogDataTableColor struct {
+	R int32 `json:"r"`
+	G int32 `json:"g"`
+	B int32 `json:"b"`
+	A int32 `json:"a"`
 }
 
 func mustMarshalSeasonTableJSON(v any) string {
@@ -2007,8 +2018,17 @@ func mustMarshalSeasonTableJSON(v any) string {
 
 func buildMmogSeasonProgressPayload() []byte {
 	var b []byte
+	var stack []int
 
 	b = appendMmogStringField(b, "RT", "YA_GetSeasonProgress")
+	b, stack = appendMmogObjectStart(b, stack, "result")
+	b, stack = appendMmogArrayStart(b, stack, "EventScores")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "EventRewards")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "SeasonRewards")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
 
@@ -2887,8 +2907,9 @@ func buildMmogCheckReturnPayload() []byte {
 	b = appendMmogStringField(b, "RT", "YA_CheckReturn")
 	b, stack = appendMmogObjectStart(b, stack, "result")
 	b = appendMmogStringField(b, "status", "ok")
-	b = appendMmogBoolField(b, "CanReturn", true)
-	b = appendMmogBoolField(b, "canReturn", true)
+	b = appendMmogBoolField(b, "CanReturnToMatch", false)
+	b = appendMmogBoolField(b, "canReturnToMatch", false)
+	b = appendMmogBoolField(b, "ReturnValue", false)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
@@ -2898,38 +2919,23 @@ func buildMmogPlayersInformationPayload(playerPID string, _ []byte) []byte {
 	var stack []int
 	pid := normalizedPlayerStatePID(playerPID)
 	state := mmogPlayerStateForPID(pid)
-	flagshipFleet := state.activeFleet().flagshipOnly()
 
 	b = appendMmogStringField(b, "RT", "YA_GetPlayersInformation")
-	b, stack = appendMmogArrayStart(b, stack, "players")
-	b, stack = appendMmogPlayerInformationEntry(b, stack, pid, flagshipFleet, state)
-	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogArrayStart(b, stack, "result")
-	b, stack = appendMmogPlayerInformationEntry(b, stack, pid, flagshipFleet, state)
+	b = appendMmogStringField(b, "result", "ok")
+	b, stack = appendMmogArrayStart(b, stack, "infos")
+	b, stack = appendMmogPlayerDisplayInfoEntry(b, stack, pid, state)
 	b, stack = appendMmogObjectEnd(b, stack)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
 
-func appendMmogPlayerInformationEntry(b []byte, stack []int, playerPID string, _ mmogFleetSeed, state mmogPlayerState) ([]byte, []int) {
+func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, state mmogPlayerState) ([]byte, []int) {
 	b, stack = appendMmogUnnamedObjectStart(b, stack)
-	b = appendMmogInt32Field(b, "playerId", numericMmogPlayerID(playerPID))
-	b = appendMmogStringField(b, "userPid", normalizedPlayerStatePID(playerPID))
-	b = appendMmogStringField(b, "displayName", state.displayName)
-	b, stack = appendMmogObjectStart(b, stack, "displayInfo")
-	b = appendMmogStringField(b, "displayName", state.displayName)
+	b = appendMmogStringField(b, "ID", normalizedPlayerStatePID(playerPID))
 	b = appendMmogStringField(b, "DisplayInfo", state.displayInfo)
-	b, stack = appendMmogObjectEnd(b, stack)
-	b = appendMmogStringField(b, "DisplayName", state.displayName)
-	b = appendMmogInt32Field(b, "team", 0)
-	b = appendMmogInt32Field(b, "slot", 0)
-	b, stack = appendMmogObjectStart(b, stack, "info")
-	b = appendMmogInt32Field(b, "UnlockedFleetType", 1)
 	b = appendMmogInt32Field(b, "Rank", state.currentRank)
-	b = appendMmogStringField(b, "DisplayInfo", state.displayInfo)
-	b, stack = appendMmogObjectEnd(b, stack)
-	b = appendMmogInt32Field(b, "state", 0)
-	b, stack = appendMmogInt32ArrayField(b, stack, "validFleets", []int32{1})
+	b = appendMmogInt32Field(b, "UnlockedFleetType", 1)
+	b = appendMmogBoolField(b, "Elite", false)
 	b, stack = appendMmogObjectEnd(b, stack)
 	return b, stack
 }
@@ -4048,7 +4054,7 @@ func gatewayRequestedCatalogCollection(requestedCatalog string, playerDataReady 
 }
 
 func starterShipIDsForBootstrap() []int32 {
-	return starterShipIDs()
+	return dreadconfig.StarterInventoryShipIDs()
 }
 
 func starterLoadoutIDsForBootstrap() []int32 {

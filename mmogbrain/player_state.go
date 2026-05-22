@@ -168,7 +168,7 @@ func normalizePersistedStarterShipIDs(exec sqlExecer, playerPID string) error {
 			return fmt.Errorf("normalize starter ship id %d: %w", loadout.precastLoadoutID, err)
 		}
 		if _, err := exec.Exec(`UPDATE player_fleets SET flagship_ship_id=?, updated_at=datetime('now') WHERE user_id=? AND flagship_loadout_id=? AND flagship_ship_id<>?`,
-			loadout.ship.id, playerPID, loadout.precastLoadoutID, loadout.ship.id); err != nil {
+			loadout.effectiveFleetShipID(), playerPID, loadout.precastLoadoutID, loadout.effectiveFleetShipID()); err != nil {
 			return fmt.Errorf("normalize starter flagship ship id %d: %w", loadout.precastLoadoutID, err)
 		}
 	}
@@ -220,6 +220,9 @@ func loadPersistedShipLoadouts(database *sql.DB, playerPID string) (map[int32]mm
 		}
 		loadout.playerLoadoutID = loadoutID
 		loadout.ship = persistedShipByID(shipID)
+		if starter, ok := starterLoadoutByPrecastID(loadout.precastLoadoutID); ok {
+			loadout.fleetShipID = starter.fleetShipID
+		}
 		loadout.active = active != 0
 		loadouts[loadout.loadoutID()] = loadout
 	}

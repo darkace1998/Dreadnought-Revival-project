@@ -39,7 +39,7 @@ func buildConfigBackedStarterFleet(loadouts []mmogShipLoadoutSeed) mmogFleetSeed
 		tiers:                append([]int32(nil), eligibility.AllowedTiers...),
 		active:               true,
 		shipLoadouts:         loadouts,
-		flagshipShipID:       loadouts[0].ship.id,
+		flagshipShipID:       loadouts[0].effectiveFleetShipID(),
 		flagshipLoadoutID:    loadouts[0].loadoutID(),
 		flagshipLoadoutIndex: loadouts[0].loadoutIndex,
 	}
@@ -59,7 +59,7 @@ func buildConfigBackedFleetSeeds(starterLoadouts []mmogShipLoadoutSeed) []mmogFl
 		if strings.EqualFold(strings.TrimSpace(eligibility.Token), "Recruit") {
 			fleet.active = true
 			fleet.shipLoadouts = starterLoadouts
-			fleet.flagshipShipID = starterLoadouts[0].ship.id
+			fleet.flagshipShipID = starterLoadouts[0].effectiveFleetShipID()
 			fleet.flagshipLoadoutID = starterLoadouts[0].loadoutID()
 			fleet.flagshipLoadoutIndex = starterLoadouts[0].loadoutIndex
 		}

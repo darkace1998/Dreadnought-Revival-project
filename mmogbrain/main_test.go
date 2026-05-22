@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"net"
-	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -409,11 +408,11 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 	}
 }
 
-func TestTechTreeIncludesRuntimeStarterShips(t *testing.T) {
+func TestTechTreeIncludesInstallerStarterShips(t *testing.T) {
 	payload := buildMmogTechTreePayload()
-	for _, shipID := range runtimeStarterShipIDsFromShared(t) {
+	for _, shipID := range dreadconfig.StarterInventoryShipIDs() {
 		if !bytes.Contains(payload, appendMmogInt32Field(nil, "ShipID", shipID)) {
-			t.Fatalf("YA_GetTechTree missing runtime starter ship id %d", shipID)
+			t.Fatalf("YA_GetTechTree missing installer starter ship id %d", shipID)
 		}
 	}
 }
@@ -421,62 +420,35 @@ func TestTechTreeIncludesRuntimeStarterShips(t *testing.T) {
 func TestPlayersInformationPayloadUsesDisplayInfoShape(t *testing.T) {
 	const playerPID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	payload := buildMmogPlayersInformationPayload(playerPID, nil)
-	players := extractNamedMmogArray(t, payload, "players")
-	result := extractNamedMmogArray(t, payload, "result")
+	infos := extractNamedMmogArray(t, payload, "infos")
 
-	for _, field := range []struct {
-		name  string
-		value string
-	}{
-		{name: "userPid", value: playerPID},
-		{name: "displayName", value: "Local"},
-		{name: "DisplayName", value: "Local"},
-		{name: "DisplayInfo", value: defaultCaptainDisplayInfo},
-	} {
-		if !bytes.Contains(players, appendMmogStringField(nil, field.name, field.value)) {
-			t.Fatalf("YA_GetPlayersInformation missing %s=%q", field.name, field.value)
-		}
-		if !bytes.Contains(result, appendMmogStringField(nil, field.name, field.value)) {
-			t.Fatalf("YA_GetPlayersInformation legacy result missing %s=%q", field.name, field.value)
-		}
+	if !bytes.Contains(payload, appendMmogStringField(nil, "result", "ok")) {
+		t.Fatal("YA_GetPlayersInformation must report result=ok before infos")
 	}
-	if !bytes.Contains(players, appendMmogFieldNameAndType(nil, "displayInfo", 0x0c)) {
-		t.Fatal("YA_GetPlayersInformation missing displayInfo object")
+	if bytes.Contains(payload, appendMmogFieldNameAndType(nil, "result", 0x0d)) {
+		t.Fatal("YA_GetPlayersInformation result must not be the legacy player array")
 	}
-	if !bytes.Contains(result, appendMmogFieldNameAndType(nil, "displayInfo", 0x0c)) {
-		t.Fatal("YA_GetPlayersInformation legacy result missing displayInfo object")
+	if !bytes.Contains(payload, appendMmogFieldNameAndType(nil, "infos", 0x0d)) {
+		t.Fatal("YA_GetPlayersInformation missing retail infos array")
 	}
-	if !bytes.Contains(players, appendMmogFieldNameAndType(nil, "info", 0x0c)) {
-		t.Fatal("YA_GetPlayersInformation missing info object")
+	if !bytes.Contains(infos, appendMmogStringField(nil, "ID", playerPID)) {
+		t.Fatal("YA_GetPlayersInformation missing player ID")
 	}
-	if !bytes.Contains(result, appendMmogFieldNameAndType(nil, "info", 0x0c)) {
-		t.Fatal("YA_GetPlayersInformation legacy result missing info object")
+	if !bytes.Contains(infos, appendMmogStringField(nil, "DisplayInfo", defaultCaptainDisplayInfo)) {
+		t.Fatal("YA_GetPlayersInformation missing DisplayInfo")
 	}
-	if !bytes.Contains(players, appendMmogFieldNameAndType(nil, "validFleets", 0x0d)) {
-		t.Fatal("YA_GetPlayersInformation missing validFleets array")
-	}
-	if !bytes.Contains(result, appendMmogFieldNameAndType(nil, "validFleets", 0x0d)) {
-		t.Fatal("YA_GetPlayersInformation legacy result missing validFleets array")
-	}
-	if !bytes.Contains(players, appendMmogInt32Field(nil, "playerId", numericMmogPlayerID(playerPID))) {
-		t.Fatal("YA_GetPlayersInformation missing numeric playerId")
-	}
-	if !bytes.Contains(result, appendMmogInt32Field(nil, "playerId", numericMmogPlayerID(playerPID))) {
-		t.Fatal("YA_GetPlayersInformation legacy result missing numeric playerId")
-	}
-	if bytes.Contains(players, appendMmogFieldNameAndType(nil, "shipId", 0x56)) ||
-		bytes.Contains(players, appendMmogFieldNameAndType(nil, "ShipID", 0x56)) {
-		t.Fatal("YA_GetPlayersInformation players payload should not inject shipId fields")
-	}
-	if bytes.Contains(result, appendMmogFieldNameAndType(nil, "shipId", 0x56)) ||
-		bytes.Contains(result, appendMmogFieldNameAndType(nil, "ShipID", 0x56)) {
-		t.Fatal("YA_GetPlayersInformation legacy result should not inject shipId fields")
-	}
-	if !bytes.Contains(players, appendMmogInt32Field(nil, "Rank", 1)) {
+	if !bytes.Contains(infos, appendMmogInt32Field(nil, "Rank", 1)) {
 		t.Fatal("YA_GetPlayersInformation missing Rank")
 	}
-	if !bytes.Contains(result, appendMmogInt32Field(nil, "Rank", 1)) {
-		t.Fatal("YA_GetPlayersInformation legacy result missing Rank")
+	if !bytes.Contains(infos, appendMmogInt32Field(nil, "UnlockedFleetType", 1)) {
+		t.Fatal("YA_GetPlayersInformation missing UnlockedFleetType")
+	}
+	if !bytes.Contains(infos, appendMmogBoolField(nil, "Elite", false)) {
+		t.Fatal("YA_GetPlayersInformation missing Elite=false")
+	}
+	if bytes.Contains(infos, appendMmogFieldNameAndType(nil, "shipId", 0x56)) ||
+		bytes.Contains(infos, appendMmogFieldNameAndType(nil, "ShipID", 0x56)) {
+		t.Fatal("YA_GetPlayersInformation infos payload should not inject shipId fields")
 	}
 }
 
@@ -606,14 +578,45 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 			!bytes.Contains(playerGet, appendMmogInt32Field(nil, "LoadoutID", loadout.loadoutID())) {
 			t.Fatalf("YA_PlayerGet missing starter loadout reference %d", loadout.loadoutID())
 		}
-		if !bytes.Contains(staticFleetData, appendMmogInt32Field(nil, "ShipID", loadout.ship.id)) {
-			t.Fatalf("YA_RequestStaticFleetData missing starter ship %d", loadout.ship.id)
+		if !bytes.Contains(staticFleetData, appendMmogInt32Field(nil, "ShipID", loadout.effectiveFleetShipID())) {
+			t.Fatalf("YA_RequestStaticFleetData missing starter fleet ship %d", loadout.effectiveFleetShipID())
 		}
 		if !bytes.Contains(staticFleetData, appendMmogInt32Field(nil, "LoadoutID", loadout.loadoutID())) {
 			t.Fatalf("YA_RequestStaticFleetData missing starter loadout id %d", loadout.loadoutID())
 		}
-		if !bytes.Contains(playerGet, appendMmogUnnamedInt32Field(nil, loadout.ship.id)) {
-			t.Fatalf("YA_PlayerGet missing starter fleet ship id %d", loadout.ship.id)
+		if !bytes.Contains(playerGet, appendMmogUnnamedInt32Field(nil, loadout.effectiveFleetShipID())) {
+			t.Fatalf("YA_PlayerGet missing starter fleet ship id %d", loadout.effectiveFleetShipID())
+		}
+	}
+	for _, loadout := range starterShipLoadouts() {
+		for payloadName, payload := range map[string][]byte{
+			"YA_PlayerFleets":           playerFleets,
+			"YA_RequestStaticFleetData": staticFleetData,
+			"YA_PlayerGet":              playerGet,
+		} {
+			if bytes.Contains(payload, appendMmogInt32Field(nil, "FlagShipID", loadout.ship.id)) ||
+				bytes.Contains(payload, appendMmogUnnamedInt32Field(nil, loadout.ship.id)) {
+				t.Fatalf("%s should use fleet/loadout-development ship id %d, not pawn item id %d", payloadName, loadout.effectiveFleetShipID(), loadout.ship.id)
+			}
+		}
+	}
+	for _, sharedLoadout := range dreadconfig.StarterInventoryLoadouts() {
+		runtimeShip, ok := runtimeStarterShipForInstallerShipID(sharedLoadout.ShipID)
+		if !ok {
+			t.Fatalf("missing runtime starter ship mapping for installer ship %d", sharedLoadout.ShipID)
+		}
+		if runtimeShip.id == sharedLoadout.ShipID {
+			continue
+		}
+		for payloadName, payload := range map[string][]byte{
+			"YA_PlayerFleets":           playerFleets,
+			"YA_RequestStaticFleetData": staticFleetData,
+			"YA_PlayerGet":              playerGet,
+		} {
+			if bytes.Contains(payload, appendMmogInt32Field(nil, "FlagShipID", runtimeShip.id)) ||
+				bytes.Contains(payload, appendMmogUnnamedInt32Field(nil, runtimeShip.id)) {
+				t.Fatalf("%s should use installer starter ship id %d, not runtime/base ship id %d", payloadName, sharedLoadout.ShipID, runtimeShip.id)
+			}
 		}
 	}
 }
@@ -746,16 +749,10 @@ func TestMmogSavePlayerDisplayInformationPersistsForPlayersInformation(t *testin
 	}
 
 	payload := buildMmogPlayersInformationPayload(playerPID, nil)
-	players := extractNamedMmogArray(t, payload, "players")
-	result := extractNamedMmogArray(t, payload, "result")
+	infos := extractNamedMmogArray(t, payload, "infos")
 
-	for _, container := range [][]byte{players, result} {
-		if !bytes.Contains(container, appendMmogStringField(nil, "DisplayInfo", displayInfo)) {
-			t.Fatalf("YA_GetPlayersInformation did not use persisted display info %q", displayInfo)
-		}
-		if !bytes.Contains(container, appendMmogStringField(nil, "DisplayName", displayName)) {
-			t.Fatalf("YA_GetPlayersInformation did not preserve display name %q", displayName)
-		}
+	if !bytes.Contains(infos, appendMmogStringField(nil, "DisplayInfo", displayInfo)) {
+		t.Fatalf("YA_GetPlayersInformation did not use persisted display info %q", displayInfo)
 	}
 }
 
@@ -857,6 +854,89 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 	}
 	if queued != 0 {
 		t.Fatalf("queued entries after leave = %d, want 0", queued)
+	}
+}
+
+func TestMmogCheckReturnUsesCanReturnToMatchFields(t *testing.T) {
+	result := extractNamedMmogObject(t, buildMmogCheckReturnPayload(), "result")
+
+	if !bytes.Contains(result, appendMmogBoolField(nil, "CanReturnToMatch", false)) {
+		t.Fatal("YA_CheckReturn missing CanReturnToMatch=false")
+	}
+	if !bytes.Contains(result, appendMmogBoolField(nil, "canReturnToMatch", false)) {
+		t.Fatal("YA_CheckReturn missing canReturnToMatch=false")
+	}
+	if !bytes.Contains(result, appendMmogBoolField(nil, "ReturnValue", false)) {
+		t.Fatal("YA_CheckReturn missing ReturnValue=false")
+	}
+	if bytes.Contains(result, appendMmogFieldNameAndType(nil, "CanReturn", 0x01)) ||
+		bytes.Contains(result, appendMmogFieldNameAndType(nil, "canReturn", 0x01)) {
+		t.Fatal("YA_CheckReturn still contains legacy CanReturn fields")
+	}
+}
+
+func TestMmogCustomRoomActionsUseResponseRTs(t *testing.T) {
+	for requestName, expectedRT := range map[string]string{
+		"YA_CustomRoomCreate":           "YA_CustomRoomCreateResponse",
+		"YA_CustomRoomStartMatch":       "YA_CustomRoomStartMatchResponse",
+		"YA_CustomRoomUserJoin":         "YA_CustomRoomUserJoinResponse",
+		"YA_CustomRoomUserLeave":        "YA_CustomRoomUserLeaveResponse",
+		"YA_CustomRoomUserReturn":       "YA_CustomRoomUserReturnResponse",
+		"YA_CustomRoomUserSwitchTeam":   "YA_CustomRoomUserSwitchTeamResponse",
+		"YA_CustomRoomChangeHost":       "YA_CustomRoomChangeHostResponse",
+		"YA_CustomRoomChangeSettings":   "YA_CustomRoomChangeSettingsResponse",
+		"YA_CustomRoomUpdate":           "YA_CustomRoomUpdateResponse",
+		"YA_CustomRoomEnterFleetSelect": "YA_CustomRoomEnterFleetSelectResponse",
+		"YA_CustomRoomExitFleetSelect":  "YA_CustomRoomExitFleetSelectResponse",
+	} {
+		payload := buildMmogRequestResponsePayload(requestName, defaultMmogPlayerPID, nil)
+		rt := extractMmogStringField(payload, "RT")
+		if rt != expectedRT {
+			t.Fatalf("%s RT = %q, want %s", requestName, rt, expectedRT)
+		}
+
+		result := extractNamedMmogObject(t, payload, "result")
+		if !bytes.Contains(result, appendMmogInt32Field(nil, "Code", 0)) {
+			t.Fatalf("%s missing Code=0", expectedRT)
+		}
+		if !bytes.Contains(result, appendMmogFieldNameAndType(nil, "Room", 0x0c)) {
+			t.Fatalf("%s missing Room object", expectedRT)
+		}
+	}
+
+	payload := buildMmogRequestResponsePayload("YA_CustomRoomInvite", defaultMmogPlayerPID, nil)
+	if rt := extractMmogStringField(payload, "RT"); rt != "YA_CustomRoomInvite" {
+		t.Fatalf("YA_CustomRoomInvite RT = %q, want request name passthrough", rt)
+	}
+	result := extractNamedMmogObject(t, payload, "result")
+	if !bytes.Contains(result, appendMmogInt32Field(nil, "Code", 0)) {
+		t.Fatal("YA_CustomRoomInvite missing Code=0")
+	}
+	if !bytes.Contains(result, appendMmogFieldNameAndType(nil, "Room", 0x0c)) {
+		t.Fatal("YA_CustomRoomInvite missing Room object")
+	}
+}
+
+func TestMmogRoomResponseNameMapsKnownCustomRoomResponses(t *testing.T) {
+	for requestName, expectedRT := range map[string]string{
+		"YA_CustomRoomCreate":           "YA_CustomRoomCreateResponse",
+		"YA_CustomRoomStartMatch":       "YA_CustomRoomStartMatchResponse",
+		"YA_CustomRoomUserJoin":         "YA_CustomRoomUserJoinResponse",
+		"YA_CustomRoomUserLeave":        "YA_CustomRoomUserLeaveResponse",
+		"YA_CustomRoomUserReturn":       "YA_CustomRoomUserReturnResponse",
+		"YA_CustomRoomUserSwitchTeam":   "YA_CustomRoomUserSwitchTeamResponse",
+		"YA_CustomRoomChangeHost":       "YA_CustomRoomChangeHostResponse",
+		"YA_CustomRoomChangeSettings":   "YA_CustomRoomChangeSettingsResponse",
+		"YA_CustomRoomUpdate":           "YA_CustomRoomUpdateResponse",
+		"YA_CustomRoomEnterFleetSelect": "YA_CustomRoomEnterFleetSelectResponse",
+		"YA_CustomRoomExitFleetSelect":  "YA_CustomRoomExitFleetSelectResponse",
+	} {
+		if got := mmogRoomResponseName(requestName); got != expectedRT {
+			t.Fatalf("%s response RT = %q, want %q", requestName, got, expectedRT)
+		}
+	}
+	if got := mmogRoomResponseName("YA_CustomRoomInvite"); got != "YA_CustomRoomInvite" {
+		t.Fatalf("YA_CustomRoomInvite response RT = %q, want passthrough", got)
 	}
 }
 
@@ -1058,17 +1138,17 @@ func sharedStarterLoadoutByID(t *testing.T, loadoutID int32) dreadconfig.Starter
 	return dreadconfig.StarterLoadout{}
 }
 
-func runtimeStarterShipIDsFromShared(t *testing.T) []int32 {
+func starterFleetShipIDsFromShared(t *testing.T) []int32 {
 	t.Helper()
 
 	sharedLoadouts := dreadconfig.StarterInventoryLoadouts()
 	ids := make([]int32, 0, len(sharedLoadouts))
 	for _, loadout := range sharedLoadouts {
-		ship, ok := runtimeStarterShipForInstallerShipID(loadout.ShipID)
+		fleetShipID, ok := fleetStarterShipIDsByPrecastID[loadout.LoadoutID]
 		if !ok {
-			t.Fatalf("missing runtime starter ship for installer ship %d", loadout.ShipID)
+			t.Fatalf("missing fleet ship id for starter loadout %d", loadout.LoadoutID)
 		}
-		ids = append(ids, ship.id)
+		ids = append(ids, fleetShipID)
 	}
 	return ids
 }
@@ -1080,7 +1160,7 @@ func TestStarterRosterMatchesSharedConfigExactly(t *testing.T) {
 		t.Fatalf("starter loadout count = %d, want %d", len(loadouts), len(sharedLoadouts))
 	}
 
-	wantShipIDs := runtimeStarterShipIDsFromShared(t)
+	wantShipIDs := starterFleetShipIDsFromShared(t)
 	gotShipIDs := starterShipIDs()
 	if len(gotShipIDs) != len(wantShipIDs) {
 		t.Fatalf("starter ship id count = %d, want %d", len(gotShipIDs), len(wantShipIDs))
@@ -1104,19 +1184,26 @@ func TestStarterRosterMatchesSharedConfigExactly(t *testing.T) {
 
 	for idx, sharedLoadout := range sharedLoadouts {
 		loadout := loadouts[idx]
-		wantShip, ok := runtimeStarterShipForInstallerShipID(sharedLoadout.ShipID)
+		wantShip, ok := starterBootstrapShipByID(sharedLoadout.ShipID)
 		if !ok {
-			t.Fatalf("missing runtime starter ship for installer ship %d", sharedLoadout.ShipID)
+			t.Fatalf("missing starter bootstrap ship for installer ship %d", sharedLoadout.ShipID)
 		}
 		wantLoadoutMeta, ok := dreadconfig.ItemByID(sharedLoadout.LoadoutID)
 		if !ok {
 			t.Fatalf("missing shared starter loadout metadata for %d", sharedLoadout.LoadoutID)
 		}
 		if loadout.ship.id != wantShip.id {
-			t.Fatalf("starter runtime ship id[%d] = %d, want %d", idx, loadout.ship.id, wantShip.id)
+			t.Fatalf("starter ship id[%d] = %d, want %d", idx, loadout.ship.id, wantShip.id)
 		}
 		if loadout.ship.name != wantShip.name {
-			t.Fatalf("starter runtime ship name[%d] = %q, want %q", idx, loadout.ship.name, wantShip.name)
+			t.Fatalf("starter ship name[%d] = %q, want %q", idx, loadout.ship.name, wantShip.name)
+		}
+		wantFleetShipID, ok := fleetStarterShipIDsByPrecastID[sharedLoadout.LoadoutID]
+		if !ok {
+			t.Fatalf("missing fleet ship id for starter loadout %d", sharedLoadout.LoadoutID)
+		}
+		if loadout.effectiveFleetShipID() != wantFleetShipID {
+			t.Fatalf("starter fleet ship id[%d] = %d, want %d", idx, loadout.effectiveFleetShipID(), wantFleetShipID)
 		}
 		if loadout.loadoutID() != sharedLoadout.LoadoutID {
 			t.Fatalf("starter loadout id[%d] = %d, want %d", idx, loadout.loadoutID(), sharedLoadout.LoadoutID)
@@ -1631,99 +1718,86 @@ func TestCareerPayloadsUseConfigBackedProgressionMetadata(t *testing.T) {
 	}
 }
 
-func TestSeasonProgressPayloadUsesNoopAcknowledgement(t *testing.T) {
+func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 	payload := buildMmogSeasonProgressPayload()
 	if !bytes.Contains(payload, appendMmogStringField(nil, "RT", "YA_GetSeasonProgress")) {
 		t.Fatal("YA_GetSeasonProgress missing RT acknowledgement")
 	}
-	if bytes.Contains(payload, appendMmogFieldNameAndType(nil, "result", 0x0c)) ||
-		bytes.Contains(payload, appendMmogFieldNameAndType(nil, "EventScores", 0x0d)) ||
-		bytes.Contains(payload, appendMmogFieldNameAndType(nil, "EventRewards", 0x0d)) ||
-		bytes.Contains(payload, appendMmogFieldNameAndType(nil, "SeasonRewards", 0x0d)) {
-		t.Fatal("YA_GetSeasonProgress should not trigger season progress observer payloads")
+	result := extractNamedMmogObject(t, payload, "result")
+	for _, field := range []string{"EventScores", "EventRewards", "SeasonRewards"} {
+		container := extractNamedMmogArray(t, result, field)
+		if bytes.Contains(container, appendMmogFieldNameAndType(nil, "EventID", 0x56)) ||
+			bytes.Contains(container, appendMmogFieldNameAndType(nil, "SeasonID", 0x56)) ||
+			bytes.Contains(container, appendMmogFieldNameAndType(nil, "ID", 0x09)) {
+			t.Fatalf("YA_GetSeasonProgress %s should not fabricate rows", field)
+		}
 	}
 }
 
 func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
-	var seasons mmogSeasonTablePayload
+	var seasons []mmogSeasonDataTableRow
 	if err := json.Unmarshal([]byte(extractMmogStringField(result, "Seasons")), &seasons); err != nil {
 		t.Fatalf("decode YA_GetSeasonData Seasons JSON: %v", err)
 	}
-	if got := len(seasons.Seasons); got != 2 {
+	if got := len(seasons); got != 2 {
 		t.Fatalf("season row count = %d, want 2", got)
 	}
-	if seasons.CurrentSeason != "PVE_Season1" {
-		t.Fatalf("season root CurrentSeason = %q, want %q", seasons.CurrentSeason, "PVE_Season1")
+	if seasons[0].RowName != "PVE_Season1" || !seasons[0].Active ||
+		seasons[0].Name != "Miner Inconvenience" ||
+		seasons[0].DescShort != "Season 1 short Description" ||
+		seasons[0].DescLong != "Season 1 long Description" {
+		t.Fatalf("season row[0] = %#v", seasons[0])
 	}
-	if seasons.Seasons[0] != (mmogSeasonTableRow{
-		SeasonID:    "PVE_Season1",
-		Name:        "Miner Inconvenience",
-		Description: "Season 1 long Description",
-		StartDate:   "2018-05-07T09:45:00Z",
-		EndDate:     "2018-05-16T16:59:59Z",
-		RewardLevel: 1,
-		Category:    "PvE",
-		Status:      "Active",
-		Amount:      0,
-		Currency:    "",
-		Flags:       0,
-	}) {
-		t.Fatalf("season row[0] = %#v", seasons.Seasons[0])
+	if seasons[1].RowName != "PVE_Season3" || seasons[1].Active ||
+		seasons[1].Name != "Battleship Down" ||
+		seasons[1].DescShort != "Season 3 short Description" ||
+		seasons[1].DescLong != "Season 3 long Description" {
+		t.Fatalf("season row[1] = %#v", seasons[1])
 	}
-	if seasons.Seasons[1] != (mmogSeasonTableRow{
-		SeasonID:    "PVE_Season3",
-		Name:        "Battleship Down",
-		Description: "Season 3 long Description",
-		StartDate:   "2018-02-06T00:00:00Z",
-		EndDate:     "2018-02-14T23:59:59Z",
-		RewardLevel: 1,
-		Category:    "PvE",
-		Status:      "Inactive",
-		Amount:      0,
-		Currency:    "",
-		Flags:       0,
-	}) {
-		t.Fatalf("season row[1] = %#v", seasons.Seasons[1])
+	for _, season := range seasons {
+		if season.ImageLarge != "" || season.ImageSmall != "" {
+			t.Fatalf("season %s should not use unresolved image asset refs: %#v", season.RowName, season)
+		}
+		if season.RewardLevels == nil {
+			t.Fatalf("season %s missing m_rewardLevels array", season.RowName)
+		}
 	}
 
-	var events mmogEventTablePayload
+	var events []mmogEventDataTableRow
 	if err := json.Unmarshal([]byte(extractMmogStringField(result, "Events")), &events); err != nil {
 		t.Fatalf("decode YA_GetSeasonData Events JSON: %v", err)
 	}
-	if got := len(events.Events); got != 1 {
+	if got := len(events); got != 1 {
 		t.Fatalf("event row count = %d, want 1", got)
 	}
-	if events.ActiveEvent != "PVE_S1E1" {
-		t.Fatalf("event root ActiveEvent = %q, want %q", events.ActiveEvent, "PVE_S1E1")
+	if events[0].RowName != "PVE_S1E1" {
+		t.Fatalf("event row name = %q, want PVE_S1E1", events[0].RowName)
 	}
-	if events.Events[0].EventID != "PVE_S1E1" {
-		t.Fatalf("event row EventID = %q, want %q", events.Events[0].EventID, "PVE_S1E1")
+	if events[0].Name != "Incident Management" {
+		t.Fatalf("event row m_name = %q, want Incident Management", events[0].Name)
 	}
-	if events.Events[0].Name != "Incident Management" {
-		t.Fatalf("event row Name = %q, want Incident Management", events.Events[0].Name)
+	if events[0].DescShort != "Miner Inconvenience - Incident Management" {
+		t.Fatalf("event row m_descShort = %q", events[0].DescShort)
 	}
-	if events.Events[0].Description != "Miner Inconvenience - Incident Management" {
-		t.Fatalf("event row Description = %q", events.Events[0].Description)
+	if events[0].StartDate != "2018.05.16-16.00.00" || events[0].EndDate != "2018.05.16-16.19.59" {
+		t.Fatalf("event row dates = %q to %q", events[0].StartDate, events[0].EndDate)
 	}
-	if events.Events[0].StartDate != "2018-05-16T16:00:00Z" || events.Events[0].EndDate != "2018-05-16T16:19:59Z" {
-		t.Fatalf("event row dates = %q to %q", events.Events[0].StartDate, events.Events[0].EndDate)
+	if events[0].GameMode != "YGMT_HORDE" {
+		t.Fatalf("event row game mode = %q, want YGMT_HORDE", events[0].GameMode)
 	}
-	if events.Events[0].RewardLevel != 1 {
-		t.Fatalf("event row RewardLevel = %d, want 1", events.Events[0].RewardLevel)
+	if events[0].Color != (mmogDataTableColor{R: 160, G: 144, B: 131, A: 255}) {
+		t.Fatalf("event row color = %#v", events[0].Color)
 	}
-	if events.Events[0].Category != "PvE" || events.Events[0].Status != "Active" {
-		t.Fatalf("event row category/status = %q/%q", events.Events[0].Category, events.Events[0].Status)
+	if events[0].RewardLevels == nil {
+		t.Fatal("event row missing m_rewardLevels array")
 	}
-	if !reflect.DeepEqual(events.Events[0].GameModes, []string{"YGMT_HORDE"}) {
-		t.Fatalf("event row GameModes = %#v, want %#v", events.Events[0].GameModes, []string{"YGMT_HORDE"})
+	if events[0].Season != "PVE_Season1" {
+		t.Fatalf("event row m_season = %q, want PVE_Season1", events[0].Season)
 	}
-	if events.Events[0].Amount != 1 || events.Events[0].Currency != "" {
-		t.Fatalf("event row amount/currency = %d/%q", events.Events[0].Amount, events.Events[0].Currency)
-	}
-	if events.Events[0].SeasonID != "PVE_Season1" || events.Events[0].MSeason != "PVE_Season1" {
-		t.Fatalf("event row season linkage = %q / %q", events.Events[0].SeasonID, events.Events[0].MSeason)
+	if seasonsRaw := extractMmogStringField(result, "Seasons"); bytes.Contains([]byte(seasonsRaw), []byte("0x00000000")) {
+		t.Fatal("season JSON still contains unresolved 0x00000000 asset references")
 	}
 
 	for field, want := range map[string]string{
@@ -1913,7 +1987,7 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	}
 }
 
-func TestObserverOnlyBootstrapResponsesAreSuppressed(t *testing.T) {
+func TestObserverOnlyBootstrapResponsesAreAcknowledged(t *testing.T) {
 	for _, requestName := range []string{"YA_GetDailyContractsData", "YA_GetSeasonProgress"} {
 		t.Run(requestName, func(t *testing.T) {
 			conn := &captureConn{}
@@ -1931,8 +2005,18 @@ func TestObserverOnlyBootstrapResponsesAreSuppressed(t *testing.T) {
 			}}, nil, false, state); err != nil {
 				t.Fatalf("processMmogAppFrames %s: %v", requestName, err)
 			}
-			if conn.Len() != 0 {
-				t.Fatalf("%s wrote %d bytes, want suppressed response", requestName, conn.Len())
+			if conn.Len() == 0 {
+				t.Fatalf("%s response was suppressed", requestName)
+			}
+			frames, remaining := parseMmogAppFrames(conn.Bytes())
+			if len(remaining) != 0 {
+				t.Fatalf("%s response left %d trailing bytes", requestName, len(remaining))
+			}
+			if len(frames) != 1 {
+				t.Fatalf("%s wrote %d frames, want 1", requestName, len(frames))
+			}
+			if !bytes.Contains(frames[0].payload, appendMmogStringField(nil, "RT", requestName)) {
+				t.Fatalf("%s response did not echo RT", requestName)
 			}
 		})
 	}
