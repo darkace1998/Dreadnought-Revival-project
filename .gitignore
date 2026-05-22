@@ -1,5 +1,8 @@
 # Runtime data
 run/
+*.db
+*.db-shm
+*.db-wal
 
 # Documentation with sensitive data
 SERVER_RUNNING.md
@@ -23,3 +26,6 @@ Thumbs.db
 
 # Build
 bin/
+
+# GitHub CLI config
+.config/
