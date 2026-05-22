@@ -1744,7 +1744,7 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	if got := len(seasons); got != 2 {
 		t.Fatalf("season row count = %d, want 2", got)
 	}
-	if seasons[0].RowName != "PVE_Season1" || !seasons[0].Active ||
+	if seasons[0].RowName != "PVE_Season1" || seasons[0].Active ||
 		seasons[0].Name != "Miner Inconvenience" ||
 		seasons[0].DescShort != "Season 1 short Description" ||
 		seasons[0].DescLong != "Season 1 long Description" {
@@ -1801,8 +1801,8 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	}
 
 	for field, want := range map[string]string{
-		"CurrentSeason": "PVE_Season1",
-		"ActiveEvent":   "PVE_S1E1",
+		"CurrentSeason": "",
+		"ActiveEvent":   "",
 	} {
 		if got := extractMmogStringField(result, field); got != want {
 			t.Fatalf("YA_GetSeasonData %s = %q, want %q", field, got, want)
@@ -1987,8 +1987,15 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	}
 }
 
-func TestObserverOnlyBootstrapResponsesAreAcknowledged(t *testing.T) {
-	for _, requestName := range []string{"YA_GetDailyContractsData", "YA_GetSeasonProgress"} {
+func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		requestName string
+		wantFrames  int
+	}{
+		{requestName: "YA_GetDailyContractsData", wantFrames: 0},
+		{requestName: "YA_GetSeasonProgress", wantFrames: 0},
+	} {
+		requestName := tc.requestName
 		t.Run(requestName, func(t *testing.T) {
 			conn := &captureConn{}
 			request := appendMmogStringField(nil, "RT", requestName)
@@ -2005,15 +2012,18 @@ func TestObserverOnlyBootstrapResponsesAreAcknowledged(t *testing.T) {
 			}}, nil, false, state); err != nil {
 				t.Fatalf("processMmogAppFrames %s: %v", requestName, err)
 			}
-			if conn.Len() == 0 {
-				t.Fatalf("%s response was suppressed", requestName)
+			if tc.wantFrames == 0 && conn.Len() != 0 {
+				t.Fatalf("%s wrote %d bytes, want suppressed response", requestName, conn.Len())
+			}
+			if tc.wantFrames == 0 {
+				return
 			}
 			frames, remaining := parseMmogAppFrames(conn.Bytes())
 			if len(remaining) != 0 {
 				t.Fatalf("%s response left %d trailing bytes", requestName, len(remaining))
 			}
-			if len(frames) != 1 {
-				t.Fatalf("%s wrote %d frames, want 1", requestName, len(frames))
+			if len(frames) != tc.wantFrames {
+				t.Fatalf("%s wrote %d frames, want %d", requestName, len(frames), tc.wantFrames)
 			}
 			if !bytes.Contains(frames[0].payload, appendMmogStringField(nil, "RT", requestName)) {
 				t.Fatalf("%s response did not echo RT", requestName)

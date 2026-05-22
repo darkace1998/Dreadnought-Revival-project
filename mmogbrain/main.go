@@ -564,6 +564,15 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 
+			if suppressUnsafeMmogObserverResponse(requestName) {
+				log.WithFields(logrus.Fields{
+					"remote":  remote,
+					"request": hex.EncodeToString(frame.requestID[:]),
+					"name":    requestName,
+				}).Info("mmog: suppressed unsafe observer-only bootstrap response")
+				continue
+			}
+
 			response := buildMmogRequestResponseFrame(frame.requestID, frame.msgType, requestName, state.playerPID, frame.payload)
 			if err := writeMmogAppResponse(log, conn, remote, frame.requestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
@@ -576,6 +585,10 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		}
 	}
 	return nil
+}
+
+func suppressUnsafeMmogObserverResponse(requestName string) bool {
+	return requestName == "YA_GetDailyContractsData" || requestName == "YA_GetSeasonProgress"
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *mmogStreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
@@ -1925,7 +1938,7 @@ func buildMmogSeasonDataPayload() []byte {
 	seasonsJSON := mustMarshalSeasonTableJSON([]mmogSeasonDataTableRow{
 		{
 			RowName:      "PVE_Season1",
-			Active:       true,
+			Active:       false,
 			Name:         "Miner Inconvenience",
 			DescShort:    "Season 1 short Description",
 			DescLong:     "Season 1 long Description",
@@ -1967,8 +1980,8 @@ func buildMmogSeasonDataPayload() []byte {
 	b, stack = appendMmogObjectStart(b, stack, "result")
 	b = appendMmogStringField(b, "Events", eventsJSON)
 	b = appendMmogStringField(b, "Seasons", seasonsJSON)
-	b = appendMmogStringField(b, "CurrentSeason", "PVE_Season1")
-	b = appendMmogStringField(b, "ActiveEvent", "PVE_S1E1")
+	b = appendMmogStringField(b, "CurrentSeason", "")
+	b = appendMmogStringField(b, "ActiveEvent", "")
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
