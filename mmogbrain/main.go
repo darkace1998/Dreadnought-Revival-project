@@ -564,6 +564,15 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 
+			if suppressMmogBootstrapObserverResponse(requestName) {
+				log.WithFields(logrus.Fields{
+					"remote":  remote,
+					"request": hex.EncodeToString(frame.requestID[:]),
+					"name":    requestName,
+				}).Info("mmog: suppressed observer-only bootstrap response")
+				continue
+			}
+
 			response := buildMmogRequestResponseFrame(frame.requestID, frame.msgType, requestName, state.playerPID, frame.payload)
 			if err := writeMmogAppResponse(log, conn, remote, frame.requestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
@@ -576,6 +585,15 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		}
 	}
 	return nil
+}
+
+func suppressMmogBootstrapObserverResponse(requestName string) bool {
+	switch requestName {
+	case "YA_GetDailyContractsData", "YA_GetSeasonProgress":
+		return true
+	default:
+		return false
+	}
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *mmogStreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
@@ -821,7 +839,7 @@ func (loadout mmogShipLoadoutSeed) entryID() string {
 }
 
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
-	return "-1"
+	return ""
 }
 
 func (loadout mmogShipLoadoutSeed) slotItemID(offset int32) int32 {
@@ -903,6 +921,13 @@ type mmogLoadoutItemSeed struct {
 	itemTier    int32
 }
 
+type mmogModuleUIDataSeed struct {
+	itemID   int32
+	index    int32
+	owned    bool
+	equipped bool
+}
+
 func nonZeroLoadoutItemID(value int32, fallback int32) int32 {
 	if value != 0 {
 		return value
@@ -918,6 +943,33 @@ func collectNonZeroItemIDs(ids ...int32) []int32 {
 		}
 	}
 	return items
+}
+
+func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
+	loadouts := starterShipLoadouts()
+	seen := make(map[int32]int)
+	seeds := make([]mmogModuleUIDataSeed, 0, len(loadouts)*6)
+	for _, loadout := range loadouts {
+		for _, slot := range loadout.loadoutSlots() {
+			if slot.itemID == 0 {
+				continue
+			}
+			if _, exists := seen[slot.itemID]; exists {
+				continue
+			}
+			if _, ok := extractedMarketItemMetadataForID(slot.itemID); !ok {
+				continue
+			}
+			seen[slot.itemID] = len(seeds)
+			seeds = append(seeds, mmogModuleUIDataSeed{
+				itemID:   slot.itemID,
+				index:    int32(len(seeds)),
+				owned:    true,
+				equipped: true,
+			})
+		}
+	}
+	return seeds
 }
 
 func (loadout mmogShipLoadoutSeed) weaponPrimaryItemID() int32 {
@@ -1038,6 +1090,30 @@ func (fleet mmogFleetSeed) flagshipIndex() int32 {
 	return 0
 }
 
+func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
+	var flagship []mmogShipLoadoutSeed
+	for _, loadout := range fleet.shipLoadouts {
+		if loadout.ship.id == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
+			flagship = []mmogShipLoadoutSeed{loadout}
+			break
+		}
+	}
+	if len(flagship) == 0 && len(fleet.shipLoadouts) > 0 {
+		flagship = []mmogShipLoadoutSeed{fleet.shipLoadouts[0]}
+	}
+	if len(flagship) > 0 {
+		flagship[0].position = 0
+		flagship[0].loadoutIndex = 0
+	}
+	fleet.shipLoadouts = flagship
+	fleet.flagshipLoadoutIndex = 0
+	if len(fleet.shipLoadouts) > 0 {
+		fleet.flagshipShipID = fleet.shipLoadouts[0].ship.id
+		fleet.flagshipLoadoutID = fleet.shipLoadouts[0].loadoutID()
+	}
+	return fleet
+}
+
 func (fleet mmogFleetSeed) shipIDs() []int32 {
 	ids := make([]int32, 0, len(fleet.shipLoadouts))
 	for _, loadout := range fleet.shipLoadouts {
@@ -1079,14 +1155,14 @@ var starterShipArchetypes = map[string]starterShipArchetype{
 }
 
 var starterShips = []mmogShipSeed{
-	{id: extractedShipIDAthos, name: "Athos", classID: 14, shipClass: 0, weight: 1, manufacturer: "JupiterArms", owned: true, nodeID: extractedShipIDAthos, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer
-	{id: extractedShipIDZmey, name: "Zmey", classID: 6, shipClass: 4, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDZmey, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},     // Akula Vektor Dreadnought
-	{id: extractedShipIDAion, name: "Aion", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: true, nodeID: extractedShipIDAion, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},         // Oberon Tactical
+	{id: extractedShipIDAthos, name: "Athos", classID: 14, shipClass: 0, weight: 1, manufacturer: "JupiterArms", owned: true, nodeID: extractedShipIDAthos, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Jupiter Arms Destroyer
+	{id: extractedShipIDZmey, name: "Zmey", classID: 6, shipClass: 4, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDZmey, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Akula Vektor Dreadnought
+	{id: extractedShipIDSvarog, name: "Svarog", classID: 10, shipClass: 2, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDSvarog, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Akula Vektor Artillery
+	{id: extractedShipIDAion, name: "Aion", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: true, nodeID: extractedShipIDAion, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Oberon Tactical
 }
 
 var lockedT1Ships = []mmogShipSeed{
 	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                        // Jupiter Arms Corvette
-	{id: extractedShipIDSvarog, name: "Svarog", classID: 10, shipClass: 2, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDSvarog, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},                           // Akula Vektor Artillery
 	{id: extractedShipIDLeipzig, name: "Leipzig", classID: 14, shipClass: 0, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDLeipzig, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
 	{id: extractedShipIDTrieste, name: "Trieste", classID: 6, shipClass: 4, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDTrieste, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},    // Akula Vektor Dreadnought T2
 	{id: extractedShipIDCeres, name: "Ceres", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: false, nodeID: extractedShipIDCeres, parentID: extractedShipIDAion, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAion, prereqID2: 0, bIsNew: false},              // Oberon Tactical follow-up
@@ -1094,9 +1170,42 @@ var lockedT1Ships = []mmogShipSeed{
 
 func allT1Ships() []mmogShipSeed {
 	ships := make([]mmogShipSeed, 0, len(starterShips)+len(lockedT1Ships))
-	ships = append(ships, starterShips...)
-	ships = append(ships, lockedT1Ships...)
+	seen := make(map[int32]struct{}, cap(ships))
+	for _, group := range [][]mmogShipSeed{starterShips, lockedT1Ships} {
+		for _, ship := range group {
+			if _, ok := seen[ship.id]; ok {
+				continue
+			}
+			seen[ship.id] = struct{}{}
+			ships = append(ships, ship)
+		}
+	}
 	return ships
+}
+
+func runtimeStarterShipForInstallerClass(classKey string) (mmogShipSeed, bool) {
+	switch strings.ToLower(strings.TrimSpace(classKey)) {
+	case "assault":
+		return starterShips[0], true
+	case "dreadnought":
+		return starterShips[1], true
+	case "sniper":
+		return starterShips[2], true
+	case "support":
+		return starterShips[3], true
+	default:
+		return mmogShipSeed{}, false
+	}
+}
+
+func runtimeStarterShipForInstallerShipID(shipID int32) (mmogShipSeed, bool) {
+	for _, pkg := range dreadconfig.InstallerStarterPackages() {
+		if pkg.ShipID != shipID {
+			continue
+		}
+		return runtimeStarterShipForInstallerClass(pkg.ClassKey)
+	}
+	return mmogShipSeed{}, false
 }
 
 func starterBootstrapShipByID(shipID int32) (mmogShipSeed, bool) {
@@ -1158,9 +1267,9 @@ func starterShipLoadouts() []mmogShipLoadoutSeed {
 		if !ok {
 			panic("missing shared starter loadout identity")
 		}
-		ship, ok := starterBootstrapShipByID(sharedLoadout.ShipID)
+		ship, ok := runtimeStarterShipForInstallerShipID(sharedLoadout.ShipID)
 		if !ok {
-			panic("missing starter bootstrap ship")
+			panic("missing runtime starter ship")
 		}
 		loadoutMeta, ok := dreadconfig.ItemByID(sharedLoadout.LoadoutID)
 		if !ok {
@@ -1338,6 +1447,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogAnalyticsBeginTransactionPayload(extractMmogStringField(payload, "transactionId"))
 	case "YA_CheckReturn":
 		return buildMmogCheckReturnPayload()
+	case "YA_GetPlayersInformation":
+		return buildMmogPlayersInformationPayload(playerPID, payload)
 	case "YA_EnterMatchmaking", "YA_SquadEnterMatchmaking":
 		return buildMmogEnterMatchmakingPayload(requestName, playerPID, payload)
 	case "YA_LeaveMatchmaking":
@@ -1613,7 +1724,8 @@ func firstMmogInt32(payload []byte, fallback int32, names ...string) int32 {
 
 func isMmogPlayerMutationRequest(requestName string) bool {
 	switch requestName {
-	case "YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
+	case "YA_SavePlayerDisplayInformation",
+		"YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
 		"YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
 		return true
 	default:
@@ -1632,6 +1744,16 @@ func appendMmogFleetRawFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byt
 	return b, stack
 }
 
+func appendMmogFleetRuntimeFields(b []byte, fleet mmogFleetSeed) []byte {
+	b = appendMmogBoolField(b, "AutoRepair", false)
+	b = appendMmogBoolField(b, "Maintenance", false)
+	b = appendMmogInt32Field(b, "LastWinTime", 0)
+	b = appendMmogInt32Field(b, "ChargingBeginTime", 0)
+	b = appendMmogInt32Field(b, "ChargingCharges", 1)
+	b = appendMmogInt32Field(b, "Rating", 0)
+	return b
+}
+
 func appendMmogFleetBackendFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
 	b = appendMmogInt32Field(b, "m_fleetId", fleet.fleetID)
 	b = appendMmogInt32Field(b, "m_flagshipIndex", fleet.flagshipIndex())
@@ -1648,6 +1770,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b = appendMmogStringField(b, "Name", fleet.displayName)
 	b = appendMmogInt32Field(b, "FleetType", fleet.fleetType)
 	b = appendMmogInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
+	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
 	b = appendMmogInt32Field(b, "flagshipShipId", fleet.flagshipShipID)
 	b = appendMmogInt32Field(b, "flagshipLoadoutID", fleet.flagshipLoadoutID)
@@ -1667,20 +1790,40 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	b = appendMmogStringField(b, "RT", "YA_PlayerFleets")
 	b, stack = appendMmogArrayStart(b, stack, "result")
 	for _, fleet := range state.activeFleets() {
-		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
+		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet.flagshipOnly())
 	}
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
 
-func appendMmogStaticFleetTypeEntry(b []byte, stack []int, id int32, tiers []int32) ([]byte, []int) {
+func appendMmogStaticFleetTypeEntry(b []byte, stack []int, eligibility dreadconfig.FleetEligibility) ([]byte, []int) {
 	b, stack = appendMmogUnnamedObjectStart(b, stack)
-	b = appendMmogInt32Field(b, "ID", id)
+	b = appendMmogInt32Field(b, "ID", eligibility.FleetType)
+	b = appendMmogInt32Field(b, "ShipsToUnlock", eligibility.NumShipsToUnlockFleet)
+	b = appendMmogInt32Field(b, "BaseMaintenanceCost", eligibility.BaseMaintenanceCost)
+	b = appendMmogStringField(b, "FleetRatingMin", strconv.FormatFloat(eligibility.FleetRatingMin, 'f', 1, 64))
+	b = appendMmogInt32Field(b, "FleetRatingCost", eligibility.FleetRatingCost)
+	b = appendMmogInt32Field(b, "ChargeTime", eligibility.MaintenanceTime)
+	b = appendMmogInt32Field(b, "ChargeCost", 0)
+	b = appendMmogInt32Field(b, "AvailableCharges", 1)
 	b, stack = appendMmogArrayStart(b, stack, "Tiers")
-	for _, tier := range tiers {
+	for _, tier := range eligibility.AllowedTiers {
 		b = appendMmogUnnamedInt32Field(b, tier)
 	}
 	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogObjectEnd(b, stack)
+	return b, stack
+}
+
+func appendMmogStaticFleetMaintenanceConfig(b []byte, stack []int) ([]byte, []int) {
+	b, stack = appendMmogObjectStart(b, stack, "Maintenance")
+	b = appendMmogStringField(b, "EliteCostMultiplier", "1.0")
+	b = appendMmogStringField(b, "NonEliteCostMultiplier", "1.0")
+	b = appendMmogInt32Field(b, "TopPlayerCount", 0)
+	b = appendMmogStringField(b, "TopPlayerCostMultiplier", "1.0")
+	b = appendMmogStringField(b, "NonTopPlayerCostMultiplier", "1.0")
+	b = appendMmogStringField(b, "WinningCostMultiplier", "1.0")
+	b = appendMmogStringField(b, "LoosingCostMultiplier", "1.0")
 	b, stack = appendMmogObjectEnd(b, stack)
 	return b, stack
 }
@@ -1728,13 +1871,14 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 	b = appendMmogStringField(b, "RT", "YA_RequestStaticFleetData")
 	b, stack = appendMmogObjectStart(b, stack, "result")
 	b, stack = appendMmogArrayStart(b, stack, "FleetTypes")
-	for _, fleet := range mmogFleetSeeds() {
-		b, stack = appendMmogStaticFleetTypeEntry(b, stack, fleet.fleetType, fleet.tiers)
+	for _, eligibility := range configBackedFleetEligibilities() {
+		b, stack = appendMmogStaticFleetTypeEntry(b, stack, eligibility)
 	}
 	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogStaticFleetMaintenanceConfig(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "Fleets")
-	for _, fleet := range state.fleets {
-		b, stack = appendMmogStaticFleetEntry(b, stack, fleet)
+	for _, fleet := range state.activeFleets() {
+		b, stack = appendMmogStaticFleetEntry(b, stack, fleet.flagshipOnly())
 	}
 	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "ShipLoadouts")
@@ -1749,32 +1893,122 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte
 	var stack []int
-	const eventsTableJSON = `[{"Name":"starter_event","m_name":"Starter Event","m_descShort":"","m_descLong":"","m_map":"","m_mapParameters":"","m_gameMode":"YGMT_TE","m_color":{"R":1.0,"G":1.0,"B":1.0,"A":1.0},"m_imageSmall":"","m_imageLarge":"","m_rewardLevels":[],"m_startDate":"","m_endDate":"","m_season":"starter_season"}]`
-	const seasonsTableJSON = `[{"Name":"starter_season","m_active":false,"m_name":"Starter Season","m_descShort":"","m_descLong":"","m_imageLarge":"","m_imageSmall":"","m_rewardLevels":[]}]`
+	seasonsJSON := mustMarshalSeasonTableJSON(mmogSeasonTablePayload{
+		Seasons: []mmogSeasonTableRow{
+			{
+				SeasonID:    "PVE_Season1",
+				Name:        "Miner Inconvenience",
+				Description: "Season 1 long Description",
+				StartDate:   "2018-05-07T09:45:00Z",
+				EndDate:     "2018-05-16T16:59:59Z",
+				RewardLevel: 1,
+				Category:    "PvE",
+				Status:      "Active",
+				Amount:      0,
+				Currency:    "",
+				Flags:       0,
+			},
+			{
+				SeasonID:    "PVE_Season3",
+				Name:        "Battleship Down",
+				Description: "Season 3 long Description",
+				StartDate:   "2018-02-06T00:00:00Z",
+				EndDate:     "2018-02-14T23:59:59Z",
+				RewardLevel: 1,
+				Category:    "PvE",
+				Status:      "Inactive",
+				Amount:      0,
+				Currency:    "",
+				Flags:       0,
+			},
+		},
+		CurrentSeason: "PVE_Season1",
+	})
+	eventsJSON := mustMarshalSeasonTableJSON(mmogEventTablePayload{
+		Events: []mmogEventTableRow{
+			{
+				EventID:     "PVE_S1E1",
+				Name:        "Incident Management",
+				Description: "Miner Inconvenience - Incident Management",
+				StartDate:   "2018-05-16T16:00:00Z",
+				EndDate:     "2018-05-16T16:19:59Z",
+				RewardLevel: 1,
+				Category:    "PvE",
+				Status:      "Active",
+				GameModes:   []string{"YGMT_HORDE"},
+				Amount:      1,
+				Currency:    "",
+				SeasonID:    "PVE_Season1",
+				Season:      "PVE_Season1",
+				MSeason:     "PVE_Season1",
+			},
+		},
+		ActiveEvent: "PVE_S1E1",
+	})
 
 	b = appendMmogStringField(b, "RT", "YA_GetSeasonData")
 	b, stack = appendMmogObjectStart(b, stack, "result")
-	b = appendMmogStringField(b, "Events", eventsTableJSON)
-	b = appendMmogStringField(b, "Seasons", seasonsTableJSON)
-	b = appendMmogStringField(b, "CurrentSeason", "")
-	b = appendMmogStringField(b, "ActiveEvent", "")
+	b = appendMmogStringField(b, "Events", eventsJSON)
+	b = appendMmogStringField(b, "Seasons", seasonsJSON)
+	b = appendMmogStringField(b, "CurrentSeason", "PVE_Season1")
+	b = appendMmogStringField(b, "ActiveEvent", "PVE_S1E1")
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
 
+type mmogSeasonTablePayload struct {
+	Seasons       []mmogSeasonTableRow `json:"Seasons"`
+	CurrentSeason string               `json:"CurrentSeason"`
+}
+
+type mmogSeasonTableRow struct {
+	SeasonID    string `json:"SeasonID"`
+	Name        string `json:"Name"`
+	Description string `json:"Description"`
+	StartDate   string `json:"start_date"`
+	EndDate     string `json:"end_date"`
+	RewardLevel int32  `json:"RewardLevel"`
+	Category    string `json:"Category"`
+	Status      string `json:"Status"`
+	Amount      int32  `json:"Amount"`
+	Currency    string `json:"Currency"`
+	Flags       int32  `json:"Flags"`
+}
+
+type mmogEventTablePayload struct {
+	Events      []mmogEventTableRow `json:"Events"`
+	ActiveEvent string              `json:"ActiveEvent"`
+}
+
+type mmogEventTableRow struct {
+	EventID     string   `json:"EventID"`
+	Name        string   `json:"Name"`
+	Description string   `json:"Description"`
+	StartDate   string   `json:"start_date"`
+	EndDate     string   `json:"end_date"`
+	RewardLevel int32    `json:"RewardLevel"`
+	Category    string   `json:"Category"`
+	Status      string   `json:"Status"`
+	GameModes   []string `json:"GameModes"`
+	Amount      int32    `json:"Amount"`
+	Currency    string   `json:"Currency"`
+	SeasonID    string   `json:"SeasonID,omitempty"`
+	Season      string   `json:"Season,omitempty"`
+	MSeason     string   `json:"m_season,omitempty"`
+}
+
+func mustMarshalSeasonTableJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic("marshal season data payload: " + err.Error())
+	}
+	return string(data)
+}
+
 func buildMmogSeasonProgressPayload() []byte {
 	var b []byte
-	var stack []int
 
 	b = appendMmogStringField(b, "RT", "YA_GetSeasonProgress")
-	b, stack = appendMmogObjectStart(b, stack, "result")
-	b, stack = appendMmogArrayStart(b, stack, "EventScores")
-	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogArrayStart(b, stack, "EventRewards")
-	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogArrayStart(b, stack, "SeasonRewards")
-	b, stack = appendMmogObjectEnd(b, stack)
-	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
 
@@ -1790,7 +2024,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	now := int32(time.Now().Unix())
 	membershipExpiresAt := now + 31536000
 	state := mmogPlayerStateForPID(playerPID)
-	starterFleet := state.activeFleet()
+	starterFleet := state.activeFleet().flagshipOnly()
 
 	b = appendMmogStringField(b, "RT", rt)
 	b = appendMmogStringField(b, "PID", playerPID)
@@ -1816,20 +2050,40 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = appendMmogInt32Field(b, "repSU_M", 0)
 	b = appendMmogInt32Field(b, "repSU_H", 0)
 	b = appendMmogInt32Field(b, "ReputationGoalID", 0)
-	b = appendMmogStringField(b, "disp", "Local")
+	b = appendMmogStringField(b, "disp", "")
 	b = appendMmogStringField(b, "motto", "")
 	b = appendMmogStringField(b, "SGD", "")
 	b = appendMmogStringField(b, "SCtA", "")
-	b = appendMmogInt32Field(b, "LGVersion", 0)
+	b = appendMmogStringField(b, "LGVersion", "0")
 	b, stack = appendMmogObjectStart(b, stack, "Membership")
 	b = appendMmogInt32Field(b, "ExpireTime", membershipExpiresAt)
 	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogInt32Field(b, "DailyContractStateID", 0)
+	b = appendMmogInt32Field(b, "LastContractsAssignment", 0)
+	b = appendMmogInt32Field(b, "DailyContractLastReplaceTime", 0)
 	b = appendMmogInt32Field(b, "FreeXp", state.freeXP)
+	b, stack = appendMmogArrayStart(b, stack, "ShipXps")
+	b, stack = appendMmogObjectEnd(b, stack)
 	b = appendMmogInt32Field(b, "ServerTime", now)
 	b = appendMmogInt32Field(b, "ClientTime", now)
 	b = appendMmogStringField(b, "PublicIP", "")
 	b = appendMmogStringField(b, "Country", "")
 	b = appendMmogStringField(b, "Platform", "steam")
+	b, stack = appendMmogObjectStart(b, stack, "CustomRoom")
+	b = appendMmogStringField(b, "roomId", "")
+	b = appendMmogStringField(b, "hostPid", "")
+	b, stack = appendMmogArrayStart(b, stack, "teams")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "settings")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "supportedModes")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogStringField(b, "gameMode", "")
+	b = appendMmogStringField(b, "mapName", "")
+	b, stack = appendMmogArrayStart(b, stack, "supportedMaps")
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogStringField(b, "chatRoomId", "")
+	b, stack = appendMmogObjectEnd(b, stack)
 	b = appendMmogStringField(b, "FleetID", starterFleet.token)
 	b = appendMmogStringField(b, "fleetId", starterFleet.token)
 	b = appendMmogInt32Field(b, "fleet id", starterFleet.fleetID)
@@ -1859,9 +2113,17 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "Friends")
 	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogArrayStart(b, stack, "Squad")
+	b, stack = appendMmogObjectStart(b, stack, "Squad")
+	b = appendMmogStringField(b, "PID", "")
+	b = appendMmogStringField(b, "PIDLeader", "")
+	b, stack = appendMmogArrayStart(b, stack, "Users")
 	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogArrayStart(b, stack, "PPF")
+	b = appendMmogStringField(b, "GameMode", "")
+	b = appendMmogInt32Field(b, "State", 0)
+	b = appendMmogInt32Field(b, "FleetType", 0)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogStringField(b, "PPF", "")
+	b = appendMmogInt32Field(b, "tslm", 0)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
@@ -1966,6 +2228,15 @@ func starterLoadoutByPrecastID(precastLoadoutID int32) (mmogShipLoadoutSeed, boo
 	return mmogShipLoadoutSeed{}, false
 }
 
+func starterLoadoutByShipID(shipID int32) (mmogShipLoadoutSeed, bool) {
+	for _, loadout := range starterShipLoadouts() {
+		if loadout.ship.id == shipID {
+			return loadout, true
+		}
+	}
+	return mmogShipLoadoutSeed{}, false
+}
+
 func appendMmogOwnedShipLoadoutsArray(b []byte, stack []int, name string, playerPID string, fleet mmogFleetSeed) ([]byte, []int) {
 	b, stack = appendMmogArrayStart(b, stack, name)
 	for _, loadout := range fleet.shipLoadouts {
@@ -1994,6 +2265,12 @@ func appendMmogOwnedShipLoadoutEntry(b []byte, stack []int, playerPID string, lo
 
 func appendMmogShipLoadoutInfoEntry(b []byte, stack []int, loadout mmogShipLoadoutSeed) ([]byte, []int) {
 	b, stack = appendMmogUnnamedObjectStart(b, stack)
+	b, stack = appendMmogShipLoadoutInfoFields(b, stack, loadout)
+	b, stack = appendMmogObjectEnd(b, stack)
+	return b, stack
+}
+
+func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoadoutSeed) ([]byte, []int) {
 	b = appendMmogStringField(b, "ID", loadout.entryID())
 	b = appendMmogStringField(b, "m_loadoutName", loadout.loadoutName)
 	b = appendMmogInt32Field(b, "LoadoutID", loadout.loadoutID())
@@ -2014,7 +2291,6 @@ func appendMmogShipLoadoutInfoEntry(b []byte, stack []int, loadout mmogShipLoado
 	b, stack = appendMmogInt32ArrayField(b, stack, "m_abilityItemIds", loadout.abilityItemIDs())
 	b, stack = appendMmogInt32ArrayField(b, stack, "m_perkIds", loadout.perkItemIDs())
 	b, stack = appendMmogStringArrayField(b, stack, "m_perkNames", loadout.perkNames())
-	b, stack = appendMmogObjectEnd(b, stack)
 	return b, stack
 }
 
@@ -2308,6 +2584,9 @@ func buildMmogTechTreePayload() []byte {
 	}
 	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "moduleUiData")
+	for _, module := range starterModuleUIDataSeeds() {
+		b, stack = appendMmogModuleUIDataEntry(b, stack, module)
+	}
 	b, stack = appendMmogObjectEnd(b, stack)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
@@ -2316,8 +2595,13 @@ func buildMmogTechTreePayload() []byte {
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = appendMmogUnnamedObjectStart(b, stack)
 	b = appendMmogInt32Field(b, "NodeID", ship.nodeID)
+	b = appendMmogInt32Field(b, "ShipID", ship.id)
+	b = appendMmogInt32Field(b, "shipID", ship.id)
+	b = appendMmogInt32Field(b, "m_shipID", ship.id)
+	b = appendMmogInt32Field(b, "m_shipId", ship.id)
 	b = appendMmogInt32Field(b, "ParentID", ship.parentID)
 	b = appendMmogStringField(b, "Name", ship.name)
+	b = appendMmogStringField(b, "m_name", ship.name)
 	b = appendMmogInt32Field(b, "NodeType", ship.nodeType)
 	b = appendMmogInt32Field(b, "Tier", 1)
 	b = appendMmogInt32Field(b, "UnlockCost", ship.unlockCost)
@@ -2328,6 +2612,54 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	b = appendMmogBoolField(b, "bIsNew", ship.bIsNew)
 	b = appendMmogInt32Field(b, "ShipClass", ship.shipClass)
 	b = appendMmogInt32Field(b, "Weight", ship.weight)
+	b = appendMmogInt32Field(b, "m_currentBaseClass", ship.shipClass)
+	b = appendMmogInt32Field(b, "m_currentShipClass", ship.shipClass)
+	b = appendMmogInt32Field(b, "m_shipTier", 1)
+	b = appendMmogInt32Field(b, "m_weight", ship.weight)
+	if loadout, ok := starterLoadoutByShipID(ship.id); ok {
+		b = appendMmogInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
+		b, stack = appendMmogObjectStart(b, stack, "m_shipLoadoutInfo")
+		b, stack = appendMmogShipLoadoutInfoFields(b, stack, loadout)
+		b, stack = appendMmogObjectEnd(b, stack)
+	}
+	b, stack = appendMmogObjectEnd(b, stack)
+	return b, stack
+}
+
+func appendMmogItemPriceDataFields(b []byte) []byte {
+	b = appendMmogBoolField(b, "m_hasPriceChanged", false)
+	b = appendMmogStringField(b, "m_currencyCode", "")
+	b = appendMmogInt32Field(b, "m_realCurrency", 0)
+	b = appendMmogInt32Field(b, "m_hardCurrency", 0)
+	b = appendMmogInt32Field(b, "m_softCurrency", 0)
+	b = appendMmogInt32Field(b, "m_freeXP", 0)
+	b = appendMmogInt32Field(b, "m_shipXP", 0)
+	return b
+}
+
+func appendMmogModuleUIDataEntry(b []byte, stack []int, module mmogModuleUIDataSeed) ([]byte, []int) {
+	b, stack = appendMmogUnnamedObjectStart(b, stack)
+	b, stack = appendMmogObjectStart(b, stack, "m_techTreePurchasePrice")
+	b = appendMmogItemPriceDataFields(b)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogObjectStart(b, stack, "m_techTreeResearchPrice")
+	b = appendMmogItemPriceDataFields(b)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogInt32Field(b, "m_techTreeItemState", 4)
+	b = appendMmogInt32Field(b, "m_index", module.index)
+	b = appendMmogInt32Field(b, "m_priceCurrency", 0)
+	b = appendMmogInt32Field(b, "m_priceAmount", 0)
+	b = appendMmogInt32Field(b, "m_originalPriceCurrency", 0)
+	b = appendMmogInt32Field(b, "m_originalPriceAmount", 0)
+	b = appendMmogStringField(b, "m_moduleTexturePath", "")
+	b = appendMmogStringField(b, "m_iconTexturePath", "")
+	b = appendMmogInt32Field(b, "m_tier", 1)
+	b = appendMmogBoolField(b, "m_shouldShowTierIcon", true)
+	b = appendMmogBoolField(b, "m_isOwned", module.owned)
+	b = appendMmogBoolField(b, "m_isOnSale", false)
+	b = appendMmogBoolField(b, "m_isNew", false)
+	b = appendMmogBoolField(b, "m_isEquipped", module.equipped)
+	b = appendMmogInt32Field(b, "m_itemId", module.itemID)
 	b, stack = appendMmogObjectEnd(b, stack)
 	return b, stack
 }
@@ -2430,8 +2762,11 @@ func buildMmogDailyContractsDataPayload() []byte {
 	b = appendMmogInt32Field(b, "DailyContractLastReplaceTime", 0)
 	b, stack = appendMmogArrayStart(b, stack, "Quests")
 	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "Contracts")
+	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogObjectStart(b, stack, "result")
-	b = appendMmogStringField(b, fieldStatus, "ok")
+	b, stack = appendMmogArrayStart(b, stack, "Contracts")
+	b, stack = appendMmogObjectEnd(b, stack)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
@@ -2556,6 +2891,59 @@ func buildMmogCheckReturnPayload() []byte {
 	b = appendMmogBoolField(b, "canReturn", true)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
+}
+
+func buildMmogPlayersInformationPayload(playerPID string, _ []byte) []byte {
+	var b []byte
+	var stack []int
+	pid := normalizedPlayerStatePID(playerPID)
+	state := mmogPlayerStateForPID(pid)
+	flagshipFleet := state.activeFleet().flagshipOnly()
+
+	b = appendMmogStringField(b, "RT", "YA_GetPlayersInformation")
+	b, stack = appendMmogArrayStart(b, stack, "players")
+	b, stack = appendMmogPlayerInformationEntry(b, stack, pid, flagshipFleet, state)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayStart(b, stack, "result")
+	b, stack = appendMmogPlayerInformationEntry(b, stack, pid, flagshipFleet, state)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b, _ = appendMmogObjectEnd(b, stack)
+	return b
+}
+
+func appendMmogPlayerInformationEntry(b []byte, stack []int, playerPID string, _ mmogFleetSeed, state mmogPlayerState) ([]byte, []int) {
+	b, stack = appendMmogUnnamedObjectStart(b, stack)
+	b = appendMmogInt32Field(b, "playerId", numericMmogPlayerID(playerPID))
+	b = appendMmogStringField(b, "userPid", normalizedPlayerStatePID(playerPID))
+	b = appendMmogStringField(b, "displayName", state.displayName)
+	b, stack = appendMmogObjectStart(b, stack, "displayInfo")
+	b = appendMmogStringField(b, "displayName", state.displayName)
+	b = appendMmogStringField(b, "DisplayInfo", state.displayInfo)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogStringField(b, "DisplayName", state.displayName)
+	b = appendMmogInt32Field(b, "team", 0)
+	b = appendMmogInt32Field(b, "slot", 0)
+	b, stack = appendMmogObjectStart(b, stack, "info")
+	b = appendMmogInt32Field(b, "UnlockedFleetType", 1)
+	b = appendMmogInt32Field(b, "Rank", state.currentRank)
+	b = appendMmogStringField(b, "DisplayInfo", state.displayInfo)
+	b, stack = appendMmogObjectEnd(b, stack)
+	b = appendMmogInt32Field(b, "state", 0)
+	b, stack = appendMmogInt32ArrayField(b, stack, "validFleets", []int32{1})
+	b, stack = appendMmogObjectEnd(b, stack)
+	return b, stack
+}
+
+func numericMmogPlayerID(playerPID string) int32 {
+	normalized := normalizedPlayerStatePID(playerPID)
+	if len(normalized) < 8 {
+		return 1
+	}
+	value, err := strconv.ParseUint(normalized[:8], 16, 32)
+	if err != nil {
+		return 1
+	}
+	return int32(value & 0x7fffffff)
 }
 
 func extractMmogPlayerPID(payload []byte) string {
@@ -3197,6 +3585,12 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
 				return
 			}
 			log.WithField("remote", remote).Debug("firmament: sent presence status result")
+		case "presence.data.list":
+			if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceDataListResult(method)); err != nil {
+				log.WithError(err).WithField("remote", remote).Warn("firmament: write presence data result failed")
+				return
+			}
+			log.WithFields(logrus.Fields{"remote": remote, fieldMethod: method}).Info("firmament: sent presence data empty-state result")
 		default:
 			if isFirmamentSocialMethod(method) && msg["id"] != nil {
 				if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceResult(method)); err != nil {
@@ -3240,6 +3634,12 @@ func firmamentPresenceResult(method string) map[string]interface{} {
 	if strings.Contains(method, "listing") {
 		result["listing"] = []interface{}{}
 	}
+	return result
+}
+
+func firmamentPresenceDataListResult(method string) map[string]interface{} {
+	result := firmamentPresenceResult(method)
+	result["result"] = []interface{}{}
 	return result
 }
 

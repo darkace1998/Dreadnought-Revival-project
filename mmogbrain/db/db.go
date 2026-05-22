@@ -123,6 +123,8 @@ var migrations = []string{
 		PRIMARY KEY (user_id, contract_id),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	`ALTER TABLE player_state ADD COLUMN display_name TEXT NOT NULL DEFAULT 'Local'`,
+	`ALTER TABLE player_state ADD COLUMN display_info TEXT NOT NULL DEFAULT ''`,
 }
 
 func Open(path string) (*sql.DB, error) {

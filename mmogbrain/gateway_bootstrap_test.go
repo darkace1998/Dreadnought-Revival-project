@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,6 +274,12 @@ func assertGatewayMarketIdentity(t *testing.T, entry map[string]any, fieldPrefix
 	externalID := gatewayJSONString(t, entry, "external_id")
 	if externalID == "" {
 		t.Fatalf("%s external_id should not be empty", fieldPrefix)
+	}
+	if strings.ContainsAny(externalID, `/\."'`) {
+		t.Fatalf("%s external_id = %q, want client-safe non-asset identifier", fieldPrefix, externalID)
+	}
+	if sku := gatewayJSONString(t, entry, "Sku"); strings.ContainsAny(sku, `/\."'`) {
+		t.Fatalf("%s Sku = %q, want client-safe non-asset identifier", fieldPrefix, sku)
 	}
 	itemID := gatewayJSONInt32(t, entry["item_id"], fieldPrefix+".item_id")
 	entityID := gatewayJSONString(t, entry, "entity_id")
@@ -684,7 +691,7 @@ func TestGatewayBootstrapPinsSharedStarterIdentityListsAndOwnedMetadata(t *testi
 	}
 
 	shipIDs := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids")
-	wantShipIDs := dreadconfig.StarterInventoryShipIDs()
+	wantShipIDs := runtimeStarterShipIDsFromShared(t)
 	if len(shipIDs) != len(wantShipIDs) {
 		t.Fatalf("starter_ship_ids count = %d, want %d", len(shipIDs), len(wantShipIDs))
 	}
@@ -714,8 +721,12 @@ func TestGatewayBootstrapPinsSharedStarterIdentityListsAndOwnedMetadata(t *testi
 		if !ok {
 			t.Fatalf("owned inventory missing shared item %d", item.Item.ItemID)
 		}
-		if owned.externalID != item.Item.AssetPath {
-			t.Fatalf("owned item %d external_id = %q, want %q", item.Item.ItemID, owned.externalID, item.Item.AssetPath)
+		wantExternalID := extractedMarketItemExternalID(item.Item.ItemID, "")
+		if owned.externalID != wantExternalID {
+			t.Fatalf("owned item %d external_id = %q, want %q", item.Item.ItemID, owned.externalID, wantExternalID)
+		}
+		if strings.ContainsAny(owned.externalID, `/\."'`) {
+			t.Fatalf("owned item %d external_id = %q, want client-safe non-asset identifier", item.Item.ItemID, owned.externalID)
 		}
 		if owned.itemType != item.Item.ItemType {
 			t.Fatalf("owned item %d item_type = %q, want %q", item.Item.ItemID, owned.itemType, item.Item.ItemType)
@@ -749,8 +760,9 @@ func TestGatewayCatalogEntitiesExposeMarketUICompatibilityFields(t *testing.T) {
 
 	entities := gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
 	firstStarter := starterShipLoadouts()[0]
+	sharedFirstStarter := sharedStarterLoadoutByID(t, firstStarter.loadoutID())
 	starterLoadout := gatewayCatalogEntityByItemID(t, entities, firstStarter.loadoutID(), "item_catalog_real entity")
-	assertGatewayMarketUICompatibilityFields(t, starterLoadout, "starter loadout catalog item", true, "0", "Loadout", firstStarter.ship.name)
+	assertGatewayMarketUICompatibilityFields(t, starterLoadout, "starter loadout catalog item", true, "0", "Loadout", sharedFirstStarter.ShipName)
 
 	for _, entity := range entities {
 		entityMap, ok := entity.(map[string]any)
@@ -785,19 +797,20 @@ func TestGatewayCatalogEntitiesUseExtractedCategoryBuckets(t *testing.T) {
 
 	firstStarter := starterShipLoadouts()[0]
 	starterWeapon := gatewayCatalogEntityByItemID(t, entities, firstStarter.weaponPrimaryItemID(), "starter weapon catalog item")
+	sharedFirstStarter := sharedStarterLoadoutByID(t, firstStarter.loadoutID())
 	if got := gatewayJSONString(t, starterWeapon, "CategoryName"); got != "Weapons" {
 		t.Fatalf("starter weapon CategoryName = %q, want Weapons", got)
 	}
-	if got := gatewayJSONString(t, starterWeapon, "ParentCategoryName"); got != firstStarter.ship.name {
-		t.Fatalf("starter weapon ParentCategoryName = %q, want %q", got, firstStarter.ship.name)
+	if got := gatewayJSONString(t, starterWeapon, "ParentCategoryName"); got != sharedFirstStarter.ShipName {
+		t.Fatalf("starter weapon ParentCategoryName = %q, want %q", got, sharedFirstStarter.ShipName)
 	}
 
 	starterAbility := gatewayCatalogEntityByItemID(t, entities, firstStarter.abilityItemID(0), "starter ability catalog item")
 	if got := gatewayJSONString(t, starterAbility, "CategoryName"); got != "Modules" {
 		t.Fatalf("starter ability CategoryName = %q, want Modules", got)
 	}
-	if got := gatewayJSONString(t, starterAbility, "ParentCategoryName"); got != firstStarter.ship.name {
-		t.Fatalf("starter ability ParentCategoryName = %q, want %q", got, firstStarter.ship.name)
+	if got := gatewayJSONString(t, starterAbility, "ParentCategoryName"); got != sharedFirstStarter.ShipName {
+		t.Fatalf("starter ability ParentCategoryName = %q, want %q", got, sharedFirstStarter.ShipName)
 	}
 }
 
@@ -837,7 +850,7 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	entities := gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
 	starterLoadout := gatewayCatalogEntityByExternalID(t, entities, starterLoadoutSeed.externalID, "item_catalog_real entity")
 	assertGatewayOwnershipFields(t, starterLoadout, "starter loadout before YA_PlayerGet", false)
-	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout before YA_PlayerGet", firstStarter.loadoutID(), firstStarter.ship.id, firstStarter.loadoutID())
+	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout before YA_PlayerGet", firstStarter.loadoutID(), starterLoadoutSeed.shipID, firstStarter.loadoutID())
 
 	state := &mmogConnState{playerPID: normalizeMmogPlayerPID(testGatewayUserID)}
 	if err := handlePlayerGetSatisfied(logrus.New(), &captureConn{}, "test-remote", nil, false, state, "client-request"); err != nil {
@@ -858,8 +871,8 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	if got := len(ownedItems); got != len(starterOwnedInventorySeeds()) {
 		t.Fatalf("owned item count after YA_PlayerGet = %d, want %d", got, len(starterOwnedInventorySeeds()))
 	}
-	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
-		t.Fatalf("starter_ship_ids count after YA_PlayerGet = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
+	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(runtimeStarterShipIDsFromShared(t)) {
+		t.Fatalf("starter_ship_ids count after YA_PlayerGet = %d, want %d", len(starterShips), len(runtimeStarterShipIDsFromShared(t)))
 	}
 	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 		t.Fatalf("starter_loadout_ids count after YA_PlayerGet = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
@@ -867,7 +880,7 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	entities = gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
 	starterLoadout = gatewayCatalogEntityByItemID(t, entities, firstStarter.loadoutID(), "item_catalog_real entity")
 	assertGatewayOwnershipFields(t, starterLoadout, "starter loadout after YA_PlayerGet", true)
-	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout after YA_PlayerGet", firstStarter.loadoutID(), firstStarter.ship.id, firstStarter.loadoutID())
+	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout after YA_PlayerGet", firstStarter.loadoutID(), starterLoadoutSeed.shipID, firstStarter.loadoutID())
 }
 
 func TestGatewayBootstrapHandlersWaitForPlayerDataReady(t *testing.T) {
@@ -907,8 +920,8 @@ func TestGatewayBootstrapHandlersWaitForPlayerDataReady(t *testing.T) {
 			if got := len(gatewayJSONArray(t, payload[gatewayKeyOwnedItems], gatewayKeyOwnedItems)); got != len(starterOwnedInventorySeeds()) {
 				t.Fatalf("owned item count after quick readiness = %d, want %d", got, len(starterOwnedInventorySeeds()))
 			}
-			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
-				t.Fatalf("starter_ship_ids count after quick readiness = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
+			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(runtimeStarterShipIDsFromShared(t)) {
+				t.Fatalf("starter_ship_ids count after quick readiness = %d, want %d", len(starterShips), len(runtimeStarterShipIDsFromShared(t)))
 			}
 			if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 				t.Fatalf("starter_loadout_ids count after quick readiness = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))

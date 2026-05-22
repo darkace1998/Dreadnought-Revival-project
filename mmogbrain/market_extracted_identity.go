@@ -1,6 +1,11 @@
 package main
 
-import dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+import (
+	"strconv"
+	"strings"
+
+	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+)
 
 type extractedMarketItemMetadata struct {
 	displayName       string
@@ -52,10 +57,47 @@ func extractedMarketItemDisplayName(itemID int32, fallback string) string {
 
 func extractedMarketItemExternalID(itemID int32, fallback string) string {
 	meta, ok := extractedMarketItemMetadataForID(itemID)
-	if !ok || meta.externalID == "" {
-		return fallback
+	if ok {
+		return clientSafeMarketExternalID(meta.itemType, meta.displayName, itemID)
 	}
-	return meta.externalID
+	if fallback != "" {
+		return sanitizeMarketExternalID(fallback)
+	}
+	return "item_" + strconv.FormatInt(int64(itemID), 10)
+}
+
+func clientSafeMarketExternalID(itemType string, displayName string, itemID int32) string {
+	prefix := sanitizeMarketExternalID(itemType)
+	name := sanitizeMarketExternalID(displayName)
+	id := strconv.FormatInt(int64(itemID), 10)
+	switch {
+	case prefix != "" && name != "":
+		return prefix + "_" + name + "_" + id
+	case prefix != "":
+		return prefix + "_" + id
+	case name != "":
+		return name + "_" + id
+	default:
+		return "item_" + id
+	}
+}
+
+func sanitizeMarketExternalID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
 }
 
 func extractedStarterLoadoutIdentityForShip(shipName string) (extractedStarterLoadoutIdentity, bool) {

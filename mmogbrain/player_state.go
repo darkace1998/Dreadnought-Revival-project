@@ -13,8 +13,12 @@ var (
 	mmogPlayerStateDB *sql.DB
 )
 
+const defaultCaptainDisplayInfo = "GENDER_MALE;#iiS=872349903#iiH=872349830#iiHw=-1#iiEw=-1#iiMs=855572488#iiMt=855572501#iiMe=855572482#iiMn=855572504#bIam=0"
+
 type mmogPlayerState struct {
 	playerPID       string
+	displayName     string
+	displayInfo     string
 	softCurrency    int32
 	premiumCurrency int32
 	freeXP          int32
@@ -39,6 +43,8 @@ func currentMmogPlayerStateDB() *sql.DB {
 func defaultMmogPlayerState(playerPID string) mmogPlayerState {
 	return mmogPlayerState{
 		playerPID:       normalizedPlayerStatePID(playerPID),
+		displayName:     "Local",
+		displayInfo:     defaultCaptainDisplayInfo,
 		softCurrency:    10000,
 		premiumCurrency: 0,
 		freeXP:          0,
@@ -54,6 +60,13 @@ func normalizedPlayerStatePID(playerPID string) string {
 		return normalized
 	}
 	return defaultMmogPlayerPID
+}
+
+func normalizedCaptainDisplayInfo(displayInfo string) string {
+	if trimmed := strings.TrimSpace(displayInfo); trimmed != "" {
+		return trimmed
+	}
+	return defaultCaptainDisplayInfo
 }
 
 func mmogPlayerStateForPID(playerPID string) mmogPlayerState {
@@ -75,10 +88,11 @@ func loadMmogPlayerState(playerPID string) (mmogPlayerState, error) {
 	}
 
 	state := defaultMmogPlayerState(pid)
-	if err := database.QueryRow(`SELECT soft_currency,premium_currency,free_xp,current_xp,current_rank,rank_xp FROM player_state WHERE user_id=?`, pid).
-		Scan(&state.softCurrency, &state.premiumCurrency, &state.freeXP, &state.currentXP, &state.currentRank, &state.rankXP); err != nil {
+	if err := database.QueryRow(`SELECT display_name,display_info,soft_currency,premium_currency,free_xp,current_xp,current_rank,rank_xp FROM player_state WHERE user_id=?`, pid).
+		Scan(&state.displayName, &state.displayInfo, &state.softCurrency, &state.premiumCurrency, &state.freeXP, &state.currentXP, &state.currentRank, &state.rankXP); err != nil {
 		return mmogPlayerState{}, fmt.Errorf("load player state: %w", err)
 	}
+	state.displayInfo = normalizedCaptainDisplayInfo(state.displayInfo)
 
 	loadouts, err := loadPersistedShipLoadouts(database, pid)
 	if err != nil {
@@ -127,6 +141,9 @@ func seedMmogPlayerState(database *sql.DB, playerPID string) error {
 	if err := normalizePersistedStarterNativeLoadoutIDs(tx, pid); err != nil {
 		return err
 	}
+	if err := normalizePersistedStarterShipIDs(tx, pid); err != nil {
+		return err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit seed player state: %w", err)
@@ -139,6 +156,20 @@ func normalizePersistedStarterNativeLoadoutIDs(exec sqlExecer, playerPID string)
 		if _, err := exec.Exec(`UPDATE player_ship_loadouts SET native_loadout_id=?, updated_at=datetime('now') WHERE user_id=? AND precast_loadout_id=? AND native_loadout_id<>?`,
 			nativeID, playerPID, precastID, nativeID); err != nil {
 			return fmt.Errorf("normalize starter native loadout id %d: %w", precastID, err)
+		}
+	}
+	return nil
+}
+
+func normalizePersistedStarterShipIDs(exec sqlExecer, playerPID string) error {
+	for _, loadout := range starterShipLoadouts() {
+		if _, err := exec.Exec(`UPDATE player_ship_loadouts SET ship_id=?, updated_at=datetime('now') WHERE user_id=? AND precast_loadout_id=? AND ship_id<>?`,
+			loadout.ship.id, playerPID, loadout.precastLoadoutID, loadout.ship.id); err != nil {
+			return fmt.Errorf("normalize starter ship id %d: %w", loadout.precastLoadoutID, err)
+		}
+		if _, err := exec.Exec(`UPDATE player_fleets SET flagship_ship_id=?, updated_at=datetime('now') WHERE user_id=? AND flagship_loadout_id=? AND flagship_ship_id<>?`,
+			loadout.ship.id, playerPID, loadout.precastLoadoutID, loadout.ship.id); err != nil {
+			return fmt.Errorf("normalize starter flagship ship id %d: %w", loadout.precastLoadoutID, err)
 		}
 	}
 	return nil
@@ -275,13 +306,13 @@ func dreadFleetEligibilityByType(fleetType int32) (struct {
 }
 
 func persistedShipByID(shipID int32) mmogShipSeed {
-	if ship, ok := starterBootstrapShipByID(shipID); ok {
-		return ship
-	}
 	for _, ship := range allT1Ships() {
 		if ship.id == shipID {
 			return ship
 		}
+	}
+	if ship, ok := runtimeStarterShipForInstallerShipID(shipID); ok {
+		return ship
 	}
 	return mmogShipSeed{id: shipID, name: fmt.Sprintf("Ship %d", shipID), owned: true, nodeID: shipID}
 }
@@ -357,6 +388,8 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 		return err
 	}
 	switch requestName {
+	case "YA_SavePlayerDisplayInformation":
+		return persistSavePlayerDisplayInformation(database, pid, payload)
 	case "YA_UpdateShipLoadout":
 		return persistUpdateShipLoadout(database, pid, payload)
 	case "YA_RenameShipLoadout":
@@ -372,6 +405,28 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 	default:
 		return nil
 	}
+}
+
+func persistSavePlayerDisplayInformation(database *sql.DB, playerPID string, payload []byte) error {
+	displayInfo := extractMmogStringField(payload, "DisplayInfo")
+	displayName := firstMmogStringField(payload, "DisplayName", "displayName")
+
+	if displayInfo == "" && strings.TrimSpace(displayName) == "" {
+		return nil
+	}
+
+	if displayName == "" {
+		if err := database.QueryRow(`SELECT display_name FROM player_state WHERE user_id=?`, playerPID).Scan(&displayName); err != nil {
+			return fmt.Errorf("load existing display name: %w", err)
+		}
+	}
+	displayInfo = normalizedCaptainDisplayInfo(displayInfo)
+
+	if _, err := database.Exec(`UPDATE player_state SET display_name=?, display_info=?, updated_at=datetime('now') WHERE user_id=?`,
+		displayName, displayInfo, playerPID); err != nil {
+		return fmt.Errorf("save player display information: %w", err)
+	}
+	return nil
 }
 
 func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte) error {
