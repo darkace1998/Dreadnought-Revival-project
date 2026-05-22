@@ -27,7 +27,7 @@ func Issue(secret []byte, userID, username, audience string, ttl time.Duration) 
 		"user_id":  userID,
 		"username": username,
 		"realm":    "dreadnought.pc-us",
-		"iss":      "dreadnought-private-server",
+		"iss":      "Dreadnought-Revival-project",
 		"sub":      userID,
 		"aud":      audience,
 		"exp":      now.Add(ttl).Unix(),

@@ -1,4 +1,4 @@
-# Dreadnought Private Server — API Reference
+# Dreadnought Revival Project — API Reference
 
 ## Auth Server (`:8081`)
 

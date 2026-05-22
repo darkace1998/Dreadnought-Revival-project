@@ -1,4 +1,6 @@
-# Dreadnought Private Server
+# Dreadnought Revival Project
+
+[![GitHub](https://img.shields.io/badge/GitHub-darkace1998/Dreadnought--Revival--project-blue?logo=github)](https://github.com/darkace1998/Dreadnought-Revival-project)
 
 A community-operated private server infrastructure for the discontinued game **Dreadnought** (UE4, Steam App 835860). Allows players to connect, authenticate, queue for matches, and play on instances of the original game engine.
 
@@ -43,9 +45,10 @@ apt install golang openssl wine  # or wine-staging for better compatibility
 go version  # needs 1.21+
 ```
 
-### 2. Build and configure
+### 2. Clone and setup
 ```bash
-cd /root/projects/dreadnought-private-server
+git clone https://github.com/darkace1998/Dreadnought-Revival-project.git
+cd Dreadnought-Revival-project
 
 # Generate TLS certificates
 bash scripts/gen-certs.sh
@@ -124,7 +127,7 @@ wine DreadGame-Win64-Shipping.exe \
 ## Project Structure
 
 ```
-dreadnought-private-server/
+Dreadnought-Revival-project/
 ├── auth-server/     # Go + SQLite — player auth (JWT)
 ├── legacy-api/      # Go + SQLite — player profiles, inventory, match history
 ├── mmogbrain/       # Go + SQLite — matchmaking queue, match lifecycle, chat

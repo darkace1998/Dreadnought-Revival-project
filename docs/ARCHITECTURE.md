@@ -1,4 +1,4 @@
-# Dreadnought Private Server — Architecture
+# Dreadnought Revival Project — Architecture
 
 ## Overview
 

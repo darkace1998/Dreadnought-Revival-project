@@ -1,4 +1,4 @@
-# Dreadnought Protocol Documentation
+# Dreadnought Revival Project — Protocol Documentation
 
 > Derived from reverse engineering analysis in `/src/Documents/` (Sessions 1–7)
 
@@ -48,7 +48,7 @@ The Dreadnought client expects a JWT with these specific claims:
   "username": "<display_name>",
   "realm": "dreadnought.pc-us",
   "aud": "dreadnought",
-  "iss": "dreadnought-private-server",
+  "iss": "Dreadnought-Revival-project",
   "iat": 1234567890,
   "exp": 1234654290
 }
