@@ -18,15 +18,15 @@ var migrations = []string{
 		status      TEXT NOT NULL DEFAULT 'waiting'
 	)`,
 	`CREATE TABLE IF NOT EXISTS matches (
-		id          TEXT PRIMARY KEY,
-		game_mode   TEXT NOT NULL,
-		map         TEXT NOT NULL,
-		server_ip   TEXT NOT NULL DEFAULT '',
-		server_port INTEGER NOT NULL DEFAULT 0,
-		status      TEXT NOT NULL DEFAULT 'forming',
-		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-		started_at  TEXT,
-		ended_at    TEXT
+	    id          TEXT PRIMARY KEY,
+	    game_mode   TEXT NOT NULL,
+	    map         TEXT NOT NULL,
+	    server_ip   TEXT NOT NULL DEFAULT '',
+	    server_port INTEGER NOT NULL DEFAULT 0,
+	    status      TEXT NOT NULL DEFAULT 'forming',
+	    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+	    started_at  TEXT,
+	    ended_at    TEXT
 	)`,
 	`CREATE TABLE IF NOT EXISTS match_slots (
 		match_id  TEXT NOT NULL,
@@ -43,22 +43,25 @@ var migrations = []string{
 		sent_at   TEXT NOT NULL DEFAULT (datetime('now'))
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_state (
-		user_id          TEXT PRIMARY KEY,
-		soft_currency    INTEGER NOT NULL DEFAULT 10000,
-		premium_currency INTEGER NOT NULL DEFAULT 0,
-		free_xp          INTEGER NOT NULL DEFAULT 0,
-		current_xp       INTEGER NOT NULL DEFAULT 0,
-		current_rank     INTEGER NOT NULL DEFAULT 1,
-		rank_xp          INTEGER NOT NULL DEFAULT 0,
-		created_at       TEXT NOT NULL DEFAULT (datetime('now')),
-		updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+	    user_id          TEXT PRIMARY KEY,
+	    soft_currency    INTEGER NOT NULL DEFAULT 10000 CHECK (soft_currency >= 0),
+	    premium_currency INTEGER NOT NULL DEFAULT 0 CHECK (premium_currency >= 0),  -- Maps to DREAD's "hard_currency"
+	    free_xp          INTEGER NOT NULL DEFAULT 0 CHECK (free_xp >= 0),
+	    current_xp       INTEGER NOT NULL DEFAULT 0 CHECK (current_xp >= 0),
+	    current_rank     INTEGER NOT NULL DEFAULT 1 CHECK (current_rank >= 1),
+	    rank_xp          INTEGER NOT NULL DEFAULT 5000 CHECK (rank_xp >= current_xp),  -- XP required for next rank (e.g., 5000 for Rank 2)
+	    display_name     TEXT NOT NULL DEFAULT 'Local' CHECK (length(display_name) <= 32),
+	    display_info     TEXT NOT NULL DEFAULT '' CHECK (length(display_info) <= 64),
+	    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+	    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+	    CHECK (current_xp <= rank_xp)  -- Prevents invalid XP overflow
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_fleets (
 		user_id                   TEXT NOT NULL,
 		fleet_id                  INTEGER NOT NULL,
 		token                     TEXT NOT NULL,
 		display_name              TEXT NOT NULL,
-		fleet_type                INTEGER NOT NULL,
+		fleet_type                INTEGER NOT NULL DEFAULT 1,
 		active                    INTEGER NOT NULL DEFAULT 0,
 		flagship_ship_id          INTEGER NOT NULL DEFAULT 0,
 		flagship_loadout_id       INTEGER NOT NULL DEFAULT 0,
@@ -69,59 +72,60 @@ var migrations = []string{
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_ship_loadouts (
-		user_id                  TEXT NOT NULL,
-		loadout_id               INTEGER NOT NULL,
-		native_loadout_id        TEXT NOT NULL,
-		precast_loadout_id       INTEGER NOT NULL,
-		ship_id                  INTEGER NOT NULL,
-		loadout_index            INTEGER NOT NULL DEFAULT 0,
-		loadout_name             TEXT NOT NULL,
-		position                 INTEGER NOT NULL DEFAULT 0,
-		active                   INTEGER NOT NULL DEFAULT 0,
-		weapon_primary_id        INTEGER NOT NULL DEFAULT 0,
-		weapon_secondary_id      INTEGER NOT NULL DEFAULT 0,
-		ability_primary_id       INTEGER NOT NULL DEFAULT 0,
-		ability_secondary_id     INTEGER NOT NULL DEFAULT 0,
-		ability_perimeter_id     INTEGER NOT NULL DEFAULT 0,
-		ability_internal_id      INTEGER NOT NULL DEFAULT 0,
-		perk_com_id              INTEGER NOT NULL DEFAULT 0,
-		perk_weapon_id           INTEGER NOT NULL DEFAULT 0,
-		perk_navigation_id       INTEGER NOT NULL DEFAULT 0,
-		perk_engineer_id         INTEGER NOT NULL DEFAULT 0,
-		created_at               TEXT NOT NULL DEFAULT (datetime('now')),
-		updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
-		PRIMARY KEY (user_id, loadout_id),
-		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	    user_id                  TEXT NOT NULL,
+	    loadout_id               INTEGER NOT NULL,
+	    native_loadout_id        TEXT NOT NULL,
+	    precast_loadout_id       INTEGER NOT NULL,
+	    ship_id                  INTEGER NOT NULL,
+	    loadout_index            INTEGER NOT NULL DEFAULT 0,    -- First slot
+	    loadout_name             TEXT NOT NULL,
+	    position                 INTEGER NOT NULL DEFAULT 0,    -- First position
+	    active                   INTEGER NOT NULL DEFAULT 0,    -- Inactive by default
+	    weapon_primary_id        INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    weapon_secondary_id      INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    ability_primary_id       INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    ability_secondary_id     INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    ability_perimeter_id     INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    ability_internal_id      INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    perk_com_id              INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    perk_weapon_id           INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    perk_navigation_id       INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    perk_engineer_id         INTEGER NOT NULL DEFAULT -1,   -- -1 = unset
+	    created_at               TEXT NOT NULL DEFAULT (datetime('now')),
+	    updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
+	    PRIMARY KEY (user_id, loadout_id),
+	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_fleet_loadouts (
-		user_id    TEXT NOT NULL,
-		fleet_id   INTEGER NOT NULL,
-		position   INTEGER NOT NULL,
-		loadout_id INTEGER NOT NULL,
-		PRIMARY KEY (user_id, fleet_id, position),
-		FOREIGN KEY (user_id, fleet_id) REFERENCES player_fleets(user_id, fleet_id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id, loadout_id) REFERENCES player_ship_loadouts(user_id, loadout_id) ON DELETE CASCADE
+	    user_id    TEXT NOT NULL,
+	    fleet_id   INTEGER NOT NULL,
+	    position   INTEGER NOT NULL DEFAULT 0, 
+	    loadout_id INTEGER NOT NULL,
+	    PRIMARY KEY (user_id, fleet_id, position),
+	    FOREIGN KEY (user_id, fleet_id) REFERENCES player_fleets(user_id, fleet_id) ON DELETE CASCADE,
+	    FOREIGN KEY (user_id, loadout_id) REFERENCES player_ship_loadouts(user_id, loadout_id) ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_officers (
-		user_id    TEXT NOT NULL,
-		officer_id TEXT NOT NULL,
-		payload    TEXT NOT NULL DEFAULT '{}',
-		created_at TEXT NOT NULL DEFAULT (datetime('now')),
-		updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-		PRIMARY KEY (user_id, officer_id),
-		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	    user_id    TEXT NOT NULL,
+	    officer_id TEXT NOT NULL,
+	    payload    TEXT NOT NULL DEFAULT '{}', 
+	    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+	    PRIMARY KEY (user_id, officer_id),
+	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_contracts (
-		user_id      TEXT NOT NULL,
-		contract_id  TEXT NOT NULL,
-		state        TEXT NOT NULL DEFAULT 'active',
-		progress     INTEGER NOT NULL DEFAULT 0,
-		completed_at TEXT,
-		payload      TEXT NOT NULL DEFAULT '{}',
-		created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-		updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
-		PRIMARY KEY (user_id, contract_id),
-		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	    user_id      TEXT NOT NULL,
+	    contract_id  TEXT NOT NULL,
+	    state        TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'completed', 'expired', 'claimed', 'rerolled')),
+	    progress     INTEGER NOT NULL DEFAULT 0,
+	    completed_at TEXT,
+	    payload      TEXT NOT NULL DEFAULT '{}',
+	    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+	    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+	    PRIMARY KEY (user_id, contract_id),
+	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE,
+	    CHECK (progress >= 0 AND progress <= 100)  -- Progress as percentage
 	)`,
 	`ALTER TABLE player_state ADD COLUMN display_name TEXT NOT NULL DEFAULT 'Local'`,
 	`ALTER TABLE player_state ADD COLUMN display_info TEXT NOT NULL DEFAULT ''`,
