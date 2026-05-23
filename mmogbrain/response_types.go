@@ -84,6 +84,23 @@ func nativeStarterLoadoutID(precastLoadoutID int32) (string, bool) {
 	return id, ok
 }
 
+func fleetStarterShipIDForPrecast(precastLoadoutID int32) int32 {
+	if id, ok := fleetStarterShipIDsByPrecastID[precastLoadoutID]; ok {
+		return id
+	}
+	return 0
+}
+
+func countOwnedShips(ships []mmogShipSeed) int {
+	count := 0
+	for _, ship := range ships {
+		if ship.owned {
+			count++
+		}
+	}
+	return count
+}
+
 func (loadout mmogShipLoadoutSeed) weaponIDs() []int32 {
 	return collectNonZeroItemIDs(loadout.weaponPrimaryItemID(), loadout.weaponSecondaryItemID())
 }
@@ -488,7 +505,7 @@ func starterShipLoadouts() []mmogShipLoadoutSeed {
 		}
 		loadouts = append(loadouts, mmogShipLoadoutSeed{
 			ship:              ship,
-			fleetShipID:       fleetStarterShipIDsByPrecastID[sharedLoadout.LoadoutID],
+			fleetShipID:       fleetStarterShipIDForPrecast(sharedLoadout.LoadoutID),
 			precastLoadoutID:  sharedLoadout.LoadoutID,
 			nativeLoadoutID:   nativeID,
 			loadoutIndex:      0,

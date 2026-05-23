@@ -32,7 +32,7 @@ func configBackedFleetToken(eligibility dreadconfig.FleetEligibility) string {
 
 func buildConfigBackedStarterFleet(loadouts []mmogShipLoadoutSeed) mmogFleetSeed {
 	eligibility := mustConfigBackedFleetEligibility("Recruit")
-	return mmogFleetSeed{
+	fleet := mmogFleetSeed{
 		fleetID:              eligibility.FleetType,
 		token:                configBackedFleetToken(eligibility),
 		displayName:          eligibility.DisplayName,
@@ -40,10 +40,14 @@ func buildConfigBackedStarterFleet(loadouts []mmogShipLoadoutSeed) mmogFleetSeed
 		tiers:                append([]int32(nil), eligibility.AllowedTiers...),
 		active:               true,
 		shipLoadouts:         loadouts,
-		flagshipShipID:       loadouts[0].effectiveFleetShipID(),
-		flagshipLoadoutID:    loadouts[0].loadoutID(),
-		flagshipLoadoutIndex: loadouts[0].loadoutIndex,
+		flagshipLoadoutIndex: -1,
 	}
+	if len(loadouts) > 0 {
+		fleet.flagshipShipID = loadouts[0].effectiveFleetShipID()
+		fleet.flagshipLoadoutID = loadouts[0].loadoutID()
+		fleet.flagshipLoadoutIndex = loadouts[0].loadoutIndex
+	}
+	return fleet
 }
 
 func buildConfigBackedFleetSeeds(starterLoadouts []mmogShipLoadoutSeed) []mmogFleetSeed {
@@ -60,9 +64,11 @@ func buildConfigBackedFleetSeeds(starterLoadouts []mmogShipLoadoutSeed) []mmogFl
 		if strings.EqualFold(strings.TrimSpace(eligibility.Token), "Recruit") {
 			fleet.active = true
 			fleet.shipLoadouts = starterLoadouts
-			fleet.flagshipShipID = starterLoadouts[0].effectiveFleetShipID()
-			fleet.flagshipLoadoutID = starterLoadouts[0].loadoutID()
-			fleet.flagshipLoadoutIndex = starterLoadouts[0].loadoutIndex
+			if len(starterLoadouts) > 0 {
+				fleet.flagshipShipID = starterLoadouts[0].effectiveFleetShipID()
+				fleet.flagshipLoadoutID = starterLoadouts[0].loadoutID()
+				fleet.flagshipLoadoutIndex = starterLoadouts[0].loadoutIndex
+			}
 		} else {
 			fleet.flagshipLoadoutIndex = -1
 		}

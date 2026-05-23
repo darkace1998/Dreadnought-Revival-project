@@ -851,7 +851,7 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
 	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
 	b = protocol.AppendInt32Field(b, "XPToNextRank", 1000)
-	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(len(allT1Ships())))
+	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(countOwnedShips(allT1Ships())))
 	b, stack = protocol.AppendArrayStart(b, stack, "shipProgressionUiData")
 	for _, ship := range allT1Ships() {
 		b, stack = appendMmogShipProgression(b, stack, ship)
