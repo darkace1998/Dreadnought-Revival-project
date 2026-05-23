@@ -287,31 +287,6 @@ func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 	}}
 }
 
-func gatewayBundleItemSeeds() []gatewayCatalogEntitySeed {
-	items := starterOwnedInventorySeeds()
-	seeds := make([]gatewayCatalogEntitySeed, 0, len(items))
-	for _, item := range items {
-		seeds = append(seeds, gatewayCatalogEntitySeed{
-			itemID:          item.itemID,
-			externalID:      item.externalID,
-			displayName:     item.name,
-			description:     item.description,
-			entityType:      "item",
-			itemType:        item.itemType,
-			manufacturer:    item.manufacturer,
-			shipID:          item.shipID,
-			loadoutID:       item.loadoutID,
-			priceCurrencyID: "CR",
-			priceAmount:     0,
-			owned:           true,
-			hidden:          item.itemType != "ship" && item.itemType != "loadout",
-			quantity:        item.quantity,
-			gateIdentity:    true,
-		})
-	}
-	return seeds
-}
-
 func gatewayMarketIdentity(seed gatewayCatalogEntitySeed, _ bool) (int32, int32, int32, string) {
 	itemID := seed.itemID
 	shipID := seed.shipID
@@ -418,9 +393,4 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	return entity
 }
 
-func maxInt32(a int32, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
+

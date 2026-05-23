@@ -65,21 +65,6 @@ func (loadout mmogShipLoadoutSeed) displayInfo() string {
 	return ""
 }
 
-func (loadout mmogShipLoadoutSeed) slotItemID(offset int32) int32 {
-	return loadout.precastLoadoutID*10 + offset
-}
-
-func nativeLoadoutObjectID(assetPath string) string {
-	assetName := assetPath
-	if idx := strings.LastIndex(assetName, "/"); idx >= 0 {
-		assetName = assetName[idx+1:]
-	}
-	if assetName == "" {
-		return ""
-	}
-	return assetName + ".Default__" + assetName + "_C"
-}
-
 var nativeStarterLoadoutIDsByPrecastID = map[int32]string{
 	33489262: "Default__VH_AssaultMedium_T1_Loadout_BP_C",
 	33489423: "Default__VH_DreadnoughtMedium_Loadout_BP_C",
@@ -156,13 +141,6 @@ type mmogModuleUIDataSeed struct {
 	index    int32
 	owned    bool
 	equipped bool
-}
-
-func nonZeroLoadoutItemID(value int32, fallback int32) int32 {
-	if value != 0 {
-		return value
-	}
-	return fallback
 }
 
 func collectNonZeroItemIDs(ids ...int32) []int32 {
@@ -535,10 +513,6 @@ func mmogFleetSeeds() []mmogFleetSeed {
 	return buildConfigBackedFleetSeeds(starterShipLoadouts())
 }
 
-func activeMmogFleetSeeds() []mmogFleetSeed {
-	return []mmogFleetSeed{starterFleetState()}
-}
-
 func starterShipIDs() []int32 {
 	return starterFleetState().shipIDs()
 }
@@ -564,23 +538,6 @@ type mmogInventoryItemSeed struct {
 	manufacturer string
 	slotName     string
 	quantity     int32
-}
-
-func inventoryDisplayType(itemType string) string {
-	switch itemType {
-	case "ship":
-		return "Ship"
-	case "loadout":
-		return "Loadout"
-	case "weapon":
-		return "Weapon"
-	case "ability":
-		return "Ability"
-	case "perk":
-		return "Perk"
-	default:
-		return itemType
-	}
 }
 
 func starterSeedSlug(value string) string {

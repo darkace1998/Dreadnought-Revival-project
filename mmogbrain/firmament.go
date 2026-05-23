@@ -18,8 +18,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const firmamentPlayerDataReadyTimeout = 30 * time.Second
-
 // startFirmamentServer runs a raw TLS server on addr for the YFirmament game protocol.
 // Protocol confirmed from Ghidra: FUN_142aa39a0 splits incoming bytes on '\n' (newline 0x0a),
 // so each message is a JSON object terminated with a newline byte.
