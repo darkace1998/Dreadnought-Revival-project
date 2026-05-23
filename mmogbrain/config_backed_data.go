@@ -63,6 +63,8 @@ func buildConfigBackedFleetSeeds(starterLoadouts []mmogShipLoadoutSeed) []mmogFl
 			fleet.flagshipShipID = starterLoadouts[0].effectiveFleetShipID()
 			fleet.flagshipLoadoutID = starterLoadouts[0].loadoutID()
 			fleet.flagshipLoadoutIndex = starterLoadouts[0].loadoutIndex
+		} else {
+			fleet.flagshipLoadoutIndex = -1
 		}
 		fleets = append(fleets, fleet)
 	}

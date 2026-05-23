@@ -239,6 +239,9 @@ func loadPersistedFleets(database *sql.DB, playerPID string, loadouts map[int32]
 	if err != nil {
 		return nil, fmt.Errorf("load player_fleets: %w", err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var fleets []mmogFleetSeed
 	for rows.Next() {
@@ -486,7 +489,9 @@ func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte)
 		fleetID = starterFleetState().fleetID
 	}
 	if loadoutID == 0 && shipID != 0 {
-		_ = database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID)
+		if err := database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("lookup loadout for set fleet flagship: %w", err)
+		}
 	}
 	if loadoutID == 0 {
 		return nil
@@ -496,7 +501,9 @@ func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte)
 		return fmt.Errorf("lookup flagship index: %w", err)
 	}
 	if shipID == 0 {
-		_ = database.QueryRow(`SELECT ship_id FROM player_ship_loadouts WHERE user_id=? AND loadout_id=?`, playerPID, loadoutID).Scan(&shipID)
+		if err := database.QueryRow(`SELECT ship_id FROM player_ship_loadouts WHERE user_id=? AND loadout_id=?`, playerPID, loadoutID).Scan(&shipID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("lookup ship for set fleet flagship: %w", err)
+		}
 	}
 	if _, err := database.Exec(`UPDATE player_fleets SET active=0, updated_at=datetime('now') WHERE user_id=?`, playerPID); err != nil {
 		return fmt.Errorf("clear active fleets: %w", err)
@@ -530,7 +537,9 @@ func persistAddToFleet(database *sql.DB, playerPID string, payload []byte) error
 		fleetID = starterFleetState().fleetID
 	}
 	if loadoutID == 0 && shipID != 0 {
-		_ = database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID)
+		if err := database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("lookup loadout for add to fleet: %w", err)
+		}
 	}
 	if loadoutID == 0 {
 		return nil

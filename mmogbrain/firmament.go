@@ -22,7 +22,7 @@ import (
 // Protocol confirmed from Ghidra: FUN_142aa39a0 splits incoming bytes on '\n' (newline 0x0a),
 // so each message is a JSON object terminated with a newline byte.
 // The game does NOT speak HTTP/WebSocket — it uses SSL_read/SSL_write directly.
-func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFile, keyFile string) {
+func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFile, keyFile string, secret []byte) {
 	var tlsCfg *tls.Config
 
 	if certFile != "" && keyFile != "" {
@@ -80,7 +80,10 @@ func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFil
 			}
 		}
 
-		ip := conn.RemoteAddr().(*net.TCPAddr).IP.String()
+		ip := conn.RemoteAddr().String()
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
 		connCountsMu.Lock()
 		count := connCounts[ip]
 		if count >= maxConnsPerIP {
@@ -101,7 +104,7 @@ func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFil
 				}
 				connCountsMu.Unlock()
 			}()
-			routeFirmamentOrMmogConn(log, conn, tlsCfg)
+			routeFirmamentOrMmogConn(log, conn, tlsCfg, secret)
 		}()
 	}
 }
@@ -112,7 +115,7 @@ func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFil
 // from observing that both protocols share port :48843 in the production server — the game
 // uses TLS for Firmament (JSON-RPC over SSL_read/SSL_write) and plain TCP with stream
 // cipher for MMOG binary frames. Confirmed working with unmodified Dreadnought client.
-func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Config) {
+func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Config, secret []byte) {
 	remote := conn.RemoteAddr().String()
 	log.WithField("remote", remote).Info("firmament/mmog: TCP connection accepted")
 
@@ -128,12 +131,12 @@ func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Con
 
 	buffered := protocol.NewBufferedConn(conn)
 	if tlsCfg != nil && len(first) > 0 && first[0] == 0x16 {
-		handleFirmamentConn(log, tls.Server(buffered, tlsCfg))
+		handleFirmamentConn(log, tls.Server(buffered, tlsCfg), secret)
 		return
 	}
 
 	if tlsCfg == nil {
-		handleFirmamentConn(log, buffered)
+		handleFirmamentConn(log, buffered, secret)
 		return
 	}
 
@@ -163,7 +166,7 @@ func (r *rawByteLogger) Write(p []byte) (int, error) {
 //	FUN_142aa9800: on first message from server, checks status=="connection_successful" → state=1
 //	FUN_142aa5b90: at state=1 game sends auth payload (JWT + "Dreadnought Game Client")
 //	FUN_142aa79f0: on server response, checks status=="success" → state=3 (hangar active)
-func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
+func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	defer func() {
 		_ = conn.Close()
 	}()
@@ -202,7 +205,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
 	// FUN_142aa9800 also reads data.notice.client_id (offset +0x98) as PeerID.
 	peerID := uuid.New().String()
 	msgID := uuid.New().String()
-	hello, _ := json.Marshal(map[string]interface{}{
+	hello, err := json.Marshal(map[string]interface{}{
 		"id":   msgID,
 		"type": "server.notice",
 		"data": map[string]interface{}{
@@ -213,6 +216,10 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
 			},
 		},
 	})
+	if err != nil {
+		log.WithError(err).WithField("remote", remote).Error("firmament: marshal hello failed")
+		return
+	}
 	hello = append(hello, '\r', '\n')
 	if _, err := conn.Write(hello); err != nil {
 		log.WithError(err).WithField("remote", remote).Error("firmament: write hello failed")
@@ -256,29 +263,31 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
 		reqID = uuid.New().String()
 	}
 	now := time.Now().Unix()
-	tokenStr, _ := authPayload["params"].(map[string]interface{})
+	params, _ := authPayload["params"].(map[string]interface{})
 	var jwtToken string
-	if tokenStr != nil {
-		jwtToken, _ = tokenStr["token"].(string)
+	if params != nil {
+		jwtToken, _ = params["token"].(string)
 	}
 	if jwtToken == "" {
-		jwtToken = "ok"
+		log.WithField("remote", remote).Warn("firmament: no JWT token provided, rejecting connection")
+		return
 	}
-	var playerID string
-	if strings.TrimSpace(jwtToken) != "" {
-		claims := jwt.MapClaims{}
-		parser := jwt.NewParser()
-		if _, _, err := parser.ParseUnverified(jwtToken, claims); err == nil {
-			playerID = protocol.GatewayPlayerDataReadyKey(protocol.GatewayClaimsUserID(claims))
-		}
+	token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
+		return secret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}))
+	if err != nil || !token.Valid {
+		log.WithError(err).WithField("remote", remote).Warn("firmament: invalid JWT, rejecting connection")
+		return
 	}
+	claims, _ := token.Claims.(jwt.MapClaims)
+	playerID := protocol.GatewayPlayerDataReadyKey(protocol.GatewayClaimsUserID(claims))
 	if playerID == "" {
 		log.WithField("remote", remote).Warn("firmament: auth payload missing player identity; sending success without MMOG readiness gate")
 	} else if !gatewayPlayerDataReadyForUser(playerID) {
 		log.WithFields(logrus.Fields{"remote": remote, "pid": playerID}).Info("firmament: sending auth success before MMOG player data is ready; gateway inventory bootstrap remains gated on YA_PlayerGet")
 	}
 
-	authOK, _ := json.Marshal(map[string]interface{}{
+	authOK, err := json.Marshal(map[string]interface{}{
 		"id":   reqID,
 		"type": "server.notice",
 		"data": map[string]interface{}{
@@ -295,6 +304,10 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn) {
 			},
 		},
 	})
+	if err != nil {
+		log.WithError(err).WithField("remote", remote).Error("firmament: marshal authOK failed")
+		return
+	}
 	authOK = append(authOK, '\r', '\n')
 	if _, err := conn.Write(authOK); err != nil {
 		log.WithError(err).WithField("remote", remote).Error("firmament: write auth_ok failed")

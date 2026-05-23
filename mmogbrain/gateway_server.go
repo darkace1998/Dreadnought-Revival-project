@@ -171,6 +171,12 @@ func makeGatewayHandler(log *logrus.Logger, secret []byte, fn func(w http.Respon
 			return
 		}
 		claims, _ := token.Claims.(jwt.MapClaims)
+		aud, _ := claims["aud"].(string)
+		if aud != "launcher" && aud != "dreadnought" {
+			log.Warn("gateway: invalid audience")
+			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
+			return
+		}
 		fn(w, r, claims)
 	}
 }
@@ -183,6 +189,10 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 	username, _ := claims["username"].(string)
 	if userID == "" {
 		userID, _ = claims["sub"].(string)
+	}
+	if userID == "" {
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+		return
 	}
 
 	sessionID := uuid.New().String()
@@ -249,6 +259,10 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 	username, _ := claims["username"].(string)
 	if userID == "" {
 		userID, _ = claims["sub"].(string)
+	}
+	if userID == "" {
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+		return
 	}
 
 	authHdr := r.Header.Get("Authorization")

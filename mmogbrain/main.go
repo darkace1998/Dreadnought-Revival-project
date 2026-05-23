@@ -107,7 +107,7 @@ func main() {
 	// certificate check (confirmed via Ghidra: FUN_142aa3e00 "Firmament TLS Certificate check").
 	firmamentCert := getenv("FIRMAMENT_CERT", "")
 	firmamentKey := getenv("FIRMAMENT_KEY", "")
-	go startFirmamentServer(shutdownCtx, log, getenv("FIRMAMENT_ADDR", ":48843"), firmamentCert, firmamentKey)
+	go startFirmamentServer(shutdownCtx, log, getenv("FIRMAMENT_ADDR", ":48843"), firmamentCert, firmamentKey, secret)
 
 	// Gateway HTTPS server — the game sends REST API calls here for login, session, catalog, etc.
 	// Protocol confirmed from game logs: POST /api/v1/authentication/login with Bearer JWT.

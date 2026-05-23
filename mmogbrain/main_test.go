@@ -2090,7 +2090,7 @@ func TestFirmamentAuthSuccessDoesNotWaitForPlayerDataReady(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	done := make(chan struct{})
 	go func() {
-		handleFirmamentConn(logrus.New(), serverConn)
+		handleFirmamentConn(logrus.New(), serverConn, []byte("test-secret"))
 		close(done)
 	}()
 	t.Cleanup(func() {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -72,6 +73,8 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 							"remote": remote,
 							"key":    hex.EncodeToString(key[:]),
 						}).Info("mmog: initialized application decryptor")
+					} else {
+						log.WithField("remote", remote).Warn("mmog: client nonce too short, cipher not initialized")
 					}
 					handshakeStage = 2
 				}
@@ -102,6 +105,11 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 					if err := processMmogAppFrames(log, conn, remote, frames, appEncoder, true, state); err != nil {
 						return
 					}
+				} else {
+					log.WithFields(logrus.Fields{
+						"remote": remote,
+						"bytes":  len(data),
+					}).Warn("mmog: encrypted frames received but cipher is nil, dropping")
 				}
 			}
 		}
@@ -303,7 +311,8 @@ func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requ
 	wire := response
 	if encryptResponses {
 		if appEncoder == nil {
-			return nil
+			log.WithField("request", fmt.Sprintf("%x", requestID)).Warn("mmog: encrypt requested but encoder is nil")
+			return fmt.Errorf("encrypt requested but encoder is nil")
 		}
 		wire = appEncoder.Encrypt(response)
 	}

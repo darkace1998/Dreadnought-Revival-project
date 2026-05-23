@@ -287,7 +287,7 @@ type mmogFleetSeed struct {
 }
 
 func (fleet mmogFleetSeed) flagshipIndex() int32 {
-	if fleet.flagshipLoadoutIndex >= 0 {
+	if fleet.flagshipLoadoutIndex > 0 {
 		return fleet.flagshipLoadoutIndex
 	}
 	for idx, loadout := range fleet.shipLoadouts {
