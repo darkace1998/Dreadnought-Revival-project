@@ -19,6 +19,10 @@ func (c *BufferedConn) Read(p []byte) (int, error) {
 	return c.reader.Read(p)
 }
 
+func (c *BufferedConn) Peek(n int) ([]byte, error) {
+	return c.reader.Peek(n)
+}
+
 type AppFrame struct {
 	MsgType   uint16
 	RequestID [16]byte

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/hex"
@@ -119,9 +118,9 @@ func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Con
 	remote := conn.RemoteAddr().String()
 	log.WithField("remote", remote).Info("firmament/mmog: TCP connection accepted")
 
-	reader := bufio.NewReader(conn)
+	buffered := protocol.NewBufferedConn(conn)
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	first, err := reader.Peek(1)
+	first, err := buffered.Peek(1)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil {
 		log.WithError(err).WithField("remote", remote).Warn("firmament/mmog: initial read failed")
@@ -129,7 +128,6 @@ func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Con
 		return
 	}
 
-	buffered := protocol.NewBufferedConn(conn)
 	if tlsCfg != nil && len(first) > 0 && first[0] == 0x16 {
 		handleFirmamentConn(log, tls.Server(buffered, tlsCfg), secret)
 		return
