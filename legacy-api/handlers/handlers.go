@@ -18,29 +18,40 @@ type Handler struct {
 	Log *logrus.Logger
 }
 
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 type playerProfile struct {
 	DisplayName string
 	CreatedAt   string
 }
 
-func (h *Handler) ensurePlayerStats(userID string) error {
-	_, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID)
+func ensurePlayerStatsExec(exec execer, userID string) error {
+	_, err := exec.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID)
 	return err
 }
 
-func (h *Handler) ensurePlayerProfile(userID string) (playerProfile, bool, error) {
-	var profile playerProfile
-	err := h.DB.QueryRow(
+func (h *Handler) ensurePlayerStats(userID string) error {
+	return ensurePlayerStatsExec(h.DB, userID)
+}
+
+// ensurePlayerProfile returns the player profile for the given user.
+// starterReady is true when the profile already existed with stats
+// initialized, meaning starter inventory has been bootstrapped.
+func (h *Handler) ensurePlayerProfile(userID string) (profile playerProfile, starterReady bool, err error) {
+	err = h.DB.QueryRow(
 		`SELECT display_name, created_at FROM player_profiles WHERE user_id=?`, userID,
 	).Scan(&profile.DisplayName, &profile.CreatedAt)
 	if err == nil {
-		if err := h.ensurePlayerStats(userID); err != nil {
-			return playerProfile{}, true, err
+		starterReady = true
+		if err = h.ensurePlayerStats(userID); err != nil {
+			return
 		}
-		return profile, true, nil
+		return
 	}
 	if err != sql.ErrNoRows {
-		return playerProfile{}, false, err
+		return
 	}
 
 	displayPrefix := userID
@@ -56,25 +67,23 @@ func (h *Handler) ensurePlayerProfile(userID string) (playerProfile, bool, error
 		uuid.New().String(), userID, profile.DisplayName,
 	)
 	if err != nil {
-		return playerProfile{}, false, err
+		return
 	}
-	if err := h.ensurePlayerStats(userID); err != nil {
-		return playerProfile{}, false, err
+	if err = h.ensurePlayerStats(userID); err != nil {
+		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return playerProfile{}, false, err
+		return
 	}
 	if rowsAffected > 0 {
-		return profile, false, nil
+		return
 	}
-	if err := h.DB.QueryRow(
+	err = h.DB.QueryRow(
 		`SELECT display_name, created_at FROM player_profiles WHERE user_id=?`, userID,
-	).Scan(&profile.DisplayName, &profile.CreatedAt); err != nil {
-		return playerProfile{}, false, err
-	}
-	return profile, false, nil
+	).Scan(&profile.DisplayName, &profile.CreatedAt)
+	return
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -366,10 +375,14 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		if p.Won {
 			winVal = 1
 		}
-		if _, err = tx.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, p.UserID); err != nil {
+		if err = ensurePlayerStatsExec(tx, p.UserID); err != nil {
 			h.Log.WithError(err).Error("post match result: ensure player stats")
 			writeError(w, http.StatusInternalServerError, "failed to record match")
 			return
+		}
+		scoreXP := p.Score / 10
+		if scoreXP < 1 {
+			scoreXP = 1
 		}
 		if _, err = tx.Exec(`UPDATE player_stats SET
 			kills=kills+?,
@@ -379,7 +392,7 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 			xp_total=xp_total+?,
 			updated_at=datetime('now')
 			WHERE user_id=?`,
-			p.Kills, p.Deaths, winVal, p.Score/10+50, p.UserID,
+			p.Kills, p.Deaths, winVal, scoreXP+50, p.UserID,
 		); err != nil {
 			h.Log.WithError(err).Error("post match result: update player stats")
 			writeError(w, http.StatusInternalServerError, "failed to record match")

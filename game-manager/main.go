@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -35,8 +36,8 @@ func main() {
 	wineExe := getenv("WINE_EXE", "wine")
 	masterURL := getenv("MASTER_URL", "http://127.0.0.1:8084")
 	serverIP := getenv("SERVER_IP", "127.0.0.1")
-	portStart := 7777
-	portEnd := 7877
+	portStart := getenvInt("PORT_RANGE_START", 7777)
+	portEnd := getenvInt("PORT_RANGE_END", 7877)
 
 	pool := portpool.New(portStart, portEnd)
 	sp := spawner.New(gameBinary, wineExe, masterURL, serverIP, log, pool.Release)
@@ -185,6 +186,15 @@ func main() {
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getenvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }

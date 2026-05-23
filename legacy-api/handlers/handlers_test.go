@@ -676,7 +676,7 @@ func seedLegacyProfile(t *testing.T, database *sql.DB, userID string) {
 	); err != nil {
 		t.Fatalf("insert legacy profile for %s: %v", userID, err)
 	}
-	if _, err := database.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID); err != nil {
+	if err := ensurePlayerStatsExec(database, userID); err != nil {
 		t.Fatalf("insert legacy stats for %s: %v", userID, err)
 	}
 }

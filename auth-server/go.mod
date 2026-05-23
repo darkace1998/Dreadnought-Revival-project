@@ -1,8 +1,9 @@
 module github.com/dreadnought-ps/auth-server
 
-go 1.25.0
+go 1.24.0
 
 require (
+	github.com/dreadnought-ps/shared v0.0.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -11,6 +12,8 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	golang.org/x/crypto v0.51.0
 )
+
+replace github.com/dreadnought-ps/shared => ../shared
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

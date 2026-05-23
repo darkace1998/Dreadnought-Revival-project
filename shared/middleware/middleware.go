@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -10,6 +11,25 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 )
+
+type contextKey string
+
+const UserIDKey contextKey = "user_id"
+const UsernameKey contextKey = "username"
+
+func UserIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(UserIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func UsernameFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(UsernameKey).(string); ok {
+		return v
+	}
+	return ""
+}
 
 // Claims represents the JWT payload used across Dreadnought services.
 type Claims struct {
@@ -54,10 +74,13 @@ func JWTMiddleware(secret []byte, log *logrus.Logger) func(http.Handler) http.Ha
 			}
 			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
 			return
-		audOk:
-			r.Header.Set("X-User-ID", claims.UserID)
-			r.Header.Set("X-Username", claims.Username)
-			next.ServeHTTP(w, r)
+	audOk:
+		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, UsernameKey, claims.Username)
+		r = r.WithContext(ctx)
+		r.Header.Set("X-User-ID", claims.UserID)
+		r.Header.Set("X-Username", claims.Username)
+		next.ServeHTTP(w, r)
 		})
 	}
 }

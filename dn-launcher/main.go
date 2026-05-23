@@ -446,7 +446,15 @@ func fatalf(format string, args ...any) {
 }
 
 func waitExit(code int) {
-	fmt.Println("\nPress Enter to exit...")
-	_, _ = fmt.Scanln()
+	fmt.Println("\nPress Enter to exit (or wait 5 seconds)...")
+	done := make(chan struct{})
+	go func() {
+		_, _ = fmt.Scanln()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+	}
 	os.Exit(code)
 }

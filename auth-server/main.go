@@ -15,6 +15,7 @@ import (
 	"github.com/dreadnought-ps/auth-server/db"
 	"github.com/dreadnought-ps/auth-server/handlers"
 	jwtPkg "github.com/dreadnought-ps/auth-server/jwt"
+	"github.com/dreadnought-ps/shared/middleware"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -147,6 +148,9 @@ func jwtMiddleware(secret []byte, database *sql.DB, next http.HandlerFunc) http.
 			return
 		}
 
+		ctx := context.WithValue(r.Context(), middleware.UserIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, middleware.UsernameKey, claims.Username)
+		r = r.WithContext(ctx)
 		r.Header.Set("X-User-ID", claims.UserID)
 		r.Header.Set("X-Username", claims.Username)
 		next(w, r)

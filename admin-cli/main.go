@@ -112,7 +112,15 @@ type client struct {
 	adminKey  string
 }
 
-func (c *client) get(url string) map[string]interface{} {
+func (c *client) joinPath(base string, elem ...string) string {
+	result, err := url.JoinPath(base, elem...)
+	if err != nil {
+		return base
+	}
+	return result
+}
+
+func (c *client) get(url string) map[string]any {
 	//nolint:gosec // Admin CLI intentionally targets operator-provided service endpoints.
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -182,11 +190,11 @@ func (c *client) del(url string) map[string]interface{} {
 
 func (c *client) status() {
 	services := []struct{ name, url string }{
-		{"auth-server", c.authURL + "/health"},
-		{"legacy-api", strings.Replace(c.authURL, "8081", "8082", 1) + "/health"},
-		{"mmogbrain", c.mmogURL + "/health"},
-		{"master-server", c.masterURL + "/health"},
-		{"game-manager", c.gmURL + "/health"},
+		{"auth-server", c.joinPath(c.authURL, "/health")},
+		{"legacy-api", c.joinPath(strings.Replace(c.authURL, "8081", "8082", 1), "/health")},
+		{"mmogbrain", c.joinPath(c.mmogURL, "/health")},
+		{"master-server", c.joinPath(c.masterURL, "/health")},
+		{"game-manager", c.joinPath(c.gmURL, "/health")},
 	}
 	fmt.Printf("%-20s  %-8s  %s\n", "SERVICE", "STATUS", "DETAILS")
 	fmt.Println(strings.Repeat("-", 60))
@@ -213,7 +221,7 @@ func (c *client) status() {
 }
 
 func (c *client) servers() {
-	r := c.get(c.masterURL + "/servers")
+	r := c.get(c.joinPath(c.masterURL, "/servers"))
 	servers, _ := r["servers"].([]interface{})
 	fmt.Printf("Active game servers: %v\n\n", r["count"])
 	if len(servers) == 0 {
@@ -236,7 +244,7 @@ func (c *client) servers() {
 }
 
 func (c *client) instances() {
-	r := c.get(c.gmURL + "/instances")
+	r := c.get(c.joinPath(c.gmURL, "/instances"))
 	instances, _ := r["instances"].([]interface{})
 	fmt.Printf("Running game instances: %v  (ports used: %v)\n\n", r["count"], r["ports_used"])
 	if len(instances) == 0 {
@@ -256,12 +264,12 @@ func (c *client) instances() {
 }
 
 func (c *client) stopInstance(id string) {
-	r := c.del(c.gmURL + "/instances/" + url.PathEscape(id))
+	r := c.del(c.joinPath(c.gmURL, "/instances/", id))
 	printJSON(r)
 }
 
 func (c *client) ban(username, reason string) {
-	r := c.post(c.authURL+"/admin/ban", map[string]string{
+	r := c.post(c.joinPath(c.authURL, "/admin/ban"), map[string]string{
 		"username": username,
 		"reason":   reason,
 	})
@@ -269,19 +277,25 @@ func (c *client) ban(username, reason string) {
 }
 
 func (c *client) unban(username string) {
-	r := c.post(c.authURL+"/admin/unban", map[string]string{
+	r := c.post(c.joinPath(c.authURL, "/admin/unban"), map[string]string{
 		"username": username,
 	})
 	printJSON(r)
 }
 
 func (c *client) queue() {
-	r := c.get(c.mmogURL + "/admin/queue")
+	r := c.get(c.joinPath(c.mmogURL, "/admin/queue"))
 	printJSON(r)
 }
 
 func (c *client) chat(channel string) {
-	r := c.get(c.mmogURL + "/mmog/chat?channel=" + url.QueryEscape(channel) + "&limit=20")
+	u, _ := url.Parse(c.mmogURL)
+	u = u.JoinPath("/mmog/chat")
+	q := url.Values{}
+	q.Set("channel", channel)
+	q.Set("limit", "20")
+	u.RawQuery = q.Encode()
+	r := c.get(u.String())
 	msgs, _ := r["messages"].([]interface{})
 	if len(msgs) == 0 {
 		fmt.Printf("No messages in channel '%s'\n", channel)

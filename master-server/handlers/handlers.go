@@ -33,7 +33,7 @@ func (h *Handler) StartCleanup() {
 	}()
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
@@ -192,7 +192,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to fetch server list")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"servers": servers, "count": len(servers)})
+	writeJSON(w, http.StatusOK, map[string]any{"servers": servers, "count": len(servers)})
 }
 
 // Health handles GET /health
@@ -201,7 +201,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	if err := h.DB.QueryRow(`SELECT COUNT(*) FROM game_servers WHERE status='online'`).Scan(&count); err != nil {
 		h.Log.WithError(err).Warn("health: count online servers")
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		fieldStatus:      "ok",
 		"service":        "master-server",
 		"servers_online": count,

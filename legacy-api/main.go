@@ -11,6 +11,7 @@ import (
 
 	"github.com/dreadnought-ps/legacy-api/db"
 	"github.com/dreadnought-ps/legacy-api/handlers"
+	"github.com/dreadnought-ps/shared/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -117,13 +118,16 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 					break
 				}
 			}
-			if !hasAud {
-				http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
-				return
-			}
-			r.Header.Set("X-User-ID", c.UserID)
-			r.Header.Set("X-Username", c.Username)
-			next.ServeHTTP(w, r)
+		if !hasAud {
+			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), middleware.UserIDKey, c.UserID)
+		ctx = context.WithValue(ctx, middleware.UsernameKey, c.Username)
+		r = r.WithContext(ctx)
+		r.Header.Set("X-User-ID", c.UserID)
+		r.Header.Set("X-Username", c.Username)
+		next.ServeHTTP(w, r)
 		})
 	}
 }
