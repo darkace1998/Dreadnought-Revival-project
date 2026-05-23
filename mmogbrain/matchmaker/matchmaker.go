@@ -66,11 +66,12 @@ func (m *Matchmaker) Stop() {
 }
 
 func (m *Matchmaker) tick() error {
-	// Find game modes with enough waiting players
+	// Group by game_mode and tier_min to match players within compatible tier ranges.
+	// Players with the same tier_min are treated as compatible for matchmaking.
 	rows, err := m.DB.Query(`
-		SELECT game_mode, COUNT(*) as cnt
+		SELECT game_mode, tier_min, COUNT(*) as cnt
 		FROM queue_entries WHERE status='waiting'
-		GROUP BY game_mode
+		GROUP BY game_mode, tier_min
 		HAVING cnt >= ?
 	`, m.PlayersPerMatch)
 	if err != nil {
@@ -80,38 +81,42 @@ func (m *Matchmaker) tick() error {
 		_ = rows.Close()
 	}()
 
-	type modeCount struct {
+	type bucket struct {
 		GameMode string
+		TierMin  int
 		Count    int
 	}
-	var ready []modeCount
+	var ready []bucket
 	for rows.Next() {
-		var mc modeCount
-		if err := rows.Scan(&mc.GameMode, &mc.Count); err != nil {
+		var b bucket
+		if err := rows.Scan(&b.GameMode, &b.TierMin, &b.Count); err != nil {
 			return fmt.Errorf("scan ready queue counts: %w", err)
 		}
-		ready = append(ready, mc)
+		ready = append(ready, b)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate ready queue counts: %w", err)
 	}
 
-	for _, mc := range ready {
-		if err := m.formMatch(mc.GameMode); err != nil {
-			m.Log.WithError(err).WithField("game_mode", mc.GameMode).Warn("form match failed")
+	for _, b := range ready {
+		if err := m.formMatch(b.GameMode, b.TierMin); err != nil {
+			m.Log.WithError(err).WithFields(logrus.Fields{
+				"game_mode": b.GameMode,
+				"tier_min":  b.TierMin,
+			}).Warn("form match failed")
 		}
 	}
 	return nil
 }
 
-func (m *Matchmaker) formMatch(gameMode string) error {
-	// Pull the oldest waiting players for this mode
+func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
+	// Pull the oldest waiting players for this mode and tier
 	rows, err := m.DB.Query(`
 		SELECT id, user_id FROM queue_entries
-		WHERE status='waiting' AND game_mode=?
+		WHERE status='waiting' AND game_mode=? AND tier_min=?
 		ORDER BY queued_at ASC
 		LIMIT ?
-	`, gameMode, m.PlayersPerMatch)
+	`, gameMode, tierMin, m.PlayersPerMatch)
 	if err != nil {
 		return err
 	}
@@ -195,6 +200,7 @@ func (m *Matchmaker) formMatch(gameMode string) error {
 		"match_id":    matchID,
 		"instance_id": instanceID,
 		"game_mode":   gameMode,
+		"tier_min":    tierMin,
 		"map":         mapName,
 		"players":     len(entries),
 		"server":      fmt.Sprintf("%s:%d", serverIP, serverPort),

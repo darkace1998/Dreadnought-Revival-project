@@ -65,6 +65,9 @@ func (rl *rateLimiter) allow(ip string) bool {
 	}
 	filtered = append(filtered, now)
 	rl.requests[ip] = filtered
+	if len(filtered) == 0 {
+		delete(rl.requests, ip)
+	}
 	return len(filtered) <= rl.limit
 }
 
@@ -111,10 +114,10 @@ func main() {
 		start := time.Now()
 
 		// Rate limit auth endpoint
-		if strings.Contains(r.URL.Path, "/auth/") {
-			ip := r.RemoteAddr
-			if idx := strings.LastIndex(ip, ":"); idx >= 0 {
-				ip = ip[:idx]
+		if strings.HasPrefix(r.URL.Path, "/auth/") {
+			ip, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				ip = r.RemoteAddr
 			}
 			if !rl.allow(ip) {
 				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
@@ -203,12 +206,13 @@ func main() {
 		},
 	}
 	httpsSrv := &http.Server{
-		Addr:         httpsAddr,
-		Handler:      handler,
-		TLSConfig:    tlsCfg,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              httpsAddr,
+		Handler:           handler,
+		TLSConfig:         tlsCfg,
+		ReadTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 		// Log TLS handshake errors (untrusted cert, cipher mismatch, etc.)
 		ErrorLog: stdlog.New(log.WriterLevel(logrus.WarnLevel), "[tls] ", 0),
 	}

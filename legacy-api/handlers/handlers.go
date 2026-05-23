@@ -23,13 +23,18 @@ type playerProfile struct {
 	CreatedAt   string
 }
 
+func (h *Handler) ensurePlayerStats(userID string) error {
+	_, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID)
+	return err
+}
+
 func (h *Handler) ensurePlayerProfile(userID string) (playerProfile, bool, error) {
 	var profile playerProfile
 	err := h.DB.QueryRow(
 		`SELECT display_name, created_at FROM player_profiles WHERE user_id=?`, userID,
 	).Scan(&profile.DisplayName, &profile.CreatedAt)
 	if err == nil {
-		if _, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID); err != nil {
+		if err := h.ensurePlayerStats(userID); err != nil {
 			return playerProfile{}, true, err
 		}
 		return profile, true, nil
@@ -38,8 +43,12 @@ func (h *Handler) ensurePlayerProfile(userID string) (playerProfile, bool, error
 		return playerProfile{}, false, err
 	}
 
+	displayPrefix := userID
+	if len(displayPrefix) > 8 {
+		displayPrefix = userID[:8]
+	}
 	profile = playerProfile{
-		DisplayName: "Player_" + userID[:8],
+		DisplayName: "Player_" + displayPrefix,
 		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	result, err := h.DB.Exec(
@@ -49,7 +58,7 @@ func (h *Handler) ensurePlayerProfile(userID string) (playerProfile, bool, error
 	if err != nil {
 		return playerProfile{}, false, err
 	}
-	if _, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID); err != nil {
+	if err := h.ensurePlayerStats(userID); err != nil {
 		return playerProfile{}, false, err
 	}
 
@@ -137,9 +146,16 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		`SELECT kills,deaths,matches_played,wins,xp_total,credits FROM player_stats WHERE user_id=?`, userID,
 	).Scan(&kills, &deaths, &matchesPlayed, &wins, &xpTotal, &credits)
 	if err == sql.ErrNoRows {
-		if _, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, userID); err != nil {
+		if err := h.ensurePlayerStats(userID); err != nil {
 			h.Log.WithError(err).Error("get profile: initialize stats")
 			writeError(w, http.StatusInternalServerError, "failed to initialize stats")
+			return
+		}
+		if err := h.DB.QueryRow(
+			`SELECT kills,deaths,matches_played,wins,xp_total,credits FROM player_stats WHERE user_id=?`, userID,
+		).Scan(&kills, &deaths, &matchesPlayed, &wins, &xpTotal, &credits); err != nil {
+			h.Log.WithError(err).Error("get profile: read default stats")
+			writeError(w, http.StatusInternalServerError, "failed to fetch stats")
 			return
 		}
 	} else if err != nil {
@@ -237,11 +253,6 @@ func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to read inventory")
 		return
 	}
-	if err := rows.Close(); err != nil {
-		h.Log.WithError(err).Error("get inventory: close inventory rows")
-		writeError(w, http.StatusInternalServerError, "failed to read inventory")
-		return
-	}
 
 	for id, seed := range staleStarterRows {
 		if _, err := h.DB.Exec(`UPDATE player_inventory SET item_type=?, item_id=? WHERE id=?`, seed.ItemType, seed.ItemID, id); err != nil {
@@ -295,6 +306,7 @@ func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 
 // PostMatchResult handles POST /v2/dreadnought/match/result
 func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<18) // 256KB limit
 	var req struct {
 		MatchID string `json:"match_id"`
 		Mode    string `json:"mode"`
@@ -320,7 +332,19 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	if _, err := h.DB.Exec(
+	tx, err := h.DB.Begin()
+	if err != nil {
+		h.Log.WithError(err).Error("post match result: begin tx")
+		writeError(w, http.StatusInternalServerError, "failed to record match")
+		return
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(
 		`INSERT OR IGNORE INTO match_history(id,mode,map,started_at,ended_at) VALUES(?,?,?,?,?)`,
 		matchID, req.Mode, req.Map, now, now,
 	); err != nil {
@@ -330,7 +354,7 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, p := range req.Players {
-		if _, err := h.DB.Exec(
+		if _, err = tx.Exec(
 			`INSERT OR REPLACE INTO match_players(match_id,user_id,team,score,kills,deaths,damage) VALUES(?,?,?,?,?,?,?)`,
 			matchID, p.UserID, p.Team, p.Score, p.Kills, p.Deaths, p.Damage,
 		); err != nil {
@@ -342,12 +366,12 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		if p.Won {
 			winVal = 1
 		}
-		if _, err := h.DB.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, p.UserID); err != nil {
+		if _, err = tx.Exec(`INSERT OR IGNORE INTO player_stats(user_id) VALUES(?)`, p.UserID); err != nil {
 			h.Log.WithError(err).Error("post match result: ensure player stats")
 			writeError(w, http.StatusInternalServerError, "failed to record match")
 			return
 		}
-		if _, err := h.DB.Exec(`UPDATE player_stats SET
+		if _, err = tx.Exec(`UPDATE player_stats SET
 			kills=kills+?,
 			deaths=deaths+?,
 			matches_played=matches_played+1,
@@ -363,10 +387,21 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err = tx.Commit(); err != nil {
+		h.Log.WithError(err).Error("post match result: commit tx")
+		writeError(w, http.StatusInternalServerError, "failed to record match")
+		return
+	}
+	err = nil
+
 	writeJSON(w, http.StatusOK, map[string]string{"match_id": matchID, fieldStatus: "recorded"})
 }
 
 // Health handles GET /health
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api"})
+	dbOK := "ok"
+	if err := h.DB.Ping(); err != nil {
+		dbOK = "error"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api", "database": dbOK})
 }

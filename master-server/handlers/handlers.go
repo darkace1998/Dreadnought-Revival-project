@@ -19,6 +19,20 @@ type Handler struct {
 	Log *logrus.Logger
 }
 
+// StartCleanup runs a background goroutine that marks stale servers offline.
+func (h *Handler) StartCleanup() {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := h.DB.Exec(`UPDATE game_servers SET status='offline'
+				WHERE status='online' AND datetime(last_heartbeat,'+60 seconds') < datetime('now')`); err != nil {
+				h.Log.WithError(err).Warn("stale server cleanup")
+			}
+		}
+	}()
+}
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -143,12 +157,6 @@ func (h *Handler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /servers — returns all online servers (server browser).
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	// Mark servers stale if no heartbeat in 60s
-	if _, err := h.DB.Exec(`UPDATE game_servers SET status='offline'
-		WHERE status='online' AND datetime(last_heartbeat,'+60 seconds') < datetime('now')`); err != nil {
-		h.Log.WithError(err).Warn("list servers: mark stale servers offline")
-	}
-
 	rows, err := h.DB.Query(
 		`SELECT id,name,ip,port,game_mode,map,current_players,max_players,status,last_heartbeat,registered_at
 		 FROM game_servers WHERE status='online' ORDER BY registered_at DESC`,

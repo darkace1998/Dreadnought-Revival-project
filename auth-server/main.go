@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,13 +39,23 @@ func main() {
 
 	h := &handlers.Handler{DB: database, Log: log, Secret: secret}
 
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := database.Exec(`DELETE FROM sessions WHERE expires_at < datetime('now')`); err != nil {
+				log.WithError(err).Warn("session cleanup")
+			}
+		}
+	}()
+
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
 
 	// Dreadnought profile-api compatible endpoints
 	r.HandleFunc("/auth/", h.Login).Methods(http.MethodPost)
 	r.HandleFunc("/auth/register", h.Register).Methods(http.MethodPost)
-	r.HandleFunc("/auth/me", jwtMiddleware(secret, h.Me)).Methods(http.MethodGet)
+	r.HandleFunc("/auth/me", jwtMiddleware(secret, database, h.Me)).Methods(http.MethodGet)
 	r.HandleFunc("/auth/logout", h.Logout).Methods(http.MethodPost)
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
 	r.Handle("/metrics", promhttp.Handler())
@@ -104,16 +116,20 @@ func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {
 	}
 }
 
-func jwtMiddleware(secret []byte, next http.HandlerFunc) http.HandlerFunc {
+func jwtMiddleware(secret []byte, database *sql.DB, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		if len(authHeader) < 8 {
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenStr == authHeader || tokenStr == "" {
 			http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
 			return
 		}
-		tokenStr := authHeader[7:]
 		claims, err := jwtPkg.Parse(secret, tokenStr)
 		if err != nil {
+			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+			return
+		}
+		if claims.UserID == "" {
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
 		}

@@ -37,13 +37,14 @@ func main() {
 	portEnd := 7877
 
 	pool := portpool.New(portStart, portEnd)
-	sp := spawner.New(gameBinary, wineExe, masterURL, serverIP, log)
+	sp := spawner.New(gameBinary, wineExe, masterURL, serverIP, log, pool.Release)
 
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
 
 	// Launch a new match instance
 	r.HandleFunc("/instances", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<17) // 128KB limit
 		var req struct {
 			GameMode string   `json:"game_mode"`
 			Map      string   `json:"map"`
@@ -51,6 +52,10 @@ func main() {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.Players) > 20 {
+			http.Error(w, `{"error":"too many players"}`, http.StatusBadRequest)
 			return
 		}
 		if req.GameMode == "" {
@@ -153,6 +158,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	log.Info("shutting down game-manager")
+	sp.Shutdown()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.WithError(err).Warn("shutdown game-manager")
 	}

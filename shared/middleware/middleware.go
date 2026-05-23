@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,9 +19,9 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// JWTMiddleware validates Bearer tokens using the supplied public key (RS256)
-// or HMAC secret (HS256). On success it writes the user_id header for
-// downstream handlers. Uses HMAC secret by default for simplicity.
+// JWTMiddleware validates Bearer tokens using the supplied HMAC secret (HS256).
+// On success it stores the user_id and username in the request context for
+// downstream handlers.
 func JWTMiddleware(secret []byte, log *logrus.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +51,7 @@ func JWTMiddleware(secret []byte, log *logrus.Logger) func(http.Handler) http.Ha
 
 // RateLimiter is a simple in-memory token-bucket rate limiter per IP.
 type RateLimiter struct {
+	mu       sync.Mutex
 	requests map[string][]time.Time
 	limit    int
 	window   time.Duration
@@ -64,12 +67,14 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if idx := strings.LastIndex(ip, ":"); idx >= 0 {
-			ip = ip[:idx]
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
 		}
 		now := time.Now()
 		cutoff := now.Add(-rl.window)
+
+		rl.mu.Lock()
 		times := rl.requests[ip]
 		filtered := times[:0]
 		for _, t := range times {
@@ -79,7 +84,13 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 		filtered = append(filtered, now)
 		rl.requests[ip] = filtered
-		if len(filtered) > rl.limit {
+		if len(filtered) == 0 {
+			delete(rl.requests, ip)
+		}
+		exceeded := len(filtered) > rl.limit
+		rl.mu.Unlock()
+
+		if exceeded {
 			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 			return
 		}
@@ -113,4 +124,11 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if rw.status == http.StatusOK {
+		rw.WriteHeader(http.StatusOK)
+	}
+	return rw.ResponseWriter.Write(b)
 }

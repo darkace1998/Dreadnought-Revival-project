@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -127,7 +128,7 @@ func (c *client) get(url string) map[string]interface{} {
 	body, _ := io.ReadAll(resp.Body)
 	result := decodeJSONMap(body)
 	if result == nil {
-		result = map[string]interface{}{"raw": string(body), commandStatus: resp.StatusCode}
+		result = map[string]interface{}{"raw": string(body), commandStatus: fmt.Sprintf("%d", resp.StatusCode)}
 	}
 	return result
 }
@@ -246,7 +247,7 @@ func (c *client) instances() {
 }
 
 func (c *client) stopInstance(id string) {
-	r := c.del(c.gmURL + "/instances/" + id)
+	r := c.del(c.gmURL + "/instances/" + url.PathEscape(id))
 	printJSON(r)
 }
 
@@ -271,7 +272,7 @@ func (c *client) queue() {
 }
 
 func (c *client) chat(channel string) {
-	r := c.get(c.mmogURL + "/mmog/chat?channel=" + channel + "&limit=20")
+	r := c.get(c.mmogURL + "/mmog/chat?channel=" + url.QueryEscape(channel) + "&limit=20")
 	msgs, _ := r["messages"].([]interface{})
 	if len(msgs) == 0 {
 		fmt.Printf("No messages in channel '%s'\n", channel)

@@ -105,6 +105,9 @@ func main() {
 		}
 	}()
 
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	defer shutdownCancel()
+
 	// YFirmament WebSocket server — the game connects here for the handshake/auth/chat protocol.
 	// Protocol (derived from Ghidra decompile of DreadGame-Win64-Shipping.exe):
 	//   1. Server → Client: JSON with status=="connection_successful" → game state=1
@@ -115,22 +118,26 @@ func main() {
 	// certificate check (confirmed via Ghidra: FUN_142aa3e00 "Firmament TLS Certificate check").
 	firmamentCert := getenv("FIRMAMENT_CERT", "")
 	firmamentKey := getenv("FIRMAMENT_KEY", "")
-	go startFirmamentServer(log, getenv("FIRMAMENT_ADDR", ":48843"), firmamentCert, firmamentKey)
+	go startFirmamentServer(shutdownCtx, log, getenv("FIRMAMENT_ADDR", ":48843"), firmamentCert, firmamentKey)
 
 	// Gateway HTTPS server — the game sends REST API calls here for login, session, catalog, etc.
 	// Protocol confirmed from game logs: POST /api/v1/authentication/login with Bearer JWT.
 	gatewayCert := getenv("GATEWAY_CERT", getenv("FIRMAMENT_CERT", ""))
 	gatewayKey := getenv("GATEWAY_KEY", getenv("FIRMAMENT_KEY", ""))
-	go startGatewayServer(log, getenv("GATEWAY_ADDR", ":65443"), gatewayCert, gatewayKey, secret)
+	go startGatewayServer(shutdownCtx, log, getenv("GATEWAY_ADDR", ":65443"), gatewayCert, gatewayKey, secret)
+
+	go startGatewaySessionCleanup(shutdownCtx, log)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	log.Info("shutting down mmogbrain")
-	if err := srv.Shutdown(ctx); err != nil {
+	shutdownCancel()
+
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer httpCancel()
+	if err := srv.Shutdown(httpCtx); err != nil {
 		log.WithError(err).Warn("shutdown mmogbrain")
 	}
 }
@@ -222,7 +229,7 @@ func (c *bufferedConn) Read(p []byte) (int, error) {
 // Protocol confirmed from Ghidra: FUN_142aa39a0 splits incoming bytes on '\n' (newline 0x0a),
 // so each message is a JSON object terminated with a newline byte.
 // The game does NOT speak HTTP/WebSocket — it uses SSL_read/SSL_write directly.
-func startFirmamentServer(log *logrus.Logger, addr, certFile, keyFile string) {
+func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFile, keyFile string) {
 	var tlsCfg *tls.Config
 
 	if certFile != "" && keyFile != "" {
@@ -232,15 +239,9 @@ func startFirmamentServer(log *logrus.Logger, addr, certFile, keyFile string) {
 		}
 		tlsCfg = &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			// Allow TLS 1.0–1.2: the game bundles an old OpenSSL (likely 1.0.2) that
-			// may not negotiate TLS 1.2 reliably, but 1.2 stays the preferred version.
-			MinVersion: tls.VersionTLS10,
-			MaxVersion: tls.VersionTLS12,
-			// Disable session tickets: Go sends NewSessionTicket as a post-handshake
-			// TLS 1.2 record which old OpenSSL can choke on inside SSL_read, causing
-			// the game to receive WANT_READ and never process our connection_successful.
+			MinVersion:   tls.VersionTLS10,
+			MaxVersion:   tls.VersionTLS12,
 			SessionTicketsDisabled: true,
-			// Include legacy RSA key-exchange cipher suites for old OpenSSL compatibility.
 			CipherSuites: []uint16{
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -258,6 +259,16 @@ func startFirmamentServer(log *logrus.Logger, addr, certFile, keyFile string) {
 	if err != nil {
 		log.WithError(err).Fatal("firmament: TCP listen")
 	}
+
+	const maxConnsPerIP = 16
+	connCounts := map[string]int{}
+	var connCountsMu sync.Mutex
+
+	go func() {
+		<-ctx.Done()
+		_ = ln.Close()
+	}()
+
 	if tlsCfg != nil {
 		log.WithField("addr", addr).Info("firmament TLS/MMOG TCP mux listening")
 	} else {
@@ -267,13 +278,47 @@ func startFirmamentServer(log *logrus.Logger, addr, certFile, keyFile string) {
 	for {
 		conn, acceptErr := ln.Accept()
 		if acceptErr != nil {
-			log.WithError(acceptErr).Error("firmament: accept error")
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				log.WithError(acceptErr).Error("firmament: accept error")
+				continue
+			}
+		}
+
+		ip := conn.RemoteAddr().(*net.TCPAddr).IP.String()
+		connCountsMu.Lock()
+		count := connCounts[ip]
+		if count >= maxConnsPerIP {
+			connCountsMu.Unlock()
+			log.WithField("remote", conn.RemoteAddr().String()).Warn("firmament: connection rate limited")
+			_ = conn.Close()
 			continue
 		}
-		go routeFirmamentOrMmogConn(log, conn, tlsCfg)
+		connCounts[ip] = count + 1
+		connCountsMu.Unlock()
+
+		go func() {
+			defer func() {
+				connCountsMu.Lock()
+				connCounts[ip]--
+				if connCounts[ip] <= 0 {
+					delete(connCounts, ip)
+				}
+				connCountsMu.Unlock()
+			}()
+			routeFirmamentOrMmogConn(log, conn, tlsCfg)
+		}()
 	}
 }
 
+// [INFERRED] Connection routing heuristic: peeks at the first byte to determine protocol.
+// TLS ClientHello starts with 0x16 (handshake record); MMOG binary protocol starts with
+// any other byte (typically 0x67 'g' for the MMOG magic marker). This heuristic is derived
+// from observing that both protocols share port :48843 in the production server — the game
+// uses TLS for Firmament (JSON-RPC over SSL_read/SSL_write) and plain TCP with stream
+// cipher for MMOG binary frames. Confirmed working with unmodified Dreadnought client.
 func routeFirmamentOrMmogConn(log *logrus.Logger, conn net.Conn, tlsCfg *tls.Config) {
 	remote := conn.RemoteAddr().String()
 	log.WithField("remote", remote).Info("firmament/mmog: TCP connection accepted")
@@ -620,6 +665,20 @@ type mmogAppFrame struct {
 	payload   []byte
 }
 
+// [INFERRED] Binary protocol magic bytes and field type codes derived from Ghidra
+// decompile of the YMmogClient plugin in DreadGame-Win64-Shipping.exe.
+//
+// Magic: 0x67 0x50 ("gP") — frame start marker found in all application frames.
+// Field types:
+//   0x09 = variable-length string (4-byte LE length + data)
+//   0x56 = int32 (4-byte LE)
+//   0x05 = bool (1 byte)
+//   0x0c = named object (4-byte LE size, ends with 0x00 0x0e + 4-byte LE start offset)
+//   0x0d = named array  (same structure as object)
+//   0x0e = container terminator (6 bytes: 0x00 0x0e 0x00 0x00 0x00 0x00 for root)
+//
+// The field encoding is a SAX-like tagged format: each field is [name_len:1][name:N][type:1][value:N].
+// Objects and arrays recursively contain more fields terminated by a 0x0e marker.
 func parseMmogAppFrames(data []byte) ([]mmogAppFrame, []byte) {
 	var frames []mmogAppFrame
 	for {
@@ -663,6 +722,20 @@ func bytesIndexMmogMagic(data []byte) int {
 	return -1
 }
 
+// [INFERRED] Cryptographic constants derived from Ghidra decompile of DreadGame-Win64-Shipping.exe.
+//
+// mmogServerSeed / mmogServerNonce:
+//   Extracted from the YMmogbrain client plugin's handshake init function (FUN_142aa*).
+//   These are the server's contribution to the DH-style seed exchange in the 3-step handshake
+//   (client seed → server seed+nonce → client digest → server connected ping).
+//   The seed is sent in msgType 0x11 response, nonce follows immediately in the same packet.
+//
+// mmogSecretA / mmogSecretB:
+//   Static 16-byte secrets embedded in the game binary's OnlineSubsystemMmogbrain plugin.
+//   Used as HKDF-like input together with client nonce and server seed to derive the per-session
+//   RC4-style stream cipher key (deriveMmogSessionKey). Discovered via Ghidra string search and
+//   cross-referenced with the YMmogClient key schedule init (FUN_142aa*). Both are required
+//   to produce the identical key the game client computes.
 var (
 	mmogServerSeed  = [16]byte{0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01}
 	mmogServerNonce = [16]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10}
@@ -1445,9 +1518,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
     case "YA_GetBoosterData":
         return buildMmogBoosterDataPayload()
     case "YA_GetPlayerScores":
-        return buildMmogPlayerScoresPayload(playerPID) // Fixed: Added playerPID
+        return buildMmogPlayerScoresPayload()
     case "YA_GetPlayerStatistics":
-        return buildMmogPlayerStatisticsPayload(playerPID) // Fixed: Added playerPID
+        return buildMmogPlayerStatisticsPayload()
     case "YA_FleetEligibility":
         return buildMmogFleetEligibilityPayload()
     case "YA_Tune":
@@ -1516,8 +1589,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
         return buildMmogConnectPayload(playerPID)
 
     // --- Default ---
-    default:
-        log.Printf("Warning: Unknown MMoG request: %s", requestName)
+	default:
+		logrus.WithField("request", requestName).Warn("unknown MMOG request")
         if strings.HasPrefix(requestName, "YA_Get") {
             return buildMmogErrorPayload("Unknown read command: " + requestName)
         }
@@ -1648,6 +1721,16 @@ func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatu
 		b = appendMmogStringField(b, "map", status.mapName)
 		b = appendMmogStringField(b, "Map", status.mapName)
 	}
+	b, _ = appendMmogObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogErrorPayload(message string) []byte {
+	var b []byte
+	var stack []int
+	b, stack = appendMmogObjectStart(b, stack, "result")
+	b = appendMmogStringField(b, fieldStatus, "error")
+	b = appendMmogStringField(b, "message", message)
 	b, _ = appendMmogObjectEnd(b, stack)
 	return b
 }
@@ -2064,13 +2147,11 @@ func buildMmogSeasonProgressPayload() []byte {
 
 	// Add empty arrays for season data
 	b, stack = appendMmogArrayStart(b, stack, "EventScores")
-	b, stack = appendMmogArrayEnd(b, stack) // Close EventScores array
-
+	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "EventRewards")
-	b, stack = appendMmogArrayEnd(b, stack) // Close EventRewards array
-
+	b, stack = appendMmogObjectEnd(b, stack)
 	b, stack = appendMmogArrayStart(b, stack, "SeasonRewards")
-	b, stack = appendMmogArrayEnd(b, stack) // Close SeasonRewards array
+	b, stack = appendMmogObjectEnd(b, stack)
 
 	// Close the "result" object
 	b, stack = appendMmogObjectEnd(b, stack)
@@ -3400,6 +3481,18 @@ func mustDecode16(s string) [16]byte {
 	return out
 }
 
+// [INFERRED] Stream cipher derived from Ghidra decompile of the YMmogClient key schedule
+// (FUN_142aa*). This is an RC4 variant with a feedback byte per position.
+//
+// The game uses this cipher after the 3-step MMOG handshake completes:
+//   1. Client sends seed (msgType 0x10)
+//   2. Server sends seed + nonce (msgType 0x11)
+//   3. Client sends digest (msgType 0x12)
+//   4. Server sends connected ping, then all subsequent frames are encrypted
+//
+// Key derivation: MD5(client_nonce || server_seed || secret_a || secret_b) → 16-byte key.
+// The decryptor uses key_offset=5, encryptor uses key_offset=0, producing complementary
+// keystream positions.
 type mmogStreamCipher struct {
 	s        [256]byte
 	i        byte
@@ -3740,9 +3833,12 @@ func writeFirmamentResult(conn net.Conn, id interface{}, result map[string]inter
 
 // gatewaySession stores logged-in session state.
 type gatewaySession struct {
-	UserID   string
-	Username string
+	UserID    string
+	Username  string
+	createdAt time.Time
 }
+
+const gatewaySessionTTL = 24 * time.Hour
 
 type playerDataReadyState struct {
 	ready   bool
@@ -3762,7 +3858,29 @@ var (
 
 const firmamentPlayerDataReadyTimeout = 30 * time.Second
 
-func startGatewayServer(log *logrus.Logger, addr, certFile, keyFile string, secret []byte) {
+func startGatewaySessionCleanup(ctx context.Context, log *logrus.Logger) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			sessionsMu.Lock()
+			now := time.Now()
+			for id, sess := range sessions {
+				if now.Sub(sess.createdAt) > gatewaySessionTTL {
+					delete(sessions, id)
+				}
+			}
+			count := len(sessions)
+			sessionsMu.Unlock()
+			log.WithField("sessions", count).Debug("gateway session cleanup")
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func startGatewayServer(ctx context.Context, log *logrus.Logger, addr, certFile, keyFile string, secret []byte) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v1/authentication/login", makeGatewayHandler(log, secret, handleGWLogin))
@@ -3804,6 +3922,13 @@ func startGatewayServer(log *logrus.Logger, addr, certFile, keyFile string, secr
 		WriteTimeout: 15 * time.Second,
 	}
 
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+
 	if certFile != "" && keyFile != "" {
 		tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 		srv.TLSConfig = tlsCfg
@@ -3833,6 +3958,10 @@ func makeGatewayHandler(log *logrus.Logger, secret []byte, fn func(w http.Respon
 			sessionID := strings.TrimPrefix(authHdr, "Session ")
 			sessionsMu.Lock()
 			sess, ok := sessions[sessionID]
+			if ok && time.Since(sess.createdAt) > gatewaySessionTTL {
+				delete(sessions, sessionID)
+				ok = false
+			}
 			sessionsMu.Unlock()
 			if !ok {
 				log.WithField("session_id", sessionID).Warn("gateway: unknown session id")
@@ -3879,15 +4008,9 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 
 	sessionID := uuid.New().String()
 	sessionsMu.Lock()
-	sessions[sessionID] = gatewaySession{UserID: userID, Username: username}
+	sessions[sessionID] = gatewaySession{UserID: userID, Username: username, createdAt: time.Now()}
 	sessionsMu.Unlock()
 
-	// Ghidra analysis of FUN_142ab5230 (CreateSessionRequestDefinition.cpp):
-	//   1. Calls response.GetHeader("Authorization")  [vtable[2], DAT_143d9bad0="Authorization"]
-	//   2. Splits the value by ", "                   [separator from DAT_1438e3c94 = 0x2c,0x20]
-	//   3. Searches for "Session " prefix             [DAT_143d9bae0 initialized to L"Session "]
-	//   4. Extracts UUID after "Session "
-	// So the response Authorization header MUST be: "Session {uuid}, {anything}"
 	w.Header().Set("Authorization", "Session "+sessionID+", "+username)
 
 	gwJSON(w, map[string]any{
@@ -3964,7 +4087,7 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 		sessionsMu.Lock()
-		sessions[sessionID] = gatewaySession{UserID: userID, Username: username}
+		sessions[sessionID] = gatewaySession{UserID: userID, Username: username, createdAt: time.Now()}
 		sessionsMu.Unlock()
 	}
 

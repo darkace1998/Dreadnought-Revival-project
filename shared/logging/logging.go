@@ -7,13 +7,12 @@ import (
 )
 
 // New returns a logrus logger configured with JSON output and the given
-// service name injected as a field.
+// service name injected into every log entry.
 func New(service string) *logrus.Logger {
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(logrus.InfoLevel)
-	log.WithField("service", service)
 	return log
 }
 

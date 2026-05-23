@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,36 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 )
+
+// ---- TLS configuration --------------------------------------------------
+
+func buildTLSConfig() *tls.Config {
+	fingerprint := strings.TrimSpace(os.Getenv("TLS_CERT_FINGERPRINT"))
+	if fingerprint == "" {
+		fmt.Fprintln(os.Stderr, "[!] TLS_CERT_FINGERPRINT not set — certificate verification is disabled.")
+		fmt.Fprintln(os.Stderr, "[!] Set TLS_CERT_FINGERPRINT to the SHA256 hex fingerprint of the server certificate for security.")
+		fmt.Fprintln(os.Stderr, "[!] Find it with: openssl x509 -in server.crt -fingerprint -sha256 -noout")
+		//nolint:gosec // Intentional fallback for private servers without configured fingerprint.
+		return &tls.Config{InsecureSkipVerify: true}
+	}
+	expected := strings.ToLower(strings.ReplaceAll(fingerprint, ":", ""))
+	return &tls.Config{
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			for _, raw := range rawCerts {
+				cert, err := x509.ParseCertificate(raw)
+				if err != nil {
+					continue
+				}
+				actual := hex.EncodeToString(sha256.Sum256(cert.Raw))
+				if strings.ToLower(actual) == expected {
+					return nil
+				}
+			}
+			return fmt.Errorf("server certificate fingerprint does not match TLS_CERT_FINGERPRINT")
+		},
+	}
+}
 
 // ---- DPAPI (Windows CryptProtectData) --------------------------------
 
@@ -60,7 +91,7 @@ func dpapiEncrypt(data []byte) ([]byte, error) {
 		uintptr(unsafe.Pointer(&outBlob)),
 	)
 	if ret == 0 {
-		return nil, fmt.Errorf("CryptProtectData: %w", err)
+		return nil, fmt.Errorf("CryptProtectData: %w", syscall.GetLastError())
 	}
 	result := make([]byte, outBlob.cbData)
 	copy(result, unsafe.Slice(outBlob.pbData, outBlob.cbData))
@@ -168,9 +199,9 @@ func getJWT(authURL, playerID string) (token, username string, err error) {
 	}
 
 	client := &http.Client{
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			//nolint:gosec // Private server uses a self-signed/internal certificate; launcher must reach it without public PKI.
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: buildTLSConfig(),
 		},
 	}
 	resp, err := client.Post(authURL, "application/json", bytes.NewReader(body))
@@ -181,7 +212,12 @@ func getJWT(authURL, playerID string) (token, username string, err error) {
 		_ = resp.Body.Close()
 	}()
 
-	respBody, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", "", fmt.Errorf("auth server returned HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB limit
 	if err != nil {
 		return "", "", fmt.Errorf("read response: %w", err)
 	}

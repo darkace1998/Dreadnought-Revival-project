@@ -57,13 +57,17 @@ func writeGreyboxError(w http.ResponseWriter, status int, code int, msg string) 
 // For Steam tickets we auto-register the user on first seen, then return a JWT.
 // This lets the unmodified launcher skip the account-link page and go straight to the game.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	rawBody, _ := io.ReadAll(r.Body)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<16) // 64KB limit
+	rawBody, err := io.ReadAll(r.Body)
 	ct := r.Header.Get("Content-Type")
 	h.Log.WithFields(logrus.Fields{
 		"content_type": ct,
-		"body":         string(rawBody),
 		"body_len":     len(rawBody),
-	}).Info("auth request raw")
+	}).Info("auth request")
+	if err != nil {
+		writeGreyboxError(w, http.StatusBadRequest, -32602, "cannot read request body")
+		return
+	}
 
 	var (
 		grantType   string
@@ -74,7 +78,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if strings.Contains(ct, "application/x-www-form-urlencoded") {
-		vals, _ := url.ParseQuery(string(rawBody))
+		vals, parseErr := url.ParseQuery(string(rawBody))
+		if parseErr != nil {
+			writeGreyboxError(w, http.StatusBadRequest, -32602, "invalid form data")
+			return
+		}
 		grantType = vals.Get("grant_type")
 		steamTicket = vals.Get("steam_ticket")
 		if steamTicket == "" {
@@ -274,6 +282,7 @@ func (h *Handler) issueAndReturnJWT(w http.ResponseWriter, user models.User, rpc
 
 // Register handles POST /auth/register — create a new account with username/email/password.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<16) // 64KB limit
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -344,7 +353,11 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 // Health handles GET /health
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "auth-server"})
+	dbOK := "ok"
+	if err := h.DB.Ping(); err != nil {
+		dbOK = "error"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "auth-server", "database": dbOK})
 }
 
 // AdminBan handles POST /admin/ban — bans a user by username.
@@ -367,23 +380,35 @@ func (h *Handler) AdminBan(w http.ResponseWriter, r *http.Request) {
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
 		return
 	}
-	// Mark user as banned
-	_, err = h.DB.Exec(`UPDATE users SET banned_at=? WHERE id=?`, time.Now().UTC(), userID)
+	tx, err := h.DB.Begin()
 	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(`UPDATE users SET banned_at=? WHERE id=?`, time.Now().UTC(), userID); err != nil {
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "ban failed")
 		return
 	}
-	// Insert into bans table
-	if _, err := h.DB.Exec(`INSERT OR REPLACE INTO bans(id,user_id,reason,banned_by,expires_at) VALUES(?,?,?,?,NULL)`,
+	if _, err = tx.Exec(`INSERT OR REPLACE INTO bans(id,user_id,reason,banned_by,expires_at) VALUES(?,?,?,?,NULL)`,
 		uuid.New().String(), userID, req.Reason, "admin"); err != nil {
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "ban failed")
 		return
 	}
-	// Invalidate all sessions
-	if _, err := h.DB.Exec(`DELETE FROM sessions WHERE user_id=?`, userID); err != nil {
+	if _, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, userID); err != nil {
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "ban failed")
 		return
 	}
+	if err = tx.Commit(); err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "ban failed")
+		return
+	}
+	err = nil // so defer doesn't rollback
 	h.Log.WithFields(logrus.Fields{fieldUsername: req.Username, "reason": req.Reason}).Warn("player banned")
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "banned", fieldUsername: req.Username})
 }

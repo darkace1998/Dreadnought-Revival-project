@@ -33,6 +33,7 @@ func main() {
 	}()
 
 	h := &handlers.Handler{DB: database, Log: log}
+	h.StartCleanup()
 
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
@@ -52,16 +53,22 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	errCh := make(chan error, 1)
 	go func() {
 		log.WithField("addr", addr).Info("master-server starting")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.WithError(err).Fatal("listen")
+			log.WithError(err).Error("listen")
+			errCh <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case err := <-errCh:
+		log.WithError(err).Fatal("server startup failed")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -17,6 +17,7 @@ func Open(path string) (*sql.DB, error) {
 	}
 	db.SetMaxOpenConns(1) // sqlite3 is single-writer
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite %s: %w", path, err)
 	}
 	return db, nil
@@ -33,7 +34,9 @@ func Migrate(db *sql.DB, migrations []string) error {
 	}
 
 	var current int
-	_ = db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_versions`).Scan(&current)
+	if err := db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_versions`).Scan(&current); err != nil {
+		return fmt.Errorf("read schema_versions: %w", err)
+	}
 
 	for i, ddl := range migrations {
 		version := i + 1

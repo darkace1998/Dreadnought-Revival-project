@@ -49,7 +49,7 @@ func Parse(secret []byte, tokenStr string) (*Claims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return secret, nil
-	}, gojwt.WithoutClaimsValidation())
+	}, gojwt.WithLeeway(1*time.Minute))
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("invalid token: %w", err)
 	}

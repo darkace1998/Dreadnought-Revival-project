@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,18 +26,21 @@ type Instance struct {
 	MatchID   string
 	Players   []string
 	Cmd       *exec.Cmd
+	ConfigDir string
 	StartedAt time.Time
 }
 
 // Spawner manages Wine + DreadGame-Win64-Shipping.exe dedicated server instances.
 type Spawner struct {
-	mu         sync.RWMutex
-	instances  map[string]*Instance
-	gameBinary string
-	wineExe    string
-	masterURL  string
-	serverIP   string
-	log        *logrus.Logger
+	mu          sync.RWMutex
+	instances   map[string]*Instance
+	gameBinary  string
+	wineExe     string
+	masterURL   string
+	serverIP    string
+	releasePort func(int)
+	log         *logrus.Logger
+	httpClient  *http.Client
 }
 
 // New creates a Spawner.
@@ -45,33 +49,41 @@ type Spawner struct {
 //	wineExe:    path to wine executable (e.g. "wine")
 //	masterURL:  base URL of master-server (e.g. "http://127.0.0.1:8084")
 //	serverIP:   public IP that clients will connect to
-func New(gameBinary, wineExe, masterURL, serverIP string, log *logrus.Logger) *Spawner {
+func New(gameBinary, wineExe, masterURL, serverIP string, log *logrus.Logger, releasePort func(int)) *Spawner {
 	return &Spawner{
-		instances:  make(map[string]*Instance),
-		gameBinary: gameBinary,
-		wineExe:    wineExe,
-		masterURL:  masterURL,
-		serverIP:   serverIP,
-		log:        log,
+		instances:   make(map[string]*Instance),
+		gameBinary:  gameBinary,
+		wineExe:     wineExe,
+		masterURL:   masterURL,
+		serverIP:    serverIP,
+		releasePort: releasePort,
+		log:         log,
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+			},
+		},
 	}
 }
 
 // Launch spawns a new dedicated game server instance and registers it with the master server.
 func (s *Spawner) Launch(gameMode, mapName string, port int, players []string) (*Instance, error) {
+	instID := uuid.New().String()
+	configDir := filepath.Join(os.TempDir(), "dn-instance-"+instID)
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
+		return nil, fmt.Errorf("create config dir: %w", err)
+	}
+
 	inst := &Instance{
-		ID:        uuid.New().String(),
+		ID:        instID,
 		Port:      port,
 		GameMode:  gameMode,
 		Map:       mapName,
 		MatchID:   uuid.New().String(),
 		Players:   players,
+		ConfigDir: configDir,
 		StartedAt: time.Now(),
-	}
-
-	// Write a per-instance config file for the game engine
-	configDir := filepath.Join(os.TempDir(), "dn-instance-"+inst.ID)
-	if err := os.MkdirAll(configDir, 0o750); err != nil {
-		return nil, fmt.Errorf("create config dir: %w", err)
 	}
 
 	args := []string{
@@ -153,40 +165,83 @@ func (s *Spawner) monitor(inst *Instance) {
 			fmt.Sprintf("%s/servers/%s", s.masterURL, inst.ServerID), nil)
 		if err != nil {
 			s.log.WithError(err).WithField("instance_id", inst.ID).Warn("build deregister request")
-		} else if _, err := http.DefaultClient.Do(req); err != nil {
-			s.log.WithError(err).WithField("instance_id", inst.ID).Warn("deregister instance")
+		} else {
+			resp, err := s.httpClient.Do(req)
+			if err != nil {
+				s.log.WithError(err).WithField("instance_id", inst.ID).Warn("deregister instance")
+			} else {
+				_ = resp.Body.Close()
+			}
 		}
 	}
 
 	s.mu.Lock()
 	delete(s.instances, inst.ID)
 	s.mu.Unlock()
+
+	if s.releasePort != nil {
+		s.releasePort(inst.Port)
+	}
+	s.cleanupInstance(inst)
 }
 
-// Stop terminates a running instance by ID.
+func (s *Spawner) cleanupInstance(inst *Instance) {
+	if inst.ConfigDir != "" {
+		if err := os.RemoveAll(inst.ConfigDir); err != nil {
+			s.log.WithError(err).WithField("instance_id", inst.ID).Warn("cleanup config dir")
+		}
+	}
+}
+
+// Stop terminates a running instance by ID. Returns nil on success, or an error
+// if the instance was not found or is already stopped.
 func (s *Spawner) Stop(id string) error {
-	s.mu.RLock()
+	s.mu.Lock()
 	inst, ok := s.instances[id]
-	s.mu.RUnlock()
 	if !ok {
+		s.mu.Unlock()
 		return fmt.Errorf("instance %s not found", id)
 	}
+	delete(s.instances, id)
+	s.mu.Unlock()
+
+	if s.releasePort != nil {
+		s.releasePort(inst.Port)
+	}
+	s.cleanupInstance(inst)
+
 	if inst.Cmd != nil && inst.Cmd.Process != nil {
 		return inst.Cmd.Process.Kill()
 	}
-	s.mu.Lock()
-	delete(s.instances, id)
-	s.mu.Unlock()
 	return nil
 }
 
-// List returns all running instances.
-func (s *Spawner) List() []*Instance {
+// Shutdown kills all running instances.
+func (s *Spawner) Shutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, inst := range s.instances {
+		if inst.Cmd != nil && inst.Cmd.Process != nil {
+			if err := inst.Cmd.Process.Kill(); err != nil {
+				s.log.WithError(err).WithField("instance_id", id).Warn("kill instance")
+			}
+		}
+		if s.releasePort != nil {
+			s.releasePort(inst.Port)
+		}
+		s.cleanupInstance(inst)
+	}
+	s.instances = make(map[string]*Instance)
+	s.log.WithField("count", len(s.instances)).Info("spawner shutdown")
+}
+
+// List returns snapshots of all running instances.
+func (s *Spawner) List() []Instance {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	list := make([]*Instance, 0, len(s.instances))
+	list := make([]Instance, 0, len(s.instances))
 	for _, inst := range s.instances {
-		list = append(list, inst)
+		list = append(list, *inst)
 	}
 	return list
 }
@@ -204,7 +259,7 @@ func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 		return "", fmt.Errorf("marshal register request: %w", err)
 	}
 
-	resp, err := http.Post(
+	resp, err := s.httpClient.Post(
 		fmt.Sprintf("%s/servers/register", s.masterURL),
 		"application/json",
 		bytes.NewReader(body),
@@ -215,6 +270,9 @@ func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("master server returned HTTP %d", resp.StatusCode)
+	}
 	var result map[string]string
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode register response: %w", err)

@@ -49,12 +49,11 @@ var migrations = []string{
 	    free_xp          INTEGER NOT NULL DEFAULT 0 CHECK (free_xp >= 0),
 	    current_xp       INTEGER NOT NULL DEFAULT 0 CHECK (current_xp >= 0),
 	    current_rank     INTEGER NOT NULL DEFAULT 1 CHECK (current_rank >= 1),
-	    rank_xp          INTEGER NOT NULL DEFAULT 5000 CHECK (rank_xp >= current_xp),  -- XP required for next rank (e.g., 5000 for Rank 2)
+	    rank_xp          INTEGER NOT NULL DEFAULT 5000,  -- XP required for next rank (e.g., 5000 for Rank 2)
 	    display_name     TEXT NOT NULL DEFAULT 'Local' CHECK (length(display_name) <= 32),
-	    display_info     TEXT NOT NULL DEFAULT '' CHECK (length(display_info) <= 64),
+	    display_info     TEXT NOT NULL DEFAULT '' CHECK (length(display_info) <= 256),
 	    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
-	    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
-	    CHECK (current_xp <= rank_xp)  -- Prevents invalid XP overflow
+	    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 	)`,
 	`CREATE TABLE IF NOT EXISTS player_fleets (
 		user_id                   TEXT NOT NULL,
@@ -127,8 +126,6 @@ var migrations = []string{
 	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE,
 	    CHECK (progress >= 0 AND progress <= 100)  -- Progress as percentage
 	)`,
-	`ALTER TABLE player_state ADD COLUMN display_name TEXT NOT NULL DEFAULT 'Local'`,
-	`ALTER TABLE player_state ADD COLUMN display_info TEXT NOT NULL DEFAULT ''`,
 }
 
 func Open(path string) (*sql.DB, error) {
