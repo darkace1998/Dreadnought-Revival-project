@@ -43,11 +43,20 @@ func Migrate(db *sql.DB, migrations []string) error {
 		if version <= current {
 			continue
 		}
-		if _, err := db.Exec(ddl); err != nil {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin migration %d: %w", version, err)
+		}
+		if _, err := tx.Exec(ddl); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("migration %d: %w", version, err)
 		}
-		if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, version); err != nil {
+		if _, err := tx.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, version); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("record migration %d: %w", version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %d: %w", version, err)
 		}
 	}
 	return nil

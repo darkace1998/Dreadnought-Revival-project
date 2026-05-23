@@ -49,3 +49,8 @@ func (p *Pool) InUse() int {
 	defer p.mu.Unlock()
 	return len(p.ports)
 }
+
+// Capacity returns the total number of ports in the pool.
+func (p *Pool) Capacity() int {
+	return p.end - p.start + 1
+}

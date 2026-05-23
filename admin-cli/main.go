@@ -125,7 +125,10 @@ func (c *client) get(url string) map[string]interface{} {
 		return map[string]interface{}{fieldError: err.Error()}
 	}
 	defer closeBody(resp.Body)
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return map[string]interface{}{fieldError: "read response: " + err.Error()}
+	}
 	result := decodeJSONMap(body)
 	if result == nil {
 		result = map[string]interface{}{"raw": string(body), commandStatus: fmt.Sprintf("%d", resp.StatusCode)}
@@ -148,7 +151,10 @@ func (c *client) post(url string, payload interface{}) map[string]interface{} {
 		return map[string]interface{}{fieldError: err.Error()}
 	}
 	defer closeBody(resp.Body)
-	rb, _ := io.ReadAll(resp.Body)
+	rb, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return map[string]interface{}{fieldError: "read response: " + err.Error()}
+	}
 	result := decodeJSONMap(rb)
 	return result
 }
@@ -166,7 +172,10 @@ func (c *client) del(url string) map[string]interface{} {
 		return map[string]interface{}{fieldError: err.Error()}
 	}
 	defer closeBody(resp.Body)
-	rb, _ := io.ReadAll(resp.Body)
+	rb, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return map[string]interface{}{fieldError: "read response: " + err.Error()}
+	}
 	result := decodeJSONMap(rb)
 	return result
 }

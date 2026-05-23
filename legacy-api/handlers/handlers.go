@@ -306,7 +306,7 @@ func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 
 // PostMatchResult handles POST /v2/dreadnought/match/result
 func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<18) // 256KB limit
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<17) // 128KB limit
 	var req struct {
 		MatchID string `json:"match_id"`
 		Mode    string `json:"mode"`

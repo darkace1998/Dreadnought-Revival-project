@@ -303,16 +303,18 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var existingID string
+	if err := h.DB.QueryRow(`SELECT id FROM users WHERE username=? OR email=?`, req.Username, req.Email).Scan(&existingID); err == nil {
+		writeGreyboxError(w, http.StatusConflict, -32002, "username or email already taken")
+		return
+	}
+
 	id := uuid.New().String()
 	_, err = h.DB.Exec(
 		`INSERT INTO users(id,username,email,password_hash) VALUES(?,?,?,?)`,
 		id, req.Username, req.Email, string(hash),
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
-			writeGreyboxError(w, http.StatusConflict, -32002, "username or email already taken")
-			return
-		}
 		h.Log.WithError(err).Error("register: db insert")
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "registration failed")
 		return

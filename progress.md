@@ -32,32 +32,37 @@
 - [x] **[PRIORITY HIGH]** Refactor — split `main.go` (4,586 lines) into separate packages — DONE 2026-05-23
 
 ### MEDIUM Issues (outstanding)
-- [ ] **M1** shared/db: Migrations not transactional — DDL + schema_versions insert not atomic
+- [x] **M1** shared/db: Migrations not transactional — FIXED 2026-05-23 (wrapped in tx)
+- [x] **M5** auth-server: Duplicate username detection via error-string matching — FIXED 2026-05-23 (SELECT check before INSERT)
+- [x] **M6** auth-server: prometheus incorrectly marked `// indirect` in go.mod — Already correct
+- [x] **M8** legacy-api: PostMatchResult no transaction — Already wrapped in tx
+- [x] **M9** legacy-api: GetInventory defers rows.Close() then explicitly calls it again — Already correct
+- [x] **M10** legacy-api: No request body size limit on PostMatchResult — FIXED 2026-05-23 (128KB limit)
+- [x] **M11** legacy-api: No DB health check in /health endpoint — Already has DB ping
+- [x] **M12** game-manager: DELETE returns 404 when process already dead — FIXED 2026-05-23 (differentiates not found vs error)
+- [x] **M13** game-manager: No input validation on POST /instances — FIXED 2026-05-23 (name length + port exhaustion check)
+- [x] **M14** game-manager: List() returns pointers to internal state — Already returns by value
+- [x] **M17** gateway: promhttp incorrectly marked `// indirect` — Already correct
+- [x] **M18** gateway: 9.8 MB compiled binary committed to repo — FIXED 2026-05-23 (.gitignore added)
+- [x] **M20** dn-launcher: HTTP response status code not checked — FIXED 2026-05-23 (status >= 400 check)
+- [x] **M21** dn-launcher: No response body size limit — Already uses LimitReader 1MB
+- [x] **M22** dn-launcher: Player ID deterministic — FIXED 2026-05-23 (added crypto/rand entropy)
+- [x] **M23** dn-launcher: Corrupted player.json silently regenerates — FIXED 2026-05-23 (warning logged)
+- [x] **M25** admin-cli: URL path injection in stopInstance() — Already uses url.PathEscape
+- [x] **M26** admin-cli: Channel name not URL-encoded in chat() — Already uses url.QueryEscape
+- [x] **M27** admin-cli: io.ReadAll errors silently swallowed — FIXED 2026-05-23 (error checks added)
+- [x] **M29** master-server: go.sum corrupted — FIXED 2026-05-23 (go mod tidy)
+- [x] **M30** master-server: Stale-server marking in hot read path — Already uses background goroutine
+- [x] **M31** master-server: RowsAffected() errors silently discarded — FIXED 2026-05-23 (error checks added)
 - [ ] **M4** shared/middleware: Claims passed via request headers instead of context.WithValue
-- [ ] **M5** auth-server: Duplicate username detection via error-string matching (brittle)
-- [ ] **M6** auth-server: prometheus incorrectly marked `// indirect` in go.mod
-- [ ] **M8** legacy-api: PostMatchResult no transaction — partial data committed on mid-loop failure
-- [ ] **M9** legacy-api: GetInventory defers rows.Close() then explicitly calls it again
-- [ ] **M10** legacy-api: No request body size limit on PostMatchResult
-- [ ] **M11** legacy-api: No DB health check in /health endpoint
-- [ ] **M12** game-manager: DELETE returns 404 when process already dead
-- [ ] **M13** game-manager: No input validation on POST /instances — unbounded player list
-- [ ] **M14** game-manager: List() returns pointers to internal state — data race risk
-- [ ] **M17** gateway: promhttp incorrectly marked `// indirect`
-- [ ] **M18** gateway: 9.8 MB compiled binary committed to repo
-- [ ] **M20** dn-launcher: HTTP response status code not checked
-- [ ] **M21** dn-launcher: No response body size limit — memory DoS
-- [ ] **M22** dn-launcher: Player ID deterministic from hostname+username
-- [ ] **M23** dn-launcher: Corrupted player.json silently regenerates identity
-- [ ] **M25** admin-cli: URL path injection in stopInstance()
-- [ ] **M26** admin-cli: Channel name not URL-encoded in chat()
-- [ ] **M27** admin-cli: io.ReadAll errors silently swallowed
-- [ ] **M29** master-server: go.sum corrupted — x/sys version mismatch
-- [ ] **M30** master-server: Stale-server marking in hot read path
-- [ ] **M31** master-server: RowsAffected() errors silently discarded
+- [ ] **M15** game-manager: Zero test files
+- [ ] **M19** gateway: Zero test files
+- [ ] **M24** dn-launcher: Zero tests
+- [ ] **M28** admin-cli: Zero tests
+- [ ] **M32** master-server: Zero test files
 
 ### LOW Issues (selected)
-- [ ] **L1** shared: go.mod declares go 1.25.0 — not a real Go release
+- [x] **L1** shared: go.mod declares go 1.25.0 — FIXED 2026-05-23 (corrected to 1.24.0)
 - [ ] **L2** auth-server: models.Session and models.Ban never used
 - [ ] **L3** auth-server: Sessions table no cleanup — expired rows accumulate
 - [ ] **L4-L15** Various minor issues across services (see issues.md)

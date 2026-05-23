@@ -112,7 +112,10 @@ func (h *Handler) Deregister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "deregistration failed")
 		return
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		h.Log.WithError(err).Warn("deregister rows affected")
+	}
 	if n == 0 {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -147,7 +150,10 @@ func (h *Handler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "heartbeat failed")
 		return
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		h.Log.WithError(err).Warn("heartbeat rows affected")
+	}
 	if n == 0 {
 		writeError(w, http.StatusNotFound, "server not found")
 		return

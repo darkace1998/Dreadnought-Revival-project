@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows/registry"
@@ -42,7 +44,8 @@ func buildTLSConfig() *tls.Config {
 				if err != nil {
 					continue
 				}
-				actual := hex.EncodeToString(sha256.Sum256(cert.Raw))
+				sum := sha256.Sum256(cert.Raw)
+			actual := hex.EncodeToString(sum[:])
 				if strings.ToLower(actual) == expected {
 					return nil
 				}
@@ -81,7 +84,7 @@ func dpapiEncrypt(data []byte) ([]byte, error) {
 	}
 	var outBlob dataBlob
 	const CRYPTPROTECT_UI_FORBIDDEN = 1
-	ret, _, err := procCryptProtect.Call(
+	ret, _, _ := procCryptProtect.Call(
 		uintptr(unsafe.Pointer(&inBlob)),
 		0, // szDataDescr
 		0, // pOptionalEntropy
@@ -126,11 +129,16 @@ func loadOrCreatePlayerID() (string, error) {
 		if json.Unmarshal(data, &ident) == nil && ident.PlayerID != "" {
 			return ident.PlayerID, nil
 		}
+		fmt.Fprintf(os.Stderr, "[!] Player identity file corrupted, regenerating...\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "[!] No player identity file found, generating new identity...\n")
 	}
 
 	hostname, _ := os.Hostname()
 	username := os.Getenv("USERNAME")
-	seed := sha256.Sum256([]byte(hostname + ":" + username))
+	entropy := make([]byte, 16)
+	rand.Read(entropy)
+	seed := sha256.Sum256([]byte(hostname + ":" + username + ":" + hex.EncodeToString(entropy)))
 	id := hex.EncodeToString(seed[:16])
 
 	out, err := json.Marshal(playerIdentity{PlayerID: id})
@@ -212,7 +220,7 @@ func getJWT(authURL, playerID string) (token, username string, err error) {
 		_ = resp.Body.Close()
 	}()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return "", "", fmt.Errorf("auth server returned HTTP %d: %s", resp.StatusCode, string(respBody))
 	}

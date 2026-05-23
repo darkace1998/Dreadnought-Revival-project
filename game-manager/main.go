@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"strings"
+
 	"github.com/dreadnought-ps/game-manager/portpool"
 	"github.com/dreadnought-ps/game-manager/spawner"
 	"github.com/gorilla/mux"
@@ -56,6 +58,18 @@ func main() {
 		}
 		if len(req.Players) > 20 {
 			http.Error(w, `{"error":"too many players"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.GameMode) > 100 {
+			http.Error(w, `{"error":"game_mode too long"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.Map) > 100 {
+			http.Error(w, `{"error":"map too long"}`, http.StatusBadRequest)
+			return
+		}
+		if pool.InUse() >= pool.Capacity() {
+			http.Error(w, `{"error":"no ports available"}`, http.StatusServiceUnavailable)
 			return
 		}
 		if req.GameMode == "" {
@@ -120,7 +134,11 @@ func main() {
 	r.HandleFunc("/instances/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		if err := sp.Stop(id); err != nil {
-			http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+			if strings.Contains(err.Error(), "not found") {
+				http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+			} else {
+				http.Error(w, `{"error":"failed to stop instance"}`, http.StatusInternalServerError)
+			}
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "stopped"})
