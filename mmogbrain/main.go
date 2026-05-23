@@ -1436,7 +1436,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetProgressionData":
 		return buildMmogProgressionDataPayload()
 	case "YA_GetPlayerPurchases":
-		return buildMmogPlayerPurchasesPayloadForPlayer(playerPID)
+	    return buildMmogPlayerPurchasesPayloadForPlayer(playerPID) // Add playerPID
 	case "YA_GetScoringData":
 		return buildMmogScoringDataPayload()
 	case "YA_GetDailyContractsData":
@@ -1444,13 +1444,13 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetBoosterData":
 		return buildMmogBoosterDataPayload()
 	case "YA_GetPlayerScores":
-		return buildMmogPlayerScoresPayload()
+	    return buildMmogPlayerScoresPayload(playerPID) // Add playerPID
 	case "YA_FleetEligibility":
 		return buildMmogFleetEligibilityPayload()
 	case "YA_Tune":
 		return buildMmogTunePayload()
 	case "YA_GetPlayerStatistics":
-		return buildMmogPlayerStatisticsPayload()
+	    return buildMmogPlayerStatisticsPayload(playerPID) // Add playerPID
 	case "YA_UserOnline":
 		return buildMmogUserOnlinePayload()
 	case "YA_Connect":
@@ -2028,20 +2028,34 @@ func mustMarshalSeasonTableJSON(v any) string {
 	}
 	return string(data)
 }
-
 func buildMmogSeasonProgressPayload() []byte {
 	var b []byte
-	var stack []int
+	var stack []int // Track nesting for objects/arrays
 
+	// Add routing tag (command name)
 	b = appendMmogStringField(b, "RT", "YA_GetSeasonProgress")
+
+	// Start the "result" object
 	b, stack = appendMmogObjectStart(b, stack, "result")
+
+	// Add empty arrays for season data
 	b, stack = appendMmogArrayStart(b, stack, "EventScores")
-	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayEnd(b, stack) // Close EventScores array
+
 	b, stack = appendMmogArrayStart(b, stack, "EventRewards")
-	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = appendMmogArrayEnd(b, stack) // Close EventRewards array
+
 	b, stack = appendMmogArrayStart(b, stack, "SeasonRewards")
+	b, stack = appendMmogArrayEnd(b, stack) // Close SeasonRewards array
+
+	// Close the "result" object
 	b, stack = appendMmogObjectEnd(b, stack)
-	b, _ = appendMmogObjectEnd(b, stack)
+
+	// Validate stack is empty (all objects/arrays closed)
+	if len(stack) != 0 {
+		return nil // or panic("Unbalanced MMoG payload")
+	}
+
 	return b
 }
 
