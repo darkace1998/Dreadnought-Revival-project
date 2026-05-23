@@ -5,10 +5,14 @@
 
 ## Completed Steps
 - [x] mmogbrain review completed — 2026-05-23
-- [x] mmogbrain 9/10 fix items completed (session expiry, graceful shutdown, tier matching, rate limiting, INFERRED markers, logging fix, crypto docs, models cleanup, build+test fixes) — 2026-05-23
+- [x] mmogbrain 9/10 fix items completed — 2026-05-23
 - [x] Moved `src/Documents/` → `dreadnought-private-server/Documents/` — 2026-05-23
 - [x] Full project review: all 8 services + shared packages reviewed — 2026-05-23
 - [x] Consolidated 50+ issues into `issues.md` with severity ratings — 2026-05-23
+- [x] 36 fixes applied across shared, auth-server, legacy-api, game-manager, gateway, master-server, admin-cli, dn-launcher — 2026-05-23
+- [x] Moved high-risk `Documents/` back to `src/Documents/` — 2026-05-23
+- [x] Committed and pushed all changes to GitHub — 2026-05-23
+- [x] Created `AGENTS.md` — session orientation and directory map — 2026-05-23
 
 ## In Progress
 (none)
