@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/dreadnought-ps/mmogbrain/protocol"
 )
 
 var (
@@ -56,7 +58,7 @@ func defaultMmogPlayerState(playerPID string) mmogPlayerState {
 }
 
 func normalizedPlayerStatePID(playerPID string) string {
-	if normalized := normalizeMmogPlayerPID(playerPID); normalized != "" {
+	if normalized := protocol.NormalizePlayerPID(playerPID); normalized != "" {
 		return normalized
 	}
 	return defaultMmogPlayerPID
@@ -411,7 +413,7 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 }
 
 func persistSavePlayerDisplayInformation(database *sql.DB, playerPID string, payload []byte) error {
-	displayInfo := extractMmogStringField(payload, "DisplayInfo")
+	displayInfo := protocol.ExtractStringField(payload, "DisplayInfo")
 	displayName := firstMmogStringField(payload, "DisplayName", "displayName")
 
 	if displayInfo == "" && strings.TrimSpace(displayName) == "" {
@@ -560,7 +562,7 @@ func persistRemoveFromFleet(database *sql.DB, playerPID string, payload []byte) 
 
 func firstMmogInt32Field(payload []byte, names ...string) int32 {
 	for _, name := range names {
-		if value, ok := extractMmogInt32Field(payload, name); ok {
+		if value, ok := protocol.ExtractInt32Field(payload, name); ok {
 			return value
 		}
 	}
@@ -569,7 +571,7 @@ func firstMmogInt32Field(payload []byte, names ...string) int32 {
 
 func firstMmogStringField(payload []byte, names ...string) string {
 	for _, name := range names {
-		if value := extractMmogStringField(payload, name); value != "" {
+		if value := protocol.ExtractStringField(payload, name); value != "" {
 			return value
 		}
 	}

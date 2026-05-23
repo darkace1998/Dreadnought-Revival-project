@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	"github.com/dreadnought-ps/mmogbrain/protocol"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 )
@@ -28,6 +29,8 @@ const (
 	gatewayKeyOwnedItems      = "owned_items"
 	gatewayKeyWallet          = "wallet"
 )
+
+
 
 func gatewayTestClaims() jwt.MapClaims {
 	return jwt.MapClaims{claimUserIDKey: testGatewayUserID}
@@ -90,7 +93,7 @@ func TestGatewayPlayReturnsMmogConnectionInfo(t *testing.T) {
 func waitForGatewayPlayerDataWaiter(t *testing.T, userID string, timeout time.Duration) {
 	t.Helper()
 
-	key := gatewayPlayerDataReadyKey(userID)
+	key := protocol.GatewayPlayerDataReadyKey(userID)
 	deadline := time.Now().Add(timeout)
 	for {
 		gatewayPlayerDataReadyMu.Lock()
@@ -432,7 +435,7 @@ func TestStarterInventorySeedsCoverShipsLoadoutsAndSlots(t *testing.T) {
 		t.Fatalf("starter perk seed count = %d, want 0", got)
 	}
 
-	if bytes.Contains(playerGet, appendMmogFieldNameAndType(nil, "Items", 0x0d)) {
+	if bytes.Contains(playerGet, appendFieldMarker("Items", 0x0d)) {
 		t.Fatal("YA_PlayerGet should not include the legacy Items inventory array after payload trim")
 	}
 }
@@ -852,7 +855,7 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	assertGatewayOwnershipFields(t, starterLoadout, "starter loadout before YA_PlayerGet", false)
 	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout before YA_PlayerGet", firstStarter.loadoutID(), starterLoadoutSeed.shipID, firstStarter.loadoutID())
 
-	state := &mmogConnState{playerPID: normalizeMmogPlayerPID(testGatewayUserID)}
+	state := &mmogConnState{playerPID: protocol.NormalizePlayerPID(testGatewayUserID)}
 	if err := handlePlayerGetSatisfied(logrus.New(), &captureConn{}, "test-remote", nil, false, state, "client-request"); err != nil {
 		t.Fatalf("handlePlayerGetSatisfied: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	"github.com/dreadnought-ps/mmogbrain/protocol"
 )
 
 func configBackedFleetEligibilities() []dreadconfig.FleetEligibility {
@@ -82,15 +83,15 @@ func configBackedProgressionCategoryDataTablePath() string {
 }
 
 func appendMmogProgressionCategoryEntry(b []byte, stack []int, taxonomy dreadconfig.ProgressionTaxonomy) ([]byte, []int) {
-	b, stack = appendMmogUnnamedObjectStart(b, stack)
-	b = appendMmogStringField(b, "TableCategory", taxonomy.TableCategory)
-	b = appendMmogInt32Field(b, "CategoryID", taxonomy.CategoryID)
-	b, stack = appendMmogArrayStart(b, stack, "AssetRoots")
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "TableCategory", taxonomy.TableCategory)
+	b = protocol.AppendInt32Field(b, "CategoryID", taxonomy.CategoryID)
+	b, stack = protocol.AppendArrayStart(b, stack, "AssetRoots")
 	for _, assetRoot := range taxonomy.AssetRoots {
-		b = appendMmogUnnamedStringField(b, assetRoot)
+		b = protocol.AppendUnnamedStringField(b, assetRoot)
 	}
-	b, stack = appendMmogObjectEnd(b, stack)
-	b, stack = appendMmogObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
 

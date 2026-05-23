@@ -12,6 +12,7 @@ This project is a community-operated private server infrastructure for the disco
 │   ├── auth-server/              :8081   Auth, login, JWT (Go + SQLite)
 │   ├── legacy-api/               :8082   Profiles, inventory, match history
 │   ├── mmogbrain/                :8083   Matchmaking + Firmament TLS :48843
+│   │   └── protocol/                      MMOG binary protocol (refactored: main.go 218 lines)
 │   ├── master-server/            :8084   Server registry + heartbeat
 │   ├── game-manager/             :8085   Wine game server spawner
 │   ├── gateway/                  :80,443 TLS termination + reverse proxy
@@ -158,7 +159,7 @@ curl http://127.0.0.1:8085/health  # game-manager
 |---------|------|----|-----------|-------|
 | auth-server | 8081 | auth.db | main.go, handlers/handlers.go, jwt/jwt.go | None |
 | legacy-api | 8082 | legacy.db | handlers/handlers.go, inventory_bootstrap.go | 682 lines |
-| mmogbrain | 8083, 48843 | mmog.db | main.go (4586 lines), matchmaker/, handlers/ | 3200+ lines |
+| mmogbrain | 8083, 48843 | mmog.db | main.go (218 lines), firmament.go, gateway_server.go, gateway_catalog.go, response_*.go, protocol/, handlers/, matchmaker/ | 3200+ lines |
 | master-server | 8084 | master.db | handlers/handlers.go | None |
 | game-manager | 8085 | (none) | spawner/spawner.go, portpool/pool.go | None |
 | gateway | 80, 443 | (none) | main.go (281 lines) | None |
@@ -194,10 +195,7 @@ curl http://127.0.0.1:8085/health  # game-manager
 ## Current State (2026-05-23)
 
 - All services build and pass lint (0 golangci-lint issues)
-- mmogbrain: 36 critical/high/medium fixes applied
-- 25 source files modified across all services
 - **24/24 CRITICAL+HIGH issues resolved** (C1-C8, H1-H16)
-  - 4 new fixes applied this session: C2 (logging service field), C3 (jwtMiddleware session check), H6 (JWT audience validation), H3/H12 (RateLimiter memory leak)
-  - ~20 issues pre-resolved in the 36-fix batch
+- **mmogbrain refactored**: 4,720-line `main.go` split into 11 files + `protocol/` package (218-line entry point)
 - 30 MEDIUM issues tracked, 2 resolved
-- Remaining major tasks: mmogbrain refactor, service consolidation, test coverage
+- Remaining major tasks: service consolidation, test coverage

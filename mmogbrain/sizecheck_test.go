@@ -4,6 +4,8 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/dreadnought-ps/mmogbrain/protocol"
 )
 
 var targetSizes = map[string]int{
@@ -47,41 +49,41 @@ func TestPayloadSizesVerify(t *testing.T) {
 	var reqID [16]byte
 
 	builders := map[string]func() []byte{
-		"YA_UserLogin":              func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogLoginSuccessPayload()) },
-		"YA_UserOnline":             func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogUserOnlinePayload()) },
-		"YA_RequestStaticFleetData": func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogStaticFleetDataPayload()) },
-		"YA_GetFeatureToggle":       func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogFeatureTogglePayload()) },
-		"YA_GetGameConfigData":      func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogGameConfigDataPayload()) },
-		"YA_GetStaticCareerData":    func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogStaticCareerDataPayload()) },
-		"YA_GetProgressionData":     func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogProgressionDataPayload()) },
-		"YA_GetScoringData":         func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogScoringDataPayload()) },
-		"YA_GetDailyContractsData":  func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogDailyContractsDataPayload()) },
-		"YA_GetBoosterData":         func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogBoosterDataPayload()) },
-		"YA_GetCareerProgression":   func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogCareerProgressionPayload()) },
-		"YA_GetPlayerScores":        func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerScoresPayload()) },
-		"YA_GetTechTree":            func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogTechTreePayload()) },
-		"YA_GetPlayerProgression":   func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerProgressionPayload(pid)) },
-		"YA_GetPlayerPurchases":     func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerPurchasesPayload()) },
-		"YA_FleetEligibility":       func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogFleetEligibilityPayload()) },
-		"YA_Tune":                   func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogTunePayload()) },
-		"YA_GetSeasonData":          func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogSeasonDataPayload()) },
-		"YA_PlayerGet":              func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
-		"YA_PlayerFleets":           func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
-		"YA_GetSeasonProgress":      func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogSeasonProgressPayload()) },
+		"YA_UserLogin":              func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogLoginSuccessPayload()) },
+		"YA_UserOnline":             func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogUserOnlinePayload()) },
+		"YA_RequestStaticFleetData": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogStaticFleetDataPayload()) },
+		"YA_GetFeatureToggle":       func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogFeatureTogglePayload()) },
+		"YA_GetGameConfigData":      func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogGameConfigDataPayload()) },
+		"YA_GetStaticCareerData":    func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogStaticCareerDataPayload()) },
+		"YA_GetProgressionData":     func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogProgressionDataPayload()) },
+		"YA_GetScoringData":         func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogScoringDataPayload()) },
+		"YA_GetDailyContractsData":  func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogDailyContractsDataPayload()) },
+		"YA_GetBoosterData":         func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogBoosterDataPayload()) },
+		"YA_GetCareerProgression":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogCareerProgressionPayload()) },
+		"YA_GetPlayerScores":        func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerScoresPayload()) },
+		"YA_GetTechTree":            func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTechTreePayload()) },
+		"YA_GetPlayerProgression":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerProgressionPayload(pid)) },
+		"YA_GetPlayerPurchases":     func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerPurchasesPayload()) },
+		"YA_FleetEligibility":       func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogFleetEligibilityPayload()) },
+		"YA_Tune":                   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTunePayload()) },
+		"YA_GetSeasonData":          func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonDataPayload()) },
+		"YA_PlayerGet":              func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
+		"YA_PlayerFleets":           func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
+		"YA_GetSeasonProgress":      func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonProgressPayload()) },
 		"YA_GetPlayersInformation": func() []byte {
-			return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayersInformationPayload(pid, nil))
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayersInformationPayload(pid, nil))
 		},
-		"YA_CheckReturn": func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogCheckReturnPayload()) },
+		"YA_CheckReturn": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogCheckReturnPayload()) },
 		"YA_AnalyticsBeginTransaction": func() []byte {
-			return buildMmogResponseFrame(reqID, 0x0320, buildMmogAnalyticsBeginTransactionPayload("test-txid"))
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogAnalyticsBeginTransactionPayload("test-txid"))
 		},
 		"YA_AnalyticsEvent": func() []byte {
-			return buildMmogResponseFrame(reqID, 0x0320, buildMmogRequestSuccessPayload("YA_AnalyticsEvent"))
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogRequestSuccessPayload("YA_AnalyticsEvent"))
 		},
 		"YA_SaveCtAData": func() []byte {
-			return buildMmogResponseFrame(reqID, 0x0320, buildMmogRequestSuccessPayload("YA_SaveCtAData"))
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogRequestSuccessPayload("YA_SaveCtAData"))
 		},
-		"YA_GetPlayerStatsCounterData": func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerStatsCounterDataPayload()) },
+		"YA_GetPlayerStatsCounterData": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerStatsCounterDataPayload()) },
 	}
 
 	allPass := true
@@ -110,9 +112,9 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 	var reqID [16]byte
 
 	builders := map[string]func() []byte{
-		"YA_RequestStaticFleetData": func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogStaticFleetDataPayload()) },
-		"YA_PlayerGet":              func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
-		"YA_PlayerFleets":           func() []byte { return buildMmogResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
+		"YA_RequestStaticFleetData": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogStaticFleetDataPayload()) },
+		"YA_PlayerGet":              func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
+		"YA_PlayerFleets":           func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
 	}
 	minReductions := map[string]int{
 		"YA_RequestStaticFleetData": 30000,

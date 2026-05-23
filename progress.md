@@ -4,21 +4,23 @@
 2026-05-23
 
 ## Completed Steps
-- [x] mmogbrain review completed — 2026-05-23
-- [x] mmogbrain 9/10 fix items completed — 2026-05-23
-- [x] Moved `src/Documents/` → `dreadnought-private-server/Documents/` — 2026-05-23
-- [x] Full project review: all 8 services + shared packages reviewed — 2026-05-23
-- [x] Consolidated 50+ issues into `issues.md` with severity ratings — 2026-05-23
-- [x] 36 fixes applied across shared, auth-server, legacy-api, game-manager, gateway, master-server, admin-cli, dn-launcher — 2026-05-23
-- [x] Moved high-risk `Documents/` back to `src/Documents/` — 2026-05-23
-- [x] Committed and pushed all changes to GitHub — 2026-05-23
-- [x] Created `AGENTS.md` — session orientation and directory map — 2026-05-23
+...
 - [x] **C2**: Fixed `shared/logging/logging.go` — `New()` now uses `service` param via Hook — 2026-05-23
 - [x] **C3**: Fixed `auth-server/main.go` jwtMiddleware — now checks sessions table for revoked tokens — 2026-05-23
 - [x] **H6**: Added JWT audience validation to legacy-api, mmogbrain, and shared/middleware — 2026-05-23
 - [x] **H3/H12**: RateLimiter memory leak fixed in `shared/middleware` and `gateway` — added `cleanupLoop()` + fixed unreachable `delete()` — 2026-05-23
-- [x] Verified all 8 CRITICAL issues: C1-C8 confirmed resolved (some pre-existing, some just fixed) — 2026-05-23
-- [x] Verified all 16 HIGH issues: H1-H16 confirmed resolved (many already fixed in 36-fix batch) — 2026-05-23
+- [x] Verified all 8 CRITICAL issues: C1-C8 confirmed resolved — 2026-05-23
+- [x] Verified all 16 HIGH issues: H1-H16 confirmed resolved — 2026-05-23
+- [x] **mmogbrain refactor** — split 4,720-line `main.go` into 11 files + 1 new package — 2026-05-23
+  - `protocol/` package (5 files: crypto.go, parser.go, encoder.go, frames.go, pid.go) — MMOG binary protocol
+  - `firmament.go` (424 lines) — Firmament TLS server + handshake
+  - `gateway_server.go` (452 lines) — Gateway HTTP server + session management
+  - `gateway_catalog.go` (426 lines) — Catalog entities + market metadata
+  - `response_types.go` (681 lines) — Ship/loadout/fleet types + starter data
+  - `response_dispatcher.go` (126 lines) — Request router switch
+  - `response_builders.go` (1476 lines) — All response payload builders
+  - `response_connection.go` (334 lines) — MMOG connection handlers
+  - `main.go` (218 lines) — Entry point + HTTP middleware
 - [x] All services build cleanly — 0 golangci-lint issues expected — 2026-05-23
 - [x] All existing tests pass — 2026-05-23
 
@@ -27,7 +29,7 @@
 
 ## Next Steps (Queue)
 ### mmogbrain
-- [ ] **[PRIORITY HIGH]** Refactor — split `main.go` (4,586 lines) into separate packages
+- [x] **[PRIORITY HIGH]** Refactor — split `main.go` (4,586 lines) into separate packages — DONE 2026-05-23
 
 ### MEDIUM Issues (outstanding)
 - [ ] **M1** shared/db: Migrations not transactional — DDL + schema_versions insert not atomic
