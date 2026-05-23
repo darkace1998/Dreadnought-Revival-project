@@ -196,5 +196,8 @@ curl http://127.0.0.1:8085/health  # game-manager
 - All services build and pass lint (0 golangci-lint issues)
 - mmogbrain: 36 critical/high/medium fixes applied
 - 25 source files modified across all services
-- 50+ issues tracked in issues.md
-- Remaining major tasks: mmogbrain refactor, service consolidation
+- **24/24 CRITICAL+HIGH issues resolved** (C1-C8, H1-H16)
+  - 4 new fixes applied this session: C2 (logging service field), C3 (jwtMiddleware session check), H6 (JWT audience validation), H3/H12 (RateLimiter memory leak)
+  - ~20 issues pre-resolved in the 36-fix batch
+- 30 MEDIUM issues tracked, 2 resolved
+- Remaining major tasks: mmogbrain refactor, service consolidation, test coverage

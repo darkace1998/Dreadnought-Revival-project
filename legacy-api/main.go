@@ -110,6 +110,17 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
+			hasAud := false
+			for _, a := range c.Audience {
+				if a == "dreadnought" {
+					hasAud = true
+					break
+				}
+			}
+			if !hasAud {
+				http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
+				return
+			}
 			r.Header.Set("X-User-ID", c.UserID)
 			r.Header.Set("X-Username", c.Username)
 			next.ServeHTTP(w, r)

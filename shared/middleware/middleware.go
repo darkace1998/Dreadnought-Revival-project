@@ -42,6 +42,19 @@ func JWTMiddleware(secret []byte, log *logrus.Logger) func(http.Handler) http.Ha
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
+			for _, a := range claims.Audience {
+				if a == "dreadnought" {
+					goto audOk
+				}
+			}
+			for _, a := range claims.Audience {
+				if a == "launcher" {
+					goto audOk
+				}
+			}
+			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
+			return
+		audOk:
 			r.Header.Set("X-User-ID", claims.UserID)
 			r.Header.Set("X-Username", claims.Username)
 			next.ServeHTTP(w, r)
@@ -58,10 +71,35 @@ type RateLimiter struct {
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+	}
+	go rl.cleanupLoop()
+	return rl
+}
+
+func (rl *RateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(rl.window)
+	defer ticker.Stop()
+	for range ticker.C {
+		rl.mu.Lock()
+		cutoff := time.Now().Add(-rl.window)
+		for ip, times := range rl.requests {
+			filtered := times[:0]
+			for _, t := range times {
+				if t.After(cutoff) {
+					filtered = append(filtered, t)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(rl.requests, ip)
+			} else {
+				rl.requests[ip] = filtered
+			}
+		}
+		rl.mu.Unlock()
 	}
 }
 
@@ -82,11 +120,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 				filtered = append(filtered, t)
 			}
 		}
-		filtered = append(filtered, now)
-		rl.requests[ip] = filtered
-		if len(filtered) == 0 {
+		if len(filtered) == 0 && len(times) > 0 {
 			delete(rl.requests, ip)
 		}
+		filtered = append(filtered, now)
+		rl.requests[ip] = filtered
 		exceeded := len(filtered) > rl.limit
 		rl.mu.Unlock()
 

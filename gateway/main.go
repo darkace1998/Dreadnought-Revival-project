@@ -44,10 +44,35 @@ type rateLimiter struct {
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	return &rateLimiter{
+	rl := &rateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+	}
+	go rl.cleanupLoop()
+	return rl
+}
+
+func (rl *rateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(rl.window)
+	defer ticker.Stop()
+	for range ticker.C {
+		rl.mu.Lock()
+		cutoff := time.Now().Add(-rl.window)
+		for ip, times := range rl.requests {
+			filtered := times[:0]
+			for _, t := range times {
+				if t.After(cutoff) {
+					filtered = append(filtered, t)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(rl.requests, ip)
+			} else {
+				rl.requests[ip] = filtered
+			}
+		}
+		rl.mu.Unlock()
 	}
 }
 
@@ -63,11 +88,11 @@ func (rl *rateLimiter) allow(ip string) bool {
 			filtered = append(filtered, t)
 		}
 	}
-	filtered = append(filtered, now)
-	rl.requests[ip] = filtered
-	if len(filtered) == 0 {
+	if len(filtered) == 0 && len(times) > 0 {
 		delete(rl.requests, ip)
 	}
+	filtered = append(filtered, now)
+	rl.requests[ip] = filtered
 	return len(filtered) <= rl.limit
 }
 

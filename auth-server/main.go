@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -133,6 +135,18 @@ func jwtMiddleware(secret []byte, database *sql.DB, next http.HandlerFunc) http.
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
 		}
+
+		sum := sha256.Sum256([]byte(tokenStr))
+		tokenHash := fmt.Sprintf("%x", sum[:])
+		var found int
+		if err := database.QueryRow(
+			`SELECT COUNT(*) FROM sessions WHERE token_hash=? AND datetime(expires_at) > datetime('now')`,
+			tokenHash,
+		).Scan(&found); err != nil || found == 0 {
+			http.Error(w, `{"error":"token revoked"}`, http.StatusUnauthorized)
+			return
+		}
+
 		r.Header.Set("X-User-ID", claims.UserID)
 		r.Header.Set("X-Username", claims.Username)
 		next(w, r)
