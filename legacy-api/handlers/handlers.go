@@ -322,13 +322,16 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		Mode    string `json:"mode"`
 		Map     string `json:"map"`
 		Players []struct {
-			UserID string `json:"user_id"`
-			Team   int    `json:"team"`
-			Score  int    `json:"score"`
-			Kills  int    `json:"kills"`
-			Deaths int    `json:"deaths"`
-			Damage int    `json:"damage"`
-			Won    bool   `json:"won"`
+			UserID      string `json:"user_id"`
+			Team        int    `json:"team"`
+			Score       int    `json:"score"`
+			Kills       int    `json:"kills"`
+			Deaths      int    `json:"deaths"`
+			Damage      int    `json:"damage"`
+			Won         bool   `json:"won"`
+			Assists     int    `json:"assists"`
+			HealingDone int    `json:"healing_done"`
+			DamageTaken int    `json:"damage_taken"`
 		} `json:"players"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -391,9 +394,13 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 			matches_played=matches_played+1,
 			wins=wins+?,
 			xp_total=xp_total+?,
+			damage_dealt=damage_dealt+?,
+			damage_taken=damage_taken+?,
+			assists=assists+?,
+			healing_done=healing_done+?,
 			updated_at=datetime('now')
 			WHERE user_id=?`,
-			p.Kills, p.Deaths, winVal, scoreXP+50, p.UserID,
+			p.Kills, p.Deaths, winVal, scoreXP+50, p.Damage, p.DamageTaken, p.Assists, p.HealingDone, p.UserID,
 		); err != nil {
 			h.Log.WithError(err).Error("post match result: update player stats")
 			writeError(w, http.StatusInternalServerError, "failed to record match")

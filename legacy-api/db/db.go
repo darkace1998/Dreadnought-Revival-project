@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -50,6 +51,19 @@ var migrations = []string{
 		damage   INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (match_id, user_id)
 	)`,
+	`ALTER TABLE player_stats ADD COLUMN assists INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN damage_dealt INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN damage_taken INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN healing_done INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN control_points INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN double_kills INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN triple_kills INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN multikills INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN kill_streak INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN modules_used INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN energy_spent INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN distance_traveled INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_stats ADD COLUMN time_played INTEGER NOT NULL DEFAULT 0`,
 }
 
 func Open(path string) (*sql.DB, error) {
@@ -83,6 +97,10 @@ func migrate(db *sql.DB) error {
 			continue
 		}
 		if _, err := db.Exec(ddl); err != nil {
+			if strings.Contains(err.Error(), "duplicate column") {
+				_, _ = db.Exec(`INSERT OR IGNORE INTO schema_versions(version) VALUES(?)`, v)
+				continue
+			}
 			return fmt.Errorf("migration %d: %w", v, err)
 		}
 		if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, v); err != nil {

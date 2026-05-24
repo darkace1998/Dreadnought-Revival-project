@@ -126,6 +126,34 @@ var migrations = []string{
 	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE,
 	    CHECK (progress >= 0 AND progress <= 100)  -- Progress as percentage
 	)`,
+	`CREATE TABLE IF NOT EXISTS player_ribbons (
+		user_id     TEXT NOT NULL,
+		ribbon_type TEXT NOT NULL,
+		count       INTEGER NOT NULL DEFAULT 0,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, ribbon_type),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
+	`CREATE TABLE IF NOT EXISTS player_season_progress (
+		user_id     TEXT NOT NULL,
+		season_id   TEXT NOT NULL,
+		xp          INTEGER NOT NULL DEFAULT 0,
+		level       INTEGER NOT NULL DEFAULT 1,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, season_id),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
+	`CREATE TABLE IF NOT EXISTS player_ship_xp (
+		user_id     TEXT NOT NULL,
+		ship_id     INTEGER NOT NULL,
+		xp          INTEGER NOT NULL DEFAULT 0,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, ship_id),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {
