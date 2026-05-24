@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/google/uuid"
@@ -288,6 +289,111 @@ func (h *Handler) ChatHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"channel": channel, "messages": messages})
+}
+
+// UpdateProgression handles POST /internal/progression — called by legacy-api after match results.
+func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID    string `json:"user_id"`
+		XP        int32  `json:"xp"`
+		Kills     int32  `json:"kills"`
+		Deaths    int32  `json:"deaths"`
+		Wins      int32  `json:"wins"`
+		MatchXP   int32  `json:"match_xp"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if req.UserID == "" {
+		writeError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	pid := normalizeForDB(req.UserID)
+	if _, err := h.DB.Exec(`INSERT OR IGNORE INTO player_state(user_id,soft_currency,premium_currency,free_xp,current_xp,current_rank,rank_xp) VALUES(?,10000,0,0,0,1,5000)`, pid); err != nil {
+		h.Log.WithError(err).WithField("pid", pid).Warn("progression: seed player state")
+		writeError(w, http.StatusInternalServerError, "seed failed")
+		return
+	}
+
+	var currentXP, currentRank, rankXP int32
+	_ = h.DB.QueryRow(`SELECT current_xp, current_rank, rank_xp FROM player_state WHERE user_id=?`, pid).
+		Scan(&currentXP, &currentRank, &rankXP)
+
+	newXP := currentXP + req.XP
+	if newXP < 0 {
+		newXP = 0
+	}
+	newRank := currentRank
+	newRankXP := rankXP + req.XP
+	for {
+		threshold := RankXPThreshold(newRank + 1)
+		if threshold <= 0 || newRankXP < threshold {
+			break
+		}
+		newRank++
+		newRankXP -= threshold
+	}
+
+	if _, err := h.DB.Exec(
+		`UPDATE player_state SET current_xp=?, current_rank=?, rank_xp=?, updated_at=datetime('now') WHERE user_id=?`,
+		newXP, newRank, newRankXP, pid,
+	); err != nil {
+		h.Log.WithError(err).WithField("pid", pid).Warn("progression: update player state")
+		writeError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+
+	h.Log.WithFields(logrus.Fields{
+		"pid":       pid,
+		"xp_added":  req.XP,
+		"new_xp":    newXP,
+		"new_rank":  newRank,
+		"new_rank_xp": newRankXP,
+	}).Info("progression: player progressed")
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus:  "ok",
+		"new_rank":   newRank,
+		"new_xp":     newXP,
+		"rank_xp":    newRankXP,
+	})
+}
+
+func normalizeForDB(userID string) string {
+	cleaned := strings.ToLower(strings.ReplaceAll(userID, "-", ""))
+	if len(cleaned) >= 32 {
+		return cleaned[:32]
+	}
+	return userID
+}
+
+// RankXPThreshold returns the XP required to advance from the given rank.
+// Based on Dreadnought 51-rank progression ladder.
+func RankXPThreshold(rank int32) int32 {
+	if rank < 2 {
+		return 0
+	}
+	if rank <= 5 {
+		return 1000
+	}
+	if rank <= 10 {
+		return 2000
+	}
+	if rank <= 20 {
+		return 3500
+	}
+	if rank <= 30 {
+		return 5000
+	}
+	if rank <= 40 {
+		return 7500
+	}
+	if rank <= 50 {
+		return 10000
+	}
+	return 15000
 }
 
 // Health handles GET /health

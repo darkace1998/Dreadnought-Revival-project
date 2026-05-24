@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dreadnought-ps/mmogbrain/handlers"
 	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
@@ -854,7 +855,7 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "CurrentXP", state.currentXP)
 	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
 	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
-	b = protocol.AppendInt32Field(b, "XPToNextRank", 1000)
+	b = protocol.AppendInt32Field(b, "XPToNextRank", handlers.RankXPThreshold(state.currentRank+1))
 	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(countOwnedShips(allT1Ships())))
 	b, stack = protocol.AppendArrayStart(b, stack, "shipProgressionUiData")
 	for _, ship := range allT1Ships() {

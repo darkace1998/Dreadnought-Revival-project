@@ -78,6 +78,7 @@ func main() {
 	auth.HandleFunc("/queue", h.QueueLeave).Methods(http.MethodDelete)
 	auth.HandleFunc("/match/{id}", h.GetMatch).Methods(http.MethodGet)
 	auth.HandleFunc("/chat", h.ChatSend).Methods(http.MethodPost)
+	auth.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
 
 	srv := &http.Server{
 		Addr:         addr,

@@ -52,7 +52,7 @@ func defaultMmogPlayerState(playerPID string) mmogPlayerState {
 		freeXP:          0,
 		currentXP:       0,
 		currentRank:     1,
-		rankXP:          0,
+		rankXP:          5000,
 		fleets:          mmogFleetSeeds(),
 	}
 }

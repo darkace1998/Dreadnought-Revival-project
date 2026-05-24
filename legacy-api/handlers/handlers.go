@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -406,6 +407,33 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = nil
+
+	for _, p := range req.Players {
+		scoreXP := p.Score/10 + 50
+		if scoreXP < 1 {
+			scoreXP = 1
+		}
+		go func(userID string, xp, kills, deaths int, won bool) {
+			winVal := 0
+			if won {
+				winVal = 1
+			}
+			body, _ := json.Marshal(map[string]interface{}{
+				"user_id":  userID,
+				"xp":       xp,
+				"kills":    kills,
+				"deaths":   deaths,
+				"wins":     winVal,
+				"match_xp": xp,
+			})
+			resp, callErr := http.Post("http://127.0.0.1:8083/mmog/progression", "application/json", bytes.NewReader(body))
+			if callErr != nil {
+				h.Log.WithError(callErr).WithField("user_id", userID).Warn("post match: mmog progression call failed")
+				return
+			}
+			_ = resp.Body.Close()
+		}(p.UserID, scoreXP, p.Kills, p.Deaths, p.Won)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"match_id": matchID, fieldStatus: "recorded"})
 }
