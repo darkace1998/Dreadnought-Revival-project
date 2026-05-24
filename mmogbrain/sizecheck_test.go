@@ -13,7 +13,7 @@ var targetSizes = map[string]int{
 	"YA_UserOnline":                81,
 	"YA_RequestStaticFleetData":    1403,
 	"YA_GetFeatureToggle":          111,
-	"YA_GetGameConfigData":         101,
+	"YA_GetGameConfigData":             265,
 	"YA_GetStaticCareerData":       3531,
 	"YA_GetProgressionData":        126,
 	"YA_GetScoringData":            232,

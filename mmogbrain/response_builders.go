@@ -930,6 +930,11 @@ func buildMmogGameConfigDataPayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendInt32Field(b, "MaxSquadSize", 5)
 	b = protocol.AppendBoolField(b, "banned", false)
+	b, stack = protocol.AppendArrayStart(b, stack, "GameModes")
+	for _, mode := range matchmaker.GameModeList() {
+		b = protocol.AppendUnnamedStringField(b, mode)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

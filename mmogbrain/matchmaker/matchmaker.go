@@ -39,6 +39,15 @@ func ValidGameMode(mode string) bool {
 	return validGameModes[mode]
 }
 
+// GameModeList returns all supported game modes.
+func GameModeList() []string {
+	modes := make([]string, 0, len(validGameModes))
+	for mode := range validGameModes {
+		modes = append(modes, mode)
+	}
+	return modes
+}
+
 // Matchmaker polls the queue and fires match creation when enough players are present.
 type Matchmaker struct {
 	DB              *sql.DB
