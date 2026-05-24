@@ -1239,3 +1239,96 @@ func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, s
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
+
+// --- Market / Purchases ---
+
+var catalogPrices = map[int32]int32{
+	extractedShipIDValcour: 5000,
+	extractedShipIDLeipzig: 5000,
+	extractedShipIDTrieste: 5000,
+	extractedShipIDCeres:   5000,
+}
+
+func buildMmogPurchasePayload(playerPID string, payload []byte) []byte {
+	itemID := protocol.FirstInt32Field(payload, 0, "ItemID", "itemID", "itemId", "ItemId")
+	if itemID == 0 {
+		return buildMmogErrorPayload("missing ItemID for purchase")
+	}
+
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return buildMmogErrorPayload("database unavailable")
+	}
+
+	price, ok := catalogPrices[itemID]
+	if !ok {
+		price = 1000
+	}
+
+	var owned int
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`, pid, itemID).Scan(&owned)
+	if owned > 0 {
+		return buildMmogErrorPayload("item already owned")
+	}
+
+	var softCurrency, premiumCurrency int32
+	_ = database.QueryRow(`SELECT soft_currency, premium_currency FROM player_state WHERE user_id=?`, pid).
+		Scan(&softCurrency, &premiumCurrency)
+
+	if softCurrency < price {
+		return buildMmogErrorPayload("insufficient credits")
+	}
+
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid); err != nil {
+		return buildMmogErrorPayload("currency deduction failed")
+	}
+	itemType := "ship"
+	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,'gp')`, pid, itemID, itemType, price); err != nil {
+		return buildMmogErrorPayload("purchase record failed")
+	}
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_PurchaseItem")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendInt32Field(b, "itemID", itemID)
+	b = protocol.AppendInt32Field(b, "pricePaid", price)
+	b = protocol.AppendInt32Field(b, "softCurrency", softCurrency-price)
+	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogElitePurchasePayload(playerPID string, payload []byte) []byte {
+	durationDays := protocol.FirstInt32Field(payload, 30, "Duration", "duration", "Days", "days")
+	if durationDays <= 0 {
+		durationDays = 30
+	}
+	price := durationDays * 50
+
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return buildMmogErrorPayload("database unavailable")
+	}
+
+	var premiumCurrency int32
+	_ = database.QueryRow(`SELECT premium_currency FROM player_state WHERE user_id=?`, pid).Scan(&premiumCurrency)
+	if premiumCurrency < price {
+		return buildMmogErrorPayload("insufficient elite currency")
+	}
+
+	_, _ = database.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid)
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_BuyEliteStatus")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendInt32Field(b, "eliteDays", durationDays)
+	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency-price)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}

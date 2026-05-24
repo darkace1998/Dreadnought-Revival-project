@@ -89,6 +89,12 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
 		return buildMmogRequestSuccessPayload(requestName)
 
+	// --- Market / Purchases ---
+	case "YA_PurchaseItem", "YA_BuyItem", "YA_Purchase", "YA_Buy":
+		return buildMmogPurchasePayload(playerPID, payload)
+	case "YA_BuyEliteStatus", "YA_BuyDaypass", "YA_ActivateElite":
+		return buildMmogElitePurchasePayload(playerPID, payload)
+
 	// --- Navigation ---
 	case "YA_RoomReturn", "YA_PlayAgain":
 		return buildMmogRequestSuccessPayload(requestName)

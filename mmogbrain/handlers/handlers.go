@@ -348,6 +348,8 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 	awardRibbons(h.DB, pid, req.Kills, req.Deaths)
 	awardSeasonXP(h.DB, pid, req.XP)
 	awardFleetShipXP(h.DB, pid, req.XP)
+	awardMatchCredits(h.DB, pid, req.XP)
+	seedDailyContracts(h.DB, pid)
 
 	h.Log.WithFields(logrus.Fields{
 		"pid":       pid,
@@ -450,6 +452,46 @@ func awardFleetShipXP(db *sql.DB, pid string, xp int32) {
 			continue
 		}
 		_, _ = db.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,?) ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=xp+?, updated_at=datetime('now')`, pid, shipID, xp, xp)
+	}
+}
+
+func awardMatchCredits(db *sql.DB, pid string, xp int32) {
+	credits := xp * 2
+	if credits < 50 {
+		credits = 50
+	}
+	_, _ = db.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, credits, pid)
+}
+
+var dailyContractSeeds = []struct {
+	id, name, description string
+	targetKills, targetScore int32
+	rewardXP, rewardGP      int32
+}{
+	{"contract_kills_5", "Get 5 Kills", "Eliminate 5 enemy ships", 5, 0, 200, 400},
+	{"contract_kills_10", "Get 10 Kills", "Eliminate 10 enemy ships", 10, 0, 500, 1000},
+	{"contract_wins_1", "Win a Match", "Win 1 match", 0, 0, 300, 600},
+	{"contract_score_500", "Score 500 Points", "Earn 500 score in matches", 0, 500, 250, 500},
+}
+
+func seedDailyContracts(db *sql.DB, pid string) {
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
+	if count >= 3 {
+		return
+	}
+	for i := 0; i < 3 && i < len(dailyContractSeeds); i++ {
+		seed := dailyContractSeeds[i]
+		payload, _ := json.Marshal(map[string]interface{}{
+			"id":          seed.id,
+			"name":        seed.name,
+			"description": seed.description,
+			"targetKills": seed.targetKills,
+			"targetScore": seed.targetScore,
+			"rewardXP":    seed.rewardXP,
+			"rewardGP":    seed.rewardGP,
+		})
+		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
 	}
 }
 

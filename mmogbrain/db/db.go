@@ -154,6 +154,16 @@ var migrations = []string{
 		PRIMARY KEY (user_id, ship_id),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	`CREATE TABLE IF NOT EXISTS player_purchases (
+		user_id     TEXT NOT NULL,
+		item_id     INTEGER NOT NULL,
+		item_type   TEXT NOT NULL DEFAULT '',
+		price_paid  INTEGER NOT NULL DEFAULT 0,
+		currency    TEXT NOT NULL DEFAULT 'gp',
+		purchased_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, item_id),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {
