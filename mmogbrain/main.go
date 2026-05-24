@@ -1,4 +1,3 @@
-//nolint:goconst,gosec,ineffassign,unused,unconvert // Reverse-engineered protocol compatibility code intentionally keeps explicit literals, casts, helper scaffolding, and legacy crypto/TLS details.
 package main
 
 import (

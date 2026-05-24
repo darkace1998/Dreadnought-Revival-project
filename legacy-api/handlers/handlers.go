@@ -420,7 +420,7 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 		if scoreXP < 1 {
 			scoreXP = 1
 		}
-		go func(userID string, xp, kills, deaths int, won bool) {
+		go func(userID string, xp, kills, deaths int, won bool, gameMode string) {
 			winVal := 0
 			if won {
 				winVal = 1
@@ -432,6 +432,7 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 				"deaths":   deaths,
 				"wins":     winVal,
 				"match_xp": xp,
+				"game_mode": gameMode,
 			})
 			resp, callErr := http.Post("http://127.0.0.1:8083/mmog/progression", "application/json", bytes.NewReader(body))
 			if callErr != nil {
@@ -439,7 +440,7 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			_ = resp.Body.Close()
-		}(p.UserID, scoreXP, p.Kills, p.Deaths, p.Won)
+		}(p.UserID, scoreXP, p.Kills, p.Deaths, p.Won, req.Mode)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"match_id": matchID, fieldStatus: "recorded"})

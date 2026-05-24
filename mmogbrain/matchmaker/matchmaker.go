@@ -19,9 +19,19 @@ var availableMaps = []string{
 
 // validGameModes lists game modes the server supports.
 var validGameModes = map[string]bool{
-	"TeamDeathmatch":   true,
-	"TeamElimination":  true,
-	"TerritoryControl": true,
+	"TeamDeathmatch":    true,
+	"TeamElimination":   true,
+	"TerritoryControl":  true,
+	"PvE_Standard":      true,
+	"PvE_Havoc":         true,
+	"PvE_Onslaught":     true,
+	"PvE_Coop":          true,
+	"Training":          true,
+}
+
+// pveMaps lists maps available for PvE modes.
+var pveMaps = []string{
+	"Amirani", "Derelict", "Iapetus", "Kalyke",
 }
 
 // ValidGameMode returns true if the given mode is supported.
@@ -164,7 +174,14 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	}
 
 	// Pick a map
-	mapName := availableMaps[time.Now().UnixNano()%int64(len(availableMaps))]
+	maps := availableMaps
+	for _, pveMode := range []string{"PvE_Standard", "PvE_Havoc", "PvE_Onslaught", "PvE_Coop"} {
+		if gameMode == pveMode {
+			maps = pveMaps
+			break
+		}
+	}
+	mapName := maps[time.Now().UnixNano()%int64(len(maps))]
 
 	// Request a game instance from the game manager
 	playerIDs := make([]string, len(entries))

@@ -1097,6 +1097,14 @@ func buildMmogBoosterDataPayload() []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetBoosterData")
 	b, stack = protocol.AppendArrayStart(b, stack, "BoosterTable")
+	for _, booster := range havocBoosters {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendInt32Field(b, "BoosterID", booster.id)
+		b = protocol.AppendStringField(b, "BoosterName", booster.name)
+		b = protocol.AppendInt32Field(b, "Cost", booster.cost)
+		b = protocol.AppendStringField(b, "Description", booster.desc)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "GoldMembershipTable")
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1104,6 +1112,20 @@ func buildMmogBoosterDataPayload() []byte {
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+var havocBoosters = []struct {
+	id   int32
+	name string
+	cost int32
+	desc string
+}{
+	{1, "Damage Boost", 500, "Increases weapon damage by 25% for one wave"},
+	{2, "Shield Boost", 400, "Increases shield absorption by 30% for one wave"},
+	{3, "Speed Boost", 300, "Increases movement speed by 20% for one wave"},
+	{4, "Repair Boost", 600, "Repairs 50% hull damage instantly"},
+	{5, "Energy Boost", 350, "Refills energy to maximum"},
+	{6, "XP Boost", 750, "Doubles XP earned for one wave"},
 }
 
 func buildMmogPlayerScoresPayload() []byte {

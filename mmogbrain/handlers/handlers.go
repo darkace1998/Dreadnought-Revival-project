@@ -300,6 +300,7 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 		Deaths    int32  `json:"deaths"`
 		Wins      int32  `json:"wins"`
 		MatchXP   int32  `json:"match_xp"`
+		GameMode  string `json:"game_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -350,6 +351,7 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 	awardFleetShipXP(h.DB, pid, req.XP)
 	awardMatchCredits(h.DB, pid, req.XP)
 	seedDailyContracts(h.DB, pid)
+	awardPvEProgression(h.DB, pid, req.GameMode, req.Kills)
 
 	h.Log.WithFields(logrus.Fields{
 		"pid":       pid,
@@ -492,6 +494,28 @@ func seedDailyContracts(db *sql.DB, pid string) {
 			"rewardGP":    seed.rewardGP,
 		})
 		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
+	}
+}
+
+func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
+	if !strings.HasPrefix(gameMode, "PvE_") && gameMode != "Training" {
+		return
+	}
+	bossKills := kills / 10
+	if bossKills < 1 {
+		bossKills = 0
+	}
+	bonusXP := int32(0)
+	switch {
+	case strings.Contains(gameMode, "Havoc"):
+		bonusXP = kills*30 + bossKills*500
+	case strings.Contains(gameMode, "Onslaught"):
+		bonusXP = kills*25 + bossKills*400
+	default:
+		bonusXP = kills*20 + bossKills*300
+	}
+	if bonusXP > 0 {
+		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, bonusXP, bonusXP/2, pid)
 	}
 }
 
