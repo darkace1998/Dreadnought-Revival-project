@@ -17,6 +17,18 @@ var availableMaps = []string{
 	"Charon", "Medusa", "Procyon", "DS-75", "Onyx", "Vesta", "Kylo", "Spree",
 }
 
+// validGameModes lists game modes the server supports.
+var validGameModes = map[string]bool{
+	"TeamDeathmatch":   true,
+	"TeamElimination":  true,
+	"TerritoryControl": true,
+}
+
+// ValidGameMode returns true if the given mode is supported.
+func ValidGameMode(mode string) bool {
+	return validGameModes[mode]
+}
+
 // Matchmaker polls the queue and fires match creation when enough players are present.
 type Matchmaker struct {
 	DB              *sql.DB

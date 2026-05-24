@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -50,6 +51,10 @@ func (h *Handler) QueueJoin(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.GameMode == "" {
 		req.GameMode = "TeamDeathmatch"
+	}
+	if !matchmaker.ValidGameMode(req.GameMode) {
+		writeError(w, http.StatusBadRequest, "unsupported game mode: "+req.GameMode)
+		return
 	}
 	if req.TierMin == 0 {
 		req.TierMin = 1

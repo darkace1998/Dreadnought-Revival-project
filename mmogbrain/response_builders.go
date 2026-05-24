@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/google/uuid"
@@ -80,6 +81,9 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 	gameMode := protocol.FirstNonEmptyString(payload, "GameMode", "gameMode", "Mode", "mode", "matchmaking")
 	if gameMode == "" || gameMode == "*matchmaking" {
 		gameMode = "TeamDeathmatch"
+	}
+	if !matchmaker.ValidGameMode(gameMode) {
+		return buildMmogMatchmakingErrorPayload(requestName, 2, "unsupported game mode")
 	}
 	tierMin := protocol.FirstInt32Field(payload, 1, "TierMin", "tierMin", "minTier", "MinTier")
 	tierMax := protocol.FirstInt32Field(payload, 5, "TierMax", "tierMax", "maxTier", "MaxTier")
