@@ -1745,76 +1745,19 @@ func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
-	var seasons []mmogSeasonDataTableRow
-	if err := json.Unmarshal([]byte(protocol.ExtractStringField(result, "Seasons")), &seasons); err != nil {
-		t.Fatalf("decode YA_GetSeasonData Seasons JSON: %v", err)
+	seasonsRaw := protocol.ExtractStringField(result, "Seasons")
+	if seasonsRaw != "[]" {
+		t.Fatalf("YA_GetSeasonData Seasons = %q, want empty array", seasonsRaw)
 	}
-	if got := len(seasons); got != 2 {
-		t.Fatalf("season row count = %d, want 2", got)
+	eventsRaw := protocol.ExtractStringField(result, "Events")
+	if eventsRaw != "[]" {
+		t.Fatalf("YA_GetSeasonData Events = %q, want empty array", eventsRaw)
 	}
-	if seasons[0].RowName != "PVE_Season1" || seasons[0].Active ||
-		seasons[0].Name != "Miner Inconvenience" ||
-		seasons[0].DescShort != "Season 1 short Description" ||
-		seasons[0].DescLong != "Season 1 long Description" {
-		t.Fatalf("season row[0] = %#v", seasons[0])
+	if currentSeason := protocol.ExtractStringField(result, "CurrentSeason"); currentSeason != "" {
+		t.Fatalf("YA_GetSeasonData CurrentSeason = %q, want empty", currentSeason)
 	}
-	if seasons[1].RowName != "PVE_Season3" || seasons[1].Active ||
-		seasons[1].Name != "Battleship Down" ||
-		seasons[1].DescShort != "Season 3 short Description" ||
-		seasons[1].DescLong != "Season 3 long Description" {
-		t.Fatalf("season row[1] = %#v", seasons[1])
-	}
-	for _, season := range seasons {
-		if season.ImageLarge != "" || season.ImageSmall != "" {
-			t.Fatalf("season %s should not use unresolved image asset refs: %#v", season.RowName, season)
-		}
-		if season.RewardLevels == nil {
-			t.Fatalf("season %s missing m_rewardLevels array", season.RowName)
-		}
-	}
-
-	var events []mmogEventDataTableRow
-	if err := json.Unmarshal([]byte(protocol.ExtractStringField(result, "Events")), &events); err != nil {
-		t.Fatalf("decode YA_GetSeasonData Events JSON: %v", err)
-	}
-	if got := len(events); got != 1 {
-		t.Fatalf("event row count = %d, want 1", got)
-	}
-	if events[0].RowName != "PVE_S1E1" {
-		t.Fatalf("event row name = %q, want PVE_S1E1", events[0].RowName)
-	}
-	if events[0].Name != "Incident Management" {
-		t.Fatalf("event row m_name = %q, want Incident Management", events[0].Name)
-	}
-	if events[0].DescShort != "Miner Inconvenience - Incident Management" {
-		t.Fatalf("event row m_descShort = %q", events[0].DescShort)
-	}
-	if events[0].StartDate != "2018.05.16-16.00.00" || events[0].EndDate != "2018.05.16-16.19.59" {
-		t.Fatalf("event row dates = %q to %q", events[0].StartDate, events[0].EndDate)
-	}
-	if events[0].GameMode != "YGMT_HORDE" {
-		t.Fatalf("event row game mode = %q, want YGMT_HORDE", events[0].GameMode)
-	}
-	if events[0].Color != (mmogDataTableColor{R: 160, G: 144, B: 131, A: 255}) {
-		t.Fatalf("event row color = %#v", events[0].Color)
-	}
-	if events[0].RewardLevels == nil {
-		t.Fatal("event row missing m_rewardLevels array")
-	}
-	if events[0].Season != "PVE_Season1" {
-		t.Fatalf("event row m_season = %q, want PVE_Season1", events[0].Season)
-	}
-	if seasonsRaw := protocol.ExtractStringField(result, "Seasons"); bytes.Contains([]byte(seasonsRaw), []byte("0x00000000")) {
-		t.Fatal("season JSON still contains unresolved 0x00000000 asset references")
-	}
-
-	for field, want := range map[string]string{
-		"CurrentSeason": "",
-		"ActiveEvent":   "",
-	} {
-		if got := protocol.ExtractStringField(result, field); got != want {
-			t.Fatalf("YA_GetSeasonData %s = %q, want %q", field, got, want)
-		}
+	if activeEvent := protocol.ExtractStringField(result, "ActiveEvent"); activeEvent != "" {
+		t.Fatalf("YA_GetSeasonData ActiveEvent = %q, want empty", activeEvent)
 	}
 }
 

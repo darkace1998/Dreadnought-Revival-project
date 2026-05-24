@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -490,99 +489,17 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte
 	var stack []int
-	seasonsJSON := mustMarshalSeasonTableJSON([]mmogSeasonDataTableRow{
-		{
-			RowName:      "PVE_Season1",
-			Active:       false,
-			Name:         "Miner Inconvenience",
-			DescShort:    "Season 1 short Description",
-			DescLong:     "Season 1 long Description",
-			ImageLarge:   "",
-			ImageSmall:   "",
-			RewardLevels: []map[string]any{},
-		},
-		{
-			RowName:      "PVE_Season3",
-			Active:       false,
-			Name:         "Battleship Down",
-			DescShort:    "Season 3 short Description",
-			DescLong:     "Season 3 long Description",
-			ImageLarge:   "",
-			ImageSmall:   "",
-			RewardLevels: []map[string]any{},
-		},
-	})
-	eventsJSON := mustMarshalSeasonTableJSON([]mmogEventDataTableRow{
-		{
-			RowName:       "PVE_S1E1",
-			Name:          "Incident Management",
-			DescShort:     "Miner Inconvenience - Incident Management",
-			DescLong:      "Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics.",
-			Map:           "",
-			MapParameters: "",
-			GameMode:      "YGMT_HORDE",
-			Color:         mmogDataTableColor{R: 160, G: 144, B: 131, A: 255},
-			ImageSmall:    "",
-			ImageLarge:    "",
-			RewardLevels:  []map[string]any{},
-			StartDate:     "2018.05.16-16.00.00",
-			EndDate:       "2018.05.16-16.19.59",
-			Season:        "PVE_Season1",
-		},
-	})
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetSeasonData")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "Events", eventsJSON)
-	b = protocol.AppendStringField(b, "Seasons", seasonsJSON)
+	b = protocol.AppendStringField(b, "Events", "[]")
+	b = protocol.AppendStringField(b, "Seasons", "[]")
 	b = protocol.AppendStringField(b, "CurrentSeason", "")
 	b = protocol.AppendStringField(b, "ActiveEvent", "")
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
 
-type mmogSeasonDataTableRow struct {
-	RowName      string           `json:"Name"`
-	Active       bool             `json:"m_active"`
-	Name         string           `json:"m_name"`
-	DescShort    string           `json:"m_descShort"`
-	DescLong     string           `json:"m_descLong"`
-	ImageLarge   string           `json:"m_imageLarge"`
-	ImageSmall   string           `json:"m_imageSmall"`
-	RewardLevels []map[string]any `json:"m_rewardLevels"`
-}
-
-type mmogEventDataTableRow struct {
-	RowName       string             `json:"Name"`
-	Name          string             `json:"m_name"`
-	DescShort     string             `json:"m_descShort"`
-	DescLong      string             `json:"m_descLong"`
-	Map           string             `json:"m_map"`
-	MapParameters string             `json:"m_mapParameters"`
-	GameMode      string             `json:"m_gameMode"`
-	Color         mmogDataTableColor `json:"m_color"`
-	ImageSmall    string             `json:"m_imageSmall"`
-	ImageLarge    string             `json:"m_imageLarge"`
-	RewardLevels  []map[string]any   `json:"m_rewardLevels"`
-	StartDate     string             `json:"m_startDate"`
-	EndDate       string             `json:"m_endDate"`
-	Season        string             `json:"m_season"`
-}
-
-type mmogDataTableColor struct {
-	R int32 `json:"r"`
-	G int32 `json:"g"`
-	B int32 `json:"b"`
-	A int32 `json:"a"`
-}
-
-func mustMarshalSeasonTableJSON(v any) string {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic("marshal season data payload: " + err.Error())
-	}
-	return string(data)
-}
 func buildMmogSeasonProgressPayload() []byte {
 	var b []byte
 	var stack []int // Track nesting for objects/arrays
