@@ -216,8 +216,8 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 			if size < 6 {
 				t.Fatalf("container size = %d at offset %d, want at least 6", size, start)
 			}
-			if start+size != i-4 {
-				t.Fatalf("container at offset %d closes at %d, want %d", start, start+size, i-4)
+		if start+size != i {
+			t.Fatalf("container at offset %d closes at %d, want %d", start, start+size, i)
 			}
 			stack = stack[:len(stack)-1]
 		default:

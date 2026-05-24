@@ -32,10 +32,10 @@ func AppendObjectEnd(b []byte, stack []int) ([]byte, []int) {
 	start := stack[len(stack)-1]
 	stack = stack[:len(stack)-1]
 	b = append(b, 0x00, 0x0e)
-	binary.LittleEndian.PutUint32(b[start:start+4], uint32(len(b)-start))
 	var offset [4]byte
 	binary.LittleEndian.PutUint32(offset[:], uint32(start))
 	b = append(b, offset[:]...)
+	binary.LittleEndian.PutUint32(b[start:start+4], uint32(len(b)-start))
 	return b, stack
 }
 
