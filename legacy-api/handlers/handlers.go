@@ -454,3 +454,72 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api", "database": dbOK})
 }
+
+// ServerStatus handles GET /v2/dreadnought/server/status
+func (h *Handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
+	var playersOnline, matchesActive int
+	_ = h.DB.QueryRow(`SELECT COUNT(*) FROM player_stats WHERE matches_played > 0`).Scan(&playersOnline)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus:      "ok",
+		"players_online":  playersOnline,
+		"matches_active":  matchesActive,
+		"server_load":     "low",
+		"maintenance":     false,
+	})
+}
+
+// Store handles GET /store — returns catalog items with prices
+func (h *Handler) Store(w http.ResponseWriter, r *http.Request) {
+	type storeItem struct {
+		ItemID      int32  `json:"item_id"`
+		ItemType    string `json:"item_type"`
+		DisplayName string `json:"display_name"`
+		Price       int32  `json:"price"`
+		Currency    string `json:"currency"`
+	}
+	items := []storeItem{
+		{33489265, "ship", "Valcour", 5000, "gp"},
+		{33489266, "ship", "Leipzig", 5000, "gp"},
+		{33489267, "ship", "Trieste", 5000, "gp"},
+		{33489268, "ship", "Ceres", 5000, "gp"},
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus: "ok",
+		"items":     items,
+	})
+}
+
+// TechTree handles GET /v2/dreadnought/techtree
+func (h *Handler) TechTree(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus: "ok",
+		"techtree":  "see mmogbrain YA_GetTechTree for full data",
+	})
+}
+
+// Season handles GET /season
+func (h *Handler) Season(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus: "ok",
+		"seasons":   "see mmogbrain YA_GetSeasonData for full data",
+	})
+}
+
+// XPConvert handles POST /xp/convert
+func (h *Handler) XPConvert(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	var req struct {
+		ShipID int32 `json:"ship_id"`
+		Amount int32 `json:"amount"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus:   "ok",
+		"converted_xp": req.Amount / 2,
+		"free_xp":      req.Amount / 2,
+	})
+}

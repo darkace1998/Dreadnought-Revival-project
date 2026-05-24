@@ -122,6 +122,14 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_Connect":
 		return buildMmogConnectPayload(playerPID)
 
+	// --- Server→Client Notifications ---
+	case "YA_UserOnline":
+		return buildMmogUserOnlinePayload()
+	case "YA_UserStatus":
+		return buildMmogRequestSuccessPayload(requestName)
+	case "YA_OnFleetCharged", "YA_AchievementsUpdated":
+		return buildMmogRequestSuccessPayload(requestName)
+
 	// --- Default ---
 	default:
 		logrus.WithField("request", requestName).Warn("unknown MMOG request")

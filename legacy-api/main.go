@@ -55,6 +55,13 @@ func main() {
 	auth.HandleFunc("/player/{id}/inventory", h.GetInventory).Methods(http.MethodGet)
 	auth.HandleFunc("/match/result", h.PostMatchResult).Methods(http.MethodPost)
 
+	// Phase 7 — completeness endpoints
+	r.HandleFunc("/v2/dreadnought/server/status", h.ServerStatus).Methods(http.MethodGet)
+	r.HandleFunc("/v2/dreadnought/techtree", h.TechTree).Methods(http.MethodGet)
+	auth.HandleFunc("/store", h.Store).Methods(http.MethodGet)
+	auth.HandleFunc("/season", h.Season).Methods(http.MethodGet)
+	auth.HandleFunc("/xp/convert", h.XPConvert).Methods(http.MethodPost)
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      r,

@@ -27,7 +27,7 @@ var targetSizes = map[string]int{
 	"YA_FleetEligibility":          305,
 	"YA_Tune":                      75,
 	"YA_GetSeasonData":             1055,
-	"YA_PlayerGet":                 1452,
+	"YA_PlayerGet":                 1719,
 	"YA_PlayerFleets":              656,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,

@@ -660,8 +660,8 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "Membership")
 	b = protocol.AppendInt32Field(b, "ExpireTime", membershipExpiresAt)
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendInt32Field(b, "DailyContractStateID", 0)
-	b = protocol.AppendInt32Field(b, "LastContractsAssignment", 0)
+	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
+	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(now))
 	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", 0)
 	b = protocol.AppendInt32Field(b, "FreeXp", state.freeXP)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
@@ -703,6 +703,14 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
+	for _, officer := range starterOfficers {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "OfficerID", officer.id)
+		b = protocol.AppendStringField(b, "Name", officer.name)
+		b = protocol.AppendInt32Field(b, "Level", 1)
+		b = protocol.AppendStringField(b, "Effect", officer.effect)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
 	for _, loadout := range customMmogShipLoadoutsForPayload(state.shipLoadouts()) {
@@ -1128,6 +1136,15 @@ var havocBoosters = []struct {
 	{6, "XP Boost", 750, "Doubles XP earned for one wave"},
 }
 
+var starterOfficers = []struct {
+	id     string
+	name   string
+	effect string
+}{
+	{"officer_engineer_01", "Chief Engineer Zhang", "Reduces module cooldown by 10%"},
+	{"officer_weapons_01", "Gunnery Officer Vasquez", "Increases primary weapon damage by 8%"},
+}
+
 func buildMmogPlayerScoresPayload() []byte {
 	var b []byte
 	var stack []int
@@ -1353,4 +1370,17 @@ func buildMmogElitePurchasePayload(playerPID string, payload []byte) []byte {
 	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency-price)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+func dailyContractState(pid string) int {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return 0
+	}
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
+	if count > 0 {
+		return count
+	}
+	return 0
 }

@@ -1609,7 +1609,6 @@ func TestPlayerGetPayloadUsesSquadObjectShape(t *testing.T) {
 		value int32
 	}{
 		{name: "DailyContractStateID", value: 0},
-		{name: "LastContractsAssignment", value: 0},
 		{name: "DailyContractLastReplaceTime", value: 0},
 		{name: "tslm", value: 0},
 	} {
@@ -1658,7 +1657,6 @@ func TestDailyContractsPayloadIsInertButParserShaped(t *testing.T) {
 		value int32
 	}{
 		{name: "DailyContractStateID", value: 0},
-		{name: "LastContractsAssignment", value: 0},
 		{name: "DailyContractLastReplaceTime", value: 0},
 	} {
 		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, field.name, field.value)) {
