@@ -304,7 +304,7 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 }
 
 func suppressUnsafeMmogObserverResponse(requestName string) bool {
-	return requestName == "YA_GetDailyContractsData" || requestName == "YA_GetSeasonProgress"
+	return false
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *protocol.StreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
