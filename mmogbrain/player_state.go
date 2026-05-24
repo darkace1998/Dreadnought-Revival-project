@@ -410,6 +410,8 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 		return persistAddToFleet(database, pid, payload)
 	case "YA_RemoveFromFleet":
 		return persistRemoveFromFleet(database, pid, payload)
+	case "YA_ChargeFleet", "YA_RepairFleet":
+		return nil
 	default:
 		return nil
 	}

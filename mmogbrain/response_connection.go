@@ -335,7 +335,8 @@ func isMmogPlayerMutationRequest(requestName string) bool {
 	switch requestName {
 	case "YA_SavePlayerDisplayInformation",
 		"YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
-		"YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
+		"YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts",
+		"YA_ChargeFleet", "YA_RepairFleet":
 		return true
 	default:
 		return false

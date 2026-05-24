@@ -2002,8 +2002,8 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 		requestName string
 		wantFrames  int
 	}{
-		{requestName: "YA_GetDailyContractsData", wantFrames: 0},
-		{requestName: "YA_GetSeasonProgress", wantFrames: 0},
+		{requestName: "YA_GetDailyContractsData", wantFrames: 1},
+		{requestName: "YA_GetSeasonProgress", wantFrames: 1},
 	} {
 		requestName := tc.requestName
 		t.Run(requestName, func(t *testing.T) {

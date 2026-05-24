@@ -83,7 +83,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	// --- Fleet/Loadout Modifications ---
 	case "YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
 		"YA_ChargeFleet", "YA_RepairFleet", "YA_FleetUpdate",
-		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance":
+		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance",
+		"YA_GetShipBonuses":
 		return buildMmogRequestSuccessPayload(requestName)
 	case "YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
 		return buildMmogRequestSuccessPayload(requestName)
