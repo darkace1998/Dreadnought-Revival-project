@@ -13,7 +13,7 @@ var targetSizes = map[string]int{
 	"YA_UserOnline":                81,
 	"YA_RequestStaticFleetData":    1403,
 	"YA_GetFeatureToggle":          111,
-	"YA_GetGameConfigData":             265,
+	"YA_GetGameConfigData":         398,
 	"YA_GetStaticCareerData":       3531,
 	"YA_GetProgressionData":        126,
 	"YA_GetScoringData":            232,
@@ -21,13 +21,13 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":            855,
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           233,
-	"YA_GetTechTree":               21139,
+	"YA_GetTechTree":               24691,
 	"YA_GetPlayerProgression":      835,
-	"YA_GetPlayerPurchases":        292,
+	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,
-	"YA_Tune":                      75,
-	"YA_GetSeasonData":             135,
-	"YA_PlayerGet":                 1719,
+	"YA_Tune":                      579,
+	"YA_GetSeasonData":             1080,
+	"YA_PlayerGet":                 1452,
 	"YA_PlayerFleets":              656,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,
@@ -62,14 +62,16 @@ func TestPayloadSizesVerify(t *testing.T) {
 		"YA_GetCareerProgression":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogCareerProgressionPayload()) },
 		"YA_GetPlayerScores":        func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerScoresPayload()) },
 		"YA_GetTechTree":            func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTechTreePayload()) },
-		"YA_GetPlayerProgression":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerProgressionPayload(pid)) },
-		"YA_GetPlayerPurchases":     func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerPurchasesPayload()) },
-		"YA_FleetEligibility":       func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogFleetEligibilityPayload()) },
-		"YA_Tune":                   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTunePayload()) },
-		"YA_GetSeasonData":          func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonDataPayload()) },
-		"YA_PlayerGet":              func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
-		"YA_PlayerFleets":           func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
-		"YA_GetSeasonProgress":      func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonProgressPayload()) },
+		"YA_GetPlayerProgression": func() []byte {
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerProgressionPayload(pid))
+		},
+		"YA_GetPlayerPurchases": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerPurchasesPayload()) },
+		"YA_FleetEligibility":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogFleetEligibilityPayload()) },
+		"YA_Tune":               func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTunePayload()) },
+		"YA_GetSeasonData":      func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonDataPayload()) },
+		"YA_PlayerGet":          func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerGetPayload(pid)) },
+		"YA_PlayerFleets":       func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerFleetsPayload(pid)) },
+		"YA_GetSeasonProgress":  func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogSeasonProgressPayload()) },
 		"YA_GetPlayersInformation": func() []byte {
 			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayersInformationPayload(pid, nil))
 		},
@@ -83,7 +85,9 @@ func TestPayloadSizesVerify(t *testing.T) {
 		"YA_SaveCtAData": func() []byte {
 			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogRequestSuccessPayload("YA_SaveCtAData"))
 		},
-		"YA_GetPlayerStatsCounterData": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerStatsCounterDataPayload()) },
+		"YA_GetPlayerStatsCounterData": func() []byte {
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerStatsCounterDataPayload())
+		},
 	}
 
 	allPass := true

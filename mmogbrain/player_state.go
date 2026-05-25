@@ -368,20 +368,34 @@ func (state mmogPlayerState) shipLoadouts() []mmogShipLoadoutSeed {
 	return loadouts
 }
 
-func (state mmogPlayerState) purchaseItemIDs() []int32 {
-	seen := map[int32]struct{}{}
+func persistedMmogPlayerPurchaseItemIDs(playerPID string) []int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		return nil
+	}
+
+	rows, err := database.Query(`SELECT item_id FROM player_purchases WHERE user_id=? ORDER BY purchased_at,item_id`, pid)
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
 	var ids []int32
-	for _, loadout := range state.shipLoadouts() {
-		for _, id := range append([]int32{loadout.ship.id, loadout.loadoutID()}, append(loadout.weaponIDs(), append(loadout.abilityItemIDs(), loadout.perkItemIDs()...)...)...) {
-			if id == 0 {
-				continue
-			}
-			if _, ok := seen[id]; ok {
-				continue
-			}
-			seen[id] = struct{}{}
-			ids = append(ids, id)
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			return nil
 		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil
 	}
 	return ids
 }

@@ -47,13 +47,17 @@ Auth Server    Legacy API      YMmogbrain      Master Server
 
 ## Components
 
-### Gateway (`:443`)
+### Gateway (`:443`, `:57005`)
 
 - Language: Go (`net/http`, `httputil.ReverseProxy`)
 - Routes traffic by `Host` header to internal services
 - Terminates TLS with self-signed cert covering all Greybox domains
 - Rate-limits `/auth/` to 100 req/min per IP
 - HTTP → HTTPS redirect on port 80
+- Receives UE4 crash reports on `:57005`; uploads are stored in `run/crash-reports/` by default
+
+The packaged client includes `CrashReportClient.exe` and its default receiver is `http://bugreports.greybox.com:57005`.
+Redirect `bugreports.greybox.com` to the private-server IP on the client machine to capture reports locally.
 
 **Config:** `gateway/config.yaml`
 

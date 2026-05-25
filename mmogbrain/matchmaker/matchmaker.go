@@ -17,16 +17,36 @@ var availableMaps = []string{
 	"Charon", "Medusa", "Procyon", "DS-75", "Onyx", "Vesta", "Kylo", "Spree",
 }
 
-// validGameModes lists game modes the server supports.
+// GameModeConfig is the mmogbrain game-mode row shape consumed by the client.
+type GameModeConfig struct {
+	Name     string
+	TeamSize int32
+}
+
+var clientGameModeConfigs = []GameModeConfig{
+	{Name: "TeamDeathMatch", TeamSize: 5},
+	{Name: "TeamElimination", TeamSize: 5},
+	{Name: "Territory", TeamSize: 5},
+	{Name: "Onslaught", TeamSize: 5},
+	{Name: "HAVOC", TeamSize: 5},
+	{Name: "BootCamp", TeamSize: 1},
+}
+
+// validGameModes lists client names plus legacy server aliases accepted by the server.
 var validGameModes = map[string]bool{
-	"TeamDeathmatch":    true,
-	"TeamElimination":   true,
-	"TerritoryControl":  true,
-	"PvE_Standard":      true,
-	"PvE_Havoc":         true,
-	"PvE_Onslaught":     true,
-	"PvE_Coop":          true,
-	"Training":          true,
+	"TeamDeathMatch":   true,
+	"TeamDeathmatch":   true,
+	"TeamElimination":  true,
+	"Territory":        true,
+	"TerritoryControl": true,
+	"Onslaught":        true,
+	"HAVOC":            true,
+	"BootCamp":         true,
+	"PvE_Standard":     true,
+	"PvE_Havoc":        true,
+	"PvE_Onslaught":    true,
+	"PvE_Coop":         true,
+	"Training":         true,
 }
 
 // pveMaps lists maps available for PvE modes.
@@ -41,11 +61,16 @@ func ValidGameMode(mode string) bool {
 
 // GameModeList returns all supported game modes.
 func GameModeList() []string {
-	modes := make([]string, 0, len(validGameModes))
-	for mode := range validGameModes {
-		modes = append(modes, mode)
+	modes := make([]string, 0, len(clientGameModeConfigs))
+	for _, mode := range clientGameModeConfigs {
+		modes = append(modes, mode.Name)
 	}
 	return modes
+}
+
+// GameModeConfigs returns the deterministic client-facing game mode rows.
+func GameModeConfigs() []GameModeConfig {
+	return append([]GameModeConfig(nil), clientGameModeConfigs...)
 }
 
 // Matchmaker polls the queue and fires match creation when enough players are present.
@@ -184,7 +209,7 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 
 	// Pick a map
 	maps := availableMaps
-	for _, pveMode := range []string{"PvE_Standard", "PvE_Havoc", "PvE_Onslaught", "PvE_Coop"} {
+	for _, pveMode := range []string{"PvE_Standard", "PvE_Havoc", "PvE_Onslaught", "PvE_Coop", "Onslaught", "HAVOC", "BootCamp"} {
 		if gameMode == pveMode {
 			maps = pveMaps
 			break

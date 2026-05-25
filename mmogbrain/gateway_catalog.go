@@ -31,12 +31,8 @@ type gatewayCatalogEntitySeed struct {
 
 func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDataReady bool) map[string]any {
 	ownedItems := []any{}
-	starterShipIDs := []int32{}
-	starterLoadoutIDs := []int32{}
 	if playerDataReady {
 		ownedItems = gatewayOwnedInventorySnapshot()
-		starterShipIDs = starterShipIDsForBootstrap()
-		starterLoadoutIDs = starterLoadoutIDsForBootstrap()
 	}
 	payload := map[string]any{
 		"Code":                0,
@@ -45,8 +41,8 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		"player_id":           playerID,
 		"wallet":              gatewayWalletSnapshot(),
 		"owned_items":         ownedItems,
-		"starter_ship_ids":    starterShipIDs,
-		"starter_loadout_ids": starterLoadoutIDs,
+		"starter_ship_ids":    starterShipIDsForBootstrap(),
+		"starter_loadout_ids": starterLoadoutIDsForBootstrap(),
 	}
 	if catalog := gatewayRequestedCatalogCollection(requestedCatalog, playerDataReady); catalog != nil {
 		payload["entities"] = catalog["entities"]

@@ -1,0 +1,6 @@
+LIBRARY "wer.dll"
+EXPORTS
+    WerReportCreate
+    WerReportSetParameter
+    WerReportAddFile
+    WerReportSubmit

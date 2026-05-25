@@ -13,6 +13,7 @@ import (
 	"time"
 
 	mmogdb "github.com/dreadnought-ps/mmogbrain/db"
+	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/golang-jwt/jwt/v5"
@@ -30,7 +31,6 @@ func appendFieldMarker(name string, fieldType byte) []byte {
 	b = append(b, fieldType)
 	return b
 }
-
 
 func (c *captureConn) Read(_ []byte) (int, error)         { return 0, nil }
 func (c *captureConn) Write(p []byte) (int, error)        { return c.Buffer.Write(p) }
@@ -216,8 +216,8 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 			if size < 6 {
 				t.Fatalf("container size = %d at offset %d, want at least 6", size, start)
 			}
-		if start+size != i {
-			t.Fatalf("container at offset %d closes at %d, want %d", start, start+size, i)
+			if start+size != i {
+				t.Fatalf("container at offset %d closes at %d, want %d", start, start+size, i)
 			}
 			stack = stack[:len(stack)-1]
 		default:
@@ -416,6 +416,24 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 			}
 		}
 	}
+
+	for _, loadout := range starterShipLoadouts() {
+		fleetShip := mmogShipSeed{
+			id:        loadout.effectiveFleetShipID(),
+			name:      loadout.ship.name + " fleet entry",
+			shipClass: loadout.ship.shipClass,
+			weight:    loadout.ship.weight,
+			owned:     true,
+			nodeID:    loadout.effectiveFleetShipID(),
+		}
+		row, _ := appendMmogTechTreeRow(nil, nil, fleetShip)
+		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_loadoutID", loadout.loadoutID())) {
+			t.Fatalf("tech tree row for fleet ship %d does not include m_loadoutID=%d", fleetShip.id, loadout.loadoutID())
+		}
+		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_precastLoadoutID", loadout.precastLoadoutID)) {
+			t.Fatalf("tech tree row for fleet ship %d does not include m_precastLoadoutID=%d", fleetShip.id, loadout.precastLoadoutID)
+		}
+	}
 }
 
 func TestTechTreeIncludesInstallerStarterShips(t *testing.T) {
@@ -423,6 +441,11 @@ func TestTechTreeIncludesInstallerStarterShips(t *testing.T) {
 	for _, shipID := range dreadconfig.StarterInventoryShipIDs() {
 		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "ShipID", shipID)) {
 			t.Fatalf("YA_GetTechTree missing installer starter ship id %d", shipID)
+		}
+	}
+	for _, shipID := range starterFleetShipIDsFromShared(t) {
+		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "ShipID", shipID)) {
+			t.Fatalf("YA_GetTechTree missing fleet/development starter ship id %d", shipID)
 		}
 	}
 }
@@ -867,9 +890,60 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 	}
 }
 
-func TestMmogCheckReturnUsesCanReturnToMatchFields(t *testing.T) {
-	result := extractNamedMmogObject(t, buildMmogCheckReturnPayload(), "result")
+func TestGameConfigDataUsesClientGameModeRows(t *testing.T) {
+	result := extractNamedMmogObject(t, buildMmogGameConfigDataPayload(), "result")
+	gameModes := extractNamedMmogArray(t, result, "GameModes")
 
+	for _, mode := range matchmaker.GameModeConfigs() {
+		if !bytes.Contains(gameModes, protocol.AppendStringField(nil, "Name", mode.Name)) {
+			t.Fatalf("YA_GetGameConfigData missing game mode name %q", mode.Name)
+		}
+	}
+	if bytes.Contains(gameModes, protocol.AppendUnnamedStringField(nil, "TeamDeathmatch")) {
+		t.Fatal("YA_GetGameConfigData should send structured GameModes rows, not legacy bare strings")
+	}
+}
+
+func TestAliasResponsesEchoRequestRT(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000,premium_currency=5000 WHERE user_id=?`, playerPID); err != nil {
+		t.Fatalf("seed currencies: %v", err)
+	}
+
+	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDValcour)
+	purchase := buildMmogRequestResponsePayload("YA_BuyItem", playerPID, purchaseRequest)
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "RT", "YA_BuyItem")) {
+		t.Fatal("YA_BuyItem response did not echo request RT")
+	}
+	if bytes.Contains(purchase, protocol.AppendStringField(nil, "RT", "YA_PurchaseItem")) {
+		t.Fatal("YA_BuyItem response used YA_PurchaseItem RT")
+	}
+
+	elite := buildMmogRequestResponsePayload("YA_ActivateElite", playerPID, nil)
+	if !bytes.Contains(elite, protocol.AppendStringField(nil, "RT", "YA_ActivateElite")) {
+		t.Fatal("YA_ActivateElite response did not echo request RT")
+	}
+}
+
+func TestErrorPayloadIncludesRequestRT(t *testing.T) {
+	payload := buildMmogRequestResponsePayload("YA_GetUnknownThing", defaultMmogPlayerPID, nil)
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", "YA_GetUnknownThing")) {
+		t.Fatal("unknown read error response missing request RT")
+	}
+	if !bytes.Contains(extractNamedMmogObject(t, payload, "result"), protocol.AppendStringField(nil, fieldStatus, "error")) {
+		t.Fatal("unknown read error response missing error status")
+	}
+}
+
+func TestMmogCheckReturnUsesCanReturnToMatchFields(t *testing.T) {
+	payload := buildMmogRequestResponsePayload("YA_CheckReturn", defaultMmogPlayerPID, nil)
+	result := extractNamedMmogObject(t, payload, "result")
+
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", "YA_CheckReturn")) {
+		t.Fatal("YA_CheckReturn dispatcher response missing RT")
+	}
 	if !bytes.Contains(result, protocol.AppendBoolField(nil, "CanReturnToMatch", false)) {
 		t.Fatal("YA_CheckReturn missing CanReturnToMatch=false")
 	}
@@ -1744,18 +1818,84 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
 	seasonsRaw := protocol.ExtractStringField(result, "Seasons")
-	if seasonsRaw != "[]" {
-		t.Fatalf("YA_GetSeasonData Seasons = %q, want empty array", seasonsRaw)
+	if !json.Valid([]byte(seasonsRaw)) {
+		t.Fatalf("YA_GetSeasonData Seasons is not valid JSON: %q", seasonsRaw)
+	}
+	if seasonsRaw == "[]" || !bytes.Contains([]byte(seasonsRaw), []byte(`"Name":"PVE_Season1"`)) {
+		t.Fatalf("YA_GetSeasonData Seasons should include a non-empty PVE_Season1 row: %q", seasonsRaw)
+	}
+	for _, field := range []string{"m_active", "m_name", "m_descShort", "m_descLong", "m_imageLarge", "m_imageSmall", "m_rewardLevels"} {
+		if !bytes.Contains([]byte(seasonsRaw), []byte(`"`+field+`"`)) {
+			t.Fatalf("YA_GetSeasonData Seasons missing %s", field)
+		}
 	}
 	eventsRaw := protocol.ExtractStringField(result, "Events")
-	if eventsRaw != "[]" {
-		t.Fatalf("YA_GetSeasonData Events = %q, want empty array", eventsRaw)
+	if !json.Valid([]byte(eventsRaw)) {
+		t.Fatalf("YA_GetSeasonData Events is not valid JSON: %q", eventsRaw)
+	}
+	if eventsRaw == "[]" || !bytes.Contains([]byte(eventsRaw), []byte(`"Name":"PVE_S1E1"`)) {
+		t.Fatalf("YA_GetSeasonData Events should include a non-empty PVE_S1E1 row: %q", eventsRaw)
+	}
+	for _, field := range []string{"m_name", "m_descShort", "m_descLong", "m_map", "m_mapParameters", "m_gameMode", "m_color", "m_imageSmall", "m_imageLarge", "m_rewardLevels", "m_startDate", "m_endDate", "m_season"} {
+		if !bytes.Contains([]byte(eventsRaw), []byte(`"`+field+`"`)) {
+			t.Fatalf("YA_GetSeasonData Events missing %s", field)
+		}
 	}
 	if currentSeason := protocol.ExtractStringField(result, "CurrentSeason"); currentSeason != "" {
 		t.Fatalf("YA_GetSeasonData CurrentSeason = %q, want empty", currentSeason)
 	}
 	if activeEvent := protocol.ExtractStringField(result, "ActiveEvent"); activeEvent != "" {
 		t.Fatalf("YA_GetSeasonData ActiveEvent = %q, want empty", activeEvent)
+	}
+}
+
+func TestTunePayloadUsesClientParserShape(t *testing.T) {
+	payload := buildMmogTunePayload()
+	if rt := protocol.ExtractStringField(payload, "RT"); rt != "YA_Tune" {
+		t.Fatalf("YA_Tune RT = %q, want YA_Tune", rt)
+	}
+
+	returning := extractNamedMmogObject(t, payload, "Returning")
+	metaData := extractNamedMmogObject(t, returning, "MetaData")
+	if version := protocol.ExtractStringField(metaData, "Version"); version != "1.0.0" {
+		t.Fatalf("YA_Tune MetaData.Version = %q, want 1.0.0", version)
+	}
+
+	for _, section := range []string{
+		"WeaponsTune",
+		"BattleReadyTune",
+		"ProjectilesTune",
+		"AbilitiesTune",
+		"OfficersTune",
+		"FeatsTune",
+		"HavocTune",
+		"GameModifiersTune",
+	} {
+		sectionObject := extractNamedMmogObject(t, returning, section)
+		_ = extractNamedMmogObject(t, sectionObject, "rows")
+		if rowCount, ok := protocol.ExtractInt32Field(sectionObject, "row_count"); !ok || rowCount != 0 {
+			t.Fatalf("YA_Tune %s row_count = %d, %t; want 0, true", section, rowCount, ok)
+		}
+	}
+
+	result := extractNamedMmogObject(t, payload, "result")
+	if status := protocol.ExtractStringField(result, fieldStatus); status != "ok" {
+		t.Fatalf("YA_Tune result.status = %q, want ok", status)
+	}
+}
+
+func TestPlayerBootstrapAvoidsSyntheticOfficersAndPurchases(t *testing.T) {
+	playerGet := buildMmogPlayerGetPayload(defaultMmogPlayerPID)
+	officers := extractNamedMmogArray(t, playerGet, "Officers")
+	if bytes.Contains(officers, appendFieldMarker("OfficerID", 0x09)) ||
+		bytes.Contains(officers, appendFieldMarker("Name", 0x09)) ||
+		bytes.Contains(officers, appendFieldMarker("Effect", 0x09)) {
+		t.Fatal("YA_PlayerGet should not include synthetic officer rows with non-client parser fields")
+	}
+
+	purchases := extractNamedMmogArray(t, extractNamedMmogObject(t, buildMmogPlayerPurchasesPayload(), "result"), "PurchasesData")
+	if bytes.Contains(purchases, []byte{0x00, 0x56}) {
+		t.Fatal("YA_GetPlayerPurchases should not synthesize starter inventory purchases")
 	}
 }
 
@@ -1775,6 +1915,7 @@ func TestCriticalPayloadsMaintainValidMmogNesting(t *testing.T) {
 		"YA_GetTechTree":               buildMmogTechTreePayload,
 		"YA_GetPlayerPurchases":        buildMmogPlayerPurchasesPayload,
 		"YA_FleetEligibility":          buildMmogFleetEligibilityPayload,
+		"YA_Tune":                      buildMmogTunePayload,
 		"YA_RefreshPlayerProfile":      func() []byte { return buildMmogPlayerDataPayload("YA_RefreshPlayerProfile", pid) },
 		"YA_EnterMatchmaking":          func() []byte { return buildMmogEnterMatchmakingPayload("YA_EnterMatchmaking", pid, nil) },
 		"YA_LeaveMatchmaking":          func() []byte { return buildMmogLeaveMatchmakingPayload("YA_LeaveMatchmaking", pid) },
@@ -1791,11 +1932,9 @@ func TestCriticalPayloadsMaintainValidMmogNesting(t *testing.T) {
 	}
 }
 
-func TestReconnectFlushOnlySendsPendingPlayerFleets(t *testing.T) {
+func TestPlayerFleetsRespondsBeforePlayerGet(t *testing.T) {
 	conn := &captureConn{}
 	fleetRequestID := syntheticRequestID(0xa1)
-	clientPlayerGetID := syntheticRequestID(0xa2)
-	reconnectPlayerGetID := syntheticRequestID(0xf0)
 	requestPayload := protocol.AppendStringField(nil, "RT", "YA_PlayerFleets")
 	requestPayload = protocol.AppendRootEnd(requestPayload)
 	state := &mmogConnState{
@@ -1803,67 +1942,34 @@ func TestReconnectFlushOnlySendsPendingPlayerFleets(t *testing.T) {
 		loginResponseSent:        true,
 		staticFleetDataReceived:  true,
 		fleetEligibilityReceived: true,
-		playerFleetsReceived:     true,
-		pendingPlayerFleets: &protocol.AppFrame{
-			MsgType:   0x0320,
-			RequestID: fleetRequestID,
-			Payload:   requestPayload,
-		},
 	}
 
-	if err := flushPendingPlayerFleets(logrus.New(), conn, "test-remote", nil, false, state, "test"); err != nil {
-		t.Fatalf("flushPendingPlayerFleets: %v", err)
-	}
-
-	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
-	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after parsing reconnect flush")
-	}
-	if len(frames) != 1 {
-		t.Fatalf("reconnect flush wrote %d frames, want 1", len(frames))
-	}
-	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerFleets" {
-		t.Fatalf("first reconnect frame = %q, want YA_PlayerFleets", got)
-	}
-	if frames[0].RequestID != fleetRequestID {
-		t.Fatalf("reconnect fleet flush request id = %x, want original %x", frames[0].RequestID, fleetRequestID)
-	}
-	if state.playerGetResponded {
-		t.Fatal("reconnect flush should not mark playerGetResponded before the client asks for YA_PlayerGet")
-	}
-	playerGetRequest := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
-	playerGetRequest = protocol.AppendRootEnd(playerGetRequest)
 	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
 		MsgType:   0x0320,
-		RequestID: clientPlayerGetID,
-		Payload:   playerGetRequest,
+		RequestID: fleetRequestID,
+		Payload:   requestPayload,
 	}}, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames: %v", err)
 	}
 
-	frames, remaining = protocol.ParseAppFrames(conn.Bytes())
+	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
 	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after parsing reconnect PlayerGet")
+		t.Fatalf("unexpected remaining bytes after parsing fleet response")
 	}
-	if len(frames) != 2 {
-		t.Fatalf("reconnect flow wrote %d frames, want 2", len(frames))
+	if len(frames) != 1 {
+		t.Fatalf("YA_PlayerFleets wrote %d frames, want 1", len(frames))
 	}
-	if got := protocol.ExtractRequestName(frames[1].Payload); got != "YA_PlayerGet" {
-		t.Fatalf("second reconnect frame = %q, want YA_PlayerGet", got)
+	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerFleets" {
+		t.Fatalf("frame = %q, want YA_PlayerFleets", got)
 	}
-	if frames[1].RequestID != clientPlayerGetID {
-		t.Fatalf("client YA_PlayerGet response id = %x, want %x", frames[1].RequestID, clientPlayerGetID)
+	if frames[0].RequestID != fleetRequestID {
+		t.Fatalf("YA_PlayerFleets response id = %x, want original %x", frames[0].RequestID, fleetRequestID)
 	}
-	for i, frame := range frames {
-		if frame.RequestID == reconnectPlayerGetID {
-			t.Fatalf("reconnect flow synthesized YA_PlayerGet frame at index %d", i)
-		}
+	if state.playerGetResponded {
+		t.Fatal("YA_PlayerFleets should not mark playerGetResponded")
 	}
-	if !state.playerGetResponded {
-		t.Fatal("explicit YA_PlayerGet did not mark playerGetResponded")
-	}
-	if state.pendingPlayerFleets != nil {
-		t.Fatal("reconnect flush did not clear pendingPlayerFleets")
+	if !state.playerFleetsReceived {
+		t.Fatal("YA_PlayerFleets should mark playerFleetsReceived")
 	}
 }
 
@@ -1940,8 +2046,9 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 	for _, tc := range []struct {
 		requestName string
 		wantFrames  int
+		wantDelayed bool
 	}{
-		{requestName: "YA_GetDailyContractsData", wantFrames: 1},
+		{requestName: "YA_GetDailyContractsData", wantFrames: 0, wantDelayed: true},
 		{requestName: "YA_GetSeasonProgress", wantFrames: 1},
 	} {
 		requestName := tc.requestName
@@ -1962,7 +2069,10 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 				t.Fatalf("processMmogAppFrames %s: %v", requestName, err)
 			}
 			if tc.wantFrames == 0 && conn.Len() != 0 {
-				t.Fatalf("%s wrote %d bytes, want suppressed response", requestName, conn.Len())
+				t.Fatalf("%s wrote %d bytes before YA_PlayerGet, want delayed response", requestName, conn.Len())
+			}
+			if tc.wantDelayed && state.pendingDailyContracts == nil {
+				t.Fatalf("%s was not delayed until YA_PlayerGet", requestName)
 			}
 			if tc.wantFrames == 0 {
 				return
@@ -1978,6 +2088,65 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 				t.Fatalf("%s response did not echo RT", requestName)
 			}
 		})
+	}
+}
+
+func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
+	conn := &captureConn{}
+	dailyContractsRequestID := syntheticRequestID(0xd1)
+	playerGetRequestID := syntheticRequestID(0xd2)
+	dailyContractsRequest := protocol.AppendStringField(nil, "RT", "YA_GetDailyContractsData")
+	dailyContractsRequest = protocol.AppendRootEnd(dailyContractsRequest)
+	playerGetRequest := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
+	playerGetRequest = protocol.AppendRootEnd(playerGetRequest)
+	state := &mmogConnState{
+		playerPID:                defaultMmogPlayerPID,
+		loginResponseSent:        true,
+		staticFleetDataReceived:  true,
+		fleetEligibilityReceived: true,
+		playerFleetsReceived:     true,
+	}
+
+	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
+		MsgType:   0x0320,
+		RequestID: dailyContractsRequestID,
+		Payload:   dailyContractsRequest,
+	}}, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames daily contracts: %v", err)
+	}
+	if conn.Len() != 0 {
+		t.Fatalf("delayed daily contracts wrote %d bytes before YA_PlayerGet, want 0", conn.Len())
+	}
+	if state.pendingDailyContracts == nil {
+		t.Fatal("YA_GetDailyContractsData was not delayed before YA_PlayerGet")
+	}
+
+	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
+		MsgType:   0x0320,
+		RequestID: playerGetRequestID,
+		Payload:   playerGetRequest,
+	}}, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames PlayerGet: %v", err)
+	}
+
+	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
+	if len(remaining) != 0 {
+		t.Fatalf("unexpected remaining bytes after delayed daily contracts flush")
+	}
+	if len(frames) != 2 {
+		t.Fatalf("PlayerGet with delayed daily contracts wrote %d frames, want 2", len(frames))
+	}
+	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerGet" {
+		t.Fatalf("first frame = %q, want YA_PlayerGet", got)
+	}
+	if got := protocol.ExtractRequestName(frames[1].Payload); got != "YA_GetDailyContractsData" {
+		t.Fatalf("second frame = %q, want YA_GetDailyContractsData", got)
+	}
+	if frames[1].RequestID != dailyContractsRequestID {
+		t.Fatalf("YA_GetDailyContractsData response id = %x, want original %x", frames[1].RequestID, dailyContractsRequestID)
+	}
+	if state.pendingDailyContracts != nil {
+		t.Fatal("PlayerGet did not clear pendingDailyContracts")
 	}
 }
 

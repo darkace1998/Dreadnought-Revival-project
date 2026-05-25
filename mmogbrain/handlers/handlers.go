@@ -51,7 +51,7 @@ func (h *Handler) QueueJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.GameMode == "" {
-		req.GameMode = "TeamDeathmatch"
+		req.GameMode = "TeamDeathMatch"
 	}
 	if !matchmaker.ValidGameMode(req.GameMode) {
 		writeError(w, http.StatusBadRequest, "unsupported game mode: "+req.GameMode)
@@ -294,13 +294,13 @@ func (h *Handler) ChatHistory(w http.ResponseWriter, r *http.Request) {
 // UpdateProgression handles POST /internal/progression — called by legacy-api after match results.
 func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UserID    string `json:"user_id"`
-		XP        int32  `json:"xp"`
-		Kills     int32  `json:"kills"`
-		Deaths    int32  `json:"deaths"`
-		Wins      int32  `json:"wins"`
-		MatchXP   int32  `json:"match_xp"`
-		GameMode  string `json:"game_mode"`
+		UserID   string `json:"user_id"`
+		XP       int32  `json:"xp"`
+		Kills    int32  `json:"kills"`
+		Deaths   int32  `json:"deaths"`
+		Wins     int32  `json:"wins"`
+		MatchXP  int32  `json:"match_xp"`
+		GameMode string `json:"game_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -354,18 +354,18 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 	awardPvEProgression(h.DB, pid, req.GameMode, req.Kills)
 
 	h.Log.WithFields(logrus.Fields{
-		"pid":       pid,
-		"xp_added":  req.XP,
-		"new_xp":    newXP,
-		"new_rank":  newRank,
+		"pid":         pid,
+		"xp_added":    req.XP,
+		"new_xp":      newXP,
+		"new_rank":    newRank,
 		"new_rank_xp": newRankXP,
 	}).Info("progression: player progressed")
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		fieldStatus:  "ok",
-		"new_rank":   newRank,
-		"new_xp":     newXP,
-		"rank_xp":    newRankXP,
+		fieldStatus: "ok",
+		"new_rank":  newRank,
+		"new_xp":    newXP,
+		"rank_xp":   newRankXP,
 	})
 }
 
@@ -405,22 +405,22 @@ func RankXPThreshold(rank int32) int32 {
 }
 
 var ribbonThresholds = map[string]struct {
-	name     string
-	minKills int32
+	name      string
+	minKills  int32
 	minDeaths int32
 }{
-	"combat_efficiency":   {"Combat Efficiency", 3, 0},
-	"kill_streak":         {"Kill Streak", 5, 0},
-	"unstoppable":         {"Unstoppable", 10, 0},
-	"survivor":            {"Survivor", 0, 0},
-	"first_blood":         {"First Blood", 1, 0},
-	"avenger":             {"Avenger", 1, 1},
-	"team_player":         {"Team Player", 2, 0},
-	"marksman":            {"Marksman", 4, 0},
-	"close_quarters":      {"Close Quarters", 3, 0},
-	"support_star":        {"Support Star", 1, 0},
-	"defender":            {"Defender", 2, 0},
-	"berserker":           {"Berserker", 6, 0},
+	"combat_efficiency": {"Combat Efficiency", 3, 0},
+	"kill_streak":       {"Kill Streak", 5, 0},
+	"unstoppable":       {"Unstoppable", 10, 0},
+	"survivor":          {"Survivor", 0, 0},
+	"first_blood":       {"First Blood", 1, 0},
+	"avenger":           {"Avenger", 1, 1},
+	"team_player":       {"Team Player", 2, 0},
+	"marksman":          {"Marksman", 4, 0},
+	"close_quarters":    {"Close Quarters", 3, 0},
+	"support_star":      {"Support Star", 1, 0},
+	"defender":          {"Defender", 2, 0},
+	"berserker":         {"Berserker", 6, 0},
 }
 
 func awardRibbons(db *sql.DB, pid string, kills, deaths int32) {
@@ -466,9 +466,9 @@ func awardMatchCredits(db *sql.DB, pid string, xp int32) {
 }
 
 var dailyContractSeeds = []struct {
-	id, name, description string
+	id, name, description    string
 	targetKills, targetScore int32
-	rewardXP, rewardGP      int32
+	rewardXP, rewardGP       int32
 }{
 	{"contract_kills_5", "Get 5 Kills", "Eliminate 5 enemy ships", 5, 0, 200, 400},
 	{"contract_kills_10", "Get 10 Kills", "Eliminate 10 enemy ships", 10, 0, 500, 1000},

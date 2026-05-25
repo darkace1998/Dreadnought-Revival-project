@@ -80,7 +80,7 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 
 	gameMode := protocol.FirstNonEmptyString(payload, "GameMode", "gameMode", "Mode", "mode", "matchmaking")
 	if gameMode == "" || gameMode == "*matchmaking" {
-		gameMode = "TeamDeathmatch"
+		gameMode = "TeamDeathMatch"
 	}
 	if !matchmaker.ValidGameMode(gameMode) {
 		return buildMmogMatchmakingErrorPayload(requestName, 2, "unsupported game mode")
@@ -191,9 +191,12 @@ func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatu
 	return b
 }
 
-func buildMmogErrorPayload(message string) []byte {
+func buildMmogErrorPayload(requestName string, message string) []byte {
 	var b []byte
 	var stack []int
+	if requestName != "" {
+		b = protocol.AppendStringField(b, "RT", requestName)
+	}
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "error")
 	b = protocol.AppendStringField(b, "message", message)
@@ -486,14 +489,18 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 
 // --- Season Data ---
 
+const mmogSeasonDataSeasonsJSON = `[{"Name":"PVE_Season1","m_active":true,"m_name":"Miner Inconvenience","m_descShort":"Season 1 short Description","m_descLong":"Season 1 long Description","m_imageLarge":"None","m_imageSmall":"None","m_rewardLevels":[]}]`
+
+const mmogSeasonDataEventsJSON = `[{"Name":"PVE_S1E1","m_name":"Incident Management","m_descShort":"Miner Inconvenience - Incident Management","m_descLong":"Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics to wear down the corp's spread out defenses. The megacorp is now contacting mercenary captains directly to assist their forces and protect Jupiter Arms assets, hoping to finally put an end to these costly attacks.","m_map":"None","m_mapParameters":"","m_gameMode":"YGMT_HORDE","m_color":{"r":160,"g":144,"b":131,"a":255},"m_imageSmall":"None","m_imageLarge":"None","m_rewardLevels":[],"m_startDate":"2018.05.16-16.00.00","m_endDate":"2018.05.16-16.19.59","m_season":"PVE_Season1"}]`
+
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetSeasonData")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "Events", "[]")
-	b = protocol.AppendStringField(b, "Seasons", "[]")
+	b = protocol.AppendStringField(b, "Events", mmogSeasonDataEventsJSON)
+	b = protocol.AppendStringField(b, "Seasons", mmogSeasonDataSeasonsJSON)
 	b = protocol.AppendStringField(b, "CurrentSeason", "")
 	b = protocol.AppendStringField(b, "ActiveEvent", "")
 	b, _ = protocol.AppendObjectEnd(b, stack)
@@ -620,14 +627,6 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
-	for _, officer := range starterOfficers {
-		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "OfficerID", officer.id)
-		b = protocol.AppendStringField(b, "Name", officer.name)
-		b = protocol.AppendInt32Field(b, "Level", 1)
-		b = protocol.AppendStringField(b, "Effect", officer.effect)
-		b, stack = protocol.AppendObjectEnd(b, stack)
-	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
 	for _, loadout := range customMmogShipLoadoutsForPayload(state.shipLoadouts()) {
@@ -819,12 +818,13 @@ func buildMmogProgressionDataPayload() []byte {
 func buildMmogTechTreePayload() []byte {
 	var b []byte
 	var stack []int
+	ships := techTreeShips()
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetTechTree")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(allT1Ships())))
+	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
 	b, stack = protocol.AppendArrayStart(b, stack, "techTreeRow")
-	for _, ship := range allT1Ships() {
+	for _, ship := range ships {
 		b, stack = appendMmogTechTreeRow(b, stack, ship)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -931,8 +931,11 @@ func buildMmogGameConfigDataPayload() []byte {
 	b = protocol.AppendInt32Field(b, "MaxSquadSize", 5)
 	b = protocol.AppendBoolField(b, "banned", false)
 	b, stack = protocol.AppendArrayStart(b, stack, "GameModes")
-	for _, mode := range matchmaker.GameModeList() {
-		b = protocol.AppendUnnamedStringField(b, mode)
+	for _, mode := range matchmaker.GameModeConfigs() {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "Name", mode.Name)
+		b = protocol.AppendInt32Field(b, "TeamSize", mode.TeamSize)
+		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
@@ -959,12 +962,11 @@ func buildMmogPlayerPurchasesPayload() []byte {
 func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
-	state := mmogPlayerStateForPID(playerPID)
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerPurchases")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "PurchasesData")
-	for _, itemID := range state.purchaseItemIDs() {
+	for _, itemID := range persistedMmogPlayerPurchaseItemIDs(playerPID) {
 		b = protocol.AppendUnnamedInt32Field(b, itemID)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1058,15 +1060,6 @@ var havocBoosters = []struct {
 	{6, "XP Boost", 750, "Doubles XP earned for one wave"},
 }
 
-var starterOfficers = []struct {
-	id     string
-	name   string
-	effect string
-}{
-	{"officer_engineer_01", "Chief Engineer Zhang", "Reduces module cooldown by 10%"},
-	{"officer_weapons_01", "Gunnery Officer Vasquez", "Increases primary weapon damage by 8%"},
-}
-
 func buildMmogPlayerScoresPayload() []byte {
 	var b []byte
 	var stack []int
@@ -1113,6 +1106,27 @@ func buildMmogTunePayload() []byte {
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", "YA_Tune")
+	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
+	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
+	b = protocol.AppendStringField(b, "Version", "1.0.0")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	for _, section := range []string{
+		"WeaponsTune",
+		"BattleReadyTune",
+		"ProjectilesTune",
+		"AbilitiesTune",
+		"OfficersTune",
+		"FeatsTune",
+		"HavocTune",
+		"GameModifiersTune",
+	} {
+		b, stack = protocol.AppendObjectStart(b, stack, section)
+		b, stack = protocol.AppendObjectStart(b, stack, "rows")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		b = protocol.AppendInt32Field(b, "row_count", 0)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b, _ = protocol.AppendObjectEnd(b, stack)
@@ -1210,16 +1224,16 @@ var catalogPrices = map[int32]int32{
 	extractedShipIDCeres:   5000,
 }
 
-func buildMmogPurchasePayload(playerPID string, payload []byte) []byte {
+func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
 	itemID := protocol.FirstInt32Field(payload, 0, "ItemID", "itemID", "itemId", "ItemId")
 	if itemID == 0 {
-		return buildMmogErrorPayload("missing ItemID for purchase")
+		return buildMmogErrorPayload(requestName, "missing ItemID for purchase")
 	}
 
 	pid := normalizedPlayerStatePID(playerPID)
 	database := currentMmogPlayerStateDB()
 	if database == nil {
-		return buildMmogErrorPayload("database unavailable")
+		return buildMmogErrorPayload(requestName, "database unavailable")
 	}
 
 	price, ok := catalogPrices[itemID]
@@ -1230,7 +1244,7 @@ func buildMmogPurchasePayload(playerPID string, payload []byte) []byte {
 	var owned int
 	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`, pid, itemID).Scan(&owned)
 	if owned > 0 {
-		return buildMmogErrorPayload("item already owned")
+		return buildMmogErrorPayload(requestName, "item already owned")
 	}
 
 	var softCurrency, premiumCurrency int32
@@ -1238,20 +1252,20 @@ func buildMmogPurchasePayload(playerPID string, payload []byte) []byte {
 		Scan(&softCurrency, &premiumCurrency)
 
 	if softCurrency < price {
-		return buildMmogErrorPayload("insufficient credits")
+		return buildMmogErrorPayload(requestName, "insufficient credits")
 	}
 
 	if _, err := database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid); err != nil {
-		return buildMmogErrorPayload("currency deduction failed")
+		return buildMmogErrorPayload(requestName, "currency deduction failed")
 	}
 	itemType := "ship"
 	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,'gp')`, pid, itemID, itemType, price); err != nil {
-		return buildMmogErrorPayload("purchase record failed")
+		return buildMmogErrorPayload(requestName, "purchase record failed")
 	}
 
 	var b []byte
 	var stack []int
-	b = protocol.AppendStringField(b, "RT", "YA_PurchaseItem")
+	b = protocol.AppendStringField(b, "RT", requestName)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "itemID", itemID)
@@ -1262,7 +1276,7 @@ func buildMmogPurchasePayload(playerPID string, payload []byte) []byte {
 	return b
 }
 
-func buildMmogElitePurchasePayload(playerPID string, payload []byte) []byte {
+func buildMmogElitePurchasePayload(requestName string, playerPID string, payload []byte) []byte {
 	durationDays := protocol.FirstInt32Field(payload, 30, "Duration", "duration", "Days", "days")
 	if durationDays <= 0 {
 		durationDays = 30
@@ -1272,20 +1286,20 @@ func buildMmogElitePurchasePayload(playerPID string, payload []byte) []byte {
 	pid := normalizedPlayerStatePID(playerPID)
 	database := currentMmogPlayerStateDB()
 	if database == nil {
-		return buildMmogErrorPayload("database unavailable")
+		return buildMmogErrorPayload(requestName, "database unavailable")
 	}
 
 	var premiumCurrency int32
 	_ = database.QueryRow(`SELECT premium_currency FROM player_state WHERE user_id=?`, pid).Scan(&premiumCurrency)
 	if premiumCurrency < price {
-		return buildMmogErrorPayload("insufficient elite currency")
+		return buildMmogErrorPayload(requestName, "insufficient elite currency")
 	}
 
 	_, _ = database.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid)
 
 	var b []byte
 	var stack []int
-	b = protocol.AppendStringField(b, "RT", "YA_BuyEliteStatus")
+	b = protocol.AppendStringField(b, "RT", requestName)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "eliteDays", durationDays)

@@ -11,7 +11,7 @@ var migrations = []string{
 	`CREATE TABLE IF NOT EXISTS queue_entries (
 		id          TEXT PRIMARY KEY,
 		user_id     TEXT NOT NULL,
-		game_mode   TEXT NOT NULL DEFAULT 'TeamDeathmatch',
+		game_mode   TEXT NOT NULL DEFAULT 'TeamDeathMatch',
 		tier_min    INTEGER NOT NULL DEFAULT 1,
 		tier_max    INTEGER NOT NULL DEFAULT 5,
 		queued_at   TEXT NOT NULL DEFAULT (datetime('now')),

@@ -407,6 +407,32 @@ func allT1Ships() []mmogShipSeed {
 	return ships
 }
 
+func techTreeShips() []mmogShipSeed {
+	ships := allT1Ships()
+	seen := make(map[int32]struct{}, len(ships)+len(starterShipLoadouts()))
+	for _, ship := range ships {
+		seen[ship.id] = struct{}{}
+	}
+	for _, loadout := range starterShipLoadouts() {
+		fleetShipID := loadout.effectiveFleetShipID()
+		if _, ok := seen[fleetShipID]; ok {
+			continue
+		}
+		seen[fleetShipID] = struct{}{}
+		ships = append(ships, mmogShipSeed{
+			id:        fleetShipID,
+			name:      loadout.ship.name + " fleet entry",
+			classID:   loadout.ship.classID,
+			shipClass: loadout.ship.shipClass,
+			weight:    loadout.ship.weight,
+			owned:     true,
+			nodeID:    fleetShipID,
+			nodeType:  0,
+		})
+	}
+	return ships
+}
+
 func runtimeStarterShipForInstallerClass(classKey string) (mmogShipSeed, bool) {
 	switch strings.ToLower(strings.TrimSpace(classKey)) {
 	case "assault":
@@ -647,7 +673,7 @@ func starterLoadoutByPrecastID(precastLoadoutID int32) (mmogShipLoadoutSeed, boo
 
 func starterLoadoutByShipID(shipID int32) (mmogShipLoadoutSeed, bool) {
 	for _, loadout := range starterShipLoadouts() {
-		if loadout.ship.id == shipID {
+		if loadout.ship.id == shipID || loadout.effectiveFleetShipID() == shipID {
 			return loadout, true
 		}
 	}

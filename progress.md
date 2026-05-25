@@ -21,6 +21,21 @@
 - [x] Phase 6: PvE / AI (4 PvE modes, Havoc boosters, boss rewards)
 - [x] Phase 7: Completeness (5 new endpoints, officers, S->C notifications)
 - [x] Phase 8: Polish (all LOW issues resolved, 0 lint, sessions cleanup verified)
+- [x] Client-facing MMOG payload fixes: structured GameModes rows and parser-compatible YA_Tune Returning/MetaData shape
+- [x] Hangar bootstrap ordering fix: pending YA_PlayerFleets waits for the client's YA_PlayerGet instead of flushing on read timeout
+- [x] Reduced risky post-hangar bootstrap data: empty synthetic Officers and persisted-only PurchasesData
+- [x] Rebuilt and restarted services; all health checks pass after latest payload/order fixes
+- [x] Added local UE4 crash report receiver on gateway `:57005`; stores uploads under `run/crash-reports/`
+- [x] Diagnosed uploaded minidump: stack overflow is in `UYPlayerMPQuestCycle::OnBackendDataAvailable`; suppressed `YA_GetDailyContractsData` runtime responses until contract/quest assets are modeled safely
+- [x] Fixed `YA_GetSeasonData` season/event data table warnings by sending non-empty JSON rows matching Ghidra `YSeasonsDTRow`/`YEventsDTRow` importer fields
+- [x] Fixed outpost flagship lookup by exposing starter loadout info on tech tree rows for the same fleet ship IDs used by `FlagShipID`
+- [x] Routed `YA_CheckReturn` to the dedicated `CanReturnToMatch=false` payload instead of unknown-request generic success; rebuilt and restarted services
+- [x] Restored immediate `YA_PlayerFleets` responses during bootstrap so PlayerGet/outpost callbacks can see a non-zero fleet count; `YA_GetDailyContractsData` remains delayed until after `YA_PlayerGet`
+- [x] Added `tools/wer-proxy`: a benign app-local `wer.dll` diagnostics shim that logs on load, loads optional sibling `Dreadnought.dll` like the public client mod, attaches diagnostics to WER reports, and forwards to the real system WER DLL
+- [x] Inspected latest post-fix MMOG runtime sequence: `YA_PlayerFleets` is immediate, `YA_PlayerGet` flushes pending purchases/contracts, `YA_CheckReturn` uses the 134-byte payload, no unknown MMOG request appears, and no `YA_PlayerStateInHangar` appears before client disconnect
+- [x] Fixed `YA_GetTechTree` to include fleet/development starter ship IDs used by `YA_PlayerFleets`; updated the payload size snapshot to 24691 and verified `mmogbrain` tests/lint pass
+- [x] Rebuilt all service binaries and restarted the detached `dread-servers` screen session from `run/start.sh`; service health checks pass on direct service ports
+- [x] Retested latest runtime logs: client receives the 24691-byte `YA_GetTechTree`, `YA_PlayerFleets`, `YA_PlayerGet`, pending purchases/contracts, then reports Outpost `Launch_P` map load success with `loading_failed: 0`; no fleet parser, unknown request, `MaxOpenRequests`, or crash upload appears before the later disconnect
 
 ## Current Feature Coverage: ~30%
 Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and earn XP/ranks.
@@ -101,6 +116,12 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [ ] L4-L15: Various LOW issues from issues.md
 
 ## Blocked / Needs Investigation
+- [ ] Retest real client after latest YA_PlayerFleets ordering and player bootstrap payload reduction
+- [ ] Retest real client after `YA_CheckReturn` dispatcher fix; confirm no unknown MMOG request warning and whether visible hangar appears
+- [ ] Retest real client after restoring immediate `YA_PlayerFleets`; confirm whether `YA_PlayerStateInHangar` is sent and visible hangar appears
+- [ ] Retest real client after suppressing `YA_GetDailyContractsData`; if stack overflow remains, capture latest Client.log/call stack around EXCEPTION_STACK_OVERFLOW and audit YA_PlayerGet/YA_GetPlayerPurchases/YA_RefreshPlayerProfile next
+- [ ] Confirm visually whether latest `YA_GetTechTree` fix now reaches visible hangar; server logs show Outpost map load success but still no explicit `YA_PlayerStateInHangar` request
+- [ ] Place `bin/wer-proxy/wer.dll` beside `DreadGame-Win64-Shipping.exe` for client diagnostics if modifying `/root/projects/src/Dreadnought` is approved
 - [ ] Game binary certificate pinning for Firmament (FUN_142aa3e00) — may need binary patching
 - [ ] RC4 stream cipher compatibility with patched vs unpatched binary
 - [ ] EAC (Easy Anti-Cheat) bypass stability

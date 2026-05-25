@@ -102,6 +102,8 @@ func main() {
 
 	httpAddr := getenv("HTTP_ADDR", ":80")
 	httpsAddr := getenv("HTTPS_ADDR", ":443")
+	crashReceiverAddr := getenv("CRASH_RECEIVER_ADDR", ":57005")
+	crashReportDir := getenv("CRASH_REPORT_DIR", "crash-reports")
 	certFile := getenv("TLS_CERT", "certs/server.crt")
 	keyFile := getenv("TLS_KEY", "certs/server.key")
 
@@ -241,6 +243,14 @@ func main() {
 		// Log TLS handshake errors (untrusted cert, cipher mismatch, etc.)
 		ErrorLog: stdlog.New(log.WriterLevel(logrus.WarnLevel), "[tls] ", 0),
 	}
+	crashReceiverSrv := &http.Server{
+		Addr:              crashReceiverAddr,
+		Handler:           newCrashReceiverHandler(log, crashReportDir),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       5 * time.Minute,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	go func() {
 		log.WithField("addr", httpAddr).Info("gateway HTTP starting")
@@ -256,6 +266,13 @@ func main() {
 		}
 	}()
 
+	go func() {
+		log.WithFields(logrus.Fields{"addr": crashReceiverAddr, "dir": crashReportDir}).Info("crash report receiver starting")
+		if err := crashReceiverSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.WithError(err).Warn("crash report receiver")
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -268,6 +285,9 @@ func main() {
 	}
 	if err := httpsSrv.Shutdown(ctx); err != nil {
 		log.WithError(err).Warn("shutdown https server")
+	}
+	if err := crashReceiverSrv.Shutdown(ctx); err != nil {
+		log.WithError(err).Warn("shutdown crash report receiver")
 	}
 }
 

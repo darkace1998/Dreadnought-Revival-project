@@ -841,11 +841,11 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	if len(ownedItems) != 0 {
 		t.Fatalf("owned item count before YA_PlayerGet = %d, want 0", len(ownedItems))
 	}
-	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != 0 {
-		t.Fatalf("starter_ship_ids count before YA_PlayerGet = %d, want 0", len(starterShips))
+	if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
+		t.Fatalf("starter_ship_ids count before YA_PlayerGet = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
 	}
-	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != 0 {
-		t.Fatalf("starter_loadout_ids count before YA_PlayerGet = %d, want 0", len(starterLoadouts))
+	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
+		t.Fatalf("starter_loadout_ids count before YA_PlayerGet = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
 	}
 	if len(gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)) == 0 {
 		t.Fatal("item_catalog_real.entities should still be populated before YA_PlayerGet")
@@ -967,11 +967,11 @@ func TestGatewayBootstrapHandlersFallbackWhenPlayerDataReadyTimesOut(t *testing.
 			if got := len(gatewayJSONArray(t, payload[gatewayKeyOwnedItems], gatewayKeyOwnedItems)); got != 0 {
 				t.Fatalf("owned item count after timeout fallback = %d, want 0", got)
 			}
-			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != 0 {
-				t.Fatalf("starter_ship_ids count after timeout fallback = %d, want 0", len(starterShips))
+			if starterShips := gatewayJSONArray(t, payload["starter_ship_ids"], "starter_ship_ids"); len(starterShips) != len(dreadconfig.StarterInventoryShipIDs()) {
+				t.Fatalf("starter_ship_ids count after timeout fallback = %d, want %d", len(starterShips), len(dreadconfig.StarterInventoryShipIDs()))
 			}
-			if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != 0 {
-				t.Fatalf("starter_loadout_ids count after timeout fallback = %d, want 0", len(starterLoadouts))
+			if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
+				t.Fatalf("starter_loadout_ids count after timeout fallback = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
 			}
 			if tc.name == "catalog" {
 				if len(gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)) == 0 {

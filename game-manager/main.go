@@ -74,7 +74,7 @@ func main() {
 			return
 		}
 		if req.GameMode == "" {
-			req.GameMode = "TeamDeathmatch"
+			req.GameMode = "TeamDeathMatch"
 		}
 		if req.Map == "" {
 			req.Map = "Charon"

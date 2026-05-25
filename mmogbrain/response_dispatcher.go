@@ -91,11 +91,13 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 
 	// --- Market / Purchases ---
 	case "YA_PurchaseItem", "YA_BuyItem", "YA_Purchase", "YA_Buy":
-		return buildMmogPurchasePayload(playerPID, payload)
+		return buildMmogPurchasePayload(requestName, playerPID, payload)
 	case "YA_BuyEliteStatus", "YA_BuyDaypass", "YA_ActivateElite":
-		return buildMmogElitePurchasePayload(playerPID, payload)
+		return buildMmogElitePurchasePayload(requestName, playerPID, payload)
 
 	// --- Navigation ---
+	case "YA_CheckReturn":
+		return buildMmogCheckReturnPayload()
 	case "YA_RoomReturn", "YA_PlayAgain":
 		return buildMmogRequestSuccessPayload(requestName)
 
@@ -105,7 +107,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_AnalyticsBeginTransaction":
 		transactionId := protocol.ExtractStringField(payload, "transactionId")
 		if transactionId == "" {
-			return buildMmogErrorPayload("Missing transactionId for YA_AnalyticsBeginTransaction")
+			return buildMmogErrorPayload(requestName, "Missing transactionId for YA_AnalyticsBeginTransaction")
 		}
 		return buildMmogAnalyticsBeginTransactionPayload(transactionId)
 
@@ -114,7 +116,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogPlayerDataPayload("YA_RefreshPlayerProfile", playerPID)
 	case "YA_GetPlayersInformation":
 		if len(payload) == 0 {
-			return buildMmogErrorPayload("Empty payload for YA_GetPlayersInformation")
+			return buildMmogErrorPayload(requestName, "Empty payload for YA_GetPlayersInformation")
 		}
 		return buildMmogPlayersInformationPayload(playerPID, payload)
 
@@ -134,7 +136,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	default:
 		logrus.WithField("request", requestName).Warn("unknown MMOG request")
 		if strings.HasPrefix(requestName, "YA_Get") {
-			return buildMmogErrorPayload("Unknown read command: " + requestName)
+			return buildMmogErrorPayload(requestName, "Unknown read command: "+requestName)
 		}
 		return buildMmogRequestSuccessPayload(requestName)
 	}

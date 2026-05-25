@@ -27,13 +27,7 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	var appPlainBuf []byte
 	state := &mmogConnState{playerPID: defaultMmogPlayerPID}
 	for {
-		readTimeout := 30 * time.Second
-		if state.pendingPlayerFleets != nil && !state.playerGetResponded {
-			// Give the client's explicit YA_PlayerGet a chance to arrive before we
-			// fall back to reconnect-mode fleet flushing.
-			readTimeout = 1500 * time.Millisecond
-		}
-		_ = conn.SetReadDeadline(time.Now().Add(readTimeout))
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		n, err := conn.Read(buf)
 		_ = conn.SetReadDeadline(time.Time{})
 		if n > 0 {
@@ -115,9 +109,6 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 		}
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				if err := flushPendingPlayerFleets(log, conn, remote, appEncoder, appEncoder != nil, state, "read-timeout"); err != nil {
-					return
-				}
 				continue
 			}
 			if err == io.EOF {
@@ -134,25 +125,11 @@ type mmogConnState struct {
 	loginResponseSent        bool
 	playerGetResponded       bool
 	pendingPlayerPurchases   *protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
-	pendingPlayerFleets      *protocol.AppFrame // briefly delayed to preserve YA_PlayerGet ordering
+	pendingDailyContracts    *protocol.AppFrame // delayed until YA_PlayerGet avoids early quest-cycle recursion
 	staticFleetDataReceived  bool
 	fleetEligibilityReceived bool
 	playerFleetsReceived     bool
 	playerPID                string
-}
-
-func flushPendingPlayerFleets(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, reason string) error {
-	if state.pendingPlayerFleets == nil || state.playerGetResponded {
-		return nil
-	}
-	pf := state.pendingPlayerFleets
-	state.pendingPlayerFleets = nil
-	log.WithFields(logrus.Fields{
-		"remote": remote,
-		"reason": reason,
-	}).Info("mmog: flushing delayed YA_PlayerFleets without synthetic YA_PlayerGet")
-	pfResp := buildMmogRequestResponseFrame(pf.RequestID, pf.MsgType, "YA_PlayerFleets", state.playerPID, pf.Payload)
-	return writeMmogAppResponse(log, conn, remote, pf.RequestID, "YA_PlayerFleets", pfResp, appEncoder, encryptResponses, "reconnect fleet flush failed", "flushed delayed YA_PlayerFleets response")
 }
 
 func syntheticRequestID(tag byte) [16]byte {
@@ -182,14 +159,6 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 			return err
 		}
 	}
-	if state.pendingPlayerFleets != nil {
-		pf := state.pendingPlayerFleets
-		state.pendingPlayerFleets = nil
-		pfResp := buildMmogRequestResponseFrame(pf.RequestID, pf.MsgType, "YA_PlayerFleets", state.playerPID, pf.Payload)
-		if err := writeMmogAppResponse(log, conn, remote, pf.RequestID, "YA_PlayerFleets", pfResp, appEncoder, encryptResponses, "pending fleet response failed", "sent pending YA_PlayerFleets response"); err != nil {
-			return err
-		}
-	}
 	// If client never requested YA_FleetEligibility or YA_PlayerFleets
 	// (reconnect session sending only YA_PlayerGet), push them proactively.
 	if !state.fleetEligibilityReceived {
@@ -201,6 +170,14 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 	if !state.playerFleetsReceived {
 		fleetsResp := protocol.BuildResponseFrame(bootstrapID, 0x0320, buildMmogPlayerFleetsPayload(state.playerPID))
 		if err := writeMmogAppResponse(log, conn, remote, bootstrapID, "YA_PlayerFleets", fleetsResp, appEncoder, encryptResponses, "proactive fleet push failed", "sent proactive YA_PlayerFleets push"); err != nil {
+			return err
+		}
+	}
+	if state.pendingDailyContracts != nil {
+		dc := state.pendingDailyContracts
+		state.pendingDailyContracts = nil
+		dcResp := buildMmogRequestResponseFrame(dc.RequestID, dc.MsgType, "YA_GetDailyContractsData", state.playerPID, dc.Payload)
+		if err := writeMmogAppResponse(log, conn, remote, dc.RequestID, "YA_GetDailyContractsData", dcResp, appEncoder, encryptResponses, "pending daily contracts response failed", "sent pending YA_GetDailyContractsData response"); err != nil {
 			return err
 		}
 	}
@@ -261,14 +238,14 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			}
 			if requestName == "YA_PlayerFleets" {
 				state.playerFleetsReceived = true
-				if !state.playerGetResponded {
-					// Delay fleet response until after YA_PlayerGet — the game requires
-					// this ordering to correctly enter the 3D hangar.
-					saved := frame
-					state.pendingPlayerFleets = &saved
-					log.WithField("remote", remote).Info("mmog: delaying YA_PlayerFleets response until YA_PlayerGet is answered")
-					continue
-				}
+			}
+			if requestName == "YA_GetDailyContractsData" && !state.playerGetResponded {
+				// The quest cycle needs this response eventually, but answering it
+				// before YA_PlayerGet can recurse through OnBackendDataAvailable.
+				saved := frame
+				state.pendingDailyContracts = &saved
+				log.WithField("remote", remote).Info("mmog: delaying YA_GetDailyContractsData response until YA_PlayerGet is answered")
+				continue
 			}
 			if isMmogPlayerMutationRequest(requestName) {
 				if err := persistMmogPlayerMutation(state.playerPID, requestName, frame.Payload); err != nil {
@@ -278,15 +255,6 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 						"pid":    state.playerPID,
 					}).Warn("mmog: failed to persist player mutation")
 				}
-			}
-
-			if suppressUnsafeMmogObserverResponse(requestName) {
-				log.WithFields(logrus.Fields{
-					"remote":  remote,
-					"request": hex.EncodeToString(frame.RequestID[:]),
-					"name":    requestName,
-				}).Info("mmog: suppressed unsafe observer-only bootstrap response")
-				continue
 			}
 
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)
@@ -301,10 +269,6 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		}
 	}
 	return nil
-}
-
-func suppressUnsafeMmogObserverResponse(requestName string) bool {
-	return false
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *protocol.StreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
