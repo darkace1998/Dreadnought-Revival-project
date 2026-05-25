@@ -525,12 +525,8 @@ func TestTechTreeModuleUIDataIncludesStarterItems(t *testing.T) {
 func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	const pid = defaultMmogPlayerPID
 
-	fullStarterFleet := starterFleetState()
-	starterFleet := fullStarterFleet.flagshipOnly()
-	if got := len(starterFleet.shipLoadouts); got != 1 {
-		t.Fatalf("flagship-only hangar fleet exposes %d loadouts, want 1", got)
-	}
-	if got := len(fullStarterFleet.shipLoadouts); got < 2 {
+	starterFleet := starterFleetState()
+	if got := len(starterFleet.shipLoadouts); got < 2 {
 		t.Fatalf("full starter fleet unexpectedly collapsed to %d loadouts", got)
 	}
 	playerFleets := buildMmogPlayerFleetsPayload(pid)
@@ -863,8 +859,8 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 	if !bytes.Contains(result, protocol.AppendStringField(nil, "matchmakingStatus", "waiting")) {
 		t.Fatal("YA_EnterMatchmaking did not report waiting state")
 	}
-	if !bytes.Contains(result, protocol.AppendStringField(nil, "GameMode", "TeamElimination")) {
-		t.Fatal("YA_EnterMatchmaking did not echo requested game mode")
+	if !bytes.Contains(result, protocol.AppendStringField(nil, "GameMode", "TE")) {
+		t.Fatal("YA_EnterMatchmaking did not normalize requested game mode")
 	}
 
 	var gameMode string
@@ -873,8 +869,8 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 		Scan(&gameMode, &tierMin, &tierMax); err != nil {
 		t.Fatalf("load queued entry: %v", err)
 	}
-	if gameMode != "TeamElimination" || tierMin != 2 || tierMax != 4 {
-		t.Fatalf("queued entry = %s/%d/%d, want TeamElimination/2/4", gameMode, tierMin, tierMax)
+	if gameMode != "TE" || tierMin != 2 || tierMax != 4 {
+		t.Fatalf("queued entry = %s/%d/%d, want TE/2/4", gameMode, tierMin, tierMax)
 	}
 
 	leave := buildMmogRequestResponsePayload("YA_LeaveMatchmaking", playerPID, nil)
@@ -902,6 +898,14 @@ func TestGameConfigDataUsesClientGameModeRows(t *testing.T) {
 	if bytes.Contains(gameModes, protocol.AppendUnnamedStringField(nil, "TeamDeathmatch")) {
 		t.Fatal("YA_GetGameConfigData should send structured GameModes rows, not legacy bare strings")
 	}
+	for _, alias := range []string{"TDM", "TE", "BC", "TER"} {
+		if !bytes.Contains(gameModes, protocol.AppendStringField(nil, "Name", alias)) {
+			t.Fatalf("YA_GetGameConfigData missing client game mode alias %q", alias)
+		}
+	}
+	if bytes.Contains(gameModes, protocol.AppendStringField(nil, "Name", "TeamDeathMatch")) {
+		t.Fatal("YA_GetGameConfigData should expose client aliases, not long server mode names")
+	}
 }
 
 func TestAliasResponsesEchoRequestRT(t *testing.T) {
@@ -924,6 +928,49 @@ func TestAliasResponsesEchoRequestRT(t *testing.T) {
 	elite := buildMmogRequestResponsePayload("YA_ActivateElite", playerPID, nil)
 	if !bytes.Contains(elite, protocol.AppendStringField(nil, "RT", "YA_ActivateElite")) {
 		t.Fatal("YA_ActivateElite response did not echo request RT")
+	}
+}
+
+func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "edededededededededededededededed"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, playerPID); err != nil {
+		t.Fatalf("seed currency: %v", err)
+	}
+
+	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDValcour)
+	purchase := buildMmogPurchasePayload("YA_BuyItem", playerPID, purchaseRequest)
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+		t.Fatalf("purchase did not succeed: %x", purchase)
+	}
+
+	techTree := buildMmogTechTreePayload(playerPID)
+	marker := bytes.Index(techTree, protocol.AppendInt32Field(nil, "ShipID", extractedShipIDValcour))
+	if marker < 0 {
+		t.Fatal("YA_GetTechTree missing purchased Valcour row")
+	}
+	rowEnd := marker + 700
+	if rowEnd > len(techTree) {
+		rowEnd = len(techTree)
+	}
+	if !bytes.Contains(techTree[marker:rowEnd], protocol.AppendBoolField(nil, "bIsPurchased", true)) {
+		t.Fatal("YA_GetTechTree does not mark purchased Valcour as purchased")
+	}
+
+	progression := buildMmogPlayerProgressionPayload(playerPID)
+	progressionMarker := bytes.Index(progression, protocol.AppendInt32Field(nil, "shipID", extractedShipIDValcour))
+	if progressionMarker < 0 {
+		t.Fatal("YA_GetPlayerProgression missing purchased Valcour row")
+	}
+	progressionEnd := progressionMarker + 120
+	if progressionEnd > len(progression) {
+		progressionEnd = len(progression)
+	}
+	if !bytes.Contains(progression[progressionMarker:progressionEnd], protocol.AppendBoolField(nil, "owned", true)) {
+		t.Fatal("YA_GetPlayerProgression does not mark purchased Valcour as owned")
 	}
 }
 
@@ -1337,7 +1384,7 @@ func TestStarterLoadoutsUseRealPrecastIDsAndActiveFlags(t *testing.T) {
 	playerGet := buildMmogPlayerGetPayload(defaultMmogPlayerPID)
 	staticFleetData := buildMmogStaticFleetDataPayload()
 	loadouts := starterShipLoadouts()
-	hangarFleet := starterFleetState().flagshipOnly()
+	hangarFleet := starterFleetState()
 	hangarLoadoutIDs := make(map[int32]struct{}, len(hangarFleet.shipLoadouts))
 	for _, loadout := range hangarFleet.shipLoadouts {
 		hangarLoadoutIDs[loadout.loadoutID()] = struct{}{}
@@ -1360,11 +1407,11 @@ func TestStarterLoadoutsUseRealPrecastIDsAndActiveFlags(t *testing.T) {
 		if !loadout.active {
 			t.Fatalf("%s starter loadout should be active", loadout.ship.name)
 		}
-		if bytes.Contains(playerGet, protocol.AppendStringField(nil, "ID", loadout.entryID())) {
-			t.Fatalf("YA_PlayerGet should not emit default starter loadout as custom native ID %q", loadout.entryID())
+		if !bytes.Contains(playerGet, protocol.AppendStringField(nil, "ID", loadout.entryID())) {
+			t.Fatalf("YA_PlayerGet missing starter loadout native ID %q", loadout.entryID())
 		}
-		if bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "ID", loadout.entryID())) {
-			t.Fatalf("YA_RequestStaticFleetData should not emit default starter loadout as custom native ID %q", loadout.entryID())
+		if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "ID", loadout.entryID())) {
+			t.Fatalf("YA_RequestStaticFleetData missing starter loadout native ID %q", loadout.entryID())
 		}
 
 		if _, ok := hangarLoadoutIDs[expectedID]; ok &&
@@ -1389,11 +1436,11 @@ func TestStarterLoadoutsUseRealPrecastIDsAndActiveFlags(t *testing.T) {
 		t.Fatal("YA_RequestStaticFleetData native loadout IDs should use development-table object IDs, not precast asset IDs")
 	}
 
-	if bytes.Contains(playerGet, appendFieldMarker("precastLoadout", 0x56)) {
-		t.Fatal("YA_PlayerGet should not emit default starter loadouts as custom MMOG ShipLoadouts")
+	if !bytes.Contains(playerGet, appendFieldMarker("precastLoadout", 0x56)) {
+		t.Fatal("YA_PlayerGet should emit starter loadouts as MMOG ShipLoadouts")
 	}
-	if bytes.Contains(staticFleetData, appendFieldMarker("precastLoadout", 0x56)) {
-		t.Fatal("YA_RequestStaticFleetData should not emit default starter loadouts as custom MMOG ShipLoadouts")
+	if !bytes.Contains(staticFleetData, appendFieldMarker("precastLoadout", 0x56)) {
+		t.Fatal("YA_RequestStaticFleetData should emit starter loadouts as MMOG ShipLoadouts")
 	}
 }
 
@@ -1432,7 +1479,7 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 
 	playerGet := buildMmogPlayerGetPayload(playerPID)
 	playerFleets := buildMmogPlayerFleetsPayload(playerPID)
-	starterFleet := starterFleetState().flagshipOnly()
+	starterFleet := starterFleetState()
 
 	for payloadName, payload := range map[string][]byte{
 		"YA_PlayerGet": playerGet,
@@ -1571,10 +1618,11 @@ func TestStarterLoadoutDetailSlotCountsStayHangarSafe(t *testing.T) {
 	}
 }
 
-func TestBootstrapPayloadsTrimDeepLoadoutCollections(t *testing.T) {
+func TestBootstrapPayloadsExposeFullFleetWithoutHeavyBattleReadyData(t *testing.T) {
 	playerGet := buildMmogPlayerGetPayload(defaultMmogPlayerPID)
 	playerFleets := buildMmogPlayerFleetsPayload(defaultMmogPlayerPID)
 	staticFleetData := buildMmogStaticFleetDataPayload()
+	starterFleet := starterFleetState()
 
 	for payloadName, payload := range map[string][]byte{
 		"YA_PlayerGet":              playerGet,
@@ -1625,11 +1673,20 @@ func TestBootstrapPayloadsTrimDeepLoadoutCollections(t *testing.T) {
 	if bytes.Contains(playerFleets, appendFieldMarker("Bonuses", 0x0d)) {
 		t.Fatal("YA_PlayerFleets should not include battle-ready bonus placeholders after payload trim")
 	}
-	if bytes.Contains(playerFleets, []byte("VeteranFleet")) || bytes.Contains(playerFleets, []byte("LegendaryFleet")) {
-		t.Fatal("YA_PlayerFleets should only include the active starter fleet after payload trim")
+	for _, fleetName := range []string{"RecruitFleet", "VeteranFleet", "LegendaryFleet"} {
+		if !bytes.Contains(playerFleets, []byte(fleetName)) {
+			t.Fatalf("YA_PlayerFleets missing fleet slot %q", fleetName)
+		}
 	}
-	if got := bytes.Count(playerFleets, appendFieldMarker("m_fleetId", 0x56)); got != 1 {
-		t.Fatalf("YA_PlayerFleets active fleet row count = %d, want 1", got)
+	if got := bytes.Count(playerFleets, appendFieldMarker("m_fleetId", 0x56)); got != len(mmogFleetSeeds()) {
+		t.Fatalf("YA_PlayerFleets fleet row count = %d, want %d", got, len(mmogFleetSeeds()))
+	}
+	staticSlots := extractNamedMmogArray(t, extractNamedMmogObject(t, staticFleetData, "result"), "Fleets")
+	if got := bytes.Count(staticSlots, appendFieldMarker("ShipSlots", 0x0d)); got != 1 {
+		t.Fatalf("YA_RequestStaticFleetData active fleet count = %d, want 1", got)
+	}
+	if got := bytes.Count(staticFleetData, appendFieldMarker("LoadoutID", 0x56)); got < len(starterFleet.shipLoadouts) {
+		t.Fatalf("YA_RequestStaticFleetData loadout id count = %d, want at least %d", got, len(starterFleet.shipLoadouts))
 	}
 }
 
@@ -1912,7 +1969,7 @@ func TestCriticalPayloadsMaintainValidMmogNesting(t *testing.T) {
 		"YA_GetSeasonProgress":         buildMmogSeasonProgressPayload,
 		"YA_GetPlayerStatsCounterData": buildMmogPlayerStatsCounterDataPayload,
 		"YA_GetPlayerProgression":      func() []byte { return buildMmogPlayerProgressionPayload(pid) },
-		"YA_GetTechTree":               buildMmogTechTreePayload,
+		"YA_GetTechTree":               func() []byte { return buildMmogTechTreePayload(pid) },
 		"YA_GetPlayerPurchases":        buildMmogPlayerPurchasesPayload,
 		"YA_FleetEligibility":          buildMmogFleetEligibilityPayload,
 		"YA_Tune":                      buildMmogTunePayload,
@@ -2019,10 +2076,10 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	if len(remaining) != 0 {
 		t.Fatalf("unexpected remaining bytes after delayed purchases flush")
 	}
-	if len(frames) != 5 {
-		t.Fatalf("PlayerGet with delayed purchases wrote %d frames, want 5", len(frames))
+	if len(frames) != 2 {
+		t.Fatalf("PlayerGet with delayed purchases wrote %d frames, want 2", len(frames))
 	}
-	wantNames := []string{"YA_PlayerGet", "YA_RequestStaticFleetData", "YA_GetPlayerPurchases", "YA_FleetEligibility", "YA_PlayerFleets"}
+	wantNames := []string{"YA_PlayerGet", "YA_GetPlayerPurchases"}
 	for i, wantName := range wantNames {
 		if got := protocol.ExtractRequestName(frames[i].Payload); got != wantName {
 			t.Fatalf("frame %d = %q, want %q", i, got, wantName)
@@ -2031,8 +2088,8 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	if frames[0].RequestID != playerGetRequestID {
 		t.Fatalf("YA_PlayerGet response id = %x, want %x", frames[0].RequestID, playerGetRequestID)
 	}
-	if frames[2].RequestID != purchasesRequestID {
-		t.Fatalf("YA_GetPlayerPurchases response id = %x, want %x", frames[2].RequestID, purchasesRequestID)
+	if frames[1].RequestID != purchasesRequestID {
+		t.Fatalf("YA_GetPlayerPurchases response id = %x, want %x", frames[1].RequestID, purchasesRequestID)
 	}
 	if state.pendingPlayerPurchases != nil {
 		t.Fatal("PlayerGet did not clear pendingPlayerPurchases")
@@ -2150,7 +2207,7 @@ func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
 	}
 }
 
-func TestPlayerGetBootstrapOnlyPushesFleetData(t *testing.T) {
+func TestPlayerGetBootstrapDoesNotPushUnrequestedFleetData(t *testing.T) {
 	conn := &captureConn{}
 	state := &mmogConnState{
 		playerPID:         defaultMmogPlayerPID,
@@ -2161,26 +2218,9 @@ func TestPlayerGetBootstrapOnlyPushesFleetData(t *testing.T) {
 		t.Fatalf("handlePlayerGetSatisfied: %v", err)
 	}
 
-	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
-	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after PlayerGet bootstrap")
-	}
-	if len(frames) != 3 {
-		t.Fatalf("PlayerGet bootstrap wrote %d frames, want 3", len(frames))
-	}
-
-	wantNames := []string{"YA_RequestStaticFleetData", "YA_FleetEligibility", "YA_PlayerFleets"}
-	bootstrapID := syntheticRequestID(0xf1)
-	for i, wantName := range wantNames {
-		if got := protocol.ExtractRequestName(frames[i].Payload); got != wantName {
-			t.Fatalf("bootstrap frame %d = %q, want %q", i, got, wantName)
-		}
-		if frames[i].RequestID != bootstrapID {
-			t.Fatalf("bootstrap frame %d request id = %x, want %x", i, frames[i].RequestID, bootstrapID)
-		}
-		if got := protocol.ExtractRequestName(frames[i].Payload); got == "YA_PlayerGet" {
-			t.Fatalf("bootstrap frame %d unexpectedly synthesized YA_PlayerGet", i)
-		}
+	if conn.Len() != 0 {
+		frames, _ := protocol.ParseAppFrames(conn.Bytes())
+		t.Fatalf("PlayerGet bootstrap wrote %d unsolicited frames, want 0", len(frames))
 	}
 	if !state.playerGetResponded {
 		t.Fatal("PlayerGet bootstrap should mark playerGetResponded")

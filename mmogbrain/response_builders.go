@@ -80,11 +80,12 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 
 	gameMode := protocol.FirstNonEmptyString(payload, "GameMode", "gameMode", "Mode", "mode", "matchmaking")
 	if gameMode == "" || gameMode == "*matchmaking" {
-		gameMode = "TeamDeathMatch"
+		gameMode = "TDM"
 	}
 	if !matchmaker.ValidGameMode(gameMode) {
 		return buildMmogMatchmakingErrorPayload(requestName, 2, "unsupported game mode")
 	}
+	gameMode = matchmaker.NormalizeGameMode(gameMode)
 	tierMin := protocol.FirstInt32Field(payload, 1, "TierMin", "tierMin", "minTier", "MinTier")
 	tierMax := protocol.FirstInt32Field(payload, 5, "TierMax", "tierMax", "maxTier", "MaxTier")
 
@@ -364,6 +365,8 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
+	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
+	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
 	b = protocol.AppendInt32Field(b, "FleetType", fleet.fleetType)
 	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
@@ -378,15 +381,38 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	return b, stack
 }
 
+func appendMmogFleetUnlockEntry(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
+	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
+	b = protocol.AppendStringField(b, "Name", fleet.displayName)
+	b = protocol.AppendStringField(b, "FleetID", fleet.token)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
 func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int
 	state := mmogPlayerStateForPID(playerPID)
+	fleets := state.fleets
+	if len(fleets) == 0 {
+		fleets = state.activeFleets()
+	}
 
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
+	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
+	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
+	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
+	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
+	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
+	for _, fleet := range fleets {
+		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "result")
-	for _, fleet := range state.activeFleets() {
-		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet.flagshipOnly())
+	for _, fleet := range fleets {
+		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
 	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -475,11 +501,11 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 	b, stack = appendMmogStaticFleetMaintenanceConfig(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
 	for _, fleet := range state.activeFleets() {
-		b, stack = appendMmogStaticFleetEntry(b, stack, fleet.flagshipOnly())
+		b, stack = appendMmogStaticFleetEntry(b, stack, fleet)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
-	for _, loadout := range customMmogShipLoadoutsForPayload(state.shipLoadouts()) {
+	for _, loadout := range state.shipLoadouts() {
 		b, stack = appendMmogStaticShipLoadout(b, stack, loadout)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -550,7 +576,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	now := int32(time.Now().Unix())
 	membershipExpiresAt := now + 31536000
 	state := mmogPlayerStateForPID(playerPID)
-	starterFleet := state.activeFleet().flagshipOnly()
+	starterFleet := state.activeFleet()
 
 	b = protocol.AppendStringField(b, "RT", rt)
 	b = protocol.AppendStringField(b, "PID", playerPID)
@@ -629,7 +655,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
-	for _, loadout := range customMmogShipLoadoutsForPayload(state.shipLoadouts()) {
+	for _, loadout := range state.shipLoadouts() {
 		b, stack = appendMmogShipLoadout(b, stack, playerPID, loadout)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -671,8 +697,8 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	b = protocol.AppendBoolField(b, "m_isActiveLoadout", loadout.active)
 	b = protocol.AppendStringField(b, "name", loadout.loadoutName)
 	b = protocol.AppendStringField(b, "m_loadoutName", loadout.loadoutName)
-	b = protocol.AppendInt32Field(b, "shipID", loadout.ship.id)
-	b = protocol.AppendInt32Field(b, "m_shipId", loadout.ship.id)
+	b = protocol.AppendInt32Field(b, "shipID", loadout.effectiveFleetShipID())
+	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
 	b = protocol.AppendInt32Field(b, "class", loadout.ship.shipClass)
 	b = protocol.AppendStringField(b, "m_name", loadout.loadoutName)
 	b = protocol.AppendInt32Field(b, "m_shipClass", loadout.ship.shipClass)
@@ -718,9 +744,9 @@ func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoad
 	b = protocol.AppendInt32Field(b, "m_loadoutID", loadout.loadoutID())
 	b = protocol.AppendInt32Field(b, "precastLoadoutID", loadout.precastLoadoutID)
 	b = protocol.AppendInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
-	b = protocol.AppendInt32Field(b, "shipID", loadout.ship.id)
-	b = protocol.AppendInt32Field(b, "ShipID", loadout.ship.id)
-	b = protocol.AppendInt32Field(b, "m_shipId", loadout.ship.id)
+	b = protocol.AppendInt32Field(b, "shipID", loadout.effectiveFleetShipID())
+	b = protocol.AppendInt32Field(b, "ShipID", loadout.effectiveFleetShipID())
+	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
 	b = protocol.AppendInt32Field(b, "loadoutIndex", loadout.loadoutIndex)
 	b = protocol.AppendInt32Field(b, "m_shipClass", loadout.ship.shipClass)
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
@@ -772,6 +798,7 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int
 	state := mmogPlayerStateForPID(playerPID)
+	ships := playerOwnedTechTreeShips(playerPID)
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerProgression")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
@@ -780,9 +807,9 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
 	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
 	b = protocol.AppendInt32Field(b, "XPToNextRank", handlers.RankXPThreshold(state.currentRank+1))
-	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(countOwnedShips(allT1Ships())))
+	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(countOwnedShips(ships)))
 	b, stack = protocol.AppendArrayStart(b, stack, "shipProgressionUiData")
-	for _, ship := range allT1Ships() {
+	for _, ship := range ships {
 		b, stack = appendMmogShipProgression(b, stack, ship)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -815,10 +842,14 @@ func buildMmogProgressionDataPayload() []byte {
 	return b
 }
 
-func buildMmogTechTreePayload() []byte {
+func buildMmogTechTreePayload(playerPID ...string) []byte {
 	var b []byte
 	var stack []int
-	ships := techTreeShips()
+	pid := defaultMmogPlayerPID
+	if len(playerPID) > 0 {
+		pid = playerPID[0]
+	}
+	ships := playerOwnedTechTreeShips(pid)
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetTechTree")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")

@@ -143,33 +143,11 @@ func syntheticRequestID(tag byte) [16]byte {
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
 	state.playerGetResponded = true
 	setGatewayPlayerDataReadyState(state.playerPID, true)
-	bootstrapID := syntheticRequestID(0xf1)
-	if !state.staticFleetDataReceived {
-		staticResp := protocol.BuildResponseFrame(bootstrapID, 0x0320, buildMmogStaticFleetDataPayloadForPlayer(state.playerPID))
-		if err := writeMmogAppResponse(log, conn, remote, bootstrapID, "YA_RequestStaticFleetData", staticResp, appEncoder, encryptResponses, "proactive static fleet data push failed", "sent proactive YA_RequestStaticFleetData push"); err != nil {
-			return err
-		}
-		state.staticFleetDataReceived = true
-	}
 	if state.pendingPlayerPurchases != nil {
 		pp := state.pendingPlayerPurchases
 		state.pendingPlayerPurchases = nil
 		ppResp := buildMmogRequestResponseFrame(pp.RequestID, pp.MsgType, "YA_GetPlayerPurchases", state.playerPID, pp.Payload)
 		if err := writeMmogAppResponse(log, conn, remote, pp.RequestID, "YA_GetPlayerPurchases", ppResp, appEncoder, encryptResponses, "pending purchases response failed", "sent pending YA_GetPlayerPurchases response"); err != nil {
-			return err
-		}
-	}
-	// If client never requested YA_FleetEligibility or YA_PlayerFleets
-	// (reconnect session sending only YA_PlayerGet), push them proactively.
-	if !state.fleetEligibilityReceived {
-		eligResp := protocol.BuildResponseFrame(bootstrapID, 0x0320, buildMmogFleetEligibilityPayload())
-		if err := writeMmogAppResponse(log, conn, remote, bootstrapID, "YA_FleetEligibility", eligResp, appEncoder, encryptResponses, "proactive fleet eligibility push failed", "sent proactive YA_FleetEligibility push"); err != nil {
-			return err
-		}
-	}
-	if !state.playerFleetsReceived {
-		fleetsResp := protocol.BuildResponseFrame(bootstrapID, 0x0320, buildMmogPlayerFleetsPayload(state.playerPID))
-		if err := writeMmogAppResponse(log, conn, remote, bootstrapID, "YA_PlayerFleets", fleetsResp, appEncoder, encryptResponses, "proactive fleet push failed", "sent proactive YA_PlayerFleets push"); err != nil {
 			return err
 		}
 	}

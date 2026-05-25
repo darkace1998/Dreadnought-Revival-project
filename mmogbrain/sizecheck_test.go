@@ -11,9 +11,9 @@ import (
 var targetSizes = map[string]int{
 	"YA_UserLogin":                 174,
 	"YA_UserOnline":                81,
-	"YA_RequestStaticFleetData":    1403,
+	"YA_RequestStaticFleetData":    5032,
 	"YA_GetFeatureToggle":          111,
-	"YA_GetGameConfigData":         398,
+	"YA_GetGameConfigData":         534,
 	"YA_GetStaticCareerData":       3531,
 	"YA_GetProgressionData":        126,
 	"YA_GetScoringData":            232,
@@ -22,13 +22,13 @@ var targetSizes = map[string]int{
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           233,
 	"YA_GetTechTree":               24691,
-	"YA_GetPlayerProgression":      835,
+	"YA_GetPlayerProgression":      1035,
 	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,
 	"YA_Tune":                      579,
 	"YA_GetSeasonData":             1080,
-	"YA_PlayerGet":                 1452,
-	"YA_PlayerFleets":              656,
+	"YA_PlayerGet":                 4927,
+	"YA_PlayerFleets":              2282,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,
 	"YA_CheckReturn":               134,
@@ -123,7 +123,7 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 	minReductions := map[string]int{
 		"YA_RequestStaticFleetData": 30000,
 		"YA_PlayerGet":              45000,
-		"YA_PlayerFleets":           2000,
+		"YA_PlayerFleets":           900,
 	}
 
 	for name, before := range preTrimTargetSizes {

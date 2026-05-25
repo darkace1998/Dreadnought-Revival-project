@@ -400,6 +400,32 @@ func persistedMmogPlayerPurchaseItemIDs(playerPID string) []int32 {
 	return ids
 }
 
+func persistedMmogPlayerPurchasedItemIDSet(playerPID string) map[int32]struct{} {
+	ids := persistedMmogPlayerPurchaseItemIDs(playerPID)
+	if len(ids) == 0 {
+		return nil
+	}
+	owned := make(map[int32]struct{}, len(ids))
+	for _, id := range ids {
+		owned[id] = struct{}{}
+	}
+	return owned
+}
+
+func playerOwnedTechTreeShips(playerPID string) []mmogShipSeed {
+	ships := techTreeShips()
+	purchased := persistedMmogPlayerPurchasedItemIDSet(playerPID)
+	if len(purchased) == 0 {
+		return ships
+	}
+	for idx := range ships {
+		if _, ok := purchased[ships[idx].id]; ok {
+			ships[idx].owned = true
+		}
+	}
+	return ships
+}
+
 func persistMmogPlayerMutation(playerPID string, requestName string, payload []byte) error {
 	database := currentMmogPlayerStateDB()
 	if database == nil {

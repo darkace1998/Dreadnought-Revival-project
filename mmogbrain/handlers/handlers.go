@@ -51,12 +51,13 @@ func (h *Handler) QueueJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.GameMode == "" {
-		req.GameMode = "TeamDeathMatch"
+		req.GameMode = "TDM"
 	}
 	if !matchmaker.ValidGameMode(req.GameMode) {
 		writeError(w, http.StatusBadRequest, "unsupported game mode: "+req.GameMode)
 		return
 	}
+	req.GameMode = matchmaker.NormalizeGameMode(req.GameMode)
 	if req.TierMin == 0 {
 		req.TierMin = 1
 	}

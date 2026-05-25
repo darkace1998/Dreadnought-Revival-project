@@ -24,29 +24,52 @@ type GameModeConfig struct {
 }
 
 var clientGameModeConfigs = []GameModeConfig{
-	{Name: "TeamDeathMatch", TeamSize: 5},
-	{Name: "TeamElimination", TeamSize: 5},
+	{Name: "TDM", TeamSize: 5},
+	{Name: "PodTDM", TeamSize: 5},
+	{Name: "TE", TeamSize: 5},
+	{Name: "TM", TeamSize: 5},
+	{Name: "TER", TeamSize: 5},
 	{Name: "Territory", TeamSize: 5},
 	{Name: "Onslaught", TeamSize: 5},
-	{Name: "HAVOC", TeamSize: 5},
-	{Name: "BootCamp", TeamSize: 1},
+	{Name: "BC", TeamSize: 1},
+	{Name: "Bootcamp", TeamSize: 1},
+	{Name: "TurboTDM", TeamSize: 5},
+}
+
+var gameModeAliases = map[string]string{
+	"TeamDeathMatch":   "TDM",
+	"TeamDeathmatch":   "TDM",
+	"TeamElimination":  "TE",
+	"TerritoryControl": "TER",
+	"BootCamp":         "BC",
+	"HAVOC":            "Onslaught",
+	"PvE_Standard":     "Onslaught",
+	"PvE_Havoc":        "Onslaught",
+	"PvE_Onslaught":    "Onslaught",
+	"PvE_Coop":         "Onslaught",
+	"Training":         "BC",
 }
 
 // validGameModes lists client names plus legacy server aliases accepted by the server.
-var validGameModes = map[string]bool{
-	"TeamDeathMatch":   true,
-	"TeamDeathmatch":   true,
-	"TeamElimination":  true,
-	"Territory":        true,
-	"TerritoryControl": true,
-	"Onslaught":        true,
-	"HAVOC":            true,
-	"BootCamp":         true,
-	"PvE_Standard":     true,
-	"PvE_Havoc":        true,
-	"PvE_Onslaught":    true,
-	"PvE_Coop":         true,
-	"Training":         true,
+var validGameModes = buildValidGameModes()
+
+func buildValidGameModes() map[string]bool {
+	modes := make(map[string]bool, len(clientGameModeConfigs)+len(gameModeAliases))
+	for _, mode := range clientGameModeConfigs {
+		modes[mode.Name] = true
+	}
+	for alias := range gameModeAliases {
+		modes[alias] = true
+	}
+	return modes
+}
+
+// NormalizeGameMode returns the client-config alias used by the dedicated server.
+func NormalizeGameMode(mode string) string {
+	if canonical, ok := gameModeAliases[mode]; ok {
+		return canonical
+	}
+	return mode
 }
 
 // pveMaps lists maps available for PvE modes.
@@ -209,7 +232,7 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 
 	// Pick a map
 	maps := availableMaps
-	for _, pveMode := range []string{"PvE_Standard", "PvE_Havoc", "PvE_Onslaught", "PvE_Coop", "Onslaught", "HAVOC", "BootCamp"} {
+	for _, pveMode := range []string{"Onslaught", "BC"} {
 		if gameMode == pveMode {
 			maps = pveMaps
 			break

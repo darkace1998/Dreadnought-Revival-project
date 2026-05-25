@@ -25,7 +25,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetPlayerProgression":
 		return buildMmogPlayerProgressionPayload(playerPID)
 	case "YA_GetTechTree":
-		return buildMmogTechTreePayload()
+		return buildMmogTechTreePayload(playerPID)
 	case "YA_GetCareerProgression":
 		return buildMmogCareerProgressionPayload()
 	case "YA_GetStaticCareerData":
