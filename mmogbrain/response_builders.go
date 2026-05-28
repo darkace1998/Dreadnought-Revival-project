@@ -362,6 +362,12 @@ func appendMmogFleetBackendFields(b []byte, stack []int, fleet mmogFleetSeed) ([
 }
 
 func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet mmogFleetSeed) ([]byte, []int) {
+	// IMPORTANT: UE4 FName comparison is case-insensitive, so field names that differ
+	// only in case (e.g. "FlagShipID" vs "flagshipID") collide in the parsed object's
+	// name table. When two such fields carry different values, the second overwrites
+	// the first, which corrupted FlagShipID with the loadout ID and made the client's
+	// fleet validator drop every entry ("Invalid fleet data, fleet array is empty").
+	// Keep exactly one canonical field per logical attribute.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "FID", fleet.token)
 	b = protocol.AppendStringField(b, "PID", playerPID)
@@ -369,14 +375,12 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
 	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
-	b = protocol.AppendInt32Field(b, "FleetType", fleet.fleetType)
 	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
+	// `flagshipShipId` (lowercase d) is distinct from `FlagShipID` (case-insensitive
+	// "flagshipid") and provides the camelCase alias the client uses for some lookups.
 	b = protocol.AppendInt32Field(b, "flagshipShipId", fleet.flagshipShipID)
-	b = protocol.AppendInt32Field(b, "flagshipLoadoutID", fleet.flagshipLoadoutID)
-	b = protocol.AppendInt32Field(b, "flagshipLoadoutIndex", fleet.flagshipLoadoutIndex)
-	b = protocol.AppendInt32Field(b, "flagshipID", fleet.flagshipLoadoutID)
 	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
 	b = protocol.AppendBoolField(b, "bIsActive", fleet.active)
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -456,10 +460,9 @@ func appendMmogStaticFleetSlotEntry(b []byte, stack []int, loadout mmogShipLoado
 	loadoutID := loadout.loadoutID()
 	fleetShipID := loadout.effectiveFleetShipID()
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	// UE4 FName lookup is case-insensitive, so emit each canonical name once.
 	b = protocol.AppendInt32Field(b, "ShipID", fleetShipID)
-	b = protocol.AppendInt32Field(b, "shipID", fleetShipID)
 	b = protocol.AppendInt32Field(b, "LoadoutID", loadoutID)
-	b = protocol.AppendInt32Field(b, "loadoutID", loadoutID)
 	b = protocol.AppendInt32Field(b, "Position", loadout.position)
 	b = protocol.AppendBoolField(b, "bIsFlagship", fleetShipID == flagshipShipID)
 	b = protocol.AppendInt32Field(b, "Status", 0)
@@ -639,18 +642,22 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "chatRoomId", "")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b = protocol.AppendStringField(b, "FleetID", starterFleet.token)
-	b = protocol.AppendStringField(b, "fleetId", starterFleet.token)
 	b = protocol.AppendInt32Field(b, "fleet id", starterFleet.fleetID)
 	b = protocol.AppendInt32Field(b, "FleetType", starterFleet.fleetType)
 	b = protocol.AppendInt32Field(b, "shipId", starterFleet.flagshipShipID)
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "shipIds", starterFleet.shipIDs())
 	b, stack = protocol.AppendBoolArrayField(b, stack, "ShipTechTreeComplete", starterFleet.shipTechTreeComplete())
+	// FName comparison is case-insensitive in UE4, so "FlagShipID" and "flagshipID"
+	// collide. Sending both with different values (ship ID vs loadout ID) used to
+	// overwrite the ship ID with the loadout ID and break fleet validation in the
+	// client. Keep one canonical FlagShipID(=ship) field and a distinct
+	// flagshipShipId camelCase alias.
 	b = protocol.AppendInt32Field(b, "FlagShipID", starterFleet.flagshipShipID)
+	b = protocol.AppendInt32Field(b, "flagshipShipId", starterFleet.flagshipShipID)
 	b = protocol.AppendInt32Field(b, "FlagShipLoadoutID", starterFleet.flagshipLoadoutID)
 	b = protocol.AppendInt32Field(b, "FlagShipLoadoutIndex", starterFleet.flagshipLoadoutIndex)
 	b = protocol.AppendInt32Field(b, "selectedLoadoutID", starterFleet.flagshipLoadoutID)
 	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipLoadoutIndex)
-	b = protocol.AppendInt32Field(b, "flagshipID", starterFleet.flagshipLoadoutID)
 	b, stack = appendMmogFleetBackendFields(b, stack, starterFleet)
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -722,9 +729,9 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	b = protocol.AppendInt32Field(b, "m_secondaryWeaponItemId", loadout.weaponSecondaryItemID())
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_weaponIDs", loadout.weaponIDs())
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityIDs", loadout.abilityItemIDs())
+	// m_perkIDs and m_perkIds collapse to the same FName, so emit once.
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_perkIDs", loadout.perkItemIDs())
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityItemIds", loadout.abilityItemIDs())
-	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_perkIds", loadout.perkItemIDs())
 	b, stack = protocol.AppendStringArrayField(b, stack, "m_perkNames", loadout.perkNames())
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -741,12 +748,12 @@ func appendMmogStaticShipLoadout(b []byte, stack []int, loadout mmogShipLoadoutS
 func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoadoutSeed) ([]byte, []int) {
 	b = protocol.AppendStringField(b, "ID", loadout.entryID())
 	b = protocol.AppendStringField(b, "m_loadoutName", loadout.loadoutName)
+	// LoadoutID/loadoutID and shipID/ShipID collide under FName comparison; keep
+	// the canonical Pascal-case form and a distinct m_-prefixed alias.
 	b = protocol.AppendInt32Field(b, "LoadoutID", loadout.loadoutID())
-	b = protocol.AppendInt32Field(b, "loadoutID", loadout.loadoutID())
 	b = protocol.AppendInt32Field(b, "m_loadoutID", loadout.loadoutID())
 	b = protocol.AppendInt32Field(b, "precastLoadoutID", loadout.precastLoadoutID)
 	b = protocol.AppendInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
-	b = protocol.AppendInt32Field(b, "shipID", loadout.effectiveFleetShipID())
 	b = protocol.AppendInt32Field(b, "ShipID", loadout.effectiveFleetShipID())
 	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
 	b = protocol.AppendInt32Field(b, "loadoutIndex", loadout.loadoutIndex)

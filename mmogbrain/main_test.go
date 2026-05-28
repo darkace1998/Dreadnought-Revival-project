@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1654,8 +1655,17 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	if !bytes.Contains(playerGet, appendFieldMarker("m_fleetType", 0x56)) {
 		t.Fatal("YA_PlayerGet missing m_fleetType field")
 	}
-	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "flagshipID", starterFleet.flagshipLoadoutID)) {
-		t.Fatalf("YA_PlayerFleets missing flagshipID keyed to starter loadout %d", starterFleet.flagshipLoadoutID)
+	// UE4 FName comparison is case-insensitive, so any field whose lowercase form
+	// equals "flagshipid" collides with FlagShipID. Sending such a field with the
+	// loadout ID (instead of the ship ID) overwrote FlagShipID and made the client
+	// drop every fleet entry with "Invalid fleet data, fleet array is empty". The
+	// canonical FlagShipID must always carry the ship ID, and no case-insensitive
+	// duplicate may carry a different value.
+	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "FlagShipID", starterFleet.flagshipShipID)) {
+		t.Fatalf("YA_PlayerFleets missing FlagShipID=%d", starterFleet.flagshipShipID)
+	}
+	if bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "flagshipID", starterFleet.flagshipLoadoutID)) {
+		t.Fatal("YA_PlayerFleets must not emit flagshipID (case-insensitive duplicate of FlagShipID) with a non-ship value")
 	}
 	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "shipCount", int32(len(starterFleet.shipLoadouts)))) {
 		t.Fatalf("YA_PlayerFleets missing shipCount=%d", len(starterFleet.shipLoadouts))
@@ -1676,6 +1686,102 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	} {
 		if !bytes.Contains(playerFleets, field.value) {
 			t.Fatalf("YA_PlayerFleets missing %s default state", field.name)
+		}
+	}
+}
+
+// TestPlayerPayloadsHaveNoFNameCollisions guards the bootstrap payloads against
+// case-insensitive duplicate field names within the same parent object. UE4
+// FName comparison is case insensitive, so any two sibling fields whose
+// lowercase form is identical collide in the client's parsed object name
+// table. When the colliding fields carry different values, the second field
+// overwrites the first; this is exactly how "FlagShipID" (ship id) used to be
+// clobbered by "flagshipID" (loadout id) and make the client report
+// "Invalid fleet data, fleet array is empty" while loading the hangar.
+func TestPlayerPayloadsHaveNoFNameCollisions(t *testing.T) {
+	const pid = defaultMmogPlayerPID
+	payloads := map[string][]byte{
+		"YA_PlayerFleets":           buildMmogPlayerFleetsPayload(pid),
+		"YA_PlayerGet":              buildMmogPlayerGetPayload(pid),
+		"YA_RefreshPlayerProfile":   buildMmogPlayerDataPayload("YA_RefreshPlayerProfile", pid),
+		"YA_RequestStaticFleetData": buildMmogStaticFleetDataPayload(),
+	}
+	for name, payload := range payloads {
+		assertMmogPayloadHasNoSiblingFNameCollisions(t, name, payload)
+	}
+}
+
+// assertMmogPayloadHasNoSiblingFNameCollisions walks the binary MMOG payload
+// and fails the test when any object/array contains two children with the same
+// case-insensitive FName but different original cases (which means the second
+// would silently overwrite the first in the client's name table).
+func assertMmogPayloadHasNoSiblingFNameCollisions(t *testing.T, payloadName string, payload []byte) {
+	t.Helper()
+	// Stack of per-scope "seen" maps. seen[depth][lowercase-name] = first-seen
+	// original case. Index 0 is the implicit root scope.
+	seenStack := []map[string]string{{}}
+	idx := 0
+	for idx < len(payload) {
+		// Each field starts with: <name_len><name?><type><type-data>...
+		if idx+1 > len(payload) {
+			return
+		}
+		nameLen := int(payload[idx])
+		idx++
+		fieldName := ""
+		if nameLen > 0 {
+			if idx+nameLen > len(payload) {
+				return
+			}
+			fieldName = string(payload[idx : idx+nameLen])
+			idx += nameLen
+		}
+		if idx >= len(payload) {
+			return
+		}
+		typeByte := payload[idx]
+		idx++
+
+		// End-marker fields close the current scope and are unnamed; they have
+		// a 4-byte start offset payload, no children-name-table entry.
+		if typeByte == 0x0e {
+			idx += 4
+			if len(seenStack) > 1 {
+				seenStack = seenStack[:len(seenStack)-1]
+			}
+			continue
+		}
+
+		// Record the field name in the current scope's seen map, if it has a
+		// name. Unnamed array entries (nameLen == 0) don't participate in name
+		// lookups.
+		if fieldName != "" {
+			scope := seenStack[len(seenStack)-1]
+			lower := strings.ToLower(fieldName)
+			if existing, ok := scope[lower]; ok && existing != fieldName {
+				t.Fatalf("%s contains FName-colliding sibling fields %q and %q (both lowercase to %q)",
+					payloadName, existing, fieldName, lower)
+			}
+			scope[lower] = fieldName
+		}
+
+		switch typeByte {
+		case 0x09: // string
+			if idx+4 > len(payload) {
+				return
+			}
+			strLen := int(binary.LittleEndian.Uint32(payload[idx : idx+4]))
+			idx += 4 + strLen
+		case 0x56: // int32
+			idx += 4
+		case 0x05: // bool
+			idx++
+		case 0x0c, 0x0d: // object / array - opens a new scope
+			idx += 4 // skip 4-byte placeholder
+			seenStack = append(seenStack, map[string]string{})
+		default:
+			// Unknown type: bail out rather than misalign the walk.
+			return
 		}
 	}
 }
