@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"github.com/dreadnought-ps/mmogbrain/db"
 	"github.com/dreadnought-ps/mmogbrain/handlers"
 	"github.com/dreadnought-ps/mmogbrain/matchmaker"
+	"github.com/dreadnought-ps/mmogbrain/protocol"
 	"github.com/dreadnought-ps/shared/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
@@ -78,6 +80,9 @@ func main() {
 	auth.HandleFunc("/match/{id}", h.GetMatch).Methods(http.MethodGet)
 	auth.HandleFunc("/chat", h.ChatSend).Methods(http.MethodPost)
 	auth.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
+	internal := r.PathPrefix("/internal").Subrouter()
+	internal.Use(internalKeyMiddleware(getenv("INTERNAL_API_KEY", getenv("ADMIN_KEY", "changeme-admin-key"))))
+	internal.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -148,14 +153,14 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 			}
 			tokenStr := auth[7:]
 			type claims struct {
-				UserID   string `json:"sub"`
+				UserID   string `json:"user_id"`
 				Username string `json:"username"`
 				jwt.RegisteredClaims
 			}
 			c := &claims{}
 			token, err := jwt.ParseWithClaims(tokenStr, c, func(t *jwt.Token) (interface{}, error) {
 				return secret, nil
-			})
+			}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(protocol.GatewayJWTIssuer), jwt.WithLeeway(time.Minute))
 			if err != nil || !token.Valid {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
@@ -170,6 +175,13 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 			if !hasAud {
 				http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
 				return
+			}
+			if c.RegisteredClaims.Issuer != protocol.GatewayJWTIssuer {
+				http.Error(w, `{"error":"invalid issuer"}`, http.StatusUnauthorized)
+				return
+			}
+			if c.UserID == "" {
+				c.UserID = c.Subject
 			}
 			ctx := context.WithValue(r.Context(), middleware.UserIDKey, c.UserID)
 			ctx = context.WithValue(ctx, middleware.UsernameKey, c.Username)
@@ -193,6 +205,19 @@ func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {
 				fieldStatus: rw.status,
 				"latency":   time.Since(start).Milliseconds(),
 			}).Info("request")
+		})
+	}
+}
+
+func internalKeyMiddleware(key string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("X-Internal-Key")
+			if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

@@ -3,38 +3,134 @@ package protocol
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func ExtractPlayerPID(payload []byte, defaultPID string) string {
+const GatewayJWTIssuer = "Dreadnought-Revival-project"
+
+func ExtractPlayerPID(payload []byte, defaultPID string, secret []byte) string {
 	ticket := ExtractStringField(payload, "Ticket")
 	if ticket == "" {
 		return defaultPID
 	}
 
-	if pid := extractPlayerIDFromJWT(ticket); pid != "" {
+	if pid, err := ExtractVerifiedPlayerPIDFromJWT(ticket, secret, "launcher", "dreadnought"); err == nil && pid != "" {
 		return pid
+	}
+	if looksLikeJWT(ticket) {
+		return defaultPID
 	}
 
 	sum := md5.Sum([]byte(ticket))
 	return hex.EncodeToString(sum[:])
 }
 
-func extractPlayerIDFromJWT(token string) string {
+func ExtractVerifiedPlayerPIDFromJWT(token string, secret []byte, audiences ...string) (string, error) {
+	claims, err := VerifiedJWTClaims(token, secret, audiences...)
+	if err != nil {
+		return "", err
+	}
+	pid := GatewayPlayerDataReadyKey(GatewayClaimsUserID(claims))
+	if pid == "" {
+		return "", fmt.Errorf("JWT missing normalized player identity")
+	}
+	return pid, nil
+}
+
+func VerifiedJWTClaims(token string, secret []byte, audiences ...string) (jwt.MapClaims, error) {
 	if strings.TrimSpace(token) == "" {
-		return ""
+		return nil, fmt.Errorf("empty JWT")
+	}
+	if len(secret) == 0 {
+		return nil, fmt.Errorf("empty JWT secret")
 	}
 
 	claims := jwt.MapClaims{}
-	parser := jwt.NewParser()
-	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
-		return ""
+	parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
+		return secret, nil
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithLeeway(time.Minute))
+	if err != nil || !parsed.Valid {
+		if err == nil {
+			err = fmt.Errorf("invalid JWT")
+		}
+		return nil, err
+	}
+	if !claimsHasIssuer(claims, GatewayJWTIssuer) {
+		return nil, fmt.Errorf("invalid issuer")
+	}
+	if !claimsHasString(claims, "realm", "dreadnought.pc-us") {
+		return nil, fmt.Errorf("invalid realm")
+	}
+	if len(audiences) > 0 && !claimsHasAudience(claims, audiences...) {
+		return nil, fmt.Errorf("invalid audience")
+	}
+	return claims, nil
+}
+
+func claimsHasIssuer(claims jwt.MapClaims, issuer string) bool {
+	if value, _ := claims["iss"].(string); value == issuer {
+		return true
+	}
+	if value, _ := claims["Issuer"].(string); value == issuer {
+		return true
+	}
+	return false
+}
+
+func claimsHasString(claims jwt.MapClaims, key string, want string) bool {
+	if value, _ := claims[key].(string); value == want {
+		return true
+	}
+	if key == "realm" {
+		value, _ := claims["Realm"].(string)
+		return value == want
+	}
+	if key == "iss" {
+		value, _ := claims["Issuer"].(string)
+		return value == want
+	}
+	return false
+}
+
+func looksLikeJWT(value string) bool {
+	return strings.Count(value, ".") == 2
+}
+
+func claimsHasAudience(claims jwt.MapClaims, audiences ...string) bool {
+	allowed := map[string]struct{}{}
+	for _, audience := range audiences {
+		if strings.TrimSpace(audience) != "" {
+			allowed[audience] = struct{}{}
+		}
+	}
+	if len(allowed) == 0 {
+		return true
 	}
 
-	return GatewayPlayerDataReadyKey(GatewayClaimsUserID(claims))
+	switch aud := claims["aud"].(type) {
+	case string:
+		_, ok := allowed[aud]
+		return ok
+	case []string:
+		for _, value := range aud {
+			if _, ok := allowed[value]; ok {
+				return true
+			}
+		}
+	case []any:
+		for _, raw := range aud {
+			value, _ := raw.(string)
+			if _, ok := allowed[value]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func GatewayPlayerDataReadyKey(playerPID string) string {

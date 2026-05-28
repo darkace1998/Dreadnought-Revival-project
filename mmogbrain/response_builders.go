@@ -315,6 +315,8 @@ func buildMmogChatPayload(requestName string, playerPID string, payload []byte) 
 	b = protocol.AppendStringField(b, "channelName", channel)
 	b, stack = protocol.AppendArrayStart(b, stack, "Messages")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "messages")
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -1203,6 +1205,7 @@ func buildMmogAnalyticsBeginTransactionPayload(transactionID string) []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_AnalyticsBeginTransaction")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendStringField(b, "transactionId", transactionID)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -1220,19 +1223,80 @@ func buildMmogCheckReturnPayload() []byte {
 	return b
 }
 
-func buildMmogPlayersInformationPayload(playerPID string, _ []byte) []byte {
+func buildMmogShipBonusesPayload(requestName string, playerPID string, payload []byte) []byte {
+	shipID := protocol.FirstInt32Field(payload, 0, "shipID", "ShipID", "shipId")
+	if shipID == 0 {
+		shipID = mmogPlayerStateForPID(playerPID).activeFleet().flagshipShipID
+	}
+
 	var b []byte
 	var stack []int
-	pid := normalizedPlayerStatePID(playerPID)
-	state := mmogPlayerStateForPID(pid)
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendInt32Field(b, "shipID", shipID)
+	b, stack = protocol.AppendArrayStart(b, stack, "ShipBonuses")
+	b, stack = appendMmogShipBonusEntry(b, stack, "Health", 0)
+	b, stack = appendMmogShipBonusEntry(b, stack, "Damage", 0)
+	b, stack = appendMmogShipBonusEntry(b, stack, "Speed", 0)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "shipBonuses")
+	b, stack = appendMmogShipBonusEntry(b, stack, "Health", 0)
+	b, stack = appendMmogShipBonusEntry(b, stack, "Damage", 0)
+	b, stack = appendMmogShipBonusEntry(b, stack, "Speed", 0)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func appendMmogShipBonusEntry(b []byte, stack []int, name string, value int32) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "Name", name)
+	b = protocol.AppendStringField(b, "name", name)
+	b = protocol.AppendInt32Field(b, "Value", value)
+	b = protocol.AppendInt32Field(b, "value", value)
+	b = protocol.AppendBoolField(b, "IsPercent", false)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+func buildMmogPlayersInformationPayload(playerPID string, payload []byte) []byte {
+	var b []byte
+	var stack []int
+	playerIDs := requestedMmogPlayerInfoIDs(playerPID, payload)
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayersInformation")
 	b = protocol.AppendStringField(b, "result", "ok")
 	b, stack = protocol.AppendArrayStart(b, stack, "infos")
-	b, stack = appendMmogPlayerDisplayInfoEntry(b, stack, pid, state)
+	for _, pid := range playerIDs {
+		state := mmogPlayerStateForPID(pid)
+		b, stack = appendMmogPlayerDisplayInfoEntry(b, stack, pid, state)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+func requestedMmogPlayerInfoIDs(playerPID string, payload []byte) []string {
+	ids := protocol.ExtractStringFields(payload, "ID", "PID", "PlayerID", "playerID", "")
+	if len(ids) == 0 {
+		ids = []string{playerPID}
+	}
+	requesterPID := normalizedPlayerStatePID(playerPID)
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		pid := protocol.NormalizePlayerPID(id)
+		if pid == "" {
+			pid = requesterPID
+		}
+		if _, ok := seen[pid]; ok {
+			continue
+		}
+		seen[pid] = struct{}{}
+		result = append(result, pid)
+	}
+	return result
 }
 
 func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, state mmogPlayerState) ([]byte, []int) {
@@ -1258,6 +1322,9 @@ var catalogPrices = map[int32]int32{
 func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
 	itemID := protocol.FirstInt32Field(payload, 0, "ItemID", "itemID", "itemId", "ItemId")
 	if itemID == 0 {
+		itemID = itemIDFromPurchaseOffer(protocol.FirstNonEmptyString(payload, "offer", "Offer", "sku", "Sku", "external_id", "ExternalID"))
+	}
+	if itemID == 0 {
 		return buildMmogErrorPayload(requestName, "missing ItemID for purchase")
 	}
 
@@ -1267,10 +1334,15 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return buildMmogErrorPayload(requestName, "database unavailable")
 	}
 
+	quantity := protocol.FirstInt32Field(payload, 1, "quantity", "Quantity")
+	if quantity <= 0 {
+		quantity = 1
+	}
 	price, ok := catalogPrices[itemID]
 	if !ok {
 		price = 1000
 	}
+	price *= quantity
 
 	var owned int
 	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`, pid, itemID).Scan(&owned)
@@ -1290,7 +1362,11 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return buildMmogErrorPayload(requestName, "currency deduction failed")
 	}
 	itemType := "ship"
-	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,'gp')`, pid, itemID, itemType, price); err != nil {
+	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
+	if currency == "" {
+		currency = "gp"
+	}
+	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`, pid, itemID, itemType, price, currency); err != nil {
 		return buildMmogErrorPayload(requestName, "purchase record failed")
 	}
 
@@ -1300,11 +1376,30 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "itemID", itemID)
+	b = protocol.AppendInt32Field(b, "quantity", quantity)
 	b = protocol.AppendInt32Field(b, "pricePaid", price)
+	b = protocol.AppendStringField(b, "currency", currency)
 	b = protocol.AppendInt32Field(b, "softCurrency", softCurrency-price)
 	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+func itemIDFromPurchaseOffer(offer string) int32 {
+	if offer == "" {
+		return 0
+	}
+	for _, ship := range allT1Ships() {
+		if offer == extractedMarketItemExternalID(ship.id, "") || offer == strconv.FormatInt(int64(ship.id), 10) {
+			return ship.id
+		}
+	}
+	for _, item := range starterOwnedInventorySeeds() {
+		if offer == item.externalID || offer == extractedMarketItemExternalID(item.itemID, "") || offer == strconv.FormatInt(int64(item.itemID), 10) {
+			return item.itemID
+		}
+	}
+	return 0
 }
 
 func buildMmogElitePurchasePayload(requestName string, playerPID string, payload []byte) []byte {

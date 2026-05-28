@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -426,15 +427,20 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 				winVal = 1
 			}
 			body, _ := json.Marshal(map[string]interface{}{
-				"user_id":  userID,
-				"xp":       xp,
-				"kills":    kills,
-				"deaths":   deaths,
-				"wins":     winVal,
-				"match_xp": xp,
+				"user_id":   userID,
+				"xp":        xp,
+				"kills":     kills,
+				"deaths":    deaths,
+				"wins":      winVal,
+				"match_xp":  xp,
 				"game_mode": gameMode,
 			})
-			resp, callErr := http.Post("http://127.0.0.1:8083/mmog/progression", "application/json", bytes.NewReader(body))
+			req, reqErr := newMmogProgressionRequest(body)
+			if reqErr != nil {
+				h.Log.WithError(reqErr).WithField("user_id", userID).Warn("post match: build mmog progression request failed")
+				return
+			}
+			resp, callErr := http.DefaultClient.Do(req)
 			if callErr != nil {
 				h.Log.WithError(callErr).WithField("user_id", userID).Warn("post match: mmog progression call failed")
 				return
@@ -455,16 +461,34 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api", "database": dbOK})
 }
 
+func newMmogProgressionRequest(body []byte) (*http.Request, error) {
+	internalKey := getenv("INTERNAL_API_KEY", getenv("ADMIN_KEY", "changeme-admin-key"))
+	req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:8083/internal/progression", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", internalKey)
+	return req, nil
+}
+
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 // ServerStatus handles GET /v2/dreadnought/server/status
 func (h *Handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
 	var playersOnline, matchesActive int
 	_ = h.DB.QueryRow(`SELECT COUNT(*) FROM player_stats WHERE matches_played > 0`).Scan(&playersOnline)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		fieldStatus:      "ok",
-		"players_online":  playersOnline,
-		"matches_active":  matchesActive,
-		"server_load":     "low",
-		"maintenance":     false,
+		"players_online": playersOnline,
+		"matches_active": matchesActive,
+		"server_load":    "low",
+		"maintenance":    false,
 	})
 }
 
@@ -518,7 +542,7 @@ func (h *Handler) XPConvert(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		fieldStatus:   "ok",
+		fieldStatus:    "ok",
 		"converted_xp": req.Amount / 2,
 		"free_xp":      req.Amount / 2,
 	})

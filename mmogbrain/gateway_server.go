@@ -134,7 +134,7 @@ func makeGatewayHandler(log *logrus.Logger, secret []byte, fn func(w http.Respon
 
 		// Session token: "Session {uuid}" — look up in our in-memory session store.
 		if strings.HasPrefix(authHdr, "Session ") {
-			sessionID := strings.TrimPrefix(authHdr, "Session ")
+			sessionID := parseGatewaySessionID(authHdr)
 			sessionsMu.Lock()
 			sess, ok := sessions[sessionID]
 			if ok && time.Since(sess.createdAt) > gatewaySessionTTL {
@@ -162,23 +162,22 @@ func makeGatewayHandler(log *logrus.Logger, secret []byte, fn func(w http.Respon
 			http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
 			return
 		}
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-			return secret, nil
-		}, jwt.WithValidMethods([]string{"HS256"}))
-		if err != nil || !token.Valid {
+		claims, err := protocol.VerifiedJWTClaims(tokenStr, secret, "launcher", "dreadnought")
+		if err != nil {
 			log.WithError(err).Warn("gateway: invalid JWT")
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
 		}
-		claims, _ := token.Claims.(jwt.MapClaims)
-		aud, _ := claims["aud"].(string)
-		if aud != "launcher" && aud != "dreadnought" {
-			log.Warn("gateway: invalid audience")
-			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
-			return
-		}
 		fn(w, r, claims)
 	}
+}
+
+func parseGatewaySessionID(authHdr string) string {
+	sessionID := strings.TrimSpace(strings.TrimPrefix(authHdr, "Session "))
+	if idx := strings.Index(sessionID, ","); idx >= 0 {
+		sessionID = sessionID[:idx]
+	}
+	return strings.TrimSpace(sessionID)
 }
 
 // handleGWLogin handles POST /api/v1/authentication/login.
@@ -268,7 +267,7 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 	authHdr := r.Header.Get("Authorization")
 	sessionID := ""
 	if strings.HasPrefix(authHdr, "Session ") {
-		sessionID = strings.TrimPrefix(authHdr, "Session ")
+		sessionID = parseGatewaySessionID(authHdr)
 		sessionsMu.Lock()
 		if _, ok := sessions[sessionID]; !ok {
 			sessionID = ""

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 
@@ -14,6 +15,30 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
+
+func TestNewMmogProgressionRequestUsesInternalEndpointAndKey(t *testing.T) {
+	oldKey, hadKey := os.LookupEnv("INTERNAL_API_KEY")
+	t.Setenv("INTERNAL_API_KEY", "test-internal-key")
+	if !hadKey {
+		t.Cleanup(func() { _ = os.Unsetenv("INTERNAL_API_KEY") })
+	} else {
+		t.Cleanup(func() { _ = os.Setenv("INTERNAL_API_KEY", oldKey) })
+	}
+
+	req, err := newMmogProgressionRequest([]byte(`{"user_id":"user-1"}`))
+	if err != nil {
+		t.Fatalf("newMmogProgressionRequest: %v", err)
+	}
+	if got := req.URL.Path; got != "/internal/progression" {
+		t.Fatalf("path = %q, want /internal/progression", got)
+	}
+	if got := req.Header.Get("X-Internal-Key"); got != "test-internal-key" {
+		t.Fatalf("internal key = %q, want test-internal-key", got)
+	}
+	if got := req.Header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content type = %q, want application/json", got)
+	}
+}
 
 func TestGetInventoryPinsStarterIdentityListsToSharedConfig(t *testing.T) {
 	database, err := legacydb.Open(":memory:")

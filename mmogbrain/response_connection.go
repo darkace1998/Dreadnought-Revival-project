@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	var appDecoder *protocol.StreamCipher
 	var appEncoder *protocol.StreamCipher
 	var appPlainBuf []byte
+	var handshakeBuf []byte
 	state := &mmogConnState{playerPID: defaultMmogPlayerPID}
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -39,72 +41,96 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 				"text":   string(data),
 			}).Info("mmog: raw bytes received")
 
-			switch handshakeStage {
-			case 0:
-				if protocol.IsHandshakePacket(data) {
-					if len(data) >= 22 {
-						clientNonce = append([]byte(nil), data[6:22]...)
+			handshakeBuf = append(handshakeBuf, data...)
+
+			if handshakeStage < 2 {
+				for handshakeStage < 2 {
+					packet, remaining, ok := nextBufferedMmogPacket(handshakeBuf)
+					if !ok {
+						break
 					}
-					if writeErr := protocol.SendSeedResponse(conn, data); writeErr != nil {
-						log.WithError(writeErr).WithField("remote", remote).Warn("mmog: seed response failed")
-						return
+					switch handshakeStage {
+					case 0:
+						if !protocol.IsHandshakePacket(packet) {
+							log.WithField("remote", remote).Warn("mmog: unexpected packet before handshake")
+							return
+						}
+						if len(packet) >= 22 {
+							clientNonce = append([]byte(nil), packet[6:22]...)
+						}
+						if writeErr := protocol.SendSeedResponse(conn, packet); writeErr != nil {
+							log.WithError(writeErr).WithField("remote", remote).Warn("mmog: seed response failed")
+							return
+						}
+						log.WithField("remote", remote).Info("mmog: sent seed response")
+						handshakeBuf = remaining
+						handshakeStage = 1
+					case 1:
+						if !protocol.IsDigestPacket(packet) {
+							log.WithField("remote", remote).Warn("mmog: unexpected packet before digest")
+							return
+						}
+						if writeErr := protocol.SendConnectedPing(conn, packet); writeErr != nil {
+							log.WithError(writeErr).WithField("remote", remote).Warn("mmog: connected ping failed")
+							return
+						}
+						log.WithField("remote", remote).Info("mmog: sent connected ping")
+						if len(clientNonce) == 16 {
+							key := protocol.DeriveSessionKey(clientNonce)
+							appDecoder = protocol.NewStreamCipher(key, 5)
+							appEncoder = protocol.NewStreamCipher(key, 0)
+							log.WithFields(logrus.Fields{
+								"remote": remote,
+								"key":    hex.EncodeToString(key[:]),
+							}).Info("mmog: initialized application decryptor")
+						} else {
+							log.WithField("remote", remote).Warn("mmog: client nonce too short, cipher not initialized")
+						}
+						handshakeBuf = remaining
+						handshakeStage = 2
 					}
-					log.WithField("remote", remote).Info("mmog: sent seed response")
-					handshakeStage = 1
+					if len(handshakeBuf) == 0 {
+						break
+					}
 				}
-			case 1:
-				if protocol.IsDigestPacket(data) {
-					if writeErr := protocol.SendConnectedPing(conn, data); writeErr != nil {
-						log.WithError(writeErr).WithField("remote", remote).Warn("mmog: connected ping failed")
-						return
-					}
-					log.WithField("remote", remote).Info("mmog: sent connected ping")
-					if len(clientNonce) == 16 {
-						key := protocol.DeriveSessionKey(clientNonce)
-						appDecoder = protocol.NewStreamCipher(key, 5)
-						appEncoder = protocol.NewStreamCipher(key, 0)
-						log.WithFields(logrus.Fields{
-							"remote": remote,
-							"key":    hex.EncodeToString(key[:]),
-						}).Info("mmog: initialized application decryptor")
-					} else {
-						log.WithField("remote", remote).Warn("mmog: client nonce too short, cipher not initialized")
-					}
-					handshakeStage = 2
-				}
-			case 2:
-				if frames, remaining := protocol.ParseAppFrames(data); len(frames) > 0 && len(remaining) == 0 {
-					log.WithFields(logrus.Fields{
-						"remote": remote,
-						"bytes":  len(data),
-						"hex":    hex.EncodeToString(data),
-						"text":   string(data),
-					}).Info("mmog: plaintext application bytes")
-					if err := processMmogAppFrames(log, conn, remote, frames, nil, false, state); err != nil {
-						return
-					}
+				if handshakeStage < 2 || len(handshakeBuf) == 0 {
 					continue
 				}
-				if appDecoder != nil {
-					plain := appDecoder.Decrypt(data)
-					appPlainBuf = append(appPlainBuf, plain...)
-					log.WithFields(logrus.Fields{
-						"remote": remote,
-						"bytes":  len(plain),
-						"hex":    hex.EncodeToString(plain),
-						"text":   string(plain),
-					}).Info("mmog: decrypted application bytes")
-					frames, remaining := protocol.ParseAppFrames(appPlainBuf)
-					appPlainBuf = remaining
-					if err := processMmogAppFrames(log, conn, remote, frames, appEncoder, true, state); err != nil {
-						return
-					}
-				} else {
-					log.WithFields(logrus.Fields{
-						"remote": remote,
-						"bytes":  len(data),
-					}).Warn("mmog: encrypted frames received but cipher is nil, dropping")
+			}
+
+			data = handshakeBuf
+			handshakeBuf = nil
+			if frames, remaining := protocol.ParseAppFrames(data); len(frames) > 0 && len(remaining) == 0 {
+				log.WithFields(logrus.Fields{
+					"remote": remote,
+					"bytes":  len(data),
+					"hex":    hex.EncodeToString(data),
+					"text":   string(data),
+				}).Info("mmog: plaintext application bytes")
+				if err := processMmogAppFrames(log, conn, remote, frames, nil, false, state); err != nil {
+					return
 				}
+				continue
+			}
+			if appDecoder != nil {
+				plain := appDecoder.Decrypt(data)
+				appPlainBuf = append(appPlainBuf, plain...)
+				log.WithFields(logrus.Fields{
+					"remote": remote,
+					"bytes":  len(plain),
+					"hex":    hex.EncodeToString(plain),
+					"text":   string(plain),
+				}).Info("mmog: decrypted application bytes")
+				frames, remaining := protocol.ParseAppFrames(appPlainBuf)
+				appPlainBuf = remaining
+				if err := processMmogAppFrames(log, conn, remote, frames, appEncoder, true, state); err != nil {
+					return
+				}
+			} else {
+				log.WithFields(logrus.Fields{
+					"remote": remote,
+					"bytes":  len(data),
+				}).Warn("mmog: encrypted frames received but cipher is nil, dropping")
 			}
 		}
 		if err != nil {
@@ -121,15 +147,30 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	}
 }
 
+func nextBufferedMmogPacket(data []byte) ([]byte, []byte, bool) {
+	if len(data) < 6 || data[0] != 0x67 || data[1] != 0x50 {
+		return nil, data, false
+	}
+	size := int(binary.LittleEndian.Uint16(data[2:4]))
+	if size < 6 || len(data) < size {
+		return nil, data, false
+	}
+	return data[:size], data[size:], true
+}
+
 type mmogConnState struct {
 	loginResponseSent        bool
 	playerGetResponded       bool
-	pendingPlayerPurchases   *protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
-	pendingDailyContracts    *protocol.AppFrame // delayed until YA_PlayerGet avoids early quest-cycle recursion
+	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
+	pendingDailyContracts    []protocol.AppFrame // delayed until YA_PlayerGet avoids early quest-cycle recursion
 	staticFleetDataReceived  bool
 	fleetEligibilityReceived bool
 	playerFleetsReceived     bool
 	playerPID                string
+}
+
+func mmogJWTSecret() []byte {
+	return []byte(getenv("JWT_SECRET", "changeme-dreadnought-jwt-secret"))
 }
 
 func syntheticRequestID(tag byte) [16]byte {
@@ -143,20 +184,24 @@ func syntheticRequestID(tag byte) [16]byte {
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
 	state.playerGetResponded = true
 	setGatewayPlayerDataReadyState(state.playerPID, true)
-	if state.pendingPlayerPurchases != nil {
-		pp := state.pendingPlayerPurchases
+	if len(state.pendingPlayerPurchases) > 0 {
+		pending := state.pendingPlayerPurchases
 		state.pendingPlayerPurchases = nil
-		ppResp := buildMmogRequestResponseFrame(pp.RequestID, pp.MsgType, "YA_GetPlayerPurchases", state.playerPID, pp.Payload)
-		if err := writeMmogAppResponse(log, conn, remote, pp.RequestID, "YA_GetPlayerPurchases", ppResp, appEncoder, encryptResponses, "pending purchases response failed", "sent pending YA_GetPlayerPurchases response"); err != nil {
-			return err
+		for _, pp := range pending {
+			ppResp := buildMmogRequestResponseFrame(pp.RequestID, pp.MsgType, "YA_GetPlayerPurchases", state.playerPID, pp.Payload)
+			if err := writeMmogAppResponse(log, conn, remote, pp.RequestID, "YA_GetPlayerPurchases", ppResp, appEncoder, encryptResponses, "pending purchases response failed", "sent pending YA_GetPlayerPurchases response"); err != nil {
+				return err
+			}
 		}
 	}
-	if state.pendingDailyContracts != nil {
-		dc := state.pendingDailyContracts
+	if len(state.pendingDailyContracts) > 0 {
+		pending := state.pendingDailyContracts
 		state.pendingDailyContracts = nil
-		dcResp := buildMmogRequestResponseFrame(dc.RequestID, dc.MsgType, "YA_GetDailyContractsData", state.playerPID, dc.Payload)
-		if err := writeMmogAppResponse(log, conn, remote, dc.RequestID, "YA_GetDailyContractsData", dcResp, appEncoder, encryptResponses, "pending daily contracts response failed", "sent pending YA_GetDailyContractsData response"); err != nil {
-			return err
+		for _, dc := range pending {
+			dcResp := buildMmogRequestResponseFrame(dc.RequestID, dc.MsgType, "YA_GetDailyContractsData", state.playerPID, dc.Payload)
+			if err := writeMmogAppResponse(log, conn, remote, dc.RequestID, "YA_GetDailyContractsData", dcResp, appEncoder, encryptResponses, "pending daily contracts response failed", "sent pending YA_GetDailyContractsData response"); err != nil {
+				return err
+			}
 		}
 	}
 	log.WithFields(logrus.Fields{
@@ -181,7 +226,7 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		}).Info("mmog: application frame")
 
 		if !state.loginResponseSent && requestName == "YA_UserLogin" {
-			state.playerPID = protocol.ExtractPlayerPID(frame.Payload, defaultMmogPlayerPID)
+			state.playerPID = protocol.ExtractPlayerPID(frame.Payload, defaultMmogPlayerPID, mmogJWTSecret())
 			setGatewayPlayerDataReadyState(state.playerPID, false)
 			log.WithFields(logrus.Fields{
 				"remote": remote,
@@ -209,8 +254,7 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				state.staticFleetDataReceived = true
 			}
 			if requestName == "YA_GetPlayerPurchases" && !state.playerGetResponded {
-				saved := frame
-				state.pendingPlayerPurchases = &saved
+				state.pendingPlayerPurchases = append(state.pendingPlayerPurchases, frame)
 				log.WithField("remote", remote).Info("mmog: delaying YA_GetPlayerPurchases response until YA_PlayerGet is answered")
 				continue
 			}
@@ -220,8 +264,7 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if requestName == "YA_GetDailyContractsData" && !state.playerGetResponded {
 				// The quest cycle needs this response eventually, but answering it
 				// before YA_PlayerGet can recurse through OnBackendDataAvailable.
-				saved := frame
-				state.pendingDailyContracts = &saved
+				state.pendingDailyContracts = append(state.pendingDailyContracts, frame)
 				log.WithField("remote", remote).Info("mmog: delaying YA_GetDailyContractsData response until YA_PlayerGet is answered")
 				continue
 			}

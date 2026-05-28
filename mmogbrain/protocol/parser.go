@@ -6,14 +6,32 @@ import (
 )
 
 func ExtractStringField(payload []byte, target string) string {
+	fields := ExtractStringFields(payload, target)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func ExtractStringFields(payload []byte, targets ...string) []string {
+	if len(targets) == 0 {
+		return nil
+	}
+	targetSet := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		targetSet[target] = struct{}{}
+	}
+	var values []string
+	extractStringFields(payload, targetSet, &values)
+	return values
+}
+
+func extractStringFields(payload []byte, targets map[string]struct{}, values *[]string) bool {
 	for i := 0; i < len(payload); {
 		nameLen := int(payload[i])
 		i++
-		if nameLen == 0 {
-			break
-		}
 		if i+nameLen+1 > len(payload) {
-			return ""
+			return false
 		}
 		name := string(payload[i : i+nameLen])
 		i += nameLen
@@ -22,50 +40,56 @@ func ExtractStringField(payload []byte, target string) string {
 		switch fieldType {
 		case 0x09:
 			if i+4 > len(payload) {
-				return ""
+				return false
 			}
 			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
 			i += 4
 			if valueLen < 0 || i+valueLen > len(payload) {
-				return ""
+				return false
 			}
 			value := string(payload[i : i+valueLen])
 			i += valueLen
-			if name == target {
-				return value
+			if _, ok := targets[name]; ok && (name != "" || strings.TrimSpace(value) != "") {
+				*values = append(*values, value)
 			}
 		case 0x05:
 			if i >= len(payload) {
-				return ""
+				return false
 			}
 			i++
 		case 0x56:
 			if i+4 > len(payload) {
-				return ""
+				return false
 			}
 			i += 4
 		case 0x0c, 0x0d:
 			if i+4 > len(payload) {
-				return ""
+				return false
 			}
 			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
 			if objectLen <= 0 || i+objectLen > len(payload) {
-				return ""
-			}
-			if name == target {
-				return ""
+				return false
 			}
 			nestedStart := i + 4
 			nestedEnd := i + objectLen
-			if value := ExtractStringField(payload[nestedStart:nestedEnd], target); value != "" {
-				return value
+			if !extractStringFields(payload[nestedStart:nestedEnd], targets, values) {
+				return false
 			}
 			i += objectLen
+		case 0x0e:
+			if nameLen != 0 || i+4 > len(payload) {
+				return false
+			}
+			start := binary.LittleEndian.Uint32(payload[i : i+4])
+			i += 4
+			if start == 0 {
+				return true
+			}
 		default:
-			return ""
+			return false
 		}
 	}
-	return ""
+	return true
 }
 
 func ExtractInt32Field(payload []byte, target string) (int32, bool) {

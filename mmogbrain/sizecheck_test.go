@@ -32,7 +32,7 @@ var targetSizes = map[string]int{
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,
 	"YA_CheckReturn":               134,
-	"YA_AnalyticsBeginTransaction": 96,
+	"YA_AnalyticsBeginTransaction": 124,
 	"YA_AnalyticsEvent":            85,
 	"YA_SaveCtAData":               82,
 	"YA_GetPlayerStatsCounterData": 338,

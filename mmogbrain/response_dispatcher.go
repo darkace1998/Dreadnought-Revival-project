@@ -83,9 +83,10 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	// --- Fleet/Loadout Modifications ---
 	case "YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
 		"YA_ChargeFleet", "YA_RepairFleet", "YA_FleetUpdate",
-		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance",
-		"YA_GetShipBonuses":
+		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance":
 		return buildMmogRequestSuccessPayload(requestName)
+	case "YA_GetShipBonuses":
+		return buildMmogShipBonusesPayload(requestName, playerPID, payload)
 	case "YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
 		return buildMmogRequestSuccessPayload(requestName)
 
@@ -102,7 +103,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Analytics ---
-	case "YA_AnalyticsEvent", "YA_SaveCtAData", "YA_IncrementPlayerStatsCounter":
+	case "YA_AnalyticsEvent", "YA_SaveCtAData", "YA_IncrementPlayerStatsCounter",
+		"YA_AnalyticsEndTransaction", "YA_AnalyticsUpdateTransaction":
 		return buildMmogRequestSuccessPayload(requestName)
 	case "YA_AnalyticsBeginTransaction":
 		transactionId := protocol.ExtractStringField(payload, "transactionId")
@@ -123,6 +125,11 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	// --- Connection ---
 	case "YA_Connect":
 		return buildMmogConnectPayload(playerPID)
+	case "YA_PlayerStateInHangar", "YA_UserLogout", "YA_ReconnectJoinChannels":
+		return buildMmogRequestSuccessPayload(requestName)
+	case "YA_UnlockItem", "YA_ClaimItem", "YA_AddItems", "YA_RemoveItems",
+		"YA_ContractReplace", "YA_ContractRemove":
+		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Server→Client Notifications ---
 	case "YA_UserOnline":

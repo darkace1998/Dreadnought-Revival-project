@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/dreadnought-ps/mmogbrain/protocol"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -30,9 +29,9 @@ func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFil
 			log.WithError(loadErr).Fatal("firmament: load TLS cert/key")
 		}
 		tlsCfg = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS10,
-			MaxVersion:   tls.VersionTLS12,
+			Certificates:           []tls.Certificate{cert},
+			MinVersion:             tls.VersionTLS10,
+			MaxVersion:             tls.VersionTLS12,
 			SessionTicketsDisabled: true,
 			CipherSuites: []uint16{
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -270,14 +269,11 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 		log.WithField("remote", remote).Warn("firmament: no JWT token provided, rejecting connection")
 		return
 	}
-	token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
-		return secret, nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
-	if err != nil || !token.Valid {
+	claims, err := protocol.VerifiedJWTClaims(jwtToken, secret, "dreadnought", "launcher")
+	if err != nil {
 		log.WithError(err).WithField("remote", remote).Warn("firmament: invalid JWT, rejecting connection")
 		return
 	}
-	claims, _ := token.Claims.(jwt.MapClaims)
 	playerID := protocol.GatewayPlayerDataReadyKey(protocol.GatewayClaimsUserID(claims))
 	if playerID == "" {
 		log.WithField("remote", remote).Warn("firmament: auth payload missing player identity; sending success without MMOG readiness gate")

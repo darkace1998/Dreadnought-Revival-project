@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -228,7 +230,7 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 
 func TestExtractMmogPlayerPIDFromLoginTicket(t *testing.T) {
 	const userID = "b7c42c0f-3ac6-48a1-82cc-fd35eb24f128"
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": userID})
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": userID, "iss": protocol.GatewayJWTIssuer, "aud": "dreadnought", "realm": "dreadnought.pc-us", "exp": time.Now().Add(time.Hour).Unix()})
 	ticket, err := token.SignedString([]byte("test-secret"))
 	if err != nil {
 		t.Fatalf("sign test token: %v", err)
@@ -238,10 +240,28 @@ func TestExtractMmogPlayerPIDFromLoginTicket(t *testing.T) {
 	payload = protocol.AppendStringField(payload, "Ticket", ticket)
 	payload = append(payload, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x00)
 
-	got := protocol.ExtractPlayerPID(payload, defaultMmogPlayerPID)
+	got := protocol.ExtractPlayerPID(payload, defaultMmogPlayerPID, []byte("test-secret"))
 	want := "b7c42c0f3ac648a182ccfd35eb24f128"
 	if got != want {
 		t.Fatalf("player PID = %q, want %q", got, want)
+	}
+}
+
+func TestExtractMmogPlayerPIDRejectsUnsignedJWT(t *testing.T) {
+	const userID = "b7c42c0f-3ac6-48a1-82cc-fd35eb24f128"
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": userID, "iss": protocol.GatewayJWTIssuer, "aud": "dreadnought", "realm": "dreadnought.pc-us", "exp": time.Now().Add(time.Hour).Unix()})
+	ticket, err := token.SignedString([]byte("wrong-secret"))
+	if err != nil {
+		t.Fatalf("sign test token: %v", err)
+	}
+
+	payload := protocol.AppendStringField(nil, "RT", "YA_UserLogin")
+	payload = protocol.AppendStringField(payload, "Ticket", ticket)
+	payload = append(payload, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x00)
+
+	got := protocol.ExtractPlayerPID(payload, defaultMmogPlayerPID, []byte("test-secret"))
+	if got != defaultMmogPlayerPID {
+		t.Fatalf("invalid JWT player PID = %q, want default", got)
 	}
 }
 
@@ -482,6 +502,26 @@ func TestPlayersInformationPayloadUsesDisplayInfoShape(t *testing.T) {
 	if bytes.Contains(infos, appendFieldMarker("shipId", 0x56)) ||
 		bytes.Contains(infos, appendFieldMarker("ShipID", 0x56)) {
 		t.Fatal("YA_GetPlayersInformation infos payload should not inject shipId fields")
+	}
+}
+
+func TestPlayersInformationPayloadUsesRequestedPlayerIDs(t *testing.T) {
+	const requesterPID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const requestedPID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	request := protocol.AppendStringField(nil, "RT", "YA_GetPlayersInformation")
+	request, stack := protocol.AppendArrayStart(request, nil, "PIDs")
+	request = protocol.AppendUnnamedStringField(request, requestedPID)
+	request, _ = protocol.AppendObjectEnd(request, stack)
+	request = protocol.AppendRootEnd(request)
+
+	payload := buildMmogPlayersInformationPayload(requesterPID, request)
+	infos := extractNamedMmogArray(t, payload, "infos")
+
+	if !bytes.Contains(infos, protocol.AppendStringField(nil, "ID", requestedPID)) {
+		t.Fatal("YA_GetPlayersInformation missing requested player ID")
+	}
+	if bytes.Contains(infos, protocol.AppendStringField(nil, "ID", requesterPID)) {
+		t.Fatal("YA_GetPlayersInformation should not replace requested player IDs with requester PID")
 	}
 }
 
@@ -908,6 +948,38 @@ func TestGameConfigDataUsesClientGameModeRows(t *testing.T) {
 	}
 }
 
+func TestChatPayloadIncludesLowercaseMessagesAlias(t *testing.T) {
+	payload := buildMmogChatPayload("YA_GlobalChat", defaultMmogPlayerPID, nil)
+	if !bytes.Contains(payload, appendFieldMarker("Messages", 0x0d)) {
+		t.Fatal("chat payload missing Messages array")
+	}
+	if !bytes.Contains(payload, appendFieldMarker("messages", 0x0d)) {
+		t.Fatal("chat payload missing lowercase messages array")
+	}
+}
+
+func TestAnalyticsBeginTransactionEchoesTransactionID(t *testing.T) {
+	payload := buildMmogAnalyticsBeginTransactionPayload("tx-123")
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "transactionId", "tx-123")) {
+		t.Fatal("YA_AnalyticsBeginTransaction did not echo transactionId")
+	}
+}
+
+func TestGetShipBonusesReturnsDataShape(t *testing.T) {
+	request := protocol.AppendInt32Field(nil, "shipID", extractedShipIDAthos)
+	payload := buildMmogRequestResponsePayload("YA_GetShipBonuses", defaultMmogPlayerPID, request)
+	result := extractNamedMmogObject(t, payload, "result")
+	if !bytes.Contains(result, appendFieldMarker("ShipBonuses", 0x0d)) {
+		t.Fatal("YA_GetShipBonuses missing ShipBonuses array")
+	}
+	if !bytes.Contains(result, appendFieldMarker("shipBonuses", 0x0d)) {
+		t.Fatal("YA_GetShipBonuses missing lowercase shipBonuses array")
+	}
+	if !bytes.Contains(result, protocol.AppendInt32Field(nil, "shipID", extractedShipIDAthos)) {
+		t.Fatal("YA_GetShipBonuses missing requested shipID")
+	}
+}
+
 func TestAliasResponsesEchoRequestRT(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const playerPID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
@@ -928,6 +1000,38 @@ func TestAliasResponsesEchoRequestRT(t *testing.T) {
 	elite := buildMmogRequestResponsePayload("YA_ActivateElite", playerPID, nil)
 	if !bytes.Contains(elite, protocol.AppendStringField(nil, "RT", "YA_ActivateElite")) {
 		t.Fatal("YA_ActivateElite response did not echo request RT")
+	}
+}
+
+func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, playerPID); err != nil {
+		t.Fatalf("seed currency: %v", err)
+	}
+	offer := extractedMarketItemExternalID(extractedShipIDValcour, "")
+	request := protocol.AppendStringField(nil, "offer", offer)
+	request = protocol.AppendInt32Field(request, "quantity", 1)
+	request = protocol.AppendStringField(request, "currency", "CR")
+	request = protocol.AppendStringField(request, "campaign", "")
+	request = protocol.AppendStringField(request, "priceId", "price_free")
+
+	purchase := buildMmogPurchasePayload("YA_PurchaseItem", playerPID, request)
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+		t.Fatalf("offer-shaped purchase did not succeed: %x", purchase)
+	}
+	if !bytes.Contains(purchase, protocol.AppendInt32Field(nil, "itemID", extractedShipIDValcour)) {
+		t.Fatal("offer-shaped purchase did not resolve offer to itemID")
+	}
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=? AND currency='CR'`, playerPID, extractedShipIDValcour).Scan(&count); err != nil {
+		t.Fatalf("count purchases: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("persisted purchases = %d, want 1", count)
 	}
 }
 
@@ -2057,7 +2161,7 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	if conn.Len() != 0 {
 		t.Fatalf("delayed purchases wrote %d bytes before YA_PlayerGet, want 0", conn.Len())
 	}
-	if state.pendingPlayerPurchases == nil {
+	if len(state.pendingPlayerPurchases) == 0 {
 		t.Fatal("YA_GetPlayerPurchases was not delayed before YA_PlayerGet")
 	}
 	if state.playerGetResponded {
@@ -2091,7 +2195,7 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	if frames[1].RequestID != purchasesRequestID {
 		t.Fatalf("YA_GetPlayerPurchases response id = %x, want %x", frames[1].RequestID, purchasesRequestID)
 	}
-	if state.pendingPlayerPurchases != nil {
+	if len(state.pendingPlayerPurchases) != 0 {
 		t.Fatal("PlayerGet did not clear pendingPlayerPurchases")
 	}
 	if !state.playerGetResponded {
@@ -2128,7 +2232,7 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 			if tc.wantFrames == 0 && conn.Len() != 0 {
 				t.Fatalf("%s wrote %d bytes before YA_PlayerGet, want delayed response", requestName, conn.Len())
 			}
-			if tc.wantDelayed && state.pendingDailyContracts == nil {
+			if tc.wantDelayed && len(state.pendingDailyContracts) == 0 {
 				t.Fatalf("%s was not delayed until YA_PlayerGet", requestName)
 			}
 			if tc.wantFrames == 0 {
@@ -2174,7 +2278,7 @@ func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
 	if conn.Len() != 0 {
 		t.Fatalf("delayed daily contracts wrote %d bytes before YA_PlayerGet, want 0", conn.Len())
 	}
-	if state.pendingDailyContracts == nil {
+	if len(state.pendingDailyContracts) == 0 {
 		t.Fatal("YA_GetDailyContractsData was not delayed before YA_PlayerGet")
 	}
 
@@ -2202,8 +2306,48 @@ func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
 	if frames[1].RequestID != dailyContractsRequestID {
 		t.Fatalf("YA_GetDailyContractsData response id = %x, want original %x", frames[1].RequestID, dailyContractsRequestID)
 	}
-	if state.pendingDailyContracts != nil {
+	if len(state.pendingDailyContracts) != 0 {
 		t.Fatal("PlayerGet did not clear pendingDailyContracts")
+	}
+}
+
+func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
+	conn := &captureConn{}
+	state := &mmogConnState{
+		playerPID:         defaultMmogPlayerPID,
+		loginResponseSent: true,
+	}
+	request := protocol.AppendStringField(nil, "RT", "YA_GetPlayerPurchases")
+	request = protocol.AppendRootEnd(request)
+	frames := []protocol.AppFrame{
+		{MsgType: 0x0320, RequestID: syntheticRequestID(0xe1), Payload: request},
+		{MsgType: 0x0320, RequestID: syntheticRequestID(0xe2), Payload: request},
+	}
+	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", frames, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames purchases: %v", err)
+	}
+	if got := len(state.pendingPlayerPurchases); got != 2 {
+		t.Fatalf("pending purchases = %d, want 2", got)
+	}
+
+	playerGet := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
+	playerGet = protocol.AppendRootEnd(playerGet)
+	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
+		MsgType:   0x0320,
+		RequestID: syntheticRequestID(0xe3),
+		Payload:   playerGet,
+	}}, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames PlayerGet: %v", err)
+	}
+	parsed, remaining := protocol.ParseAppFrames(conn.Bytes())
+	if len(remaining) != 0 {
+		t.Fatalf("unexpected remaining bytes after pending flush")
+	}
+	if len(parsed) != 3 {
+		t.Fatalf("flushed frame count = %d, want 3", len(parsed))
+	}
+	if parsed[1].RequestID != frames[0].RequestID || parsed[2].RequestID != frames[1].RequestID {
+		t.Fatal("pending purchases did not flush all original request IDs in order")
 	}
 }
 
@@ -2224,6 +2368,53 @@ func TestPlayerGetBootstrapDoesNotPushUnrequestedFleetData(t *testing.T) {
 	}
 	if !state.playerGetResponded {
 		t.Fatal("PlayerGet bootstrap should mark playerGetResponded")
+	}
+}
+
+func TestParseAppFramesPreservesSplitMagicByte(t *testing.T) {
+	reqID := syntheticRequestID(0xf1)
+	payload := protocol.AppendStringField(nil, "RT", "YA_PlayerStateInHangar")
+	frame := protocol.BuildResponseFrame(reqID, 0x0320, payload)
+	frames, remaining := protocol.ParseAppFrames(frame[:1])
+	if len(frames) != 0 {
+		t.Fatalf("split first byte parsed %d frames, want 0", len(frames))
+	}
+	if !bytes.Equal(remaining, frame[:1]) {
+		t.Fatalf("remaining split magic = %x, want %x", remaining, frame[:1])
+	}
+	frames, remaining = protocol.ParseAppFrames(append(remaining, frame[1:]...))
+	if len(remaining) != 0 {
+		t.Fatalf("full frame left %d remaining bytes", len(remaining))
+	}
+	if len(frames) != 1 {
+		t.Fatalf("full frame parsed %d frames, want 1", len(frames))
+	}
+	if frames[0].RequestID != reqID {
+		t.Fatal("parsed frame lost request ID")
+	}
+}
+
+func TestSafeNoopClientCallsReturnSuccess(t *testing.T) {
+	for _, name := range []string{
+		"YA_PlayerStateInHangar",
+		"YA_UserLogout",
+		"YA_UnlockItem",
+		"YA_ClaimItem",
+		"YA_AddItems",
+		"YA_RemoveItems",
+		"YA_ContractReplace",
+		"YA_ContractRemove",
+		"YA_AnalyticsEndTransaction",
+		"YA_AnalyticsUpdateTransaction",
+		"YA_ReconnectJoinChannels",
+	} {
+		payload := buildMmogRequestResponsePayload(name, defaultMmogPlayerPID, nil)
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", name)) {
+			t.Fatalf("%s response missing RT", name)
+		}
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+			t.Fatalf("%s response missing status ok", name)
+		}
 	}
 }
 
@@ -2267,7 +2458,7 @@ func TestFirmamentAuthSuccessDoesNotWaitForPlayerDataReady(t *testing.T) {
 		t.Fatalf("greeting status = %v, want connection_successful", got)
 	}
 
-	token := mustSignTestJWT(t, jwt.MapClaims{"user_id": userID})
+	token := mustSignTestJWT(t, jwt.MapClaims{"user_id": userID, "iss": protocol.GatewayJWTIssuer, "aud": "dreadnought", "realm": "dreadnought.pc-us", "exp": time.Now().Add(time.Hour).Unix()})
 	writeFirmamentTestMessage(t, clientConn, map[string]any{
 		"id":     "auth-1",
 		"method": "auth.refresh.redeem",
@@ -2373,5 +2564,67 @@ func TestFirmamentAuthSuccessDoesNotWaitForPlayerDataReady(t *testing.T) {
 	}
 	if got := result[fieldStatus]; got != "success" {
 		t.Fatalf("generic status = %v, want success", got)
+	}
+}
+
+func TestFirmamentRejectsInvalidAudience(t *testing.T) {
+	const userID = "b7c42c0f-3ac6-48a1-82cc-fd35eb24f128"
+	serverConn, clientConn := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		handleFirmamentConn(logrus.New(), serverConn, []byte("test-secret"))
+		close(done)
+	}()
+	t.Cleanup(func() {
+		_ = clientConn.Close()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("handleFirmamentConn did not exit after invalid audience test cleanup")
+		}
+	})
+
+	reader := bufio.NewReader(clientConn)
+	_ = readFirmamentTestMessage(t, clientConn, reader, time.Second)
+	token := mustSignTestJWT(t, jwt.MapClaims{"user_id": userID, "iss": protocol.GatewayJWTIssuer, "aud": "wrong", "realm": "dreadnought.pc-us", "exp": time.Now().Add(time.Hour).Unix()})
+	writeFirmamentTestMessage(t, clientConn, map[string]any{
+		"id":     "auth-1",
+		"method": "auth.refresh.redeem",
+		"params": map[string]any{"token": token},
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("firmament did not close after invalid audience")
+	}
+}
+
+func TestGatewayParsesSessionHeaderWithUsernameSuffix(t *testing.T) {
+	sessionsMu.Lock()
+	sessions = map[string]gatewaySession{"session-1": {UserID: "user-1", Username: "captain", createdAt: time.Now()}}
+	sessionsMu.Unlock()
+	t.Cleanup(func() {
+		sessionsMu.Lock()
+		sessions = make(map[string]gatewaySession)
+		sessionsMu.Unlock()
+	})
+
+	called := false
+	handler := makeGatewayHandler(logrus.New(), []byte("test-secret"), func(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
+		called = true
+		if got := claims["user_id"]; got != "user-1" {
+			t.Fatalf("user_id = %v, want user-1", got)
+		}
+		gwJSON(w, map[string]any{"ok": true})
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/session/touch", nil)
+	req.Header.Set("Authorization", "Session session-1, captain")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatal("gateway handler was not called")
 	}
 }

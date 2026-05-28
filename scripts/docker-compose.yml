@@ -31,6 +31,7 @@ services:
       - ADDR=:8082
       - DB_PATH=/data/legacy.db
       - JWT_SECRET=${JWT_SECRET:-changeme-dreadnought-jwt-secret}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme-admin-key}
     volumes:
       - ./data:/data
     ports:
@@ -54,6 +55,7 @@ services:
       - DB_PATH=/data/mmog.db
       - JWT_SECRET=${JWT_SECRET:-changeme-dreadnought-jwt-secret}
       - ADMIN_KEY=${ADMIN_KEY:-changeme-admin-key}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme-admin-key}
       - GAME_MGR_URL=http://game-manager:8085
       - PLAYERS_PER_MATCH=${PLAYERS_PER_MATCH:-10}
       - FIRMAMENT_ADDR=:48843

@@ -38,6 +38,9 @@ func ParseAppFrames(data []byte) ([]AppFrame, []byte) {
 		if data[0] != 0x67 || data[1] != 0x50 {
 			next := bytesIndexMagic(data[1:])
 			if next < 0 {
+				if data[len(data)-1] == 0x67 {
+					return frames, data[len(data)-1:]
+				}
 				return frames, nil
 			}
 			data = data[next+1:]
