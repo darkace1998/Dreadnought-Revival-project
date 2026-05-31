@@ -411,17 +411,15 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
 	for _, fleet := range fleets {
 		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "Items")
+	b, stack = protocol.AppendArrayStart(b, stack, "result")
 	for _, fleet := range fleets {
 		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
