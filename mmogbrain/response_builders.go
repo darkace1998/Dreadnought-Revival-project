@@ -369,11 +369,11 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// fleet validator drop every entry ("Invalid fleet data, fleet array is empty").
 	// Keep exactly one canonical field per logical attribute.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
 	b = protocol.AppendStringField(b, "FID", fleet.token)
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
-	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
 	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
@@ -411,15 +411,17 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
 	for _, fleet := range fleets {
 		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "result")
+	b, stack = protocol.AppendArrayStart(b, stack, "Items")
 	for _, fleet := range fleets {
 		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
 	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

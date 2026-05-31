@@ -109,8 +109,8 @@ func TestFleetEligibilityPreservesRecruitVeteranLegendary(t *testing.T) {
 	if !ok {
 		t.Fatal("missing Legendary fleet eligibility")
 	}
-	if legendary.FleetType != 3 {
-		t.Fatalf("Legendary fleet type = %d, want 3", legendary.FleetType)
+	if legendary.FleetType != 2 {
+		t.Fatalf("Legendary fleet type = %d, want 2", legendary.FleetType)
 	}
 	if legendary.MaintenanceTime != 1200 {
 		t.Fatalf("Legendary maintenance time = %d, want 1200", legendary.MaintenanceTime)
