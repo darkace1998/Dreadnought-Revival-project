@@ -11,6 +11,9 @@ SERVER_RUNNING.md
 *.log
 logs/
 
+# PID files
+*.pid
+
 # Environment files
 .env
 *.env

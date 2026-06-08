@@ -373,7 +373,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b = protocol.AppendStringField(b, "FID", fleet.token)
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
-	b = protocol.AppendStringField(b, "Name", strconv.Itoa(int(fleet.fleetType)))
+	b = protocol.AppendStringField(b, "Name", fleet.displayName)
 	b = protocol.AppendStringField(b, "DisplayName", fleet.displayName)
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
 	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
