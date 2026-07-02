@@ -8,6 +8,355 @@ import (
 	"testing"
 )
 
+func TestDataDirReturnsEnvVarWhenSet(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/custom/path"); err != nil {
+		t.Fatal(err)
+	}
+	if got := DataDir(); got != "/custom/path" {
+		t.Fatalf("DataDir() = %q, want %q", got, "/custom/path")
+	}
+}
+
+func TestDataDirReturnsDefaultWhenEnvVarEmpty(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := DataDir(); got != DefaultDataDir {
+		t.Fatalf("DataDir() = %q, want %q", got, DefaultDataDir)
+	}
+}
+
+func TestDataDirReturnsDefaultWhenEnvVarUnset(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Unsetenv("DATA_DIR"); err != nil {
+		t.Fatal(err)
+	}
+	if got := DataDir(); got != DefaultDataDir {
+		t.Fatalf("DataDir() = %q, want %q", got, DefaultDataDir)
+	}
+}
+
+func TestDatatablesDirJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirDatatables)
+	if got := DatatablesDir(); got != want {
+		t.Fatalf("DatatablesDir() = %q, want %q", got, want)
+	}
+}
+
+func TestAssetsDirJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirAssets)
+	if got := AssetsDir(); got != want {
+		t.Fatalf("AssetsDir() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadoutsDirJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirLoadouts)
+	if got := LoadoutsDir(); got != want {
+		t.Fatalf("LoadoutsDir() = %q, want %q", got, want)
+	}
+}
+
+func TestDataTablePathJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirDatatables, "DN_Weapons_OTS_DT.json")
+	if got := DataTablePath("DN_Weapons_OTS_DT.json"); got != want {
+		t.Fatalf("DataTablePath() = %q, want %q", got, want)
+	}
+}
+
+func TestDataTablePathHandlesSubdirectories(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirDatatables, "ShipFeats", "DN_Feats_Assault_OTS_DT.json")
+	if got := DataTablePath("ShipFeats/DN_Feats_Assault_OTS_DT.json"); got != want {
+		t.Fatalf("DataTablePath() = %q, want %q", got, want)
+	}
+}
+
+func TestAssetPathJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirAssets, "ItemIDTable.json")
+	if got := AssetPath("ItemIDTable.json"); got != want {
+		t.Fatalf("AssetPath() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadoutPathJoinsCorrectly(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/test/data"); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join("/test/data", SubdirLoadouts, "LoadoutDevelopmentTable.json")
+	if got := LoadoutPath("LoadoutDevelopmentTable.json"); got != want {
+		t.Fatalf("LoadoutPath() = %q, want %q", got, want)
+	}
+}
+
+func TestDataDirExistsReturnsTrueForExistingDir(t *testing.T) {
+	dir := t.TempDir()
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dir); err != nil {
+		t.Fatal(err)
+	}
+	if !DataDirExists() {
+		t.Fatal("DataDirExists() = false, want true for existing directory")
+	}
+}
+
+func TestDataDirExistsReturnsFalseForMissingDir(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", "/nonexistent/path/that/does/not/exist"); err != nil {
+		t.Fatal(err)
+	}
+	if DataDirExists() {
+		t.Fatal("DataDirExists() = true, want false for missing directory")
+	}
+}
+
+func TestDataDirExistsReturnsFalseForFile(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "notadir.txt")
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", filePath); err != nil {
+		t.Fatal(err)
+	}
+	if DataDirExists() {
+		t.Fatal("DataDirExists() = true, want false for file (not directory)")
+	}
+}
+
+func TestDataTableFileExistsReturnsTrueForExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := filepath.Join(datatablesDir, "test.json")
+	if err := os.WriteFile(filePath, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	if !DataTableFileExists("test.json") {
+		t.Fatal("DataTableFileExists() = false, want true for existing file")
+	}
+}
+
+func TestDataTableFileExistsReturnsFalseForMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	if DataTableFileExists("missing.json") {
+		t.Fatal("DataTableFileExists() = true, want false for missing file")
+	}
+}
+
+func TestDataTableFileExistsReturnsFalseForDirectory(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	subDir := filepath.Join(datatablesDir, "subdir")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	if DataTableFileExists("subdir") {
+		t.Fatal("DataTableFileExists() = true, want false for directory")
+	}
+}
+
+func TestLoadDataTableWithFallbackLoadsExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	content := `{"rows": {"Row1": {"m_val": 42}}, "row_count": 1}`
+	filePath := filepath.Join(datatablesDir, "test.json")
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	dt, err := LoadDataTableWithFallback("test.json")
+	if err != nil {
+		t.Fatalf("LoadDataTableWithFallback() error = %v", err)
+	}
+	if dt == nil {
+		t.Fatal("LoadDataTableWithFallback() returned nil DataTable")
+	}
+	if len(dt.Rows) != 1 {
+		t.Fatalf("len(Rows) = %d, want 1", len(dt.Rows))
+	}
+	row, ok := dt.GetRow("Row1")
+	if !ok {
+		t.Fatal("missing Row1")
+	}
+	if got := row.GetInt("m_val"); got != 42 {
+		t.Fatalf("m_val = %d, want 42", got)
+	}
+}
+
+func TestLoadDataTableWithFallbackReturnsErrorForMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDataTableWithFallback("missing.json")
+	if err == nil {
+		t.Fatal("LoadDataTableWithFallback() expected error for missing file")
+	}
+}
+
+func TestLoadDataTableWithFallbackReturnsErrorForInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables)
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := filepath.Join(datatablesDir, "bad.json")
+	if err := os.WriteFile(filePath, []byte("{invalid json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDataTableWithFallback("bad.json")
+	if err == nil {
+		t.Fatal("LoadDataTableWithFallback() expected error for invalid JSON")
+	}
+}
+
+func TestLoadDataTableWithFallbackHandlesSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	datatablesDir := filepath.Join(dataDir, SubdirDatatables, "ShipFeats")
+	if err := os.MkdirAll(datatablesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	content := `{"rows": {"Feat1": {"m_effect": "test"}}, "row_count": 1}`
+	filePath := filepath.Join(datatablesDir, "DN_Feats_Assault.json")
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+	dt, err := LoadDataTableWithFallback("ShipFeats/DN_Feats_Assault.json")
+	if err != nil {
+		t.Fatalf("LoadDataTableWithFallback() error = %v", err)
+	}
+	if dt == nil {
+		t.Fatal("LoadDataTableWithFallback() returned nil DataTable")
+	}
+	if len(dt.Rows) != 1 {
+		t.Fatalf("len(Rows) = %d, want 1", len(dt.Rows))
+	}
+}
+
 func TestLoadDataTableParsesValidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.json")

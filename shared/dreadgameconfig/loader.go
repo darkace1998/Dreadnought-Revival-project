@@ -4,8 +4,67 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
+
+const (
+	DefaultDataDir = "../data/"
+
+	SubdirDatatables = "datatables"
+	SubdirAssets     = "assets"
+	SubdirLoadouts   = "loadouts"
+)
+
+func DataDir() string {
+	if dir := os.Getenv("DATA_DIR"); dir != "" {
+		return dir
+	}
+	return DefaultDataDir
+}
+
+func DatatablesDir() string {
+	return filepath.Join(DataDir(), SubdirDatatables)
+}
+
+func AssetsDir() string {
+	return filepath.Join(DataDir(), SubdirAssets)
+}
+
+func LoadoutsDir() string {
+	return filepath.Join(DataDir(), SubdirLoadouts)
+}
+
+func DataTablePath(relativePath string) string {
+	return filepath.Join(DatatablesDir(), relativePath)
+}
+
+func AssetPath(relativePath string) string {
+	return filepath.Join(AssetsDir(), relativePath)
+}
+
+func LoadoutPath(relativePath string) string {
+	return filepath.Join(LoadoutsDir(), relativePath)
+}
+
+func DataDirExists() bool {
+	info, err := os.Stat(DataDir())
+	return err == nil && info.IsDir()
+}
+
+func DataTableFileExists(relativePath string) bool {
+	info, err := os.Stat(DataTablePath(relativePath))
+	return err == nil && !info.IsDir()
+}
+
+func LoadDataTableWithFallback(relativePath string) (*DataTable, error) {
+	path := DataTablePath(relativePath)
+	dt, err := LoadDataTable(path)
+	if err != nil {
+		return nil, fmt.Errorf("load datatable %s (fallback unavailable): %w", relativePath, err)
+	}
+	return dt, nil
+}
 
 type DataTable struct {
 	Rows     map[string]Row `json:"rows"`
