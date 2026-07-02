@@ -19,7 +19,7 @@
 ## Phase 2: Weapons Data (B1-B5)
 > Load 226 weapon definitions with 50+ stat fields each.
 
-- [ ] **B1**: Define Go struct `WeaponStats` matching `DN_Weapons_OTS_DT.json` fields (damageHigh/Med/Low, cooldown, spread, ammo, speed, energyCost, hitzone multipliers)
+- [x] **B1**: Define Go struct `WeaponStats` matching `DN_Weapons_OTS_DT.json` fields (damageHigh/Med/Low, cooldown, spread, ammo, speed, energyCost, hitzone multipliers)
 - [ ] **B2**: Load `DN_Weapons_OTS_DT.json` into `map[int32]WeaponStats` keyed by ItemID
 - [ ] **B3**: Expose `WeaponByID(id) WeaponStats` and `AllWeapons() []WeaponStats` accessors
 - [ ] **B4**: Wire weapon stats into `YA_GetTechTree` and store catalog payloads
