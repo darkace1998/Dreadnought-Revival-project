@@ -1018,6 +1018,18 @@ func appendMmogModuleUIDataEntry(b []byte, stack []int, module mmogModuleUIDataS
 	b = protocol.AppendBoolField(b, "m_isNew", false)
 	b = protocol.AppendBoolField(b, "m_isEquipped", module.equipped)
 	b = protocol.AppendInt32Field(b, "m_itemId", module.itemID)
+	if weapon, ok := dreadconfig.WeaponByID(module.itemID); ok {
+		b = protocol.AppendInt32Field(b, "m_damageHigh", weapon.DamageHigh)
+		b = protocol.AppendInt32Field(b, "m_damageMedium", weapon.DamageMedium)
+		b = protocol.AppendInt32Field(b, "m_damageLow", weapon.DamageLow)
+		b = protocol.AppendStringField(b, "m_weaponCooldownTime", strconv.FormatFloat(weapon.WeaponCooldownTime, 'f', 3, 64))
+		b = protocol.AppendInt32Field(b, "m_ammoMagazinSize", weapon.AmmoMagazinSize)
+		b = protocol.AppendStringField(b, "m_spreadBaseValue", strconv.FormatFloat(weapon.SpreadBaseValue, 'f', 2, 64))
+		b = protocol.AppendStringField(b, "m_spreadMaxValue", strconv.FormatFloat(weapon.SpreadMaxValue, 'f', 2, 64))
+		b = protocol.AppendInt32Field(b, "m_maxRange", weapon.MaxRange)
+		b = protocol.AppendStringField(b, "m_slotType", weapon.SlotType)
+		b = protocol.AppendStringField(b, "m_class", weapon.Class)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }

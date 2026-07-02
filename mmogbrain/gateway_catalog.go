@@ -323,6 +323,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	for _, item := range seed.bundleItems {
 		bundleItems = append(bundleItems, gatewayMarketEntity(item, playerDataReady))
 	}
+	itemStatsArray := gatewayWeaponStatsArray(seed.itemID)
 	entity := map[string]any{
 		"ID":                  itemID,
 		"Name":                seed.displayName,
@@ -367,7 +368,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"ActionAvailabilityIndex": 0,
 		"HasVideoPreview":         false,
 		"OnSale":                  false,
-		"ItemStatsArray":          []any{},
+		"ItemStatsArray":          itemStatsArray,
 		"AdditionalTextArray":     []any{},
 		"IsHeroShip":              false,
 		"HasVeteranStatus":        false,
@@ -391,6 +392,25 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		entity["granted_currency_amount"] = seed.grantedAmount
 	}
 	return entity
+}
+
+func gatewayWeaponStatsArray(itemID int32) []any {
+	weapon, ok := dreadconfig.WeaponByID(itemID)
+	if !ok {
+		return []any{}
+	}
+	return []any{
+		map[string]any{"stat_name": "DamageHigh", "stat_value": weapon.DamageHigh},
+		map[string]any{"stat_name": "DamageMedium", "stat_value": weapon.DamageMedium},
+		map[string]any{"stat_name": "DamageLow", "stat_value": weapon.DamageLow},
+		map[string]any{"stat_name": "WeaponCooldownTime", "stat_value": weapon.WeaponCooldownTime},
+		map[string]any{"stat_name": "AmmoMagazinSize", "stat_value": weapon.AmmoMagazinSize},
+		map[string]any{"stat_name": "SpreadBaseValue", "stat_value": weapon.SpreadBaseValue},
+		map[string]any{"stat_name": "SpreadMaxValue", "stat_value": weapon.SpreadMaxValue},
+		map[string]any{"stat_name": "MaxRange", "stat_value": weapon.MaxRange},
+		map[string]any{"stat_name": "SlotType", "stat_value": weapon.SlotType},
+		map[string]any{"stat_name": "Class", "stat_value": weapon.Class},
+	}
 }
 
 
