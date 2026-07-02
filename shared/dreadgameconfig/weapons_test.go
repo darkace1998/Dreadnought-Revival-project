@@ -1,6 +1,8 @@
 package dreadgameconfig
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -202,5 +204,128 @@ func TestWeaponStatsFromRow(t *testing.T) {
 	}
 	if w.HitImpactForce != 5000 {
 		t.Errorf("HitImpactForce = %v, want 5000", w.HitImpactForce)
+	}
+}
+
+func TestLoadWeapons(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	weaponsLoaded = false
+	weaponsByItemID = nil
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("LoadWeapons() error = %v", err)
+	}
+
+	if !weaponsLoaded {
+		t.Error("weaponsLoaded should be true after LoadWeapons()")
+	}
+
+	if len(weaponsByItemID) == 0 {
+		t.Error("weaponsByItemID should not be empty after LoadWeapons()")
+	}
+
+	if len(weaponsByItemID) != 159 {
+		t.Errorf("loaded %d weapons, want 159 (weapons with ItemIDs)", len(weaponsByItemID))
+	}
+}
+
+func TestWeaponByID(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	weaponsLoaded = false
+	weaponsByItemID = nil
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("LoadWeapons() error = %v", err)
+	}
+
+	foundCount := 0
+	for itemID := range weaponsByItemID {
+		w, ok := WeaponByID(itemID)
+		if !ok {
+			t.Errorf("WeaponByID(%d) returned false, want true", itemID)
+		}
+		if w.ItemID != itemID {
+			t.Errorf("WeaponByID(%d).ItemID = %d, want %d", itemID, w.ItemID, itemID)
+		}
+		foundCount++
+		if foundCount >= 10 {
+			break
+		}
+	}
+
+	_, ok := WeaponByID(999999999)
+	if ok {
+		t.Error("WeaponByID(999999999) returned true for non-existent weapon, want false")
+	}
+}
+
+func TestAllWeapons(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	weaponsLoaded = false
+	weaponsByItemID = nil
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("LoadWeapons() error = %v", err)
+	}
+
+	allWeapons := AllWeapons()
+	if len(allWeapons) != 159 {
+		t.Errorf("AllWeapons() returned %d weapons, want 159 (weapons with ItemIDs)", len(allWeapons))
+	}
+
+	for itemID, w := range allWeapons {
+		if w.ItemID != itemID {
+			t.Errorf("AllWeapons()[%d].ItemID = %d, want %d", itemID, w.ItemID, itemID)
+		}
+	}
+}
+
+func TestLoadWeaponsIdempotent(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	weaponsLoaded = false
+	weaponsByItemID = nil
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("First LoadWeapons() error = %v", err)
+	}
+
+	firstCount := len(weaponsByItemID)
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("Second LoadWeapons() error = %v", err)
+	}
+
+	secondCount := len(weaponsByItemID)
+
+	if firstCount != secondCount {
+		t.Errorf("LoadWeapons() not idempotent: first=%d, second=%d", firstCount, secondCount)
 	}
 }
