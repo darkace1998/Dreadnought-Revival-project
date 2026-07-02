@@ -7,12 +7,113 @@
 ## Critical Priority (Gameplay-Breaking)
 
 ### DataTable Loading & Game Data
-- [ ] **Load 379+ DataTables** from extracted JSON into server config (biggest single unlock)
-- [ ] **Ship data**: 75+ ship configs with full stats, 50+ hero ships, 3 manufacturers (Jupiter Arms, House Oberon, Akula Vektor)
-- [ ] **Weapon data**: 50+ weapon types, 226 DataTable rows, 60+ stat fields (damage, range, spread, projectile physics)
-- [ ] **Ability data**: 103+ abilities with cooldowns, tiers, 402+ modifiers (damage, defensive, mobility, deployable, special)
-- [ ] **Officer cards**: 21 officers with triggers (OnEnable, DoKill, BeHitPerHitPoint, OnAbilityFinishedCooldown) and AM/RM modifiers
-- [ ] **Perk system**: YPerkManager, PerksUnlock_DT, PerksUnlockingChallenges_DT (offensive, defensive, utility, class-specific)
+> 176 extracted JSON files exist at `src/Documents/datatables/json/.../DataTables/` (8,299 rows, 1.2 MB).
+> Asset management tables exist at `test/` (4 files, ~8,800 entries).
+> Currently `shared/dreadgameconfig` is 100% hardcoded (66 items). `data/` directory is empty.
+
+#### Phase A: Loader Infrastructure
+- [ ] **A1**: Create `shared/dreadgameconfig/loader.go` — generic JSON DataTable parser (`{"rows": {"RowName": {...}}, "row_count": N}`)
+- [ ] **A2**: Add `DATA_DIR` env var support (default: `../data/`) with fallback to embedded hardcoded data
+- [ ] **A3**: Copy/symlink the 176 extracted DataTable JSONs into `data/datatables/`
+- [ ] **A4**: Copy the 4 asset management JSONs from `test/` into `data/assets/`
+- [ ] **A5**: Copy `LoadoutDevelopmentTable.json` from `DreadGame/Config/` into `data/loadouts/`
+- [ ] **A6**: Add loader unit tests — parse each of the 176 files without error, validate row counts match
+
+#### Phase B: Weapons (226 rows, 50+ fields each)
+- [ ] **B1**: Define Go struct `WeaponStats` matching `DN_Weapons_OTS_DT.json` fields (damageHigh/Med/Low, cooldown, spread, ammo, speed, energyCost, hitzone multipliers)
+- [ ] **B2**: Load `DN_Weapons_OTS_DT.json` into `map[int32]WeaponStats` keyed by ItemID
+- [ ] **B3**: Expose `WeaponByID(id) WeaponStats` and `AllWeapons() []WeaponStats` accessors
+- [ ] **B4**: Wire weapon stats into `YA_GetTechTree` and store catalog payloads
+- [ ] **B5**: Add tests — verify all 226 weapons load, spot-check damage/cooldown values against `lookup_tables.md`
+
+#### Phase C: Projectiles (393 rows + 175 offline missiles)
+- [ ] **C1**: Define Go struct `ProjectileStats` matching `DN_Projectile_OTS_DT.json` fields
+- [ ] **C2**: Load `Projectiles/DN_Projectile_OTS_DT.json` (393 rows)
+- [ ] **C3**: Load `Projectiles/YProjectileMissile_Offline_DT.json` (175 rows)
+- [ ] **C4**: Link projectiles to weapons via weapon-to-projectile reference fields
+- [ ] **C5**: Add tests — verify projectile count, validate weapon→projectile linkage
+
+#### Phase D: Ship Feats (75 tables, per-ship stat modifiers)
+- [ ] **D1**: Define Go struct `ShipFeat` matching `ShipFeats/*.json` fields (m_enabling, m_triggers, m_effects DSL)
+- [ ] **D2**: Build feat DSL parser — parse modifier strings like `AM(PawnDamageModifier +75%) :Stacks(1): D(10.0) : Buff(FirepowerIncrease)`
+- [ ] **D3**: Load all 75 `ShipFeats/*.json` files into `map[shipID][]ShipFeat`
+- [ ] **D4**: Expose `FeatsForShip(shipID) []ShipFeat` accessor
+- [ ] **D5**: Wire ship feats into tech tree rows and fleet data payloads
+- [ ] **D6**: Add tests — verify all 75 feat tables load, validate modifier parsing
+
+#### Phase E: Abilities (24 tables, 103+ abilities)
+- [ ] **E1**: Define Go struct `AbilityStats` matching ability DataTable fields (cooldown, activeTime, duration, damage, tier scaling)
+- [ ] **E2**: Load all 24 `Abilities/*.json` files into unified ability map
+- [ ] **E3**: Cross-reference abilities with ItemIDRegister to resolve ItemID→asset path
+- [ ] **E4**: Expose `AbilityByID(id) AbilityStats` and `AllAbilities() []AbilityStats` accessors
+- [ ] **E5**: Wire ability stats into tech tree, store catalog, and loadout payloads
+- [ ] **E6**: Add tests — verify ability count, validate cooldown/damage values
+
+#### Phase F: Officers & Perks
+- [ ] **F1**: Define Go struct `OfficerCard` matching `DN_Officers_OTS_DT.json` fields (trigger type, effect DSL, conditions)
+- [ ] **F2**: Load officers table (21 rows) with trigger/effect parsing
+- [ ] **F3**: Wire officer data into `YA_PlayerGet` Officers array (replace current empty synthetic data)
+- [ ] **F4**: Define Go struct `Perk` for perk DataTable fields
+- [ ] **F5**: Load perk data from ItemIDTable category `YPerk` entries
+- [ ] **F6**: Wire perks into tech tree and store catalog
+- [ ] **F7**: Add tests — verify 21 officers load, validate trigger types
+
+#### Phase G: Energy Shields & Global Tuning
+- [ ] **G1**: Define Go struct `EnergyShieldStats` matching `DN_EnergyShields_DT.json` fields (per-class shield damage modifiers, pass-through factors)
+- [ ] **G2**: Load energy shields table
+- [ ] **G3**: Define Go struct `GlobalTuning` matching `DN_GlobalTuningValues_DT.json` fields (AFK timer, projectile speed modifier, reveal range)
+- [ ] **G4**: Load global tuning table
+- [ ] **G5**: Expose tuning values for use by matchmaking and game balance calculations
+- [ ] **G6**: Add tests — verify shield modifiers sum correctly, validate tuning constants
+
+#### Phase H: Asset Management & Item Registry
+- [ ] **H1**: Load `test/ItemIDTable.json` (10,661 lines, 27 categories, ~4,000+ item IDs) into category→itemID map
+- [ ] **H2**: Load `test/ItemIDRegister.json` (12,349 lines, 3,086 entries) into itemID→assetPath map
+- [ ] **H3**: Load `test/CatalogIDTable.json` (6,692 lines, 12 catalog buckets) into catalog bucket data
+- [ ] **H4**: Load `test/ItemIDConversionTable.json` (36,482 lines, 1,616 entries) into oldItemID→newItemID map
+- [ ] **H5**: Replace hardcoded `itemCatalog` in dreadgameconfig with data from loaded asset tables
+- [ ] **H6**: Verify all 66 currently hardcoded items resolve correctly via the new loader
+- [ ] **H7**: Add tests — verify item counts per category, validate ID→path mappings
+
+#### Phase I: Loadout Development Table
+- [ ] **I1**: Define Go struct `DevLoadout` matching `LoadoutDevelopmentTable.json` fields (ShipID, weapon/ability/perk slot ItemIDs)
+- [ ] **I2**: Load loadout development table (~100+ hero ship loadouts)
+- [ ] **I3**: Cross-reference loadout slot ItemIDs with weapon/ability/perk data from phases B/E
+- [ ] **I4**: Wire into `YA_PlayerFleets` and `YA_RequestStaticFleetData` as precast loadout references
+- [ ] **I5**: Add tests — verify loadout count, validate slot ItemIDs resolve to known items
+
+#### Phase J: Progression Tables
+- [ ] **J1**: Load `Progression/Ranks/DN_Ranks_Player.json` — replace hardcoded 51-rank ladder with extracted data
+- [ ] **J2**: Load `Progression/GameModifiers/DN_GameModifiers_DT.json` — game mode tuning values
+- [ ] **J3**: Load `Progression/DN_PlayerMatchStatistics.json` — match stat category definitions
+- [ ] **J4**: Verify rank names/thresholds match current hardcoded values
+- [ ] **J5**: Add tests — verify rank count, validate game modifier fields
+
+#### Phase K: PvE Tables
+- [ ] **K1**: Load `Progression/Havoc/` — 7 files (boosts:38, modifiers:26, bossWaves:4, rewards:7, loadouts, enemyModifiers, unlockables)
+- [ ] **K2**: Load `PVE/` — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
+- [ ] **K3**: Replace hardcoded Havoc modifier/boost/reward data in mmogbrain with loaded table data
+- [ ] **K4**: Wire PvE scoring tables into match result processing
+- [ ] **K5**: Add tests — verify boost/modifier counts match (38 boosts, 26 modifiers)
+
+#### Phase L: UI & Miscellaneous Tables
+- [ ] **L1**: Load `UI/` — 16 files (HUD colors, energy wheel config, onboarding, quest markers, short commands, module data:1,237 rows)
+- [ ] **L2**: Load `CachedData/DN_ShipMeshCache_DT.json` — ship mesh references
+- [ ] **L3**: Load `FeatEffectFeedback/` — feat effect feedback definitions
+- [ ] **L4**: Load `BuffPod/` — buff pod feat definitions
+- [ ] **L5**: Load `LevelStreaming/` — 13 per-map level streaming configs
+- [ ] **L6**: Validate loaded data doesn't break any existing payloads
+- [ ] **L7**: Add tests — verify file counts per directory
+
+#### Phase M: Integration & Migration
+- [ ] **M1**: Update `YA_GetTechTree` to use loaded weapon/ability/ship feat data instead of hardcoded stubs
+- [ ] **M2**: Update `YA_PlayerFleets` to use loaded loadout development data
+- [ ] **M3**: Update `YA_RequestStaticFleetData` to use loaded ship feat data
+- [ ] **M4**: Update store catalog (`gateway_catalog.go`) to use loaded item registry for full item list
+- [ ] **M5**: Update `YA_GetShipBonuses` to use loaded feat modifier data
+- [ ] **M6**: Remove hardcoded `itemCatalog` from `dreadgameconfig/data.go` after all loaders verified
+- [ ] **M7**: Update payload size snapshots in `sizecheck_test.go` after data changes
+- [ ] **M8**: Full regression — all mmogbrain tests pass with loaded data
 
 ### Damage & Defense System
 - [ ] **Energy wheel**: 4-way (Off, Thrusters, Shields, Weapons) with per-class effects and exact modifiers
@@ -185,8 +286,11 @@
 - Feature coverage: ~30%
 
 **Next priorities:**
-1. DataTable loading (biggest single unlock)
-2. Ship/weapon/ability data
-3. Damage/defense system
-4. Scoring/rating system
-5. Additional game modes
+1. DataTable Phase A: Loader infrastructure (A1-A6)
+2. DataTable Phase B: Weapons (B1-B5)
+3. DataTable Phase H: Asset management & item registry (H1-H7)
+4. DataTable Phase E: Abilities (E1-E6)
+5. DataTable Phase M: Integration & migration (M1-M8)
+6. Damage/defense system
+7. Scoring/rating system
+8. Additional game modes
