@@ -905,6 +905,104 @@ func TestLoadDataTableHandlesLargeRowCounts(t *testing.T) {
 	}
 }
 
+func TestLoadAllExtractedDataTables(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	datatablesDir := DatatablesDir()
+	if _, err := os.Stat(datatablesDir); os.IsNotExist(err) {
+		t.Skipf("datatables directory not found at %s, skipping", datatablesDir)
+	}
+
+	var totalFiles, totalRows int
+	var errors []string
+
+	err := filepath.Walk(datatablesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
+		}
+
+		totalFiles++
+		dt, err := LoadDataTable(path)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", filepath.Base(path), err))
+			return nil
+		}
+		totalRows += len(dt.Rows)
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("filepath.Walk error: %v", err)
+	}
+
+	if totalFiles != 176 {
+		t.Errorf("expected 176 DataTable files, found %d", totalFiles)
+	}
+
+	if totalRows != 8299 {
+		t.Errorf("expected 8299 total rows, found %d", totalRows)
+	}
+
+	if len(errors) > 0 {
+		t.Errorf("failed to parse %d files:\n%s", len(errors), fmt.Sprintf("%v", errors))
+	}
+}
+
+func TestDataTableRowCountsMatch(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	datatablesDir := DatatablesDir()
+	if _, err := os.Stat(datatablesDir); os.IsNotExist(err) {
+		t.Skipf("datatables directory not found at %s, skipping", datatablesDir)
+	}
+
+	var mismatches []string
+
+	err := filepath.Walk(datatablesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
+		}
+
+		dt, err := LoadDataTable(path)
+		if err != nil {
+			return nil
+		}
+
+		if dt.RowCount != len(dt.Rows) {
+			mismatches = append(mismatches, fmt.Sprintf("%s: row_count=%d, actual=%d",
+				filepath.Base(path), dt.RowCount, len(dt.Rows)))
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("filepath.Walk error: %v", err)
+	}
+
+	if len(mismatches) > 0 {
+		t.Errorf("row_count mismatches found in %d files:\n%s",
+			len(mismatches), fmt.Sprintf("%v", mismatches))
+	}
+}
+
 func mustMarshalJSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {

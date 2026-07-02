@@ -12,7 +12,7 @@
 - [x] **A3**: Copy/symlink the 176 extracted DataTable JSONs into `data/datatables/`
 - [x] **A4**: Copy the 4 asset management JSONs from `test/` into `data/assets/`
 - [x] **A5**: Copy `LoadoutDevelopmentTable.json` from `DreadGame/Config/` into `data/loadouts/`
-- [ ] **A6**: Add loader unit tests — parse each of the 176 files without error, validate row counts match
+- [x] **A6**: Add loader unit tests — parse each of the 176 files without error, validate row counts match
 
 ---
 
