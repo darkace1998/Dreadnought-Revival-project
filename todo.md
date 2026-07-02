@@ -4,14 +4,9 @@
 
 ---
 
-## Critical Priority (Gameplay-Breaking)
+## Phase 1: DataTable Loading Infrastructure (A1-A6)
+> Build the foundation for loading 176 extracted JSON DataTables.
 
-### DataTable Loading & Game Data
-> 176 extracted JSON files exist at `src/Documents/datatables/json/.../DataTables/` (8,299 rows, 1.2 MB).
-> Asset management tables exist at `test/` (4 files, ~8,800 entries).
-> Currently `shared/dreadgameconfig` is 100% hardcoded (66 items). `data/` directory is empty.
-
-#### Phase A: Loader Infrastructure
 - [ ] **A1**: Create `shared/dreadgameconfig/loader.go` — generic JSON DataTable parser (`{"rows": {"RowName": {...}}, "row_count": N}`)
 - [ ] **A2**: Add `DATA_DIR` env var support (default: `../data/`) with fallback to embedded hardcoded data
 - [ ] **A3**: Copy/symlink the 176 extracted DataTable JSONs into `data/datatables/`
@@ -19,21 +14,33 @@
 - [ ] **A5**: Copy `LoadoutDevelopmentTable.json` from `DreadGame/Config/` into `data/loadouts/`
 - [ ] **A6**: Add loader unit tests — parse each of the 176 files without error, validate row counts match
 
-#### Phase B: Weapons (226 rows, 50+ fields each)
+---
+
+## Phase 2: Weapons Data (B1-B5)
+> Load 226 weapon definitions with 50+ stat fields each.
+
 - [ ] **B1**: Define Go struct `WeaponStats` matching `DN_Weapons_OTS_DT.json` fields (damageHigh/Med/Low, cooldown, spread, ammo, speed, energyCost, hitzone multipliers)
 - [ ] **B2**: Load `DN_Weapons_OTS_DT.json` into `map[int32]WeaponStats` keyed by ItemID
 - [ ] **B3**: Expose `WeaponByID(id) WeaponStats` and `AllWeapons() []WeaponStats` accessors
 - [ ] **B4**: Wire weapon stats into `YA_GetTechTree` and store catalog payloads
 - [ ] **B5**: Add tests — verify all 226 weapons load, spot-check damage/cooldown values against `lookup_tables.md`
 
-#### Phase C: Projectiles (393 rows + 175 offline missiles)
+---
+
+## Phase 3: Projectiles Data (C1-C5)
+> Load 393 projectile definitions + 175 offline missile variants.
+
 - [ ] **C1**: Define Go struct `ProjectileStats` matching `DN_Projectile_OTS_DT.json` fields
 - [ ] **C2**: Load `Projectiles/DN_Projectile_OTS_DT.json` (393 rows)
 - [ ] **C3**: Load `Projectiles/YProjectileMissile_Offline_DT.json` (175 rows)
 - [ ] **C4**: Link projectiles to weapons via weapon-to-projectile reference fields
 - [ ] **C5**: Add tests — verify projectile count, validate weapon→projectile linkage
 
-#### Phase D: Ship Feats (75 tables, per-ship stat modifiers)
+---
+
+## Phase 4: Ship Feats (D1-D6)
+> Load 75 ship feat tables with modifier DSL parsing.
+
 - [ ] **D1**: Define Go struct `ShipFeat` matching `ShipFeats/*.json` fields (m_enabling, m_triggers, m_effects DSL)
 - [ ] **D2**: Build feat DSL parser — parse modifier strings like `AM(PawnDamageModifier +75%) :Stacks(1): D(10.0) : Buff(FirepowerIncrease)`
 - [ ] **D3**: Load all 75 `ShipFeats/*.json` files into `map[shipID][]ShipFeat`
@@ -41,7 +48,11 @@
 - [ ] **D5**: Wire ship feats into tech tree rows and fleet data payloads
 - [ ] **D6**: Add tests — verify all 75 feat tables load, validate modifier parsing
 
-#### Phase E: Abilities (24 tables, 103+ abilities)
+---
+
+## Phase 5: Abilities Data (E1-E6)
+> Load 103+ abilities from 24 DataTable files.
+
 - [ ] **E1**: Define Go struct `AbilityStats` matching ability DataTable fields (cooldown, activeTime, duration, damage, tier scaling)
 - [ ] **E2**: Load all 24 `Abilities/*.json` files into unified ability map
 - [ ] **E3**: Cross-reference abilities with ItemIDRegister to resolve ItemID→asset path
@@ -49,7 +60,11 @@
 - [ ] **E5**: Wire ability stats into tech tree, store catalog, and loadout payloads
 - [ ] **E6**: Add tests — verify ability count, validate cooldown/damage values
 
-#### Phase F: Officers & Perks
+---
+
+## Phase 6: Officers & Perks (F1-F7)
+> Load 21 officer cards and perk system data.
+
 - [ ] **F1**: Define Go struct `OfficerCard` matching `DN_Officers_OTS_DT.json` fields (trigger type, effect DSL, conditions)
 - [ ] **F2**: Load officers table (21 rows) with trigger/effect parsing
 - [ ] **F3**: Wire officer data into `YA_PlayerGet` Officers array (replace current empty synthetic data)
@@ -58,7 +73,11 @@
 - [ ] **F6**: Wire perks into tech tree and store catalog
 - [ ] **F7**: Add tests — verify 21 officers load, validate trigger types
 
-#### Phase G: Energy Shields & Global Tuning
+---
+
+## Phase 7: Energy Shields & Global Tuning (G1-G6)
+> Load shield mechanics and global game balance values.
+
 - [ ] **G1**: Define Go struct `EnergyShieldStats` matching `DN_EnergyShields_DT.json` fields (per-class shield damage modifiers, pass-through factors)
 - [ ] **G2**: Load energy shields table
 - [ ] **G3**: Define Go struct `GlobalTuning` matching `DN_GlobalTuningValues_DT.json` fields (AFK timer, projectile speed modifier, reveal range)
@@ -66,7 +85,11 @@
 - [ ] **G5**: Expose tuning values for use by matchmaking and game balance calculations
 - [ ] **G6**: Add tests — verify shield modifiers sum correctly, validate tuning constants
 
-#### Phase H: Asset Management & Item Registry
+---
+
+## Phase 8: Asset Management & Item Registry (H1-H7)
+> Load 4 asset lookup tables (~8,800 entries) and replace hardcoded catalog.
+
 - [ ] **H1**: Load `test/ItemIDTable.json` (10,661 lines, 27 categories, ~4,000+ item IDs) into category→itemID map
 - [ ] **H2**: Load `test/ItemIDRegister.json` (12,349 lines, 3,086 entries) into itemID→assetPath map
 - [ ] **H3**: Load `test/CatalogIDTable.json` (6,692 lines, 12 catalog buckets) into catalog bucket data
@@ -75,28 +98,44 @@
 - [ ] **H6**: Verify all 66 currently hardcoded items resolve correctly via the new loader
 - [ ] **H7**: Add tests — verify item counts per category, validate ID→path mappings
 
-#### Phase I: Loadout Development Table
+---
+
+## Phase 9: Loadout Development Table (I1-I5)
+> Load ~100+ hero ship loadout definitions.
+
 - [ ] **I1**: Define Go struct `DevLoadout` matching `LoadoutDevelopmentTable.json` fields (ShipID, weapon/ability/perk slot ItemIDs)
 - [ ] **I2**: Load loadout development table (~100+ hero ship loadouts)
 - [ ] **I3**: Cross-reference loadout slot ItemIDs with weapon/ability/perk data from phases B/E
 - [ ] **I4**: Wire into `YA_PlayerFleets` and `YA_RequestStaticFleetData` as precast loadout references
 - [ ] **I5**: Add tests — verify loadout count, validate slot ItemIDs resolve to known items
 
-#### Phase J: Progression Tables
+---
+
+## Phase 10: Progression Tables (J1-J5)
+> Load rank data, game modifiers, and match statistics definitions.
+
 - [ ] **J1**: Load `Progression/Ranks/DN_Ranks_Player.json` — replace hardcoded 51-rank ladder with extracted data
 - [ ] **J2**: Load `Progression/GameModifiers/DN_GameModifiers_DT.json` — game mode tuning values
 - [ ] **J3**: Load `Progression/DN_PlayerMatchStatistics.json` — match stat category definitions
 - [ ] **J4**: Verify rank names/thresholds match current hardcoded values
 - [ ] **J5**: Add tests — verify rank count, validate game modifier fields
 
-#### Phase K: PvE Tables
+---
+
+## Phase 11: PvE Tables (K1-K5)
+> Load Havoc boosts/modifiers/rewards and PvE scoring tables.
+
 - [ ] **K1**: Load `Progression/Havoc/` — 7 files (boosts:38, modifiers:26, bossWaves:4, rewards:7, loadouts, enemyModifiers, unlockables)
 - [ ] **K2**: Load `PVE/` — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 - [ ] **K3**: Replace hardcoded Havoc modifier/boost/reward data in mmogbrain with loaded table data
 - [ ] **K4**: Wire PvE scoring tables into match result processing
 - [ ] **K5**: Add tests — verify boost/modifier counts match (38 boosts, 26 modifiers)
 
-#### Phase L: UI & Miscellaneous Tables
+---
+
+## Phase 12: UI & Miscellaneous Tables (L1-L7)
+> Load UI configs, level streaming, and misc gameplay tables.
+
 - [ ] **L1**: Load `UI/` — 16 files (HUD colors, energy wheel config, onboarding, quest markers, short commands, module data:1,237 rows)
 - [ ] **L2**: Load `CachedData/DN_ShipMeshCache_DT.json` — ship mesh references
 - [ ] **L3**: Load `FeatEffectFeedback/` — feat effect feedback definitions
@@ -105,7 +144,11 @@
 - [ ] **L6**: Validate loaded data doesn't break any existing payloads
 - [ ] **L7**: Add tests — verify file counts per directory
 
-#### Phase M: Integration & Migration
+---
+
+## Phase 13: Integration & Migration (M1-M8)
+> Wire all loaded data into payloads and remove hardcoded stubs.
+
 - [ ] **M1**: Update `YA_GetTechTree` to use loaded weapon/ability/ship feat data instead of hardcoded stubs
 - [ ] **M2**: Update `YA_PlayerFleets` to use loaded loadout development data
 - [ ] **M3**: Update `YA_RequestStaticFleetData` to use loaded ship feat data
@@ -115,7 +158,11 @@
 - [ ] **M7**: Update payload size snapshots in `sizecheck_test.go` after data changes
 - [ ] **M8**: Full regression — all mmogbrain tests pass with loaded data
 
-### Damage & Defense System
+---
+
+## Phase 14: Damage & Defense System
+> Implement energy wheel, shields, armor, and damage types.
+
 - [ ] **Energy wheel**: 4-way (Off, Thrusters, Shields, Weapons) with per-class effects and exact modifiers
 - [ ] **Energy shields**: DN_EnergyShields_DT, separate from hull, regenerating
 - [ ] **Armor system**: Standard, Kinetic Amplifier, Armorbooster, Armored Lockdown with damage resistance values
@@ -123,7 +170,11 @@
 - [ ] **Damage formula**: Final = Base x DamageMod x ArmorMod x ShieldMod
 - [ ] **Hull damage states**: Hull_Damaged, Hull_Severely_Damaged, Hull_Critical_Damaged
 
-### Scoring & Rating System
+---
+
+## Phase 15: Scoring & Rating System
+> Implement TrueSkill-like rating and comprehensive stat tracking.
+
 - [ ] **TrueSkill-like rating**: Starting skill 220, max 500, deviation 40, base change 10, conservative constant 3
 - [ ] **Team rating update**: Every 240 seconds
 - [ ] **15 stat categories**: Kills, Assists, Double Kills, Weapon Damage by class, Energy Used, Damage with Modules, Healing Done, Control Points, etc.
@@ -134,9 +185,9 @@
 
 ---
 
-## High Priority (Major Feature Gaps)
+## Phase 16: Additional Game Modes
+> Add 8 missing game modes beyond the current 3 PvP + 3 PvE.
 
-### Additional Game Modes
 - [ ] **Pod TDM**: GameMode_PodTDM_BP
 - [ ] **Turbo TDM**: GameMode_Turbo_TDM_BP
 - [ ] **Training mode**: YMSS_PLAY_TRAINING
@@ -146,13 +197,21 @@
 - [ ] **Bootcamp**: GameInfo_BC_BP (training scenario)
 - [ ] **Benchmark mode**: GameMode_Benchmark_BP (performance test)
 
-### Chat & Social Systems
+---
+
+## Phase 17: Chat & Social Systems
+> Implement real chat channels, presence, and squad management.
+
 - [ ] **Real chat channels**: Team, squad, global, language-specific channels with actual message routing
 - [ ] **Presence system**: Online/offline/away status, friend list, pending friends
 - [ ] **Squad system**: Real squad state management (invite, accept, leave, kick, promote)
 - [ ] **Squad XP/credit bonuses**: Elite status bonuses for squad members
 
-### Vanity & Cosmetics
+---
+
+## Phase 18: Vanity & Cosmetics
+> Add ship and character customization systems.
+
 - [ ] **Paints**: Ship color customization
 - [ ] **Decals**: Ship surface graphics
 - [ ] **Emblems**: Faction/personal emblems
@@ -161,23 +220,35 @@
 - [ ] **Character customization**: Material, mesh, gender (YCharacterCustomization*)
 - [ ] **Founders packs**: 8+ special cosmetic bundles
 
-### Achievements
+---
+
+## Phase 19: Achievements
+> Implement 34 Steam achievements.
+
 - [ ] **34 Steam achievements**: BixsRightHand, SinleyBayRecruit/Veteran/Legend, JackOfAllTrades, MVP, HungryForMore, HelpingHand, DeathmatchVet, EliminationVet, Unbreakable, CryHavoc, OnslaughtVeteran, VeteranCaptain, LegendaryCaptain, TopOfTheLine, PuttinOnTheRitz, PimpYourRide, etc.
 
-### Fleet Progression
+---
+
+## Phase 20: Fleet Progression
+> Add fleet XP sharing and battle bonuses.
+
 - [ ] **Fleet XP sharing**: All ships in fleet earn XP together
 - [ ] **Battle bonus**: Fleet-wide bonus, resettable with Credits
 - [ ] **Elite bonuses**: Extra contract slot, XP/Credits bonus (self + allies), applied before Battle Bonus
 
-### Item Drop System
+---
+
+## Phase 21: Item Drop System
+> Implement loot drops from matches.
+
 - [ ] **YPlayerItemDropCycleMP**: 1 drop per cycle, max 20 checks, max 1 simultaneous unclaimed item
 - [ ] **DN_MPItemDrops**: Loot table integration
 
 ---
 
-## Medium Priority (Polish & Completeness)
+## Phase 22: Season & Event System Enhancements
+> Expand season/event support with full episode data.
 
-### Season & Event System
 - [ ] **6 seasons**: S1-S6 with full episode data (20+ episodes)
 - [ ] **Reward tiers**: BRONZE, SILVER, GOLD per season
 - [ ] **Seasonal cosmetics**: Body sets (Autumn, Spring, Summer, Winter, Explorer, Jovian, NanoDoc), decals, paints
@@ -185,7 +256,11 @@
 - [ ] **Boss battles**: BunBunBoss (S3), DreadnoughtHeavyBoss (S4), Multiple bosses (S6)
 - [ ] **Medal scoring**: PvEMedalScoring DataTable
 
-### AI System Enhancements
+---
+
+## Phase 23: AI System Enhancements
+> Improve AI with behavior trees and advanced mechanics.
+
 - [ ] **AI behavior trees**: 22 BT nodes, blackboard system
 - [ ] **AI ability activation**: DN_AIAbilityActivation_DT (21 rows) with target/damage/distance/threat/probability gates
 - [ ] **AI state machine**: YCSB_NONE, YCSB_ATTACK, etc.
@@ -194,30 +269,46 @@
 - [ ] **Bot configurations**: DN_ClientBots_DT
 - [ ] **Battle ready**: DN_BattleReadyUpdate_DT
 
-### Custom Match Enhancements
+---
+
+## Phase 24: Custom Match Enhancements
+> Add real lobby state management for custom matches.
+
 - [ ] **Real lobby state**: Actual room state management (not just success responses)
 - [ ] **Custom settings**: Game mode, map, player limits, team sizes
 - [ ] **Fleet select**: Real fleet selection flow in custom matches
 
-### Market & Economy Enhancements
+---
+
+## Phase 25: Market & Economy Enhancements
+> Add featured items, bundles, and live store features.
+
 - [ ] **Featured items**: Rotating daily/weekly store offers
 - [ ] **Spotlight items**: Highlighted/promoted items
 - [ ] **Bundle system**: GetMarketBundlesRequestDefinition
 - [ ] **Live tiles**: Dynamic UI elements in store
 
-### Remaining YA_* Handlers
+---
+
+## Phase 26: Remaining YA_* Handlers
+> Complete ~15 less common request types.
+
 - [ ] **~15 less common request types**: Complete remaining YA_* handlers that currently return generic success
 
-### Server→Client Notifications
+---
+
+## Phase 27: Server→Client Notifications
+> Implement real notification payloads.
+
 - [ ] **Achievements updated**: YA_AchievementsUpdated with actual achievement data
 - [ ] **User status**: YA_UserStatus with real presence data
 - [ ] **Fleet charged**: YA_OnFleetCharged with actual fleet state
 
 ---
 
-## Low Priority (Infrastructure & Polish)
+## Phase 28: Test Coverage
+> Add tests for 5 services with 0 coverage.
 
-### Test Coverage
 - [ ] **auth-server**: Add tests for login, register, logout, ban/unban, JWT validation
 - [ ] **admin-cli**: Add tests for CLI commands
 - [ ] **dn-launcher**: Add tests for identity generation, auth flow, config parsing
@@ -227,7 +318,11 @@
 - [ ] **shared/logging**: Add tests for logger creation, service hook
 - [ ] **shared/middleware**: Add tests for JWT middleware, rate limiter
 
-### Medium Issues (29 outstanding)
+---
+
+## Phase 29: Medium Issues (29 outstanding)
+> Fix remaining medium-priority bugs and code quality issues.
+
 - [ ] **M1**: shared/db — Migrations not transactional (DDL + schema_versions insert not atomic)
 - [ ] **M2**: shared/middleware — JWTMiddleware claims RS256 support but only HMAC implemented
 - [ ] **M3**: shared/middleware — Claims passed via request headers instead of context.WithValue
@@ -258,7 +353,11 @@
 - [ ] **M31**: master-server — RowsAffected() errors silently discarded
 - [ ] **M32**: master-server — Zero test files
 
-### Phase 8 Polish Items
+---
+
+## Phase 30: Polish Items
+> Final cleanup and LOW issue resolution.
+
 - [ ] **M4**: Context.WithValue migration for JWT claims
 - [ ] **L2**: Remove unused auth-server models (Session, Ban)
 - [ ] **L3**: Sessions table TTL cleanup already done — verify
@@ -286,11 +385,11 @@
 - Feature coverage: ~30%
 
 **Next priorities:**
-1. DataTable Phase A: Loader infrastructure (A1-A6)
-2. DataTable Phase B: Weapons (B1-B5)
-3. DataTable Phase H: Asset management & item registry (H1-H7)
-4. DataTable Phase E: Abilities (E1-E6)
-5. DataTable Phase M: Integration & migration (M1-M8)
-6. Damage/defense system
-7. Scoring/rating system
-8. Additional game modes
+1. Phase 1: DataTable loader infrastructure (A1-A6)
+2. Phase 2: Weapons data (B1-B5)
+3. Phase 8: Asset management & item registry (H1-H7)
+4. Phase 5: Abilities data (E1-E6)
+5. Phase 13: Integration & migration (M1-M8)
+6. Phase 14: Damage/defense system
+7. Phase 15: Scoring/rating system
+8. Phase 16: Additional game modes
