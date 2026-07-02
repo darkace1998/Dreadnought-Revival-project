@@ -10,7 +10,7 @@
 - [x] **A1**: Create `shared/dreadgameconfig/loader.go` — generic JSON DataTable parser (`{"rows": {"RowName": {...}}, "row_count": N}`)
 - [x] **A2**: Add `DATA_DIR` env var support (default: `../data/`) with fallback to embedded hardcoded data
 - [x] **A3**: Copy/symlink the 176 extracted DataTable JSONs into `data/datatables/`
-- [ ] **A4**: Copy the 4 asset management JSONs from `test/` into `data/assets/`
+- [x] **A4**: Copy the 4 asset management JSONs from `test/` into `data/assets/`
 - [ ] **A5**: Copy `LoadoutDevelopmentTable.json` from `DreadGame/Config/` into `data/loadouts/`
 - [ ] **A6**: Add loader unit tests — parse each of the 176 files without error, validate row counts match
 
