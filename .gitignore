@@ -32,3 +32,4 @@ bin/
 
 # GitHub CLI config
 .config/
+screenlog.*

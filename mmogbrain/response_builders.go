@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -368,19 +370,21 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// the first, which corrupted FlagShipID with the loadout ID and made the client's
 	// fleet validator drop every entry ("Invalid fleet data, fleet array is empty").
 	// Keep exactly one canonical field per logical attribute.
+	// 
+	// IMPORTANT: The client parser only handles field types 1-4 (double, double, int64, string).
+	// int32 fields (protocol type 0x56) fall through to default=0, causing fleet type
+	// validation to fail with 'Invalid fleet data received'. Use string fields for Type/Name.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "FID", fleet.token)
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
-	b = protocol.AppendStringField(b, "Name", fleet.displayName)
+	b = protocol.AppendStringField(b, "Name", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "DisplayName", fleet.displayName)
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
 	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
-	// `flagshipShipId` (lowercase d) is distinct from `FlagShipID` (case-insensitive
-	// "flagshipid") and provides the camelCase alias the client uses for some lookups.
 	b = protocol.AppendInt32Field(b, "flagshipShipId", fleet.flagshipShipID)
 	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
 	b = protocol.AppendBoolField(b, "bIsActive", fleet.active)
@@ -390,7 +394,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 
 func appendMmogFleetUnlockEntry(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendInt32Field(b, "Type", fleet.fleetType)
+	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
@@ -404,7 +408,7 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	state := mmogPlayerStateForPID(playerPID)
 	fleets := state.fleets
 	if len(fleets) == 0 {
-		fleets = state.activeFleets()
+		fleets = []mmogFleetSeed{starterFleetState()}
 	}
 
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
@@ -412,17 +416,15 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
-	for _, fleet := range fleets {
-		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
-	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "Items")
 	for _, fleet := range fleets {
 		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "Items")
+	for _, fleet := range fleets {
+		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
+	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -542,32 +544,88 @@ func buildMmogSeasonDataPayload() []byte {
 }
 
 func buildMmogSeasonProgressPayload() []byte {
+	return buildMmogSeasonProgressPayloadForPlayer(defaultMmogPlayerPID)
+}
+
+func buildMmogSeasonProgressPayloadForPlayer(playerPID string) []byte {
 	var b []byte
-	var stack []int // Track nesting for objects/arrays
+	var stack []int
 
-	// Add routing tag (command name)
 	b = protocol.AppendStringField(b, "RT", "YA_GetSeasonProgress")
-
-	// Start the "result" object
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 
-	// Add empty arrays for season data
+	// Load actual season progress from database
+	seasonProgress := loadPlayerSeasonProgress(playerPID)
+
+	// EventScores array - contains player's progress in each event
 	b, stack = protocol.AppendArrayStart(b, stack, "EventScores")
+	for _, progress := range seasonProgress {
+		b, stack = appendMmogEventScoreEntry(b, stack, progress)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	// EventRewards array - contains rewards claimed for events
 	b, stack = protocol.AppendArrayStart(b, stack, "EventRewards")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	// SeasonRewards array - contains rewards claimed for season
 	b, stack = protocol.AppendArrayStart(b, stack, "SeasonRewards")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
-	// Close the "result" object
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
-	// Validate stack is empty (all objects/arrays closed)
 	if len(stack) != 0 {
-		return nil // or panic("Unbalanced MMoG payload")
+		return nil
 	}
 
 	return b
+}
+
+type playerSeasonProgress struct {
+	seasonID string
+	xp       int32
+	level    int32
+}
+
+func loadPlayerSeasonProgress(playerPID string) []playerSeasonProgress {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return nil
+	}
+
+	rows, err := db.Query(`SELECT season_id, xp, level FROM player_season_progress WHERE user_id=? ORDER BY season_id`, playerPID)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var progress []playerSeasonProgress
+	for rows.Next() {
+		var p playerSeasonProgress
+		if err := rows.Scan(&p.seasonID, &p.xp, &p.level); err != nil {
+			continue
+		}
+		progress = append(progress, p)
+	}
+	return progress
+}
+
+func appendMmogEventScoreEntry(b []byte, stack []int, progress playerSeasonProgress) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "SeasonID", progress.seasonID)
+	b = protocol.AppendInt32Field(b, "Score", progress.xp)
+	b = protocol.AppendInt32Field(b, "Level", progress.level)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+func appendMmogSeasonProgressEntry(b []byte, stack []int, progress playerSeasonProgress) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "SeasonID", progress.seasonID)
+	b = protocol.AppendInt32Field(b, "XP", progress.xp)
+	b = protocol.AppendInt32Field(b, "Level", progress.level)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
 }
 
 // --- Player Data ---
@@ -624,6 +682,15 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "FreeXp", state.freeXP)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	// Add season progress data
+	seasonProgress := loadPlayerSeasonProgress(playerPID)
+	b, stack = protocol.AppendArrayStart(b, stack, "SeasonProgress")
+	for _, progress := range seasonProgress {
+		b, stack = appendMmogSeasonProgressEntry(b, stack, progress)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	b = protocol.AppendInt32Field(b, "ServerTime", now)
 	b = protocol.AppendInt32Field(b, "ClientTime", now)
 	b = protocol.AppendStringField(b, "PublicIP", "")
@@ -672,6 +739,9 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Ribbons")
+	for _, ribbon := range loadPlayerRibbons(playerPID) {
+		b, stack = appendMmogRibbonEntry(b, stack, ribbon)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Medals")
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1048,17 +1118,68 @@ func buildMmogScoringDataPayload() []byte {
 }
 
 func buildMmogDailyContractsDataPayload() []byte {
+	return buildMmogDailyContractsDataPayloadForPlayer(defaultMmogPlayerPID)
+}
+
+func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetDailyContractsData")
-	b = protocol.AppendInt32Field(b, "DailyContractStateID", 0)
+	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
 	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(time.Now().Unix()))
 	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(time.Now().Unix()))
+
+	// Load contracts from database
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
+	if database != nil {
+		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+		if err == nil {
+			defer func() { _ = rows.Close() }()
+			for rows.Next() {
+				var contractID, payloadJSON, state string
+				var progress int32
+				if err := rows.Scan(&contractID, &payloadJSON, &progress, &state); err == nil {
+					b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+					b = protocol.AppendStringField(b, "ContractID", contractID)
+					b = protocol.AppendInt32Field(b, "Progress", progress)
+					b = protocol.AppendStringField(b, "State", state)
+					
+					// Parse payload to include contract details
+					var contractData map[string]interface{}
+					if json.Unmarshal([]byte(payloadJSON), &contractData) == nil {
+						if name, ok := contractData["name"].(string); ok {
+							b = protocol.AppendStringField(b, "Name", name)
+						}
+						if desc, ok := contractData["description"].(string); ok {
+							b = protocol.AppendStringField(b, "Description", desc)
+						}
+						if targetKills, ok := contractData["targetKills"].(float64); ok {
+							b = protocol.AppendInt32Field(b, "TargetKills", int32(targetKills))
+						}
+						if targetScore, ok := contractData["targetScore"].(float64); ok {
+							b = protocol.AppendInt32Field(b, "TargetScore", int32(targetScore))
+						}
+						if rewardXP, ok := contractData["rewardXP"].(float64); ok {
+							b = protocol.AppendInt32Field(b, "RewardXP", int32(rewardXP))
+						}
+						if rewardGP, ok := contractData["rewardGP"].(float64); ok {
+							b = protocol.AppendInt32Field(b, "RewardGP", int32(rewardGP))
+						}
+					}
+					b, stack = protocol.AppendObjectEnd(b, stack)
+				}
+			}
+		}
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1101,6 +1222,490 @@ var havocBoosters = []struct {
 	{4, "Repair Boost", 600, "Repairs 50% hull damage instantly"},
 	{5, "Energy Boost", 350, "Refills energy to maximum"},
 	{6, "XP Boost", 750, "Doubles XP earned for one wave"},
+}
+
+// AI Difficulty Levels
+var aiDifficultyLevels = []struct {
+	name         string
+	difficultyID int32
+	spawnRate    float32
+	healthMult   float32
+	damageMult   float32
+	xpMult       float32
+	creditMult   float32
+	description  string
+}{
+	{"Easy", 1, 0.8, 0.8, 0.8, 0.8, 0.8, "Reduced enemy count and stats"},
+	{"Normal", 2, 1.0, 1.0, 1.0, 1.0, 1.0, "Standard difficulty"},
+	{"Hard", 3, 1.2, 1.3, 1.3, 1.3, 1.3, "Increased enemy count and stats"},
+	{"Very Hard", 4, 1.5, 1.6, 1.6, 1.6, 1.6, "Significantly increased challenge"},
+	{"Nightmare", 5, 2.0, 2.0, 2.0, 2.0, 2.0, "Maximum difficulty for elite players"},
+}
+
+// Boss Types with Phase Mechanics
+var bossTypes = []struct {
+	bossID      string
+	name        string
+	shipClass   string
+	phaseCount  int32
+	difficulty  int32
+	rewardXP    int32
+	rewardGP    int32
+	description string
+}{
+	{"boss_raider_captain", "Raider Captain", "Corvette", 2, 1, 500, 1000, "Light corvette with hit-and-run tactics"},
+	{"boss_destroyer_commander", "Destroyer Commander", "Destroyer", 3, 2, 1000, 2000, "Heavy destroyer with broadside attacks"},
+	{"boss_battlecruiser_admiral", "Battlecruiser Admiral", "Battlecruiser", 4, 3, 2000, 4000, "Armored battlecruiser with shield phases"},
+	{"boss_dreadnought_titan", "Dreadnought Titan", "Dreadnought", 5, 4, 3500, 7000, "Massive dreadnought with multiple weapon systems"},
+	{"boss_carrier_overlord", "Carrier Overlord", "Carrier", 5, 5, 5000, 10000, "Carrier that spawns fighter squadrons"},
+	{"boss_artillery_fortress", "Artillery Fortress", "Artillery", 3, 3, 1500, 3000, "Long-range artillery platform"},
+	{"boss_stealth_phantom", "Stealth Phantom", "Stealth", 4, 4, 2500, 5000, "Cloaked ship with ambush tactics"},
+	{"boss_support_nexus", "Support Nexus", "Support", 3, 2, 1200, 2400, "Support ship that heals allies"},
+	{"boss_tactical_strategist", "Tactical Strategist", "Tactical", 4, 3, 1800, 3600, "Tactical ship with area denial"},
+	{"boss_experimental_prototype", "Experimental Prototype", "Experimental", 5, 5, 4000, 8000, "Unstable prototype with random abilities"},
+	{"boss_pirate_lord", "Pirate Lord", "Pirate", 4, 4, 3000, 6000, "Pirate flagship with boarding parties"},
+	{"boss_mining_goliath", "Mining Goliath", "Industrial", 3, 2, 1400, 2800, "Heavy mining vessel with drills"},
+	{"boss_research_vessel", "Research Vessel", "Science", 3, 3, 1600, 3200, "Science ship with experimental weapons"},
+	{"boss_colony_ship", "Colony Ship", "Transport", 4, 3, 2200, 4400, "Large transport with defensive turrets"},
+	{"boss_flagship_leviathan", "Flagship Leviathan", "Flagship", 5, 5, 6000, 12000, "Ultimate boss with all ship capabilities"},
+}
+
+// Havoc Mode Wave Configuration
+var havocWaveConfig = []struct {
+	waveNumber     int32
+	enemyCount     int32
+	eliteCount     int32
+	bossWave       bool
+	bossID         string
+	timeLimit      int32
+	rewardXP       int32
+	rewardGP       int32
+	description    string
+}{
+	{1, 5, 0, false, "", 120, 100, 200, "Initial wave - light enemies"},
+	{2, 8, 1, false, "", 120, 150, 300, "Second wave - increased count"},
+	{3, 10, 2, false, "", 120, 200, 400, "Third wave - elite enemies appear"},
+	{4, 12, 3, false, "", 120, 250, 500, "Fourth wave - heavy opposition"},
+	{5, 15, 4, false, "", 120, 300, 600, "Fifth wave - overwhelming force"},
+	{6, 1, 0, true, "boss_raider_captain", 180, 500, 1000, "Boss wave - Raider Captain"},
+	{7, 18, 5, false, "", 120, 400, 800, "Seventh wave - maximum enemies"},
+	{8, 20, 6, false, "", 120, 500, 1000, "Eighth wave - elite swarm"},
+	{9, 25, 8, false, "", 120, 600, 1200, "Ninth wave - survival test"},
+	{10, 1, 0, true, "boss_destroyer_commander", 240, 1000, 2000, "Boss wave - Destroyer Commander"},
+	{11, 30, 10, false, "", 120, 800, 1600, "Eleventh wave - endless swarm"},
+	{12, 35, 12, false, "", 120, 1000, 2000, "Twelfth wave - final stand"},
+	{13, 1, 0, true, "boss_dreadnought_titan", 300, 3500, 7000, "Final boss - Dreadnought Titan"},
+}
+
+// Havoc Mode Modifiers
+var havocModifiers = []struct {
+	modifierID   string
+	name         string
+	description  string
+	waveStart    int32
+	effectType   string
+	effectValue  float32
+}{
+	{"mod_enemy_shields", "Enemy Shield Boost", "Enemies gain 50% shield strength", 3, "shield", 1.5},
+	{"mod_enemy_damage", "Enemy Damage Increase", "Enemies deal 30% more damage", 5, "damage", 1.3},
+	{"mod_enemy_speed", "Enemy Speed Boost", "Enemies move 25% faster", 7, "speed", 1.25},
+	{"mod_spawn_rate", "Rapid Spawn", "Enemies spawn 50% faster", 9, "spawn", 1.5},
+	{"mod_boss_health", "Boss Health Increase", "Bosses gain 100% health", 6, "boss_health", 2.0},
+	{"mod_elite_frequency", "Elite Surge", "Elite enemies appear more frequently", 4, "elite", 2.0},
+	{"mod_player_regen", "Reduced Regen", "Player regeneration reduced by 50%", 8, "regen", 0.5},
+	{"mod_wave_time", "Time Pressure", "Wave time limit reduced by 25%", 10, "time", 0.75},
+}
+
+// PvE Reward Tiers
+var pveRewardTiers = []struct {
+	tierName     string
+	minWave      int32
+	bossKillsReq int32
+	rewardXP     int32
+	rewardGP     int32
+	rewardItem   string
+	description  string
+}{
+	{"Bronze", 5, 0, 1000, 2000, "", "Complete 5 waves"},
+	{"Silver", 10, 1, 2500, 5000, "", "Complete 10 waves with 1 boss kill"},
+	{"Gold", 13, 3, 5000, 10000, "", "Complete all waves with 3 boss kills"},
+	{"Platinum", 13, 5, 10000, 20000, "havoc_paint_gold", "Perfect run with 5 boss kills"},
+	{"Diamond", 13, 7, 20000, 40000, "havoc_emblem_diamond", "Elite performance with 7 boss kills"},
+}
+
+// PvE Progress Tracking Functions
+
+type pveProgress struct {
+	mode         string
+	highestWave  int32
+	totalWaves   int32
+	bossKills    int32
+	totalKills   int32
+	bestScore    int32
+}
+
+func loadPlayerPvEProgress(playerPID string) []pveProgress {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return nil
+	}
+
+	rows, err := db.Query(`SELECT mode, highest_wave, total_waves, boss_kills, total_kills, best_score 
+		FROM player_pve_progress WHERE user_id=? ORDER BY mode`, playerPID)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var progress []pveProgress
+	for rows.Next() {
+		var p pveProgress
+		if err := rows.Scan(&p.mode, &p.highestWave, &p.totalWaves, &p.bossKills, &p.totalKills, &p.bestScore); err != nil {
+			continue
+		}
+		progress = append(progress, p)
+	}
+	return progress
+}
+
+type bossKillRecord struct {
+	bossID    string
+	killCount int32
+	firstKill string
+	lastKill  string
+}
+
+func loadPlayerBossKills(playerPID string) []bossKillRecord {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return nil
+	}
+
+	rows, err := db.Query(`SELECT boss_id, kill_count, first_kill, last_kill 
+		FROM player_boss_kills WHERE user_id=? ORDER BY kill_count DESC`, playerPID)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var kills []bossKillRecord
+	for rows.Next() {
+		var k bossKillRecord
+		var firstKill, lastKill sql.NullString
+		if err := rows.Scan(&k.bossID, &k.killCount, &firstKill, &lastKill); err != nil {
+			continue
+		}
+		if firstKill.Valid {
+			k.firstKill = firstKill.String
+		}
+		if lastKill.Valid {
+			k.lastKill = lastKill.String
+		}
+		kills = append(kills, k)
+	}
+	return kills
+}
+
+type aiPreferences struct {
+	difficulty     string
+	aiBehavior     string
+	spawnRate      float32
+	bossFrequency  float32
+}
+
+func loadPlayerAIPreferences(playerPID string) aiPreferences {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return aiPreferences{
+			difficulty:    "Normal",
+			aiBehavior:    "Balanced",
+			spawnRate:     1.0,
+			bossFrequency: 1.0,
+		}
+	}
+
+	var prefs aiPreferences
+	err := db.QueryRow(`SELECT difficulty, ai_behavior, spawn_rate, boss_frequency 
+		FROM player_ai_preferences WHERE user_id=?`, playerPID).
+		Scan(&prefs.difficulty, &prefs.aiBehavior, &prefs.spawnRate, &prefs.bossFrequency)
+	if err != nil {
+		return aiPreferences{
+			difficulty:    "Normal",
+			aiBehavior:    "Balanced",
+			spawnRate:     1.0,
+			bossFrequency: 1.0,
+		}
+	}
+	return prefs
+}
+
+func savePlayerAIPreferences(db *sql.DB, pid string, prefs aiPreferences) {
+	_, _ = db.Exec(`INSERT OR REPLACE INTO player_ai_preferences(user_id, difficulty, ai_behavior, spawn_rate, boss_frequency, updated_at) 
+		VALUES(?, ?, ?, ?, ?, datetime('now'))`, pid, prefs.difficulty, prefs.aiBehavior, prefs.spawnRate, prefs.bossFrequency)
+}
+
+// PvE MMOG Payload Builders
+
+func buildMmogPvEProgressPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetPvEProgress")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	progress := loadPlayerPvEProgress(playerPID)
+	b, stack = protocol.AppendArrayStart(b, stack, "PvEProgress")
+	for _, p := range progress {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "Mode", p.mode)
+		b = protocol.AppendInt32Field(b, "HighestWave", p.highestWave)
+		b = protocol.AppendInt32Field(b, "TotalWaves", p.totalWaves)
+		b = protocol.AppendInt32Field(b, "BossKills", p.bossKills)
+		b = protocol.AppendInt32Field(b, "TotalKills", p.totalKills)
+		b = protocol.AppendInt32Field(b, "BestScore", p.bestScore)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogBossKillsPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetBossKills")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	kills := loadPlayerBossKills(playerPID)
+	b, stack = protocol.AppendArrayStart(b, stack, "BossKills")
+	for _, k := range kills {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "BossID", k.bossID)
+		b = protocol.AppendInt32Field(b, "KillCount", k.killCount)
+		if k.firstKill != "" {
+			b = protocol.AppendStringField(b, "FirstKill", k.firstKill)
+		}
+		if k.lastKill != "" {
+			b = protocol.AppendStringField(b, "LastKill", k.lastKill)
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogAIPreferencesPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetAIPreferences")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	prefs := loadPlayerAIPreferences(playerPID)
+	b = protocol.AppendStringField(b, "Difficulty", prefs.difficulty)
+	b = protocol.AppendStringField(b, "AIBehavior", prefs.aiBehavior)
+	b = protocol.AppendStringField(b, "SpawnRate", fmt.Sprintf("%.2f", prefs.spawnRate))
+	b = protocol.AppendStringField(b, "BossFrequency", fmt.Sprintf("%.2f", prefs.bossFrequency))
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogSetAIPreferencesPayload(playerPID string, payload []byte) []byte {
+	difficulty := protocol.ExtractStringField(payload, "Difficulty")
+	aiBehavior := protocol.ExtractStringField(payload, "AIBehavior")
+	spawnRateStr := protocol.ExtractStringField(payload, "SpawnRate")
+	bossFreqStr := protocol.ExtractStringField(payload, "BossFrequency")
+
+	// Parse float values
+	spawnRate := float32(1.0)
+	if spawnRateStr != "" {
+		if val, err := strconv.ParseFloat(spawnRateStr, 32); err == nil {
+			spawnRate = float32(val)
+		}
+	}
+	bossFreq := float32(1.0)
+	if bossFreqStr != "" {
+		if val, err := strconv.ParseFloat(bossFreqStr, 32); err == nil {
+			bossFreq = float32(val)
+		}
+	}
+
+	// Validate difficulty
+	validDifficulty := false
+	for _, level := range aiDifficultyLevels {
+		if level.name == difficulty {
+			validDifficulty = true
+			break
+		}
+	}
+	if !validDifficulty {
+		difficulty = "Normal"
+	}
+
+	prefs := aiPreferences{
+		difficulty:    difficulty,
+		aiBehavior:    aiBehavior,
+		spawnRate:     spawnRate,
+		bossFrequency: bossFreq,
+	}
+
+	db := currentMmogPlayerStateDB()
+	if db != nil {
+		savePlayerAIPreferences(db, playerPID, prefs)
+	}
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_SetAIPreferences")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogHavocWavesPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetHavocWaves")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	b, stack = protocol.AppendArrayStart(b, stack, "Waves")
+	for _, wave := range havocWaveConfig {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendInt32Field(b, "WaveNumber", wave.waveNumber)
+		b = protocol.AppendInt32Field(b, "EnemyCount", wave.enemyCount)
+		b = protocol.AppendInt32Field(b, "EliteCount", wave.eliteCount)
+		b = protocol.AppendBoolField(b, "BossWave", wave.bossWave)
+		if wave.bossID != "" {
+			b = protocol.AppendStringField(b, "BossID", wave.bossID)
+		}
+		b = protocol.AppendInt32Field(b, "TimeLimit", wave.timeLimit)
+		b = protocol.AppendInt32Field(b, "RewardXP", wave.rewardXP)
+		b = protocol.AppendInt32Field(b, "RewardGP", wave.rewardGP)
+		b = protocol.AppendStringField(b, "Description", wave.description)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogBossTypesPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetBossTypes")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	b, stack = protocol.AppendArrayStart(b, stack, "BossTypes")
+	for _, boss := range bossTypes {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "BossID", boss.bossID)
+		b = protocol.AppendStringField(b, "Name", boss.name)
+		b = protocol.AppendStringField(b, "ShipClass", boss.shipClass)
+		b = protocol.AppendInt32Field(b, "PhaseCount", boss.phaseCount)
+		b = protocol.AppendInt32Field(b, "Difficulty", boss.difficulty)
+		b = protocol.AppendInt32Field(b, "RewardXP", boss.rewardXP)
+		b = protocol.AppendInt32Field(b, "RewardGP", boss.rewardGP)
+		b = protocol.AppendStringField(b, "Description", boss.description)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogAIDifficultyLevelsPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetAIDifficultyLevels")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	b, stack = protocol.AppendArrayStart(b, stack, "DifficultyLevels")
+	for _, level := range aiDifficultyLevels {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "Name", level.name)
+		b = protocol.AppendInt32Field(b, "DifficultyID", level.difficultyID)
+		b = protocol.AppendStringField(b, "SpawnRate", fmt.Sprintf("%.2f", level.spawnRate))
+		b = protocol.AppendStringField(b, "HealthMult", fmt.Sprintf("%.2f", level.healthMult))
+		b = protocol.AppendStringField(b, "DamageMult", fmt.Sprintf("%.2f", level.damageMult))
+		b = protocol.AppendStringField(b, "XPMult", fmt.Sprintf("%.2f", level.xpMult))
+		b = protocol.AppendStringField(b, "CreditMult", fmt.Sprintf("%.2f", level.creditMult))
+		b = protocol.AppendStringField(b, "Description", level.description)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogHavocModifiersPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetHavocModifiers")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	b, stack = protocol.AppendArrayStart(b, stack, "Modifiers")
+	for _, mod := range havocModifiers {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "ModifierID", mod.modifierID)
+		b = protocol.AppendStringField(b, "Name", mod.name)
+		b = protocol.AppendStringField(b, "Description", mod.description)
+		b = protocol.AppendInt32Field(b, "WaveStart", mod.waveStart)
+		b = protocol.AppendStringField(b, "EffectType", mod.effectType)
+		b = protocol.AppendStringField(b, "EffectValue", fmt.Sprintf("%.2f", mod.effectValue))
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogPvERewardTiersPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetPvERewardTiers")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+
+	b, stack = protocol.AppendArrayStart(b, stack, "RewardTiers")
+	for _, tier := range pveRewardTiers {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "TierName", tier.tierName)
+		b = protocol.AppendInt32Field(b, "MinWave", tier.minWave)
+		b = protocol.AppendInt32Field(b, "BossKillsReq", tier.bossKillsReq)
+		b = protocol.AppendInt32Field(b, "RewardXP", tier.rewardXP)
+		b = protocol.AppendInt32Field(b, "RewardGP", tier.rewardGP)
+		if tier.rewardItem != "" {
+			b = protocol.AppendStringField(b, "RewardItem", tier.rewardItem)
+		}
+		b = protocol.AppendStringField(b, "Description", tier.description)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
 }
 
 func buildMmogPlayerScoresPayload() []byte {
@@ -1323,10 +1928,42 @@ func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, s
 // --- Market / Purchases ---
 
 var catalogPrices = map[int32]int32{
+	// Ships
 	extractedShipIDValcour: 5000,
 	extractedShipIDLeipzig: 5000,
 	extractedShipIDTrieste: 5000,
 	extractedShipIDCeres:   5000,
+	// Weapons
+	100597772: 2000, // Repeater Turrets
+	100598563: 2000, // Laser Turrets
+	100598595: 2500, // Plasma Cannon
+	100598596: 2500, // Rail Gun
+	100597987: 3000, // Artillery Cannon
+	100598570: 3000, // Howitzer
+	100597870: 3500, // Missile Launcher
+	100598573: 3500, // Torpedo Launcher
+	// Abilities
+	100597788: 1500, // Repair Beam
+	100598590: 1500, // Shield Boost
+	100597790: 2000, // EMP Blast
+	100598592: 2000, // Turbo Boost
+	// Perks
+	100597776: 1000, // Armor Plating
+	100598567: 1000, // Energy Shield
+	100597778: 1200, // Targeting Computer
+	100598569: 1200, // Engine Upgrade
+}
+
+// Daily contract seeds
+var dailyContractSeeds = []struct {
+	id, name, description    string
+	targetKills, targetScore int32
+	rewardXP, rewardGP       int32
+}{
+	{"contract_kills_5", "Get 5 Kills", "Eliminate 5 enemy ships", 5, 0, 200, 400},
+	{"contract_kills_10", "Get 10 Kills", "Eliminate 10 enemy ships", 10, 0, 500, 1000},
+	{"contract_wins_1", "Win a Match", "Win 1 match", 0, 0, 300, 600},
+	{"contract_score_500", "Score 500 Points", "Earn 500 score in matches", 0, 500, 250, 500},
 }
 
 func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
@@ -1444,6 +2081,233 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 	return b
 }
 
+func buildMmogXPConversionPayload(requestName string, playerPID string, payload []byte) []byte {
+	xpAmount := protocol.FirstInt32Field(payload, 0, "XPAmount", "xpAmount", "xp", "XP")
+	if xpAmount <= 0 {
+		return buildMmogErrorPayload(requestName, "invalid XP amount")
+	}
+
+	convertTo := protocol.FirstNonEmptyString(payload, "convertTo", "ConvertTo", "currency", "Currency")
+	if convertTo == "" {
+		convertTo = "credits"
+	}
+
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return buildMmogErrorPayload(requestName, "database unavailable")
+	}
+
+	var creditsGained, premiumCreditsGained int32
+	var success bool
+
+	if convertTo == "premium" || convertTo == "elite" {
+		premiumCreditsGained, success = convertXPToPremiumCredits(database, pid, xpAmount)
+		if !success {
+			return buildMmogErrorPayload(requestName, "XP conversion failed")
+		}
+	} else {
+		creditsGained, success = convertXPToCredits(database, pid, xpAmount)
+		if !success {
+			return buildMmogErrorPayload(requestName, "XP conversion failed")
+		}
+	}
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendInt32Field(b, "xpConverted", xpAmount)
+	b = protocol.AppendInt32Field(b, "creditsGained", creditsGained)
+	b = protocol.AppendInt32Field(b, "premiumCreditsGained", premiumCreditsGained)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogContractCompletionPayload(requestName string, playerPID string, payload []byte) []byte {
+	contractID := protocol.FirstNonEmptyString(payload, "ContractID", "contractID", "contract_id", "id")
+	if contractID == "" {
+		return buildMmogErrorPayload(requestName, "missing contract ID")
+	}
+
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return buildMmogErrorPayload(requestName, "database unavailable")
+	}
+
+	rewardXP, rewardGP, success := completeContract(database, pid, contractID)
+	if !success {
+		return buildMmogErrorPayload(requestName, "contract completion failed")
+	}
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendStringField(b, "contractID", contractID)
+	b = protocol.AppendInt32Field(b, "rewardXP", rewardXP)
+	b = protocol.AppendInt32Field(b, "rewardGP", rewardGP)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func buildMmogContractRerollPayload(requestName string, playerPID string, payload []byte) []byte {
+	contractID := protocol.FirstNonEmptyString(payload, "ContractID", "contractID", "contract_id", "id")
+	if contractID == "" {
+		return buildMmogErrorPayload(requestName, "missing contract ID")
+	}
+
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return buildMmogErrorPayload(requestName, "database unavailable")
+	}
+
+	// Reroll costs 100 credits
+	rerollCost := int32(100)
+	var softCurrency int32
+	_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&softCurrency)
+	if softCurrency < rerollCost {
+		return buildMmogErrorPayload(requestName, "insufficient credits for reroll")
+	}
+
+	// Deduct reroll cost
+	_, _ = database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=?`, rerollCost, pid)
+
+	// Mark old contract as rerolled
+	_, _ = database.Exec(`UPDATE player_contracts SET state='rerolled', updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
+
+	// Seed new contracts
+	seedDailyContractsForPlayer(database, pid)
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendStringField(b, "contractID", contractID)
+	b = protocol.AppendInt32Field(b, "rerollCost", rerollCost)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// Contract and XP conversion functions (moved from handlers package)
+
+func seedDailyContractsForPlayer(db *sql.DB, pid string) {
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
+	if count >= 3 {
+		return
+	}
+	for i := 0; i < 3 && i < len(dailyContractSeeds); i++ {
+		seed := dailyContractSeeds[i]
+		payload, _ := json.Marshal(map[string]interface{}{
+			"id":          seed.id,
+			"name":        seed.name,
+			"description": seed.description,
+			"targetKills": seed.targetKills,
+			"targetScore": seed.targetScore,
+			"rewardXP":    seed.rewardXP,
+			"rewardGP":    seed.rewardGP,
+		})
+		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
+	}
+}
+
+func completeContract(db *sql.DB, pid, contractID string) (rewardXP, rewardGP int32, success bool) {
+	// Get contract details
+	var payload string
+	err := db.QueryRow(`SELECT payload FROM player_contracts WHERE user_id=? AND contract_id=? AND state='active'`, pid, contractID).Scan(&payload)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	// Parse payload to get rewards
+	var contractData struct {
+		RewardXP int32 `json:"rewardXP"`
+		RewardGP int32 `json:"rewardGP"`
+	}
+	if err := json.Unmarshal([]byte(payload), &contractData); err != nil {
+		return 0, 0, false
+	}
+
+	// Mark contract as completed
+	_, err = db.Exec(`UPDATE player_contracts SET state='completed', progress=100, completed_at=datetime('now'), updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	// Award rewards
+	if contractData.RewardXP > 0 {
+		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, updated_at=datetime('now') WHERE user_id=?`, contractData.RewardXP, pid)
+	}
+	if contractData.RewardGP > 0 {
+		_, _ = db.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, contractData.RewardGP, pid)
+	}
+
+	// Seed new contract to replace completed one
+	seedDailyContractsForPlayer(db, pid)
+
+	return contractData.RewardXP, contractData.RewardGP, true
+}
+
+func convertXPToCredits(db *sql.DB, pid string, xpAmount int32) (creditsGained int32, success bool) {
+	if xpAmount <= 0 {
+		return 0, false
+	}
+
+	// Check if player has enough free XP
+	var freeXP int32
+	err := db.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP)
+	if err != nil || freeXP < xpAmount {
+		return 0, false
+	}
+
+	// Calculate credits (10 XP = 1 credit)
+	creditsGained = xpAmount / 10
+	if creditsGained <= 0 {
+		return 0, false
+	}
+
+	// Deduct XP and add credits
+	_, err = db.Exec(`UPDATE player_state SET free_xp=free_xp-?, soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, xpAmount, creditsGained, pid)
+	if err != nil {
+		return 0, false
+	}
+
+	return creditsGained, true
+}
+
+func convertXPToPremiumCredits(db *sql.DB, pid string, xpAmount int32) (premiumCreditsGained int32, success bool) {
+	if xpAmount <= 0 {
+		return 0, false
+	}
+
+	// Check if player has enough free XP
+	var freeXP int32
+	err := db.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP)
+	if err != nil || freeXP < xpAmount {
+		return 0, false
+	}
+
+	// Calculate premium credits (100 XP = 1 premium credit)
+	premiumCreditsGained = xpAmount / 100
+	if premiumCreditsGained <= 0 {
+		return 0, false
+	}
+
+	// Deduct XP and add premium credits
+	_, err = db.Exec(`UPDATE player_state SET free_xp=free_xp-?, premium_currency=premium_currency+?, updated_at=datetime('now') WHERE user_id=?`, xpAmount, premiumCreditsGained, pid)
+	if err != nil {
+		return 0, false
+	}
+
+	return premiumCreditsGained, true
+}
+
 func dailyContractState(pid string) int {
 	db := currentMmogPlayerStateDB()
 	if db == nil {
@@ -1455,4 +2319,75 @@ func dailyContractState(pid string) int {
 		return count
 	}
 	return 0
+}
+
+// ribbonThresholds defines the 12 ribbon types and their unlock conditions
+var ribbonThresholds = map[string]struct {
+	name      string
+	minKills  int32
+	minDeaths int32
+}{
+	"combat_efficiency": {"Combat Efficiency", 3, 0},
+	"kill_streak":       {"Kill Streak", 5, 0},
+	"unstoppable":       {"Unstoppable", 10, 0},
+	"survivor":          {"Survivor", 0, 0},
+	"first_blood":       {"First Blood", 1, 0},
+	"avenger":           {"Avenger", 1, 1},
+	"team_player":       {"Team Player", 2, 0},
+	"marksman":          {"Marksman", 4, 0},
+	"close_quarters":    {"Close Quarters", 3, 0},
+	"support_star":      {"Support Star", 1, 0},
+	"defender":          {"Defender", 2, 0},
+	"berserker":         {"Berserker", 6, 0},
+}
+
+type playerRibbon struct {
+	ribbonType string
+	count      int32
+}
+
+func loadPlayerRibbons(playerPID string) []playerRibbon {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return nil
+	}
+	rows, err := db.Query(`SELECT ribbon_type, count FROM player_ribbons WHERE user_id=? AND count > 0 ORDER BY ribbon_type`, playerPID)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var ribbons []playerRibbon
+	for rows.Next() {
+		var r playerRibbon
+		if err := rows.Scan(&r.ribbonType, &r.count); err != nil {
+			continue
+		}
+		ribbons = append(ribbons, r)
+	}
+	return ribbons
+}
+
+func appendMmogRibbonEntry(b []byte, stack []int, ribbon playerRibbon) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "Type", ribbon.ribbonType)
+	b = protocol.AppendInt32Field(b, "Count", ribbon.count)
+	if info, ok := ribbonThresholds[ribbon.ribbonType]; ok {
+		b = protocol.AppendStringField(b, "Name", info.name)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+func buildMmogRibbonsPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_GetRibbons")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b, stack = protocol.AppendArrayStart(b, stack, "Ribbons")
+	for _, ribbon := range loadPlayerRibbons(playerPID) {
+		b, stack = appendMmogRibbonEntry(b, stack, ribbon)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
 }

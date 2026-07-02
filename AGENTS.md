@@ -1,151 +1,62 @@
-# AGENTS.md — Dreadnought Private Server Project
+# AGENTS.md — Dreadnought Private Server
 
-## Overview
+Go workspace of 8 microservices emulating the Greybox backend for Dreadnought (UE4, Steam 835860).
 
-This project is a community-operated private server infrastructure for the discontinued game **Dreadnought** (UE4, Steam App 835860, Yager/Grey Box). The goal is to restore full playability via a Go-based backend and minimal client patches.
+## Critical Gotchas
 
-## Directory Map
+**Tests & lint must run per-module, not from workspace root:**
+```bash
+# WRONG (fails with "directory prefix . does not contain modules")
+cd dreadnought-private-server && go test ./...
 
-```
-/root/projects/
-├── dreadnought-private-server/   ← MAIN WORKING DIRECTORY (git repo)
-│   ├── auth-server/              :8081   Auth, login, JWT (Go + SQLite)
-│   ├── legacy-api/               :8082   Profiles, inventory, match history
-│   ├── mmogbrain/                :8083   Matchmaking + Firmament TLS :48843
-│   │   └── protocol/                      MMOG binary protocol (refactored: main.go 218 lines)
-│   ├── master-server/            :8084   Server registry + heartbeat
-│   ├── game-manager/             :8085   Wine game server spawner
-│   ├── gateway/                  :80,443 TLS termination + reverse proxy
-│   ├── admin-cli/                       CLI management tool
-│   ├── dn-launcher/                     Custom client launcher (Windows only)
-│   ├── shared/                          Common Go packages (db, middleware, logging, config)
-│   ├── scripts/                         Setup, cert generation, docker-compose
-│   ├── certs/                           TLS certificates (CA, server, firmament)
-│   ├── docs/                            API.md, PROTOCOL.md, ARCHITECTURE.md
-│   ├── run/                             Compiled binaries + runtime DBs
-│   ├── go.work                          Go workspace file (8 modules)
-│   ├── progress.md                      Task tracker (READ FIRST every session)
-│   ├── issues.md                        Known bugs and blockers
-│   ├── README.md                        Project overview + quick start
-│   ├── .github/copilot-instructions.md  Copilot AI instructions
-│   └── .env.example                     Environment variable template
-│
-├── src/                           ← GAME FILES (not in git, READ-ONLY)
-│   ├── Dreadnought/               Original game client + launcher files
-│   │   ├── DreadnoughtLauncher.exe
-│   │   └── launcher_extracted/    Extracted AngularJS launcher web app
-│   └── Documents/                 Reverse-engineering knowledge base
-│       ├── ghidra_decompile/      Ghidra decompilation of game binary
-│       ├── ghidra_output/         Binary RE findings
-│       ├── networking/            Wire protocol, packet layouts, RPCs
-│       ├── ships/                 Ship stats, classes, hardpoints
-│       ├── weapons/               Weapon system documentation
-│       ├── abilities/             103+ abilities documented
-│       ├── game_modes/            13 game modes, maps catalog
-│       ├── progression/           XP, ranks, seasons, ribbons
-│       ├── datatables/            379+ DataTables indexed
-│       ├── config/                Game config docs, feature flags
-│       ├── ai/                    AI behavior trees, boss AI
-│       ├── market/                Store, contracts
-│       ├── damage/                Damage formulas
-│       ├── diagrams/              ASCII system relationship diagrams
-│       ├── file_index.md          Master index of 4,854 files
-│       └── summary.md             Comprehensive 940-line overview
-│
-├── DreadGame/                    ← Extracted UE4 game content
-│   ├── Config/                   62 INI+JSON game config files
-│   ├── Content/                  Maps, environments, ships, weapons, UI
-│   ├── Plugins/                  8 UE4 plugins (YMmogbrain, OnlineSubsystemMmogbrain, etc.)
-│   └── DreadGame.uproject
-│
-├── test/                         ← Test data (JSON lookup tables)
-├── ue-env/                       ← Python 3.13 venv for UE4 tooling
-├── DreadGame.zip                 ← Compressed game assets
-└── *.log, *.pid                  ← Runtime logs and PID files
+# CORRECT
+cd dreadnought-private-server/mmogbrain && go test ./...
+cd dreadnought-private-server/legacy-api && go test ./...
+cd dreadnought-private-server/shared && go test ./...
 ```
 
-## Session Startup Checklist
+**Current test status (2026-05-26):**
+- `mmogbrain`: `TestPayloadSizesVerify` FAILS — `YA_PlayerFleets` target=2116 got=588 (delta=-1528)
+- `legacy-api/handlers`: 9 tests pass
+- `shared/dreadgameconfig`: 7 tests pass
+- All other modules: no test files
 
-Every session, in order:
-
-1. **Confirm access:**
-   ```
-   ls dreadnought-private-server/ src/Documents/ src/Dreadnought/
-   ```
-
-2. **Load progress tracker:**
-   ```
-   cat dreadnought-private-server/progress.md
-   ```
-
-3. **Load issues:**
-   ```
-   cat dreadnought-private-server/issues.md
-   ```
-
-4. **If pending/in-progress steps exist, continue them immediately.**
-
-5. **Before implementing any feature:**
-   - Read relevant files in `src/Documents/` (NOT in git — read-only reference)
-   - NEVER modify `src/Documents/` or `src/Dreadnought/`
-   - If documentation is missing or incomplete, report it — don't invent
-
-## Key Rules
-
-- **All code changes go in `dreadnought-private-server/`** (the git repo)
-- **`src/` is READ-ONLY** — game files, decompilation output, documentation
-- **`Documents/` has moved back to `src/Documents/`** (not in the git repo)
-- **Never break working functionality** — flag risks before proceeding
-- **Never guess silently** — mark inferences with `// [INFERRED]` and explain
-- **Keep both codebases in sync** — protocol/data changes must match on both sides
-- **Update progress.md after every completed step**
-- **Never redo completed work** — check progress.md first
-
-## Service Architecture
-
-```
-[Windows Client]
-      │
-      ├── HTTPS :443 → gateway (TLS termination + Host-header routing)
-      │     ├── profile-api.*       → auth-server :8081
-      │     ├── legacyapi.*         → legacy-api  :8082
-      │     ├── mmog.*              → mmogbrain   :8083
-      │     └── masterserver.*      → master-server :8084
-      │
-      ├── TLS :48843 → mmogbrain (Firmament JSON-RPC + YMmogbrain binary)
-      │
-      └── UDP :7777-7877 → DreadGame-Win64-Shipping.exe (dedicated servers)
-                              spawned by game-manager :8085
+**Lint from workspace root reports 0 issues but shows typecheck error:**
+```bash
+# Run per-module for real results
+cd dreadnought-private-server/mmogbrain && golangci-lint run ./...
 ```
 
-## JWT Format
+**Service launcher:** `run/start.sh` sources `run/secrets.env` and starts all services with correct env vars.
+
+**Go version mismatch:** `go.work` declares `go 1.25.0` (installed), but `Dockerfile.service` uses `golang:1.24-alpine`.
+
+## Architecture
 
 ```
-Algorithm: HS256
-Claims: sub, username, realm="dreadnought.pc-us", aud="dreadnought"|"launcher"
-Issuer: "Dreadnought-Revival-project"
-TTL: 24 hours
+[Windows Client] → HTTPS :443 → gateway (TLS termination + Host-header routing)
+  ├─ profile-api.*       → auth-server :8081   (JWT, login)
+  ├─ legacyapi.*         → legacy-api  :8082   (profiles, inventory)
+  ├─ mmog.*              → mmogbrain   :8083   (matchmaking)
+  └─ masterserver.*      → master-server :8084 (server registry)
+
+[Client] → TLS :48843 → mmogbrain (Firmament JSON-RPC + YMmogbrain binary protocol)
+[Client] → UDP :7777-7877 → DreadGame-Win64-Shipping.exe (dedicated servers via Wine)
 ```
 
-## Build & Test Commands
+## Build & Run
 
 ```bash
 # Build all services
-bash dreadnought-private-server/scripts/setup.sh
+bash scripts/setup.sh
 
 # Build single service
-cd dreadnought-private-server/auth-server && go build -o ../run/auth-server .
+cd auth-server && go build -o ../run/auth-server .
 
-# Run all tests (mmogbrain has the most)
-cd dreadnought-private-server/mmogbrain && go test ./...
+# Start all services (sources run/secrets.env)
+bash run/start.sh
 
-# Run a single test
-cd dreadnought-private-server/mmogbrain && go test -run TestExtractMmogPlayerPID ./...
-
-# Lint everything
-cd dreadnought-private-server && golangci-lint run ./...
-
-# Health-check all services
+# Health checks
 curl http://127.0.0.1:8081/health  # auth-server
 curl http://127.0.0.1:8082/health  # legacy-api
 curl http://127.0.0.1:8083/health  # mmogbrain
@@ -153,49 +64,47 @@ curl http://127.0.0.1:8084/health  # master-server
 curl http://127.0.0.1:8085/health  # game-manager
 ```
 
-## Service Details
+## Key Files
 
-| Service | Port | DB | Key Files | Tests |
-|---------|------|----|-----------|-------|
-| auth-server | 8081 | auth.db | main.go, handlers/handlers.go, jwt/jwt.go | None |
-| legacy-api | 8082 | legacy.db | handlers/handlers.go, inventory_bootstrap.go | 682 lines |
-| mmogbrain | 8083, 48843 | mmog.db | main.go (218 lines), firmament.go, gateway_server.go, gateway_catalog.go, response_*.go, protocol/, handlers/, matchmaker/ | 3200+ lines |
-| master-server | 8084 | master.db | handlers/handlers.go | None |
-| game-manager | 8085 | (none) | spawner/spawner.go, portpool/pool.go | None |
-| gateway | 80, 443 | (none) | main.go (281 lines) | None |
-| admin-cli | CLI | (none) | main.go (321 lines) | None |
-| dn-launcher | Client | (none) | main.go (447 lines) | None |
-| shared/* | — | db/db.go | middleware, logging, dreadgameconfig | 179 lines |
+- `progress.md` — Task tracker (READ FIRST every session)
+- `issues.md` — Known bugs and blockers
+- `go.work` — Workspace file (8 modules)
+- `run/start.sh` — Service launcher script
+- `run/secrets.env` — Runtime secrets (gitignored)
+- `docs/PROTOCOL.md` — UE4 wire protocol reference
+- `docs/API.md` — REST API documentation
+- `.github/copilot-instructions.md` — Architectural context
 
-## Environment Variables
+## Conventions
 
-| Variable | Used By | Default | Description |
-|----------|---------|---------|-------------|
-| JWT_SECRET | auth, legacy, mmog | changeme-... | HMAC key for JWT signing |
-| DB_PATH | auth, legacy, mmog, master | <svc>.db | SQLite database path |
-| ADDR | all | :<port> | Listen address |
-| SERVER_IP | game-manager | 127.0.0.1 | Public IP for clients |
-| GAME_BINARY | game-manager | /src/... | Path to DreadGame.exe |
-| WINE_EXE | game-manager | wine | Wine executable |
-| MASTER_URL | game-manager | http://127.0.0.1:8084 | Master server URL |
-| GAME_MGR_URL | mmogbrain | http://127.0.0.1:8085 | Game manager URL |
-| ADMIN_KEY | auth, admin-cli | changeme-... | Admin API key |
-| TLS_CERT/TLS_KEY | gateway | certs/... | TLS certificate paths |
-| FIRMAMENT_CERT/KEY | mmogbrain | (none) | Firmament TLS cert |
-| PLAYERS_PER_MATCH | mmogbrain | 2 | Players needed per match |
-| TLS_CERT_FINGERPRINT | dn-launcher | (none) | SHA256 of server cert |
+- **Handler pattern:** `type Handler struct { DB *sql.DB; Log *logrus.Logger; ... }` wired in `main.go` with `gorilla/mux`
+- **JWT:** HS256, claims: `sub`, `username`, `realm="dreadnought.pc-us"`, `aud="dreadnought"|"launcher"`
+- **Auth middleware:** Injects `X-User-ID`/`X-Username` headers; admin endpoints use `X-Admin-Key`
+- **Database:** SQLite via `shared/db` (WAL mode, `MaxOpenConns=1`, sequential migrations)
+- **Logging:** `logrus` with `JSONFormatter`; `Info` for requests, `Warn` for admin events
+- **Metrics:** All services expose `GET /metrics` via `promhttp`
+- **Env vars:** All services use `getenv(key, fallback)` — no `.env` parsing
 
-## Key Protocol Details
+## mmogbrain (most complex service)
 
-- **UE4 wire protocol:** 17-byte packet header (magic 0x55453400), 6 packet types, 5 channels
-- **YMmogbrain binary:** Custom SAX-like tagged field encoding, RC4 variant stream cipher
-- **Firmament:** JSON-RPC 2.0 over TLS, newline-delimited, on port 48843
-- **Gateway routing:** Host-header based, with special handling for `/auth/` rate limiting
+Beyond HTTP REST, runs Firmament TLS server on `:48843` speaking proprietary binary protocol:
+- Binary encoding helpers: `appendMmogStringField`, `appendMmogInt32Field`, etc.
+- Player PIDs: UUID hex strings **with hyphens stripped** (32 chars, not 36)
+- Race condition: Firmament auth delayed until MMOG `YA_PlayerGet` confirms player data ready
+- `PLAYERS_PER_MATCH=2` for testing, `10` for production
 
-## Current State (2026-05-23)
+## TLS Certificates
 
-- All services build and pass lint (0 golangci-lint issues)
-- **24/24 CRITICAL+HIGH issues resolved** (C1-C8, H1-H16)
-- **mmogbrain refactored**: 4,720-line `main.go` split into 11 files + `protocol/` package (218-line entry point)
-- 30 MEDIUM issues tracked, 2 resolved
-- Remaining major tasks: service consolidation, test coverage
+| File | Used by | Notes |
+|---|---|---|
+| `certs/server.crt` | Gateway HTTPS | Self-signed; clients trust `certs/ca.crt` |
+| `certs/firmament.crt` | Firmament :48843 | Issuer spoofed as `Amazon RSA 2048 M01` to bypass game's CA pinning |
+
+## Current State (2026-05-26)
+
+- All 8 services build; 0 golangci-lint issues per-module
+- 24/24 CRITICAL+HIGH issues resolved; 30 MEDIUM tracked
+- mmogbrain refactored: 4,720-line `main.go` → 218-line entry point + 11 files
+- Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks
+- Feature coverage: ~30%
+- **Known failing test:** `TestPayloadSizesVerify` in mmogbrain (YA_PlayerFleets size mismatch)

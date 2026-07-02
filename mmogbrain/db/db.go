@@ -164,6 +164,40 @@ var migrations = []string{
 		PRIMARY KEY (user_id, item_id),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	`CREATE TABLE IF NOT EXISTS player_pve_progress (
+		user_id        TEXT NOT NULL,
+		mode           TEXT NOT NULL,
+		highest_wave   INTEGER NOT NULL DEFAULT 0,
+		total_waves    INTEGER NOT NULL DEFAULT 0,
+		boss_kills     INTEGER NOT NULL DEFAULT 0,
+		total_kills    INTEGER NOT NULL DEFAULT 0,
+		best_score     INTEGER NOT NULL DEFAULT 0,
+		created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, mode),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
+	`CREATE TABLE IF NOT EXISTS player_boss_kills (
+		user_id     TEXT NOT NULL,
+		boss_id     TEXT NOT NULL,
+		kill_count  INTEGER NOT NULL DEFAULT 0,
+		first_kill  TEXT,
+		last_kill   TEXT,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, boss_id),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
+	`CREATE TABLE IF NOT EXISTS player_ai_preferences (
+		user_id          TEXT PRIMARY KEY,
+		difficulty       TEXT NOT NULL DEFAULT 'Normal',
+		ai_behavior      TEXT NOT NULL DEFAULT 'Balanced',
+		spawn_rate       REAL NOT NULL DEFAULT 1.0,
+		boss_frequency   REAL NOT NULL DEFAULT 1.0,
+		created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

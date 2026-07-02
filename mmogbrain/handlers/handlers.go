@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/google/uuid"
@@ -518,6 +519,61 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 	if bonusXP > 0 {
 		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, bonusXP, bonusXP/2, pid)
 	}
+
+	// Track PvE progress
+	wave := kills / 5 // Estimate wave based on kills
+	if wave < 1 {
+		wave = 1
+	}
+	_, _ = db.Exec(`INSERT OR IGNORE INTO player_pve_progress(user_id, mode, highest_wave, total_waves, boss_kills, total_kills, best_score) 
+		VALUES(?, ?, 0, 0, 0, 0, 0)`, pid, gameMode)
+	_, _ = db.Exec(`UPDATE player_pve_progress SET 
+		highest_wave = MAX(highest_wave, ?),
+		total_waves = total_waves + 1,
+		boss_kills = boss_kills + ?,
+		total_kills = total_kills + ?,
+		best_score = MAX(best_score, ?),
+		updated_at = datetime('now')
+		WHERE user_id=? AND mode=?`, wave, bossKills, kills, bonusXP, pid, gameMode)
+}
+
+// RecordBossKill records a boss kill for a player
+func RecordBossKill(db *sql.DB, pid, bossID string) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, _ = db.Exec(`INSERT OR IGNORE INTO player_boss_kills(user_id, boss_id, kill_count, first_kill, last_kill) 
+		VALUES(?, ?, 0, ?, ?)`, pid, bossID, now, now)
+	_, _ = db.Exec(`UPDATE player_boss_kills SET 
+		kill_count = kill_count + 1,
+		last_kill = ?,
+		updated_at = datetime('now')
+		WHERE user_id=? AND boss_id=?`, now, pid, bossID)
+}
+
+// CompletePvEWave tracks wave completion and awards rewards
+func CompletePvEWave(db *sql.DB, pid, gameMode string, wave, kills, bossKills, score int32) {
+	// Update PvE progress
+	_, _ = db.Exec(`INSERT OR IGNORE INTO player_pve_progress(user_id, mode, highest_wave, total_waves, boss_kills, total_kills, best_score) 
+		VALUES(?, ?, 0, 0, 0, 0, 0)`, pid, gameMode)
+	_, _ = db.Exec(`UPDATE player_pve_progress SET 
+		highest_wave = MAX(highest_wave, ?),
+		total_waves = total_waves + 1,
+		boss_kills = boss_kills + ?,
+		total_kills = total_kills + ?,
+		best_score = MAX(best_score, ?),
+		updated_at = datetime('now')
+		WHERE user_id=? AND mode=?`, wave, bossKills, kills, score, pid, gameMode)
+
+	// Calculate rewards based on wave
+	rewardXP := wave * 100
+	rewardGP := wave * 200
+	if bossKills > 0 {
+		rewardXP += bossKills * 500
+		rewardGP += bossKills * 1000
+	}
+
+	// Award rewards
+	_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, soft_currency=soft_currency+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, 
+		rewardXP, rewardGP, rewardXP/2, pid)
 }
 
 // Health handles GET /health

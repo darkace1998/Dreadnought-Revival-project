@@ -226,6 +226,10 @@ func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed 
 		if item.itemType == "ship" {
 			continue
 		}
+		price := int32(0)
+		if p, ok := catalogPrices[item.itemID]; ok {
+			price = p
+		}
 		seeds = append(seeds, gatewayCatalogEntitySeed{
 			itemID:          item.itemID,
 			externalID:      item.externalID,
@@ -237,7 +241,7 @@ func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed 
 			shipID:          item.shipID,
 			loadoutID:       item.loadoutID,
 			priceCurrencyID: priceCurrencyID,
-			priceAmount:     0,
+			priceAmount:     price,
 			owned:           true,
 			hidden:          item.itemType != "ship" && item.itemType != "loadout",
 			quantity:        item.quantity,

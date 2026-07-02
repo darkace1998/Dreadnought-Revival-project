@@ -32,6 +32,11 @@ func main() {
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
 
+	logFile, err := os.OpenFile("mmogbrain.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err == nil {
+		log.SetOutput(logFile)
+	}
+
 	dbPath := getenv("DB_PATH", "mmog.db")
 	addr := getenv("ADDR", ":8083")
 	secret := []byte(getenv("JWT_SECRET", "changeme-dreadnought-jwt-secret"))

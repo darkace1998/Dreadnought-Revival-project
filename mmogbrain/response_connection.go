@@ -163,6 +163,8 @@ type mmogConnState struct {
 	playerGetResponded       bool
 	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
 	pendingDailyContracts    []protocol.AppFrame // delayed until YA_PlayerGet avoids early quest-cycle recursion
+	pendingPlayerFleets      []protocol.AppFrame // delayed until YA_PlayerGet fleet config is loaded
+	pendingStaticFleetData   []protocol.AppFrame // delayed until YA_PlayerGet fleet config is loaded
 	staticFleetDataReceived  bool
 	fleetEligibilityReceived bool
 	playerFleetsReceived     bool
@@ -184,6 +186,28 @@ func syntheticRequestID(tag byte) [16]byte {
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
 	state.playerGetResponded = true
 	setGatewayPlayerDataReadyState(state.playerPID, true)
+	if len(state.pendingStaticFleetData) > 0 {
+		pending := state.pendingStaticFleetData
+		state.pendingStaticFleetData = nil
+		for _, ps := range pending {
+			psResp := buildMmogRequestResponseFrame(ps.RequestID, ps.MsgType, "YA_RequestStaticFleetData", state.playerPID, ps.Payload)
+			log.WithFields(logrus.Fields{"remote": remote, "name": "YA_RequestStaticFleetData", "hex": hex.EncodeToString(psResp), "plain_len": len(psResp)}).Info("mmog: fleet response hex dump")
+			if err := writeMmogAppResponse(log, conn, remote, ps.RequestID, "YA_RequestStaticFleetData", psResp, appEncoder, encryptResponses, "pending static fleet data response failed", "sent pending YA_RequestStaticFleetData response"); err != nil {
+				return err
+			}
+		}
+	}
+	if len(state.pendingPlayerFleets) > 0 {
+		pending := state.pendingPlayerFleets
+		state.pendingPlayerFleets = nil
+		for _, pf := range pending {
+			pfResp := buildMmogRequestResponseFrame(pf.RequestID, pf.MsgType, "YA_PlayerFleets", state.playerPID, pf.Payload)
+			log.WithFields(logrus.Fields{"remote": remote, "name": "YA_PlayerFleets", "hex": hex.EncodeToString(pfResp), "plain_len": len(pfResp)}).Info("mmog: fleet response hex dump")
+			if err := writeMmogAppResponse(log, conn, remote, pf.RequestID, "YA_PlayerFleets", pfResp, appEncoder, encryptResponses, "pending player fleets response failed", "sent pending YA_PlayerFleets response"); err != nil {
+				return err
+			}
+		}
+	}
 	if len(state.pendingPlayerPurchases) > 0 {
 		pending := state.pendingPlayerPurchases
 		state.pendingPlayerPurchases = nil
@@ -258,6 +282,16 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				log.WithField("remote", remote).Info("mmog: delaying YA_GetPlayerPurchases response until YA_PlayerGet is answered")
 				continue
 			}
+			if requestName == "YA_PlayerFleets" && !state.playerGetResponded && (!state.staticFleetDataReceived || !state.fleetEligibilityReceived) {
+				state.pendingPlayerFleets = append(state.pendingPlayerFleets, frame)
+				log.WithField("remote", remote).Info("mmog: delaying YA_PlayerFleets response until YA_PlayerGet is answered")
+				continue
+			}
+			if requestName == "YA_RequestStaticFleetData" && !state.playerGetResponded {
+				state.pendingStaticFleetData = append(state.pendingStaticFleetData, frame)
+				log.WithField("remote", remote).Info("mmog: delaying YA_RequestStaticFleetData response until YA_PlayerGet is answered")
+				continue
+			}
 			if requestName == "YA_PlayerFleets" {
 				state.playerFleetsReceived = true
 			}
@@ -279,6 +313,14 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			}
 
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)
+			if requestName == "YA_PlayerFleets" || requestName == "YA_RequestStaticFleetData" {
+				log.WithFields(logrus.Fields{
+					"remote":    remote,
+					"name":      requestName,
+					"hex":       hex.EncodeToString(response),
+					"plain_len": len(response),
+				}).Info("mmog: fleet response hex dump")
+			}
 			if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
 			}

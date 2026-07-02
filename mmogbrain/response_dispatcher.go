@@ -17,9 +17,29 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetSeasonData":
 		return buildMmogSeasonDataPayload()
 	case "YA_GetSeasonProgress":
-		return buildMmogSeasonProgressPayload()
+		return buildMmogSeasonProgressPayloadForPlayer(playerPID)
+	case "YA_GetPvEProgress":
+		return buildMmogPvEProgressPayload(playerPID)
+	case "YA_GetBossKills":
+		return buildMmogBossKillsPayload(playerPID)
+	case "YA_GetAIPreferences":
+		return buildMmogAIPreferencesPayload(playerPID)
+	case "YA_SetAIPreferences":
+		return buildMmogSetAIPreferencesPayload(playerPID, payload)
+	case "YA_GetHavocWaves":
+		return buildMmogHavocWavesPayload()
+	case "YA_GetBossTypes":
+		return buildMmogBossTypesPayload()
+	case "YA_GetAIDifficultyLevels":
+		return buildMmogAIDifficultyLevelsPayload()
+	case "YA_GetHavocModifiers":
+		return buildMmogHavocModifiersPayload()
+	case "YA_GetPvERewardTiers":
+		return buildMmogPvERewardTiersPayload()
 	case "YA_PlayerGet":
 		return buildMmogPlayerGetPayload(playerPID)
+	case "YA_GetRibbons":
+		return buildMmogRibbonsPayload(playerPID)
 	case "YA_GetPlayerStatsCounterData":
 		return buildMmogPlayerStatsCounterDataPayload()
 	case "YA_GetPlayerProgression":
@@ -41,7 +61,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetScoringData":
 		return buildMmogScoringDataPayload()
 	case "YA_GetDailyContractsData":
-		return buildMmogDailyContractsDataPayload()
+		return buildMmogDailyContractsDataPayloadForPlayer(playerPID)
 	case "YA_GetBoosterData":
 		return buildMmogBoosterDataPayload()
 	case "YA_GetPlayerScores":
@@ -95,6 +115,12 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogPurchasePayload(requestName, playerPID, payload)
 	case "YA_BuyEliteStatus", "YA_BuyDaypass", "YA_ActivateElite":
 		return buildMmogElitePurchasePayload(requestName, playerPID, payload)
+	case "YA_ConvertXPToCredits", "YA_ExchangeXP":
+		return buildMmogXPConversionPayload(requestName, playerPID, payload)
+	case "YA_CompleteContract", "YA_ClaimContract":
+		return buildMmogContractCompletionPayload(requestName, playerPID, payload)
+	case "YA_RerollContract", "YA_RefreshContract":
+		return buildMmogContractRerollPayload(requestName, playerPID, payload)
 
 	// --- Navigation ---
 	case "YA_CheckReturn":
