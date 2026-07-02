@@ -1,0 +1,271 @@
+{
+  "rows": {
+    "HVC_Boost_Util_SpdInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +7%) : Stacks(99);AM(PawnReverseForceModifier +7%) : Stacks(99);AM(PawnVerticalForceModifier +7%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +12%) : Stacks(99);AM(PawnReverseForceModifier +12%) : Stacks(99);AM(PawnVerticalForceModifier +12%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +20%) : Stacks(99);AM(PawnReverseForceModifier +20%) : Stacks(99);AM(PawnVerticalForceModifier +20%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_DmgInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +3%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_DmgInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +5.5%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_DmgInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +10%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_WpnEnDec": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -15% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_WpnEnRelDec_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnReloadTimePriModifier -50% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(99);AM( PawnReloadTimeSecModifier -50% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(99);AM( PawnHealingModifier +10% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HpInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +4%) : Stacks(99);RM(Health +100%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HpInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +6%) : Stacks(99);RM(Health +100%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HpInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +10%) : Stacks(99);RM(Health +100%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_EnInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnMaxEnergyModifier+10%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_EnInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnMaxEnergyModifier +25%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_EnInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnMaxEnergyModifier+40%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HPRegtimeDec_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthCooldownTimeModifier -20%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HPRegInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +5%): Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HPRegInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +10%): Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_HPRegInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +20%): Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +3%) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +5.5%) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +10%) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArIncSid_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +100% | CC(DamageSourceAngle<135&DamageSourceAngle>45) ) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArIncFr_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +3% | CC(DamageSourceAngle<=45) ):Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ArIncBk_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +3% | CC(DamageSourceAngle>=135) ) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ShieldEnDec_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -15% | CC(EnergyWheelSelection==YEWS_SHIELD)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Def_ThrustEnArmInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +10% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_AbiInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +5%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_AbiInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +10%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_AbiInc_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +20%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Off_RldTDec_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnReloadTimePriModifier -10%) : Stacks(99);AM(PawnReloadTimeSecModifier -10%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_AbiTDec_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -10%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdIncFwd_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier  +30%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdIncVert_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnVerticalForceModifier +30%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdIncStr_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnSteerForceModifier +30%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_SpdIncBk_Large": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnReverseForceModifier  +30%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_EnReginc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM ( PawnEnergyRegenerationRateModifier +10%) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_ThrustEnDec": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -15% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_Boost_Util_EnThrustSpdInc_Medium": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnVerticalForceModifier +30% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(99);AM(PawnSteeringForceModifier +30% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(99);AM(PawnForwardForceModifier  +30% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 38
+}

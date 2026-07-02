@@ -1,0 +1,131 @@
+{
+  "rows": {
+    "0": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "1": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "2": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "3": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "4": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "5": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "6": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "7": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "8": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "9": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "10": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "11": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "12": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "13": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "14": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "15": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "16": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "17": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "18": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "19": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    },
+    "20": {
+      "m_maxBonus": 10000,
+      "m_timeLimitA": 0,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 5
+    }
+  },
+  "row_count": 21
+}

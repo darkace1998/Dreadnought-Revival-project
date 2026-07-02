@@ -1,0 +1,185 @@
+{
+  "rows": {
+    "DN_AbilityAltWeapon_DT": {
+      "m_abilityName": "None",
+      "m_triggerName": "None",
+      "m_activeTime": 0.0,
+      "m_coolDown": 0.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Int_AltFire_SpdDec_Ability_T3_BP": {
+      "m_abilityName": "Stasis Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 10.0,
+      "m_coolDown": 40.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Int_AltFire_SpdDec_Ability_BP": {
+      "m_abilityName": "Stasis Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 15.0,
+      "m_coolDown": 35.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Int_AltFire_SpdDec_Ability_T5_BP": {
+      "m_abilityName": "Stasis Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 20.0,
+      "m_coolDown": 30.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_DN_Int_AltFire_ArDec_Ability_BP": {
+      "m_abilityName": "Rupture Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 15.0,
+      "m_coolDown": 55.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_DN_Int_AltFire_ArDec_Ability_T5_BP": {
+      "m_abilityName": "Rupture Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 15.0,
+      "m_coolDown": 45.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SC_Int_AltFire_AbiDec_Ability_T3_BP": {
+      "m_abilityName": "Disruptor Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 7.0,
+      "m_coolDown": 60.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SC_Int_AltFire_AbiDec_Ability_BP": {
+      "m_abilityName": "Disruptor Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 7.0,
+      "m_coolDown": 55.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SC_Int_AltFire_AbiDec_Ability_T5_BP": {
+      "m_abilityName": "Disruptor Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 7.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SC_Int_AltFire_SpeedDec_Ability_BP": {
+      "m_abilityName": "Stasis Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 15.0,
+      "m_coolDown": 35.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SC_Int_AltFire_SpeedDec_Ability_T5_BP": {
+      "m_abilityName": "Stasis Ammo",
+      "m_triggerName": "None",
+      "m_activeTime": 15.0,
+      "m_coolDown": 30.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 9.0,
+      "m_coolDown": 60.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T0_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 7.0,
+      "m_coolDown": 75.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T1_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 7.0,
+      "m_coolDown": 70.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T2_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 7.0,
+      "m_coolDown": 65.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T3_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 8.0,
+      "m_coolDown": 62.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T3_Hero_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 8.0,
+      "m_coolDown": 62.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_Firemode_Artillery_Ability_T5_BP": {
+      "m_abilityName": "Siege Mode",
+      "m_triggerName": "ArtilleryMode",
+      "m_activeTime": 10.0,
+      "m_coolDown": 55.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_FireMode_Weaken_Ability_BP": {
+      "m_abilityName": "Rupture Catalyst",
+      "m_triggerName": "None",
+      "m_activeTime": 10.0,
+      "m_coolDown": 60.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SN_Pri_FireMode_Weaken_Ability_T5_BP": {
+      "m_abilityName": "Rupture Catalyst",
+      "m_triggerName": "None",
+      "m_activeTime": 10.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    }
+  },
+  "row_count": 20
+}

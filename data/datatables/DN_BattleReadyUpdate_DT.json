@@ -1,0 +1,50 @@
+{
+  "rows": {
+    "defaultRecruit": {
+      "m_minConectedTime": 5.0,
+      "m_cooldownWin": 0.0,
+      "m_cooldownWin[1]": -1.0,
+      "m_cooldownWin[2]": 0.1,
+      "m_cooldownWin[3]": 0.0,
+      "m_cooldownLose": 0.0,
+      "m_cooldownLose[1]": -1.0,
+      "m_cooldownLose[2]": 0.0,
+      "m_cooldownLose[3]": 0.0,
+      "m_cooldownLateJoin": 0.0,
+      "m_cooldownLateJoin[1]": 1.0,
+      "m_cooldownLateJoin[2]": 0.0,
+      "m_cooldownLateJoin[3]": 0.0
+    },
+    "defaultVeteran": {
+      "m_minConectedTime": 5.0,
+      "m_cooldownWin": 0.0,
+      "m_cooldownWin[1]": 0.0,
+      "m_cooldownWin[2]": -1.0,
+      "m_cooldownWin[3]": 0.0,
+      "m_cooldownLose": 0.0,
+      "m_cooldownLose[1]": 0.0,
+      "m_cooldownLose[2]": -1.0,
+      "m_cooldownLose[3]": 0.0,
+      "m_cooldownLateJoin": 0.0,
+      "m_cooldownLateJoin[1]": 0.0,
+      "m_cooldownLateJoin[2]": 1.0,
+      "m_cooldownLateJoin[3]": 0.0
+    },
+    "defaultLegendary": {
+      "m_minConectedTime": 5.0,
+      "m_cooldownWin": 0.0,
+      "m_cooldownWin[1]": 0.0,
+      "m_cooldownWin[2]": 0.0,
+      "m_cooldownWin[3]": -1.0,
+      "m_cooldownLose": 0.0,
+      "m_cooldownLose[1]": 0.0,
+      "m_cooldownLose[2]": 0.0,
+      "m_cooldownLose[3]": -1.0,
+      "m_cooldownLateJoin": 0.0,
+      "m_cooldownLateJoin[1]": 0.0,
+      "m_cooldownLateJoin[2]": 0.0,
+      "m_cooldownLateJoin[3]": 1.0
+    }
+  },
+  "row_count": 3
+}

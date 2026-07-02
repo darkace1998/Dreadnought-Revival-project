@@ -1,0 +1,11 @@
+{
+  "rows": {
+    "0": {
+      "m_objectID": "ESCORTSHIP",
+      "m_maxScore": 10000,
+      "m_maxDamage": 20000,
+      "m_minDamage": 5000
+    }
+  },
+  "row_count": 1
+}

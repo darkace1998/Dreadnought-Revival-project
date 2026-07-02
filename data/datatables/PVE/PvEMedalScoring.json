@@ -1,0 +1,20 @@
+{
+  "rows": {
+    "0": {
+      "m_medal": "EYMedal::YM_BRONZE",
+      "m_teamScoreNeeded": 0,
+      "m_reward": 0
+    },
+    "1": {
+      "m_medal": "EYMedal::YM_SILVER",
+      "m_teamScoreNeeded": 1,
+      "m_reward": 0
+    },
+    "2": {
+      "m_medal": "EYMedal::YM_GOLD",
+      "m_teamScoreNeeded": 2,
+      "m_reward": 0
+    }
+  },
+  "row_count": 3
+}

@@ -1,0 +1,65 @@
+{
+  "rows": {
+    "HostileTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_HostileTarget",
+      "m_icon": "import[12]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "PrimaryTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_PrimaryTarget",
+      "m_icon": "import[15]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "FollowTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_FollowTarget",
+      "m_icon": "import[14]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "TargetDestination": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_TargetDestination",
+      "m_icon": "import[19]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "Regroup": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_Regroup",
+      "m_icon": "import[18]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "DestroyTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_DestroyTarget",
+      "m_icon": "import[13]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_MainQuest"
+    },
+    "OptionalTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_OptionalTarget",
+      "m_icon": "import[16]",
+      "m_markerText": "[text_5b]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_SideQuest"
+    },
+    "LastTargetAlive": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_LastTargetAlive",
+      "m_icon": "import[19]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_Enemy"
+    },
+    "ProtectTarget": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_ProtectionTarget",
+      "m_icon": "import[17]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_SideQuest"
+    },
+    "Incoming": {
+      "m_marker": "EYUIQuestMarker::EYUIQM_Incoming",
+      "m_icon": "import[19]",
+      "m_markerText": "[text]",
+      "m_questMarkerColorStyle": "EYUIColorStyle::YUICS_Enemy"
+    }
+  },
+  "row_count": 10
+}

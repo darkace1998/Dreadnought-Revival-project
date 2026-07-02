@@ -1,0 +1,26 @@
+{
+  "rows": {
+    "EnergyOnThrust": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnFeat1()",
+      "m_effects": "RM(Energy InitialEnergyCosts -0); AM(PawnVerticalForceModifier +125%) :Stacks(1) ; AM(PawnForwardForceModifier +150%) :Stacks(1) ;AM(PawnReverseForceModifier +100%) :Stacks(1); AM(PawnSteerForceModifier +60%) :Stacks(1) ; AM(PawnEnergyConsumptionRateModifier -30%) :Stacks(1);DFS(EnergyOnShield) ;DFS(EnergyOnDamage); DFS(EnergyOff); PCFS(#Energy_To_Engine)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyOnDamage": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnFeat3(CC(Energy>0))",
+      "m_effects": "RM(Energy InitialEnergyCosts -0); AM(PawnEnergyConsumptionRateModifier +100%) :Stacks(1); DFS(EnergyOnThrust) ;DFS(EnergyOnShield) ;DFS(EnergyOff); PCFS(#Energy_To_Weapons)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_FirepowerInc_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_FirepowerInc_T3))",
+      "m_effects": "AM(PawnDamageModifier +60%) :Stacks(1): D(8.0) : Buff(FirepowerIncrease);PlayFeedback(FirepowerIncrease):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 3
+}

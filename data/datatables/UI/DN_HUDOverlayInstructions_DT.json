@@ -1,0 +1,50 @@
+{
+  "rows": {
+    "TouchpadEnergyWheel": {
+      "m_controllerConfigIndex": 0,
+      "m_instructionType": "EYHelperHUDInstructionType::EnergyWheelInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadShortCommands": {
+      "m_controllerConfigIndex": 0,
+      "m_instructionType": "EYHelperHUDInstructionType::ShortCommandInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadControls": {
+      "m_controllerConfigIndex": 0,
+      "m_instructionType": "EYHelperHUDInstructionType::OptionsInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadEnergyWheel_Config1": {
+      "m_controllerConfigIndex": 1,
+      "m_instructionType": "EYHelperHUDInstructionType::EnergyWheelInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadShortCommands_Config1": {
+      "m_controllerConfigIndex": 1,
+      "m_instructionType": "EYHelperHUDInstructionType::ShortCommandInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadControls_Config1": {
+      "m_controllerConfigIndex": 1,
+      "m_instructionType": "EYHelperHUDInstructionType::OptionsInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadEnergyWheel_Config2": {
+      "m_controllerConfigIndex": 2,
+      "m_instructionType": "EYHelperHUDInstructionType::EnergyWheelInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadShortCommands_Config2": {
+      "m_controllerConfigIndex": 2,
+      "m_instructionType": "EYHelperHUDInstructionType::ShortCommandInstructions",
+      "m_instructionText": "[text]"
+    },
+    "TouchpadControls_Config2": {
+      "m_controllerConfigIndex": 2,
+      "m_instructionType": "EYHelperHUDInstructionType::OptionsInstructions",
+      "m_instructionText": "[text]"
+    }
+  },
+  "row_count": 9
+}

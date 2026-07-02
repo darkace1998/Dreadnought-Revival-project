@@ -1,0 +1,680 @@
+{
+  "rows": {
+    "AbilityReady": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityReady",
+      "m_color": {
+        "r": 0,
+        "g": 172,
+        "b": 231,
+        "a": 255
+      }
+    },
+    "AbilityTargeted": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityTargeted",
+      "m_color": {
+        "r": 0,
+        "g": 127,
+        "b": 48,
+        "a": 255
+      }
+    },
+    "AbilityReadyGlow": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityReadyGlow",
+      "m_color": {
+        "r": 0,
+        "g": 20,
+        "b": 63,
+        "a": 255
+      }
+    },
+    "AbilityTargetedGlow": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityTargetedGlow",
+      "m_color": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
+    },
+    "Buff": {
+      "m_style": "EYUIColorStyle::YUICS_Buff",
+      "m_color": {
+        "r": 101,
+        "g": 196,
+        "b": 36,
+        "a": 255
+      }
+    },
+    "BuffGlow": {
+      "m_style": "EYUIColorStyle::YUICS_BuffGlow",
+      "m_color": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
+    },
+    "Debuff": {
+      "m_style": "EYUIColorStyle::YUICS_Debuff",
+      "m_color": {
+        "r": 229,
+        "g": 79,
+        "b": 32,
+        "a": 255
+      }
+    },
+    "DebuffGlow": {
+      "m_style": "EYUIColorStyle::YUICS_DebuffGlow",
+      "m_color": {
+        "r": 136,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Admin": {
+      "m_style": "EYUIColorStyle::YUICS_Admin",
+      "m_color": {
+        "r": 244,
+        "g": 71,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Generic": {
+      "m_style": "EYUIColorStyle::YUICS_Generic",
+      "m_color": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      }
+    },
+    "Server": {
+      "m_style": "EYUIColorStyle::YUICS_Server",
+      "m_color": {
+        "r": 253,
+        "g": 130,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Whisper": {
+      "m_style": "EYUIColorStyle::YUICS_Whisper",
+      "m_color": {
+        "r": 225,
+        "g": 52,
+        "b": 53,
+        "a": 255
+      }
+    },
+    "Enemy": {
+      "m_style": "EYUIColorStyle::YUICS_Enemy",
+      "m_color": {
+        "r": 240,
+        "g": 149,
+        "b": 135,
+        "a": 255
+      }
+    },
+    "Active": {
+      "m_style": "EYUIColorStyle::YUICS_Active",
+      "m_color": {
+        "r": 42,
+        "g": 136,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "ActiveGlow": {
+      "m_style": "EYUIColorStyle::YUICS_ActiveGlow",
+      "m_color": {
+        "r": 1,
+        "g": 29,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Inactive": {
+      "m_style": "EYUIColorStyle::YUICS_Inactive",
+      "m_color": {
+        "r": 58,
+        "g": 134,
+        "b": 220,
+        "a": 255
+      }
+    },
+    "InactiveGlow": {
+      "m_style": "EYUIColorStyle::YUICS_InactiveGlow",
+      "m_color": {
+        "r": 0,
+        "g": 11,
+        "b": 54,
+        "a": 255
+      }
+    },
+    "Neutral": {
+      "m_style": "EYUIColorStyle::YUICS_Neutral",
+      "m_color": {
+        "r": 196,
+        "g": 216,
+        "b": 218,
+        "a": 255
+      }
+    },
+    "Ally": {
+      "m_style": "EYUIColorStyle::YUICS_Ally",
+      "m_color": {
+        "r": 136,
+        "g": 188,
+        "b": 241,
+        "a": 255
+      }
+    },
+    "Faction_4": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_5": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_6": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_7": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_8": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_9": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_10": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "Faction_11": {
+      "m_style": "EYUIColorStyle::YUICS_Faction",
+      "m_color": {
+        "r": 188,
+        "g": 67,
+        "b": 235,
+        "a": 255
+      }
+    },
+    "DeadPawn": {
+      "m_style": "EYUIColorStyle::YUICS_DeadPawn",
+      "m_color": {
+        "r": 34,
+        "g": 34,
+        "b": 34,
+        "a": 255
+      }
+    },
+    "DeadPawnGlow": {
+      "m_style": "EYUIColorStyle::YUICS_DeadPawnGlow",
+      "m_color": {
+        "r": 14,
+        "g": 14,
+        "b": 14,
+        "a": 255
+      }
+    },
+    "DrawStateGlow": {
+      "m_style": "EYUIColorStyle::YUICS_DrawStateGlow",
+      "m_color": {
+        "r": 136,
+        "g": 131,
+        "b": 28,
+        "a": 255
+      }
+    },
+    "CriticalDamageGlow": {
+      "m_style": "EYUIColorStyle::YUICS_CriticalDamageGlow",
+      "m_color": {
+        "r": 44,
+        "g": 2,
+        "b": 6,
+        "a": 255
+      }
+    },
+    "DamageGlowColor": {
+      "m_style": "EYUIColorStyle::YUICS_DamageGlow",
+      "m_color": {
+        "r": 102,
+        "g": 3,
+        "b": 3,
+        "a": 255
+      }
+    },
+    "DefaultColor": {
+      "m_style": "EYUIColorStyle::YUICS_Default",
+      "m_color": {
+        "r": 147,
+        "g": 214,
+        "b": 240,
+        "a": 255
+      }
+    },
+    "WarningGlow": {
+      "m_style": "EYUIColorStyle::YUICS_WarningGlow",
+      "m_color": {
+        "r": 71,
+        "g": 0,
+        "b": 2,
+        "a": 255
+      }
+    },
+    "TextField_Focused": {
+      "m_style": "EYUIColorStyle::YUICS_TextFieldFocused",
+      "m_color": {
+        "r": 22,
+        "g": 172,
+        "b": 255,
+        "a": 255
+      }
+    },
+    "TextField_NoInput": {
+      "m_style": "EYUIColorStyle::YUICS_TextFieldNoInputFocused",
+      "m_color": {
+        "r": 253,
+        "g": 253,
+        "b": 253,
+        "a": 255
+      }
+    },
+    "TextField_NotFocused": {
+      "m_style": "EYUIColorStyle::YUICS_TextFieldNotFocused",
+      "m_color": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
+    },
+    "CriticalDamage": {
+      "m_style": "EYUIColorStyle::YUICS_CriticalDamage",
+      "m_color": {
+        "r": 240,
+        "g": 4,
+        "b": 25,
+        "a": 255
+      }
+    },
+    "Damage": {
+      "m_style": "EYUIColorStyle::YUICS_Damage",
+      "m_color": {
+        "r": 225,
+        "g": 15,
+        "b": 14,
+        "a": 255
+      }
+    },
+    "Energy": {
+      "m_style": "EYUIColorStyle::YUICS_Energy",
+      "m_color": {
+        "r": 56,
+        "g": 204,
+        "b": 251,
+        "a": 255
+      }
+    },
+    "Health": {
+      "m_style": "EYUIColorStyle::YUICS_Health",
+      "m_color": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      }
+    },
+    "Warning": {
+      "m_style": "EYUIColorStyle::YUICS_Warning",
+      "m_color": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
+    },
+    "Weapon": {
+      "m_style": "EYUIColorStyle::YUICS_Weapon",
+      "m_color": {
+        "r": 251,
+        "g": 112,
+        "b": 9,
+        "a": 255
+      }
+    },
+    "MainQuest": {
+      "m_style": "EYUIColorStyle::YUICS_MainQuest",
+      "m_color": {
+        "r": 255,
+        "g": 168,
+        "b": 26,
+        "a": 255
+      }
+    },
+    "MainQuestGlow": {
+      "m_style": "EYUIColorStyle::YUICS_MainQuestGlow",
+      "m_color": {
+        "r": 138,
+        "g": 28,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "SideQuest": {
+      "m_style": "EYUIColorStyle::YUICS_SideQuest",
+      "m_color": {
+        "r": 3,
+        "g": 186,
+        "b": 113,
+        "a": 255
+      }
+    },
+    "SideQuestGlow": {
+      "m_style": "EYUIColorStyle::YUICS_SideQuestGlow",
+      "m_color": {
+        "r": 0,
+        "g": 58,
+        "b": 54,
+        "a": 255
+      }
+    },
+    "Squad": {
+      "m_style": "EYUIColorStyle::YUICS_Squad",
+      "m_color": {
+        "r": 82,
+        "g": 214,
+        "b": 13,
+        "a": 255
+      }
+    },
+    "Text_Defeat": {
+      "m_style": "EYUIColorStyle::YUICS_Text_Defeat",
+      "m_color": {
+        "r": 255,
+        "g": 0,
+        "b": 39,
+        "a": 255
+      }
+    },
+    "Text_Defeat_EOM": {
+      "m_style": "EYUIColorStyle::YUICS_Text_DefeatEOM",
+      "m_color": {
+        "r": 179,
+        "g": 11,
+        "b": 10,
+        "a": 255
+      }
+    },
+    "Text_Draw": {
+      "m_style": "EYUIColorStyle::YUICS_Text_Draw",
+      "m_color": {
+        "r": 156,
+        "g": 152,
+        "b": 154,
+        "a": 255
+      }
+    },
+    "Text_Draw_EOM": {
+      "m_style": "EYUIColorStyle::YUICS_Text_DrawEOM",
+      "m_color": {
+        "r": 154,
+        "g": 154,
+        "b": 154,
+        "a": 255
+      }
+    },
+    "Text_Victory": {
+      "m_style": "EYUIColorStyle::YUICS_Text_Victory",
+      "m_color": {
+        "r": 244,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Text_Victory_EOM": {
+      "m_style": "EYUIColorStyle::YUICS_Text_VictoryEOM",
+      "m_color": {
+        "r": 93,
+        "g": 179,
+        "b": 26,
+        "a": 255
+      }
+    },
+    "InRange": {
+      "m_style": "EYUIColorStyle::YUICS_InRange",
+      "m_color": {
+        "r": 204,
+        "g": 2,
+        "b": 2,
+        "a": 255
+      }
+    },
+    "InRangeGlow": {
+      "m_style": "EYUIColorStyle::YUICS_InRangeGlow",
+      "m_color": {
+        "r": 138,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "MidRange": {
+      "m_style": "EYUIColorStyle::YUICS_MidRange",
+      "m_color": {
+        "r": 249,
+        "g": 29,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "MidRangeGlow": {
+      "m_style": "EYUIColorStyle::YUICS_MidRangeGlow",
+      "m_color": {
+        "r": 134,
+        "g": 16,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "OutOfRange": {
+      "m_style": "EYUIColorStyle::YUICS_OutOfRange",
+      "m_color": {
+        "r": 249,
+        "g": 134,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "OutOfRangeGlow": {
+      "m_style": "EYUIColorStyle::YUICS_OutOfRangeGlow",
+      "m_color": {
+        "r": 138,
+        "g": 69,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "NeutralGlow": {
+      "m_style": "EYUIColorStyle::YUICS_NeutralGlow",
+      "m_color": {
+        "r": 19,
+        "g": 20,
+        "b": 22,
+        "a": 255
+      }
+    },
+    "AllyGlow": {
+      "m_style": "EYUIColorStyle::YUICS_AllyGlow",
+      "m_color": {
+        "r": 0,
+        "g": 20,
+        "b": 58,
+        "a": 255
+      }
+    },
+    "EnemyGlow": {
+      "m_style": "EYUIColorStyle::YUICS_EnemyGlow",
+      "m_color": {
+        "r": 72,
+        "g": 3,
+        "b": 0,
+        "a": 255
+      }
+    },
+    "Faction_3Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_3Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_4Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_4Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_5Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_5Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_6Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_6Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_7Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_7Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_8Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_8Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_9Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_9Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "Faction_10Glow": {
+      "m_style": "EYUIColorStyle::YUICS_Faction_10Glow",
+      "m_color": {
+        "r": 18,
+        "g": 0,
+        "b": 71,
+        "a": 255
+      }
+    },
+    "AbilityInactive": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityInactive",
+      "m_color": {
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      }
+    },
+    "AbilityInactiveGlow": {
+      "m_style": "EYUIColorStyle::YUICS_AbilityInactiveGlow",
+      "m_color": {
+        "r": 94,
+        "g": 94,
+        "b": 94,
+        "a": 255
+      }
+    },
+    "HeroShipFreeXP": {
+      "m_style": "EYUIColorStyle::YUICS_HeroShipFreeXP",
+      "m_color": {
+        "r": 127,
+        "g": 186,
+        "b": 231,
+        "a": 255
+      }
+    },
+    "SoftCurrency": {
+      "m_style": "EYUIColorStyle::YUICS_SoftCurrency",
+      "m_color": {
+        "r": 76,
+        "g": 213,
+        "b": 154,
+        "a": 255
+      }
+    }
+  },
+  "row_count": 75
+}

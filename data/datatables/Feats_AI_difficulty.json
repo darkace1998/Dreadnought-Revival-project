@@ -1,0 +1,33 @@
+{
+  "rows": {
+    "difficultyEnemy0": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -1%) :Stacks(1)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "difficultyEnemy1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -1%) :Stacks(1)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "difficultyAlly0": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -1%) :Stacks(1)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "difficultyAlly1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -1%) :Stacks(1)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 4
+}

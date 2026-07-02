@@ -1,0 +1,47 @@
+{
+  "rows": {
+    "TutorialDamageResistance": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +100% | CC(HealthPercentage<15%)) : Stacks(1);AM(PawnDamageResistance +0% | CC(HealthPercentage>14%)) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TutorialSpeed": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +100%);AM(PawnSteerForceModifier +75%);AM(PawnVerticalForceModifier +50%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TutorialHealthRegen": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +100%);AM(PawnHealthCooldownTimeModifier -90%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TutorialSpeed_Thruster": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +25% | CC(EnergyWheelSelection==YEWS_THRUSTER));",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TutorialHangarSpeed": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier -40%)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TutorialEnergyRegen": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyCooldownTimeModifier -90%%);AM(PawnEnergyRegenerationRateModifier +100%); AM(PawnEnergyConsumptionRateModifier +50% | CC(EnergyWheelSelection==YEWS_THRUSTER)); AM(PawnEnergyConsumptionRateModifier -80% | CC(EnergyWheelSelection==YEWS_WEAPON));AM(PawnEnergyConsumptionRateModifier -80% | CC(EnergyWheelSelection==YEWS_SHIELD));",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 6
+}

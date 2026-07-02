@@ -1,0 +1,4991 @@
+{
+  "rows": {
+    "WP_AssaultHPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:76b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultHPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:76b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultHPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:76b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultHPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:76b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultLPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "Root",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultMPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecLong01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecLong01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecLong01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecMid01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecMid01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtHPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:88b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtHPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:88b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtHPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:88b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtLPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtLPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtLPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtLPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtMPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtMPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtMPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtMPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecLong01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecLong01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_RespawnJetPri01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:65b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutLPri01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:85b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutLPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:85b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutLPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:85b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutLPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:85b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutLPri01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:85b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutMPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:73b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutMPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:73b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutMPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:73b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutMPri01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:73b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecLong01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:97b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecLong01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:97b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecShort01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecShort01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecShort01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecShort01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperHPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperHPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperHPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperLPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperLPri01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperLPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperLPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperLPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecLong01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecLong01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecMid01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:101b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecMid01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:101b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecMid01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:101b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportHPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportHPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportHPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportMPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecLong01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecLong01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecMid01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecMid01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecMid01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_RJ_Pri_Bomb_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_RJ_Pri_Bomb_Dmg_Weapon_Left_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_RJ_Pri_Missile_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Mine_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_ArDec_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_ArInc_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportLPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportLPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportLPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportLPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultLPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "Root",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon02_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutHPri01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutHPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtMPri01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutHPri01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultLPri01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:81b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "Root",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutHPri01_weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_T4_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Dmg_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Super_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Super_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Super_Weapon_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Super_Weapon_T0_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Ultra_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Ultra_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_PwrDec_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpH_EnDec_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpH_EnDec_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_T0_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Mine_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:106b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon02_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:110b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:124b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:110b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:124b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:110b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:124b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:103b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Dmg_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslH_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslH_Dmg_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslH_Dmg_Weapon_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslL_L_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslL_L_Dmg_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpH_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpM_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_Dmg_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_Dmg_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_Dmg_Weapon_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_Left_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_PwrDec_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_MslWeapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_MslWeapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_Weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretPhys_MslWeapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Barrage_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Repeater_TurretWeapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Repeater_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_Pri_TrainingMissileSwarm_Dmg_Weapon_BP_Child": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Super_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Swarm_Weapon02_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:108b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Ultra_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_AbiDec_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_PwrDec_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_PwrInc_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_MslL_L_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpH_EnDec_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_MG_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:110b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:124b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:103b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Swarm_Weap_L_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Weaken_Weap_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:109b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TurretH_TurretWeapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TurretH_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslH_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslL_L_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslM_Dmg_Weapon_L_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpH_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpM_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_Mine_Dmg_Weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_Mine_Scr_Weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_Left_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_PwrDec_Weap_Left_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_PwrDec_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpL_Dmg_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpL_Dmg_Weapon_Left_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretH_MslWeapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretH_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_MslWeapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretPhys_MslWeapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_EnInc_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_PwrInc_Weapon_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ONS_AITargetM_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:73b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:103b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Barrage_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Repeater_TurretWeapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Repeater_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Missile_Super_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:105b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:115b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Super_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Swarm_Weapon02_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:108b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Pri_Torpedo_Ultra_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_AbiDec_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_PwrDec_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_Msl_PwrInc_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_MslL_L_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpH_EnDec_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_AS_Sec_TrpM_Weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_MG_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:110b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:124b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:103b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Swarm_Weap_L_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Weaken_Weap_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:109b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TurretH_TurretWeapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TurretH_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslH_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslL_L_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_MslM_Dmg_Weapon_L_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:102b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:118b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpH_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Sec_TrpM_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:94b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:108b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_Mine_Dmg_Weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_Mine_Scr_Weapon01_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_Dmg_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_EnDec_Weap_Left_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_PwrDec_Weap_Left_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpH_PwrDec_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpL_Dmg_Weapon_Left_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretH_MslWeapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretH_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_MslWeapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretL_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:75b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Pri_TurretPhys_MslWeapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:109b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_EnInc_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SU_Sec_Msl_PwrInc_Weapon_T5_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:82b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:92b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperHPri01_weapon01_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:78b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d74]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:83b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecMid01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:101b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecMid01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_T4_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T3_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T3_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T3_Hero_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T0_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecShort01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d73]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:98b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecShort01_weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:92b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecMid01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T0_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecShort01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_AssaultSecLong01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:93b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SupportSecMid01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecShort01_weapon_T1_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadSecShort01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:96b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:105b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecMid01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:101b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecLong01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:87b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "[StringAssetReference:97b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_ScoutSecMid01_weapon_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:84b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_SC_Sec_TrpL_Dmg_Weapon_Left_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:94b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_DreadnoughtSecMid01_weapon01_T0_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:101b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "b_barrel",
+        "m_yawBoneName": "b_base",
+        "m_activeAnimation": "00000000",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecLong01_weapon01_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "WP_SniperSecLong01_weapon01_T2_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:90b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d72]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    },
+    "AB_DN_Pri_WarpM_Swarm_Weap_L_T3_BP": {
+      "m_desiredSkeletalMeshPath": "[StringAssetReference:88b]",
+      "m_nativeData": {
+        "m_nativeAnimationData": [
+          "[StructProperty\u00d71]"
+        ],
+        "m_pitchBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_yawBoneToModify": {
+          "BoneName": "None"
+        },
+        "m_pitchBoneName": "",
+        "m_yawBoneName": "",
+        "m_activeAnimation": "[StringAssetReference:104b]",
+        "m_activeAnimationHardReference": "null"
+      }
+    }
+  },
+  "row_count": 277
+}

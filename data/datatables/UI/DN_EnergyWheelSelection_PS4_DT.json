@@ -1,0 +1,21 @@
+{
+  "rows": {
+    "Thruster": {
+      "m_energyWheelSelection": "YEWS_THRUSTER",
+      "m_icon": "import[9]"
+    },
+    "Shield": {
+      "m_energyWheelSelection": "YEWS_SHIELD",
+      "m_icon": "import[10]"
+    },
+    "Weapons": {
+      "m_energyWheelSelection": "YEWS_WEAPON",
+      "m_icon": "import[11]"
+    },
+    "Off": {
+      "m_energyWheelSelection": "YEWS_OFF",
+      "m_icon": "import[8]"
+    }
+  },
+  "row_count": 4
+}

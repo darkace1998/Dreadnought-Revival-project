@@ -1,0 +1,38 @@
+{
+  "rows": {
+    "PVE_DebugSeason": {
+      "m_active": false,
+      "m_name": "\u0000YSeasonsDataManager\u0000\u0015\u0000\u0000\u0000PVE_DebugSeason_Name\u0000\u0012\u0000\u0000\u0000Debug season name",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u001b\u0000\u0000\u0000PVE_DebugSeason_Desc_Short\u0000\u001f\u0000\u0000\u0000Debug season short Description",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u001a\u0000\u0000\u0000PVE_DebugSeason_Desc_Long\u0000\u0011\u0000\u0000\u0000Long Description",
+      "m_imageLarge": "0x00000000",
+      "m_imageSmall": "0x00000000",
+      "m_rewardLevels": [
+        "[StructProperty\u00d73]"
+      ]
+    },
+    "PVE_Season3": {
+      "m_active": false,
+      "m_name": "\u0000YSeasonsDataManager\u0000\u0011\u0000\u0000\u0000PVE_Season3_Name\u0000\u0010\u0000\u0000\u0000Battleship Down",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0017\u0000\u0000\u0000PVE_Season3_Desc_Short\u0000\u001b\u0000\u0000\u0000Season 3 short Description",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0016\u0000\u0000\u0000PVE_Season3_Desc_Long\u0000\u001a\u0000\u0000\u0000Season 3 long Description",
+      "m_imageLarge": "0x00000000",
+      "m_imageSmall": "0x00000000",
+      "m_rewardLevels": [
+        "[StructProperty\u00d73]"
+      ]
+    },
+    "PVE_Season1": {
+      "m_active": true,
+      "m_name": "\u0000YSeasonsDataManager\u0000\u0011\u0000\u0000\u0000PVE_Season1_Name\u0000\u0014\u0000\u0000\u0000Miner Inconvenience",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0017\u0000\u0000\u0000PVE_Season1_Desc_Short\u0000\u001b\u0000\u0000\u0000Season 1 short Description",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0016\u0000\u0000\u0000PVE_Season1_Desc_Long\u0000\u001a\u0000\u0000\u0000Season 1 long Description",
+      "m_imageLarge": "0x00000000",
+      "m_imageSmall": "0x00000000",
+      "m_rewardLevels": [
+        "[StructProperty\u00d73]"
+      ]
+    }
+  },
+  "row_count": 3
+}

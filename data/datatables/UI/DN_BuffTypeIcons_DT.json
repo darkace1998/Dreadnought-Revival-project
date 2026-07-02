@@ -1,0 +1,65 @@
+{
+  "rows": {
+    "ArmorDecrease": {
+      "m_buffType": "EYBuffType::EYBT_ArmorDec",
+      "m_icon": "import[21]"
+    },
+    "SpeedDecrease": {
+      "m_buffType": "EYBuffType::EYBT_SpeedDec",
+      "m_icon": "import[31]"
+    },
+    "EnergyDecrease": {
+      "m_buffType": "EYBuffType::EYBT_EnergyDec",
+      "m_icon": "import[25]"
+    },
+    "FireDecrease": {
+      "m_buffType": "EYBuffType::EYBT_FireDec",
+      "m_icon": "import[27]"
+    },
+    "AbilityDecrease": {
+      "m_buffType": "EYBuffType::EYBT_AbilityDec",
+      "m_icon": "import[19]"
+    },
+    "Scramble": {
+      "m_buffType": "EYBuffType::EYBT_Scramble",
+      "m_icon": "import[30]"
+    },
+    "DebuffMax": {
+      "m_buffType": "EYBuffType::EYBT_DebuffMAX",
+      "m_icon": "import[24]"
+    },
+    "FireIncrease": {
+      "m_buffType": "EYBuffType::EYBT_FireInc",
+      "m_icon": "import[28]"
+    },
+    "SpeedIncrease": {
+      "m_buffType": "EYBuffType::EYBT_SpeedInc",
+      "m_icon": "import[32]"
+    },
+    "EnergyIncrease": {
+      "m_buffType": "EYBuffType::EYBT_EnergyInc",
+      "m_icon": "import[26]"
+    },
+    "AbilityIncrease": {
+      "m_buffType": "EYBuffType::EYBT_AbilityInc",
+      "m_icon": "import[20]"
+    },
+    "ArmorIncrease": {
+      "m_buffType": "EYBuffType::EYBT_ArmorInc",
+      "m_icon": "import[22]"
+    },
+    "HealthIncrease": {
+      "m_buffType": "EYBuffType::EYBT_HealthInc",
+      "m_icon": "import[29]"
+    },
+    "Turbo": {
+      "m_buffType": "EYBuffType::EYBT_Turbo",
+      "m_icon": "import[33]"
+    },
+    "BuffMax": {
+      "m_buffType": "EYBuffType::EYBT_BuffMAX",
+      "m_icon": "import[23]"
+    }
+  },
+  "row_count": 15
+}

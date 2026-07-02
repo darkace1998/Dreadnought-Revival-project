@@ -1,0 +1,133 @@
+{
+  "rows": {
+    "DN_TurretActor_DT": {
+      "m_fireRange": 10000.0,
+      "m_lifetimeAfterOwnerDeath": 0.0,
+      "m_lifeTime": 0.0,
+      "m_health": 0.0,
+      "m_maxConcurrentActors": 0,
+      "m_deploymentTime": 0.0
+    },
+    "AB_AS_Pri_Missile_Repeater_Actor_BP": {
+      "m_fireRange": 12000.0,
+      "m_lifetimeAfterOwnerDeath": 5.0,
+      "m_lifeTime": 0.25,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 10,
+      "m_deploymentTime": 0.0
+    },
+    "AB_AS_Pri_Missile_Repeater_Actor_T5_BP": {
+      "m_fireRange": 12000.0,
+      "m_lifetimeAfterOwnerDeath": 5.0,
+      "m_lifeTime": 0.25,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 10,
+      "m_deploymentTime": 0.0
+    },
+    "AB_DN_Sec_TurretH_Actor_BP": {
+      "m_fireRange": 10000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 20.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 3,
+      "m_deploymentTime": 0.0
+    },
+    "AB_DN_Sec_TurretH_Actor_T5_BP": {
+      "m_fireRange": 10000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 20.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 4,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SN_Pri_Catapult_Turret_Actor_BP": {
+      "m_fireRange": 10000.0,
+      "m_lifetimeAfterOwnerDeath": 0.0,
+      "m_lifeTime": 30.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 0,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SN_Pri_Catapult_Turret_Actor_T5_BP": {
+      "m_fireRange": 10000.0,
+      "m_lifetimeAfterOwnerDeath": 0.0,
+      "m_lifeTime": 40.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 0,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretH_Actor_BP": {
+      "m_fireRange": 35000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 40.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretH_Actor_T5_BP": {
+      "m_fireRange": 35000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 50.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretL_Actor_BP": {
+      "m_fireRange": 7000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 45.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 3,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretL_Actor_T2_BP": {
+      "m_fireRange": 7000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 40.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 1,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretL_Actor_T3_BP": {
+      "m_fireRange": 7000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 45.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretL_Actor_T5_BP": {
+      "m_fireRange": 7000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 50.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 3,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretPhys_Actor_BP": {
+      "m_fireRange": 12000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 40.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretPhys_Actor_T3_BP": {
+      "m_fireRange": 12000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 35.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    },
+    "AB_SU_Pri_TurretPhys_Actor_T5_BP": {
+      "m_fireRange": 12000.0,
+      "m_lifetimeAfterOwnerDeath": 10.0,
+      "m_lifeTime": 45.0,
+      "m_health": 750.0,
+      "m_maxConcurrentActors": 2,
+      "m_deploymentTime": 0.0
+    }
+  },
+  "row_count": 16
+}

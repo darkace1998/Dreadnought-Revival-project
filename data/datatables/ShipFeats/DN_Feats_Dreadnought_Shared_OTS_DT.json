@@ -1,0 +1,33 @@
+{
+  "rows": {
+    "AfterburnerSteeringMod": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Afterburner))",
+      "m_effects": "AM(PawnSteerForceModifier -90%) :Stacks(1);AM(PawnVerticalForceModifier -50%) :Stacks(1);PlayFeedback(SpeedThrust):Buff(SpeedIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HPMaxIncrease": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HPMaxIncrease))",
+      "m_effects": "RM(MaxHealth +100%) : Stacks(1): D(60.0);AM(PawnMaxHealthModifier +0%) : D(60.0): Buff(HealthIncrease): Stacks(1);RM(HealthRegeneration +200): Stacks(1): D(60.0);PlayFeedback(HealthIncrease):D(60.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HPMaxIncrease_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HPMaxIncrease_T5))",
+      "m_effects": "RM(MaxHealth +100%) : Stacks(1) : D(60.0);AM(PawnMaxHealthModifier +0%) : D(60.0): Buff(HealthIncrease): Stacks(1);RM(HealthRegeneration  +400): Stacks(1): D(60.0);PlayFeedback(HealthIncrease):D(60.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RetaliatorFeat": {
+      "m_enabling": " ByRemote()",
+      "m_triggers": " BeShieldHitPerHitPoint()",
+      "m_effects": "AbilityCooldown() : D(-0.00048);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease); PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 4
+}

@@ -1,0 +1,315 @@
+{
+  "rows": {
+    "Horde_Generic_PrepareForWave": {
+      "m_id": "Horde_Generic_PrepareForWave",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Horde_Generic_DefeatWave": {
+      "m_id": "Horde_Generic_DefeatWave",
+      "m_type": "EYObjectiveType::YOT_HORDE",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Destroy_Generic_DestroyCore": {
+      "m_id": "Destroy_Generic_DestroyCore",
+      "m_type": "EYObjectiveType::YOT_DESTROY",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Destroy_Generic_Destroy2Generators": {
+      "m_id": "Destroy_Generic_Destroy2Generators",
+      "m_type": "EYObjectiveType::YOT_DESTROY",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text]",
+      "m_amountToComplete": 2,
+      "m_currentAmount": 0
+    },
+    "Destroy_Generic_Destroy1Generator": {
+      "m_id": "Destroy_Generic_Destroy1Generator",
+      "m_type": "EYObjectiveType::YOT_DESTROY",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_follow": {
+      "m_id": "S5E4_Follow",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_KillJammers": {
+      "m_id": "S5E4_KillJammers",
+      "m_type": "EYObjectiveType::YOT_KILL",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text]",
+      "m_amountToComplete": 2,
+      "m_currentAmount": 0
+    },
+    "S5E4_Rendevouz1": {
+      "m_id": "S5E4_Rendevouz1",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_Rendevouz2": {
+      "m_id": "S5E4_Rendevouz2",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_Rendevouz3": {
+      "m_id": "S5E4_Rendevouz3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_Rendevouz4": {
+      "m_id": "S5E4_Rendevouz4",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_Rendevouz5": {
+      "m_id": "S5E4_Rendevouz5",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S5E4_DestroyEnemyShips": {
+      "m_id": "S5E4_DestroyEnemyShips",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForClear3": {
+      "m_id": "Escort02_WaitForClear3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_follow1": {
+      "m_id": "Escort02_follow1",
+      "m_type": "EYObjectiveType::YOT_ESCORT",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_defend1": {
+      "m_id": "Escort02_defend1",
+      "m_type": "EYObjectiveType::YOT_DEFEND",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_follow2": {
+      "m_id": "Escort02_follow2",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_defend2": {
+      "m_id": "Escort02_defend2",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_follow3": {
+      "m_id": "Escort02_follow3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_defend3": {
+      "m_id": "Escort02_defend3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForEscort1": {
+      "m_id": "Escort02_WaitForEscort1",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForEscort2": {
+      "m_id": "Escort02_WaitForEscort2",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Generic_BuffPod_Retrieve": {
+      "m_id": "Generic_BuffPod_Retrieve",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": false,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Generic_XPPod_Retrieve": {
+      "m_id": "Generic_XPPod_Retrieve",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_Prepare1": {
+      "m_id": "Escort02_Prepare1",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_Prepare2": {
+      "m_id": "Escort02_Prepare2",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_Prepare3": {
+      "m_id": "Escort02_Prepare3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForClear1": {
+      "m_id": "Escort02_WaitForClear1",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForClear2": {
+      "m_id": "Escort02_WaitForClear2",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "Escort02_WaitForEscort3": {
+      "m_id": "Escort02_WaitForEscort3",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "S3E4_DefeatBoss": {
+      "m_id": "S3E4_DefeatBoss",
+      "m_type": "EYObjectiveType::YOT_KILL",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    }
+  },
+  "row_count": 31
+}

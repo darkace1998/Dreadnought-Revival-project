@@ -1,0 +1,105 @@
+{
+  "rows": {
+    "0": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 5.0,
+      "m_durationOnScreen": 4.5
+    },
+    "1": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 9.6,
+      "m_durationOnScreen": 3.0
+    },
+    "2": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 13.0,
+      "m_durationOnScreen": 3.0
+    },
+    "3": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 17.0,
+      "m_durationOnScreen": 2.5
+    },
+    "4": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 20.5,
+      "m_durationOnScreen": 6.0
+    },
+    "5": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 20.5,
+      "m_durationOnScreen": 6.0
+    },
+    "6": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 26.5,
+      "m_durationOnScreen": 3.0
+    },
+    "7": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 29.5,
+      "m_durationOnScreen": 3.0
+    },
+    "8": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 33.5,
+      "m_durationOnScreen": 2.8
+    },
+    "9": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 37.700001,
+      "m_durationOnScreen": 2.5
+    },
+    "10": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 40.400002,
+      "m_durationOnScreen": 4.2
+    },
+    "11": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 40.400002,
+      "m_durationOnScreen": 4.2
+    },
+    "12": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 46.799999,
+      "m_durationOnScreen": 2.5
+    },
+    "13": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 49.400002,
+      "m_durationOnScreen": 2.2
+    },
+    "14": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 52.5,
+      "m_durationOnScreen": 3.0
+    },
+    "15": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 57.0,
+      "m_durationOnScreen": 2.0
+    },
+    "16": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 61.099998,
+      "m_durationOnScreen": 1.8
+    },
+    "17": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 63.0,
+      "m_durationOnScreen": 5.0
+    },
+    "18": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 69.0,
+      "m_durationOnScreen": 3.272
+    },
+    "19": {
+      "m_text": "[text]",
+      "m_secondsFromMovieStart": 80.800003,
+      "m_durationOnScreen": 2.0
+    }
+  },
+  "row_count": 20
+}

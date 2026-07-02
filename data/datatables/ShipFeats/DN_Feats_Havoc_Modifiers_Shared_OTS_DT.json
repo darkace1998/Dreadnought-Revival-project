@@ -1,0 +1,355 @@
+{
+  "rows": {
+    "HVC_Mod_Default": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "DoKillTest": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill()",
+      "m_effects": "AM(PawnMaxEnergyModifier -10%) : D(10000) : Stacks(4);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_abilitiesCooldownResetKill": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill() ",
+      "m_effects": "AbilityCoolDown() : D(-1000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_abilitiesDamageHigh_abilitiesCooldownHigh": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +100%%);AM(PawnAbilityCooldownTimeModifier +50%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_abilitiesDamageLow_abilitiesCooldownLow": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier -50%%);AM(PawnAbilityCooldownTimeModifier -75%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_aimLowWhileMoving_movementForwardFast": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnSpreadPenaltyMovementModifier +5);AM( PawnSpreadMaxValueModifier +300%%);AM( PawnSpreadEaseModifier +400%%);AM(PawnForwardForceModifier +200%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_damageresistanceBackNegative": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(DamageSourceAngle>120))",
+      "m_effects": "RM(Health -1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_damageresistanceFrontFull_damageresistanceBackNegative_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(DamageSourceAngle<60))",
+      "m_effects": "RM(Health +1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_damageresistanceFrontFull_damageresistanceBackNegative_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(DamageSourceAngle>120))",
+      "m_effects": "RM(Health -2);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyFullKill_energyRegenNone_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill()",
+      "m_effects": "RM(Energy +10000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyFullKill_energyRegenNone_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -100%%);RM(Energy +10000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthFullKill_healthRegenNone_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill() ",
+      "m_effects": "RM(Health +1000000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthFullKill_healthRegenNone_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier -100%%);RM(Health +10000000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyMaxDecreaseKill": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill() ",
+      "m_effects": "AM(PawnMaxEnergyModifier -10%%) : Stacks(9);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyNone": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(Energy -10000);AM(PawnMaxEnergyModifier -10000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyRegenFast_energyCooldownLow_energyMaxLow": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier +100%%);AM(PawnEnergyCoolDownTimeModifier -100%%);AM(PawnMaxEnergyModifier -50%%);RM(Energy +100);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyRegenHit_abilitiesCooldownHit": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint()",
+      "m_effects": "RM(Energy +0.01);AbilityCoolDown() : D(-0.0015);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyRegenNone_energyMaxHigh": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier -100%%);AM(PawnMaxEnergyModifier +800%%);RM( Energy +100000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyUnlimted_healthDecreaseHit_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable();",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -100%%);AM(PawnEnergyCooldownTimeModifier -100%%);AM(PawnEnergyRegenerationRateModifier +200%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyUnlimted_healthDecreaseHit_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint()",
+      "m_effects": "RM(Health -0.2);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_energyUnlimted_wheelRestrictions": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -100%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingDamageresistanceFull_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealingModifier -99.9%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingDamageresistanceFull_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHealed();",
+      "m_effects": "AM(PawnDamageResistance +100%%) : D(0.6) : Stacks(1) : Buff(ArmorIncrease);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingDamageresistanceFull_4": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeOverhealed()",
+      "m_effects": "AM(PawnDamageResistance +100%%) : D(0.6) : Stacks(1) : Buff(ArmorIncrease);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingEnergyRegen_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealingModifier -100%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingEnergyRegen_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHealed();",
+      "m_effects": "RM(Energy +1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healingNone_healingEnergyRegen_4": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeOverhealed()",
+      "m_effects": "RM(Energy +1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthMaxDecreaseKill_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +200%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthMaxDecreaseKill_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill() ",
+      "m_effects": "RM(MaxHealth -20%% | CC(Health > 20%));",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthMaxIncreaseHeal": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeOverhealed()",
+      "m_effects": "RM(MaxHealth +0.25) : Stacks(1000);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthRegenFast_healthCooldownHigh": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +400%%);AM(PawnHealthCooldownTimeModifier +100%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthRegenHit_healthRegenSlow_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier -90%%) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthRegenHit_healthRegenSlow_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoHitPerHitPoint()",
+      "m_effects": "RM(Health +0.2);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_healthRegenNone_healthMaxHigh": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +100%%);AM(PawnHealthRegenerationModifier -100%%);RM(Health +100%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_movementNone_movementFast_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier -90%%);AM(PawnReverseForceModifier -90%%);AM(PawnSteerForceModifier -60%%);AM(PawnVerticalForceModifier -90%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_movementNone_movementFast_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +200%% | CC(EnergyWheelSelection==YEWS_THRUSTER));AM(PawnReverseForceModifier +100%% | CC(EnergyWheelSelection==YEWS_THRUSTER));AM(PawnSteerForceModifier +100%% | CC(EnergyWheelSelection==YEWS_THRUSTER));AM(PawnVerticalForceModifier +100%% | CC(EnergyWheelSelection==YEWS_THRUSTER));",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_movementVerticalNone": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnVerticalForceModifier -100%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_weaponFirerateLow_weaponDamageHigh": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnWeaponsCoolDownModifier +150%%);AM(PawnPrimaryWeaponCoolDownModifier +150%%);AM(PawnDamageModifier +175%%);AM(PawnReloadTimePriModifier +75%%);AM(PawnReloadTimeSecModifier +75%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +5%);AM(PawnAbilityDamageModifier +5%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +5%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost10": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +10%);AM(PawnAbilityDamageModifier +10%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost10": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +10%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost15": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +15%);AM(PawnAbilityDamageModifier +15%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost15": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +15%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost20": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +20%);AM(PawnAbilityDamageModifier +20%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost20": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +20%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost50": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +50%);AM(PawnAbilityDamageModifier +50%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost50": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +50%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyDamageBoost100": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +100%);AM(PawnAbilityDamageModifier +100%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "HVC_PEM_EnemyHealthBoost100": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +100%);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 50
+}

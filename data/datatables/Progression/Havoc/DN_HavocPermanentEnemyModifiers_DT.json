@@ -1,0 +1,243 @@
+{
+  "rows": {
+    "EnemyBoost_01_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 3,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_01_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 3,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_02_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 4,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_02_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 4,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_03_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 5,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_03_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 5,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_04_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 6,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_04_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 6,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_05_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 8,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_05_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 8,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_06_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost5",
+      "m_effect": 5,
+      "m_wave": 9,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_06_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost5",
+      "m_effect": 5,
+      "m_wave": 9,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_07_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 10,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_07_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 10,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_08_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 11,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_08_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 11,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_09_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 13,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_09_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 13,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_10_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 14,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_10_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 14,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_11_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 15,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_11_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 15,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_12_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost10",
+      "m_effect": 10,
+      "m_wave": 16,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_12_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost10",
+      "m_effect": 10,
+      "m_wave": 16,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_13_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost15",
+      "m_effect": 15,
+      "m_wave": 18,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_13_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost15",
+      "m_effect": 15,
+      "m_wave": 18,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_14_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost15",
+      "m_effect": 15,
+      "m_wave": 19,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_14_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost15",
+      "m_effect": 15,
+      "m_wave": 19,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_15_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost15",
+      "m_effect": 15,
+      "m_wave": 20,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_15_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost15",
+      "m_effect": 15,
+      "m_wave": 20,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_16_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost15",
+      "m_effect": 15,
+      "m_wave": 21,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_16_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost15",
+      "m_effect": 15,
+      "m_wave": 21,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    },
+    "EnemyBoost_17_Damage": {
+      "m_feats": "HVC_PEM_EnemyDamageBoost15",
+      "m_effect": 15,
+      "m_wave": 23,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_DAMAGEBOOST"
+    },
+    "EnemyBoost_17_Health": {
+      "m_feats": "HVC_PEM_EnemyHealthBoost15",
+      "m_effect": 15,
+      "m_wave": 23,
+      "m_impact": 1,
+      "m_category": "EYHavocPermanentEnemyModifierCategory::YHPEMC_HEALTHBOOST"
+    }
+  },
+  "row_count": 34
+}

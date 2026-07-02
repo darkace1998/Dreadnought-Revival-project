@@ -1,0 +1,152 @@
+{
+  "rows": {
+    "MODULERECYCLER": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKillWithAbility()",
+      "m_effects": "AbilityCoolDown() : D(-15.0) : Stacks(1);AM(PawnDamageResistance +0%) : Stacks(1) : D(2.0): Buff(AbilityIncrease);PlayFeedback(ModuleRecycler) : D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "RETALIATOR": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "EFS(RetaliatorFeat);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    },
+    "COMMUNICATIONS101": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -10%) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "FEEDBACKLOOP": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnAbilityFinishedCooldown()",
+      "m_effects": "RM(Energy FeedbackLoop +0.3);AM(PawnDamageResistance +0%) : Stacks(1) : D(2.0): Buff(EnergyIncrease); PlayFeedback(FeedbackLoop) : D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "DESPERATEMEASURES": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "EFS(DesperateMeasuresTriggeringFeat);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ENGINEERING101": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +6.5%) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "GETMYGOODSIDE": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(DamageSourceAngle>50)|CC(DamageSourceAngle<130))",
+      "m_effects": "RM(Energy +0.0025);AM(PawnDamageResistance +0%) : Stacks(1) : D(2.0): Buff(EnergyIncrease);PlayFeedback(GetMyGoodSide):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ADRENALINESHOT": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHealedPerHitPoint(CC(HealthPercentage&Target<0.30));DoHealPerHitPoint(CC(HealthPercentage&Attacker<0.30));",
+      "m_effects": "RM(Energy +0.0016);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(EnergyIncrease);PlayFeedback(AdrenalineShot) : D(0.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "MRFIXIT": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "EFS(MrFixitFeat);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "REINFORCED": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(maxhealth +18%); AM(PawnAbilityCooldownTimeModifier +20%) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "SLOWANDSTEADY": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier -10%) :Stacks(1) ; AM(PawnVerticalForceModifier -10%) :Stacks(1) ; AM(PawnReverseForceModifier -10%) :Stacks(1); AM(PawnDamageResistance +10%) :Stacks(1)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "NAVIGATIONEXPERT": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -50% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1) ; AM(PawnEnergyConsumptionRateModifier +30% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(1) ; AM(PawnEnergyConsumptionRateModifier +30% | CC(EnergyWheelSelection==YEWS_SHIELD)) :Stacks(1) ;",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "NERVESOFSTEEL": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "EFS(NervesOfSteelFeat); AM(PawnDamageResistance 5% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); ",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "TIPTHESCALES": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnReloadTimePriModifier -15% | CC(Energy==0)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -15% | CC(Energy==0)) :Stacks(1) ; AM(PawnPrimaryWeaponCoolDownModifier - 10% | CC(Energy==0)) :Stacks(1) ; AM(PawnWeaponsCoolDownModifier -10% | CC(Energy==0)) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "NAVIGATION101": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +10%) :Stacks(1) ; AM(PawnVerticalForceModifier +10%) :Stacks(1) ; AM(PawnReverseForceModifier +10%) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ENGINERIGGER": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +100% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); AM(PawnReverseForceModifier +75% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); AM(PawnSteerForceModifier +25% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); AM(PawnVerticalForceModifier +20% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); AM(PawnStrafeForceModifier +50% | CC(EnergyWheelSelection==YEWS_THRUSTER)) :Stacks(1); AM(PawnEnergyConsumptionRateModifier +75% | CC(EnergyWheelSelection==YEWS_THRUSTER)) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "MODULEAMPER": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +30% | CC(EnergyWheelSelection==YEWS_WEAPON)) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "GLASSCANNON": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +20% | CC(HealthPercentage>99%)) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "DESTRUCTIONCASCADE": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "DoKill()",
+      "m_effects": "AM(PawnDamageModifier +30%) : Stacks(1) : D(20.0) : Buff(FirepowerIncrease);AM(PawnDamageShieldModifier +30%) : Stacks(1) : D(20.0);PlayFeedback(DestructionCascade) : D(20.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "WEAPONS101": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +6.5%) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "SURVIVALINSTINCT": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<90%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<90%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<80%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<80%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<70%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<70%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<60%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<60%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<50%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<50%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<40%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<40%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<30%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<30%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<20%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<20%)) :Stacks(1);AM(PawnReloadTimePriModifier -7% | CC(HealthPercentage<10%)) :Stacks(1) ; AM(PawnReloadTimeSecModifier -7% | CC(HealthPercentage<10%)) :Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 21
+}

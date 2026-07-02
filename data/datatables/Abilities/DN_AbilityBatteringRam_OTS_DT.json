@@ -1,0 +1,113 @@
+{
+  "rows": {
+    "DN_AbilityBatteringRam_DT": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 100.0,
+      "m_maxDamage": 100.0,
+      "m_abilityName": "None",
+      "m_triggerName": "None",
+      "m_activeTime": 0.0,
+      "m_coolDown": 0.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_AoEDmg_Ability_BP": {
+      "m_damageRadius": 4000,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 12500.0,
+      "m_abilityName": "Blast Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 15.0,
+      "m_coolDown": 30.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_AoEDmg_Ability_T5_BP": {
+      "m_damageRadius": 6000,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 13750.0,
+      "m_abilityName": "Blast Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 15.0,
+      "m_coolDown": 25.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Dmg_Ability_T2_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 15000.0,
+      "m_abilityName": "Plasma Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 10.0,
+      "m_coolDown": 40.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Dmg_Ability_T3_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 20000.0,
+      "m_abilityName": "Plasma Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 10.0,
+      "m_coolDown": 35.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Dmg_Ability_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 25000.0,
+      "m_abilityName": "Plasma Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 10.0,
+      "m_coolDown": 30.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Dmg_Ability_T5_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 30000.0,
+      "m_abilityName": "Plasma Ram",
+      "m_triggerName": "Ram",
+      "m_activeTime": 10.0,
+      "m_coolDown": 25.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Weaken_Ability_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 11500.0,
+      "m_abilityName": "Rupture Ram",
+      "m_triggerName": "RuptureRam",
+      "m_activeTime": 10.0,
+      "m_coolDown": 35.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_AS_Pri_Ram_Weaken_Ability_T5_BP": {
+      "m_damageRadius": 500,
+      "m_overlapRadius": 250.0,
+      "m_maxDamage": 15000.0,
+      "m_abilityName": "Rupture Ram",
+      "m_triggerName": "RuptureRam",
+      "m_activeTime": 10.0,
+      "m_coolDown": 35.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    }
+  },
+  "row_count": 9
+}

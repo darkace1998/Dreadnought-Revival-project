@@ -1,0 +1,80 @@
+{
+  "rows": {
+    "Assists": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_Assists",
+      "m_name": "[text]",
+      "m_priority": 18
+    },
+    "Kills": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_Kills",
+      "m_name": "[text]",
+      "m_priority": 20
+    },
+    "DoubleKills": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DoubleKills",
+      "m_name": "[text]",
+      "m_priority": 21
+    },
+    "DamageDestroyer": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedDestroyer",
+      "m_name": "[text]",
+      "m_priority": 10
+    },
+    "DamageScout": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedCorvette",
+      "m_name": "[text]",
+      "m_priority": 10
+    },
+    "DamageSupport": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedTacticalCruiser",
+      "m_name": "[text]",
+      "m_priority": 6
+    },
+    "DamageDreadnought": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedDreadnought",
+      "m_name": "[text]",
+      "m_priority": 10
+    },
+    "DamageSniper": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedArtilleryCruiser",
+      "m_name": "[text]",
+      "m_priority": 10
+    },
+    "EnergyUsed": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_PowerUsage",
+      "m_name": "[text]",
+      "m_priority": 2
+    },
+    "AbilityDamage": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_DamageCausedByAbilities",
+      "m_name": "[text]",
+      "m_priority": 5
+    },
+    "Healing": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_Healing",
+      "m_name": "[text]",
+      "m_priority": 19
+    },
+    "ControlPointsCaptured": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_ControlPointsCaptured",
+      "m_name": "[text]",
+      "m_priority": 30
+    },
+    "ControlPointDefenseKills": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_ControlPointDefenseKills",
+      "m_name": "[text]",
+      "m_priority": 29
+    },
+    "TotalAmountTerritoryClaimed": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_TotalAmountTerritoryClaimed",
+      "m_name": "[text]",
+      "m_priority": 20
+    },
+    "TotalAmountTerritoryCleared": {
+      "m_ID": "EYPlayerMatchStatisticsCategoryID::YPMSCID_TotalAmountTerritoryCleared",
+      "m_name": "[text]",
+      "m_priority": 25
+    }
+  },
+  "row_count": 15
+}

@@ -1,0 +1,376 @@
+{
+  "rows": {
+    "HVCDEFDN_M(T2)": {
+      "m_waveAppearances": "none",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489354,
+      "m_loadoutItemIDNextTier": 33489355,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_M(T2)": {
+      "m_waveAppearances": "none",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489363,
+      "m_loadoutItemIDNextTier": 33489364,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCUTIAS_M(T2)": {
+      "m_waveAppearances": "none",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489370,
+      "m_loadoutItemIDNextTier": 33489367,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCOFFSC_L(T2)": {
+      "m_waveAppearances": "none",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489386,
+      "m_loadoutItemIDNextTier": 33489387,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSN_M(T2)": {
+      "m_waveAppearances": "none",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489394,
+      "m_loadoutItemIDNextTier": 33489395,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCDEFAS_H(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489432,
+      "m_loadoutItemIDNextTier": 33489349,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFDN_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489355,
+      "m_loadoutItemIDNextTier": 33489356,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489364,
+      "m_loadoutItemIDNextTier": 33489365,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCUTIAS_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489367,
+      "m_loadoutItemIDNextTier": 33489368,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISU_L(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489374,
+      "m_loadoutItemIDNextTier": 33489371,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISN_L(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489382,
+      "m_loadoutItemIDNextTier": 33489381,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISC_H(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489383,
+      "m_loadoutItemIDNextTier": 33489384,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCOFFSC_L(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489387,
+      "m_loadoutItemIDNextTier": 33489388,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSC_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489390,
+      "m_loadoutItemIDNextTier": 33489391,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSN_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489395,
+      "m_loadoutItemIDNextTier": 33489396,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFDN_L(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489404,
+      "m_loadoutItemIDNextTier": 33489403,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCDEFAS_H(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489349,
+      "m_loadoutItemIDNextTier": 33489350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFAS_M(T3)": {
+      "m_waveAppearances": "3.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489351,
+      "m_loadoutItemIDNextTier": 33489352,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFAS_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489352,
+      "m_loadoutItemIDNextTier": 33489353,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFDN_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489356,
+      "m_loadoutItemIDNextTier": 33489357,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFDN_H(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489358,
+      "m_loadoutItemIDNextTier": 33489359,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_H(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489361,
+      "m_loadoutItemIDNextTier": 33489362,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489365,
+      "m_loadoutItemIDNextTier": 33489366,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCUTIAS_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489368,
+      "m_loadoutItemIDNextTier": 33489369,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISU_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489371,
+      "m_loadoutItemIDNextTier": 33489372,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTIDN_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489378,
+      "m_loadoutItemIDNextTier": 33489379,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISN_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489381,
+      "m_loadoutItemIDNextTier": 33489380,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISC_H(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489384,
+      "m_loadoutItemIDNextTier": 33489385,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCOFFSC_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489388,
+      "m_loadoutItemIDNextTier": 33489389,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSC_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489391,
+      "m_loadoutItemIDNextTier": 33489392,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSN_M(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489396,
+      "m_loadoutItemIDNextTier": 33489397,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSN_H(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489398,
+      "m_loadoutItemIDNextTier": 33489399,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFAS_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489401,
+      "m_loadoutItemIDNextTier": 33489402,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFDN_L(T4)": {
+      "m_waveAppearances": "6.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489403,
+      "m_loadoutItemIDNextTier": 33489405,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFAS_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489402,
+      "m_loadoutItemIDNextTier": 33489402,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFDN_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489405,
+      "m_loadoutItemIDNextTier": 33489405,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCDEFAS_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489350,
+      "m_loadoutItemIDNextTier": 33489350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFAS_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489353,
+      "m_loadoutItemIDNextTier": 33489353,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFDN_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489357,
+      "m_loadoutItemIDNextTier": 33489357,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFDN_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489359,
+      "m_loadoutItemIDNextTier": 33489359,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCOFFSN_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489399,
+      "m_loadoutItemIDNextTier": 33489399,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCDEFSN_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489360,
+      "m_loadoutItemIDNextTier": 33489360,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489362,
+      "m_loadoutItemIDNextTier": 33489362,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCDEFSU_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489366,
+      "m_loadoutItemIDNextTier": 33489366,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVCUTIAS_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489369,
+      "m_loadoutItemIDNextTier": 33489369,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISU_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489372,
+      "m_loadoutItemIDNextTier": 33489372,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTIDN_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489373,
+      "m_loadoutItemIDNextTier": 33489373,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCOFFSN_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489397,
+      "m_loadoutItemIDNextTier": 33489397,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCUTIDN_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489379,
+      "m_loadoutItemIDNextTier": 33489379,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISN_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489380,
+      "m_loadoutItemIDNextTier": 33489380,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCUTISC_H(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489385,
+      "m_loadoutItemIDNextTier": 33489385,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVCOFFSC_L(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489389,
+      "m_loadoutItemIDNextTier": 33489389,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVCOFFSC_M(T5)": {
+      "m_waveAppearances": "12.0",
+      "m_weight": 1,
+      "m_loadoutItemID": 33489392,
+      "m_loadoutItemIDNextTier": 33489392,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    }
+  },
+  "row_count": 53
+}

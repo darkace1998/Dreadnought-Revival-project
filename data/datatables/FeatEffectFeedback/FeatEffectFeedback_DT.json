@@ -1,0 +1,775 @@
+{
+  "rows": {
+    "AbilityCooldownReduce": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        44
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "AbilityDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        43
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[0]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "AbilityHealthIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        44,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "AbilityIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        44
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "ArmorDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        45
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[1]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "ArmorIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 5.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 5.0
+    },
+    "ArmorIncreaseLockdown": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "ArmorIncreaseLockdownSuT5": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Artillery": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "ClearFeats": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Cloak": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "CloakHealthIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        51
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "CloakHeavy": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        45
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "CloakSpeedIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyBoost": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": true,
+      "m_uiFeedbackRetriggerMinDuration": 2.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        47
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[3]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyDecreaseHit": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        47
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[3]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyRefill": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Evasion": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "FireMode": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "FirepowerDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        49
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[4]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "FirepowerIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 5.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 5.0
+    },
+    "FirepowerIncreaseHit": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "HealingIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "HealingIncreasedArmorDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "HealthIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        51
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "HealthPack": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        51
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "JetBuff": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Lockdown": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Ram": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "RapidFire": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "RapidFireSnT4": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Scramble": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        52
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[6]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        53
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[5]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedDecreaseHit": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        53
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[5]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedEnergyDecrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        53,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedIncrease": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[2]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedThrust": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpeedUp": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "TractorBeam": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        53
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "TurnBoost": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        54
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "Weaken": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        43,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[7]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "EnergyArmorAbilityDecreaseHit": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        47,
+        0,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "import[7]",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "StasisBeam": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "PurgeBeamMode": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        45
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Neutral",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "DesperateMeasures": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        44,
+        0
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "GetMyGoodSide": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "FeedbackLoop": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "DestructionCascade": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        50
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "ModuleRecycler": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        44
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": true,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "AdrenalineShot": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        48
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 3.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 3.0
+    },
+    "SpawnprotectionTER": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        46
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Good",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 6.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 6.0
+    },
+    "SpawnprotectionDebuffTER": {
+      "m_uiFeedbackMessage": "[text]",
+      "m_uiFeedbackIcons": [
+        49
+      ],
+      "m_uiFeedbackType": "EYFeedbackAnimationType::Bad",
+      "m_retriggerUIFeedback": false,
+      "m_uiFeedbackRetriggerMinDuration": 5.0,
+      "m_alwaysConsiderAsTriggeredBySelf": false,
+      "m_startAudioEvent": "null",
+      "m_stopAudioEvent": "null",
+      "m_retriggerStartAudioEvent": false,
+      "m_startAudioRetriggerMinDuration": 5.0
+    }
+  },
+  "row_count": 54
+}

@@ -1,0 +1,50 @@
+{
+  "rows": {
+    "DN_MissileWeapon_DT": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30,
+      "m_coolDownTime": 0.0
+    },
+    "AB_DN_Pri_Jet_Bomber_weapon_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.25,
+      "m_projectileFiringDelayMax": 0.25,
+      "m_ammoMagazinSize": 4,
+      "m_coolDownTime": 1.0
+    },
+    "AB_DN_Pri_Jet_Bomber_weapon_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.25,
+      "m_projectileFiringDelayMax": 0.25,
+      "m_ammoMagazinSize": 4,
+      "m_coolDownTime": 1.0
+    },
+    "AB_DN_Pri_Jet_Interceptor_weapon_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 3,
+      "m_coolDownTime": 2.5
+    },
+    "AB_DN_Pri_Jet_Interceptor_weapon_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 3,
+      "m_coolDownTime": 2.5
+    }
+  },
+  "row_count": 5
+}

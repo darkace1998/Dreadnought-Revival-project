@@ -1,0 +1,161 @@
+{
+  "rows": {
+    "0": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 80,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "1": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 100,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "2": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 120,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "3": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 160,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "4": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 200,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "5": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 240,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "6": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 280,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "7": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "8": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "9": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "10": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "11": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "12": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "13": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "14": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "15": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "16": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "17": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "18": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "19": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "20": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "21": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "22": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "23": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "24": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    },
+    "25": {
+      "m_maxBonus": 500,
+      "m_timeLimitA": 300,
+      "m_timeLimitB": 2000,
+      "m_pointsLostPerSecond": 15
+    }
+  },
+  "row_count": 26
+}

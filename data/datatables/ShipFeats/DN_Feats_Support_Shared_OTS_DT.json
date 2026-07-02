@@ -1,0 +1,166 @@
+{
+  "rows": {
+    "EnergyLance_T0": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance_T0))",
+      "m_effects": "AM(PawnDamageModifier +25%) : Stacks(1) : D(5.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +50%) :Stacks(1): D(5.0);PlayFeedback(HealingIncrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyLance_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance_T1))",
+      "m_effects": "AM(PawnDamageModifier +45%) : Stacks(1) : D(5.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +90%) :Stacks(1): D(5.0);PlayFeedback(HealingIncrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyLance_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance_T2))",
+      "m_effects": "AM(PawnDamageModifier +60%) : Stacks(1) : D(5.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +100%) :Stacks(1): D(5.0);PlayFeedback(HealingIncrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyLance_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance_T3))",
+      "m_effects": "AM(PawnDamageModifier +70%) : Stacks(1) : D(10.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +120%) :Stacks(1): D(10.0);AM(PawnDamageResistance -50%) : Stacks(1) : D(10.0) : Buff(ArmorDecrease);RM(Energy EnergyLanceCost -80) :Stacks(1);PlayFeedback(HealingIncreasedArmorDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyLance": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance))",
+      "m_effects": "AM(PawnDamageModifier +85%) : Stacks(1) : D(12.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +135%) :Stacks(1): D(12.0);AM(PawnDamageResistance -100%) : Stacks(1) : D(12.0) : Buff(ArmorDecrease);RM(Energy EnergyLanceCost -100) :Stacks(1);PlayFeedback(HealingIncreasedArmorDecrease):D(12.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyLance_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==EnergyLance_T5))",
+      "m_effects": "AM(PawnDamageModifier +100%) : Stacks(1) : D(15.0) : Buff(FirepowerIncrease);AM(PawnHealingModifier +150%) :Stacks(1): D(15.0);AM(PawnDamageResistance -150%) : Stacks(1) : D(15.0) : Buff(ArmorDecrease);RM(Energy EnergyLanceCost -125) :Stacks(1);PlayFeedback(HealingIncreasedArmorDecrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T0": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T0))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(3.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T1))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(4.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(4.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T2))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(5.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T3))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(6.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(6.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(7.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(7.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T5))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1000): Stacks(1): D(8.0) : Buff(HealthIncrease);PlayFeedback(HealthPack):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "GetMyGoodSideFeat": {
+      "m_enabling": "ByRemote()",
+      "m_triggers": "BeHitPerHitPoint(CC(DamageSourceAngle>120))",
+      "m_effects": "RM(Energy +0.0025);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(EnergyIncrease);PlayFeedback(GetMyGoodSide):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityIncrease_T3": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==AbilityIncrease_T3))",
+      "m_effects": "AbilityCoolDown() : D(-20.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityIncrease": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==AbilityIncrease))",
+      "m_effects": "AbilityCoolDown() : D(-20.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityIncrease_T5": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==AbilityIncrease_T5))",
+      "m_effects": "AbilityCoolDown() : D(-30.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StasisBeam_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==StasisBeam_T3))",
+      "m_effects": "AM(PawnDamageModifier -90%) : Stacks(1) : D(8.0);PlayFeedback(StasisBeam):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StasisBeam": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==StasisBeam))",
+      "m_effects": "AM(PawnDamageModifier -90%) : Stacks(1) : D(8.0);PlayFeedback(StasisBeam):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StasisBeam_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==StasisBeam_T5))",
+      "m_effects": "AM(PawnDamageModifier -0%) : Stacks(1) : D(8.0);PlayFeedback(StasisBeam):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EmergencyEvac": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==EmergencyEvac))",
+      "m_effects": "CloakShip(CloakEvac):Stacks(1);AM(PawnForwardForceModifier +100%): D(10.0) : Buff(SpeedIncrease) :Stacks(1);AM(PawnVerticalForceModifier +100%) :Stacks(1);AM(PawnReverseForceModifier +100%) :Stacks(1);AM(PawnSteerForceModifier +100%) :Stacks(1);AM(PawnStrafeForceModifier +100%) :Stacks(1);PlayFeedback(CloakSpeedIncrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EmergencyEvac_T5": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==EmergencyEvac_T5))",
+      "m_effects": "CloakShip(CloakEvac):Stacks(1);AM(PawnForwardForceModifier +100%): D(15.0) : Buff(SpeedIncrease) :Stacks(1);AM(PawnVerticalForceModifier +100%) :Stacks(1);AM(PawnReverseForceModifier +100%) :Stacks(1);AM(PawnSteerForceModifier +100%) :Stacks(1);AM(PawnStrafeForceModifier +100%) :Stacks(1);PlayFeedback(CloakSpeedIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeakenBeam": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==WeakenBeam))",
+      "m_effects": "AM(PawnDamageResistance -0%) : Stacks(1) : D(0) : Buff(ArmorDecrease);PlayFeedback(PurgeBeamMode):D(0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "RetaliatorFeat": {
+      "m_enabling": " ByRemote()",
+      "m_triggers": " BeShieldHitPerHitPoint()",
+      "m_effects": "AbilityCooldown() : D(-0.001);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 23
+}

@@ -1,0 +1,75 @@
+{
+  "rows": {
+    "Int_SpeedInc": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_SpeedInc))",
+      "m_effects": "AM(PawnVerticalForceModifier +200%) :Stacks(1): D(10.0) : Buff(SpeedIncrease);AM(PawnForwardForceModifier +250%) :Stacks(1): D(10.0);AM(PawnReverseForceModifier +200%) :Stacks(1): D(10.0);AM(PawnSteerForceModifier +200%) :Stacks(1): D(10.0);PlayFeedback(SpeedIncrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_SpeedInc_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_SpeedInc_T5))",
+      "m_effects": "AM(PawnVerticalForceModifier +200%) :Stacks(1): D(12.0) : Buff(SpeedIncrease);AM(PawnForwardForceModifier +250%) :Stacks(1): D(12.0);AM(PawnReverseForceModifier +200%) :Stacks(1): D(12.0);AM(PawnSteerForceModifier +200%) :Stacks(1): D(12.0);PlayFeedback(SpeedIncrease):D(12.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease_T0": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc_T0))",
+      "m_effects": "AbilityCoolDown() : D(-20.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc_T1))",
+      "m_effects": "AbilityCoolDown() : D(-30.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease_T2": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc_T2))",
+      "m_effects": "AbilityCoolDown() : D(-40.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc_T3))",
+      "m_effects": "AbilityCoolDown() : D(-50.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc))",
+      "m_effects": "AbilityCoolDown() : D(-55.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Int_AbilityIncrease_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Int_AbInc_T5))",
+      "m_effects": "AbilityCoolDown() : D(-60.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityIncrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RammingSpeed": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Ram))",
+      "m_effects": "AM(PawnSteerForceModifier -100%) : D(2.0) : Buff(SpeedIncrease);AM(PawnForwardForceModifier +500%) : D(2.0);AM(PawnVerticalForceModifier -100%) : D(2.0);PlayFeedback(Ram):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RetaliatorFeat": {
+      "m_enabling": "ByRemote()",
+      "m_triggers": "BeShieldHitPerHitPoint()",
+      "m_effects": "AbilityCooldown() : D(-0.00065);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 10
+}

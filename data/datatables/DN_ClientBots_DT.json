@@ -1,0 +1,65 @@
+{
+  "rows": {
+    "AssaultH_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "AssaultL_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "AssaultM_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "DreadH_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "DreadL_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "DreadM_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "ScoutH_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "ScoutL_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "ScoutM_Default": {
+      "m_clientBot": "[AssetObjectProperty:86b]"
+    },
+    "SniperH_Default": {
+      "m_clientBot": "[AssetObjectProperty:89b]"
+    },
+    "SniperL_Default": {
+      "m_clientBot": "[AssetObjectProperty:89b]"
+    },
+    "SniperM_Default": {
+      "m_clientBot": "[AssetObjectProperty:89b]"
+    },
+    "SupportH_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "SupportL_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "SupportM_Default": {
+      "m_clientBot": "[AssetObjectProperty:92b]"
+    },
+    "RespawnJetMsl_Default": {
+      "m_clientBot": "[AssetObjectProperty:99b]"
+    },
+    "RespawnJetBomb_Default": {
+      "m_clientBot": "[AssetObjectProperty:99b]"
+    },
+    "RespawnJetBoost_Default": {
+      "m_clientBot": "[AssetObjectProperty:109b]"
+    },
+    "RespawnJetDef_Default": {
+      "m_clientBot": "[AssetObjectProperty:99b]"
+    },
+    "ter": {
+      "m_clientBot": "[AssetObjectProperty:100b]"
+    }
+  },
+  "row_count": 20
+}

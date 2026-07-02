@@ -1,0 +1,12 @@
+{
+  "rows": {
+    "HVC_Boost_Util_SpdInc_Small": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +40%) : Stacks(99); AM(PawnReverseForceModifier +40%) : Stacks(99); AM(PawnVerticalForceModifier +40%) : Stacks(99);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 1
+}

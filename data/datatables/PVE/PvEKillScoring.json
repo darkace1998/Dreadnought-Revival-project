@@ -1,0 +1,110 @@
+{
+  "rows": {
+    "0": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "1": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "2": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "3": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "4": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "5": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "6": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "7": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "8": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "9": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "10": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "11": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "12": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "13": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "14": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "15": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "16": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "17": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "18": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "19": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    },
+    "20": {
+      "m_starterKillScore": 5000,
+      "m_deductionTime": 20,
+      "m_scoreToDeduct": 50
+    }
+  },
+  "row_count": 21
+}

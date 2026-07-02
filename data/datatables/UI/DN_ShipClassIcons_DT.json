@@ -1,0 +1,49 @@
+{
+  "rows": {
+    "Scout": {
+      "m_baseClass": "YSBC_SCOUT",
+      "m_icon": "import[14]"
+    },
+    "Sniper": {
+      "m_baseClass": "YSBC_SNIPER",
+      "m_icon": "import[13]"
+    },
+    "Support": {
+      "m_baseClass": "YSBC_SUPPORT",
+      "m_icon": "import[20]"
+    },
+    "Assault": {
+      "m_baseClass": "YSBC_ASSAULT",
+      "m_icon": "import[16]"
+    },
+    "Jet": {
+      "m_baseClass": "YSBC_JET",
+      "m_icon": "import[18]"
+    },
+    "Boss": {
+      "m_baseClass": "YSBC_BOSS",
+      "m_icon": "import[19]"
+    },
+    "Dreadnought": {
+      "m_baseClass": "YSBC_DREADNOUGHT",
+      "m_icon": "import[17]"
+    },
+    "Drone": {
+      "m_baseClass": "YSBC_DRONE",
+      "m_icon": "import[15]"
+    },
+    "Civilian": {
+      "m_baseClass": "YSBC_CIVILIAN",
+      "m_icon": "import[19]"
+    },
+    "CommandShip": {
+      "m_baseClass": "YSBC_COMMANDSHIP",
+      "m_icon": "import[21]"
+    },
+    "AITarget": {
+      "m_baseClass": "YSBC_AITARGET",
+      "m_icon": "import[19]"
+    }
+  },
+  "row_count": 11
+}

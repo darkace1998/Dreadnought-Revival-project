@@ -1,0 +1,13 @@
+{
+  "rows": {
+    "Eliminated": {
+      "m_iconType": "EYUITeamEliminationIcon::EYUITEI_Eliminated",
+      "m_icon": "import[7]"
+    },
+    "Unseen": {
+      "m_iconType": "EYUITeamEliminationIcon::EYUITEI_Unseen",
+      "m_icon": "import[6]"
+    }
+  },
+  "row_count": 2
+}

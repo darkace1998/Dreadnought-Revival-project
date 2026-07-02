@@ -1,0 +1,155 @@
+{
+  "rows": {
+    "Gamepad_DPad_Left": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[24]",
+      "m_InputName": "Gamepad_DPad_Left"
+    },
+    "Gamepad_DPad_Right": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[25]",
+      "m_InputName": "Gamepad_DPad_Right"
+    },
+    "Gamepad_DPad_Down": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[23]",
+      "m_InputName": "Gamepad_DPad_Down"
+    },
+    "Gamepad_DPad_Up": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[26]",
+      "m_InputName": "Gamepad_DPad_Up"
+    },
+    "Gamepad_RightTrigger": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[33]",
+      "m_InputName": "Gamepad_RightTrigger"
+    },
+    "Gamepad_LeftTrigger": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[28]",
+      "m_InputName": "Gamepad_LeftTrigger"
+    },
+    "Gamepad_RightShoulder": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[32]",
+      "m_InputName": "Gamepad_RightShoulder"
+    },
+    "Gamepad_LeftShoulder": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[27]",
+      "m_InputName": "Gamepad_LeftShoulder"
+    },
+    "Gamepad_FaceButton_Top": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[38]",
+      "m_InputName": "Gamepad_FaceButton_Top"
+    },
+    "Gamepad_FaceButton_Left": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[36]",
+      "m_InputName": "Gamepad_FaceButton_Left"
+    },
+    "Gamepad_FaceButton_Right": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[22]",
+      "m_InputName": "Gamepad_FaceButton_Right"
+    },
+    "Gamepad_FaceButton_Bottom": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[39]",
+      "m_InputName": "Gamepad_FaceButton_Bottom"
+    },
+    "Gamepad_Special_Right": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[31]",
+      "m_InputName": "Gamepad_Special_Right"
+    },
+    "Gamepad_Special_Left": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[37]",
+      "m_InputName": "Gamepad_Special_Left"
+    },
+    "Gamepad_RightThumbstick": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[35]",
+      "m_InputName": "Gamepad_RightThumbstick"
+    },
+    "Gamepad_LeftThumbstick": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[30]",
+      "m_InputName": "Gamepad_LeftThumbstick"
+    },
+    "Gamepad_RightTriggerAxis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[33]",
+      "m_InputName": "Gamepad_RightTriggerAxis"
+    },
+    "Gamepad_LeftTriggerAxis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[28]",
+      "m_InputName": "Gamepad_LeftTriggerAxis"
+    },
+    "Gamepad_RightY": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[35]",
+      "m_InputName": "Gamepad_RightY"
+    },
+    "Gamepad_RightX": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[35]",
+      "m_InputName": "Gamepad_RightX"
+    },
+    "Gamepad_LeftY": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[30]",
+      "m_InputName": "Gamepad_LeftY"
+    },
+    "Gamepad_LeftX": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[30]",
+      "m_InputName": "Gamepad_LeftX"
+    },
+    "Touchpad": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[37]",
+      "m_InputName": "Touchpad"
+    },
+    "Gamepad_LeftThumbstick_Y-Axis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[30]",
+      "m_InputName": "Gamepad_LeftThumbstick_Y-Axis"
+    },
+    "Gamepad_LeftThumbstick_X-Axis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[30]",
+      "m_InputName": "Gamepad_LeftThumbstick_X-Axis"
+    },
+    "Gamepad_RightThumbstick_Y-Axis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[35]",
+      "m_InputName": "Gamepad_RightThumbstick_Y-Axis"
+    },
+    "Gamepad_RightThumbstick_X-Axis": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[35]",
+      "m_InputName": "Gamepad_RightThumbstick_X-Axis"
+    },
+    "Gamepad_RightThumbstickButton": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[34]",
+      "m_InputName": "Gamepad_RightThumbstickButton"
+    },
+    "Gamepad_LeftThumbstickButton": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "import[29]",
+      "m_InputName": "Gamepad_LeftThumbstickButton"
+    },
+    "EmptyRow": {
+      "m_inputBinding": "[text]",
+      "m_inputIcon": "null",
+      "m_InputName": "NoInput"
+    }
+  },
+  "row_count": 30
+}

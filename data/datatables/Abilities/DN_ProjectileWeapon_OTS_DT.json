@@ -1,0 +1,221 @@
+{
+  "rows": {
+    "DN_ProjectileWeapon_DT": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_T0_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_T1_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_T2_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_T3_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Per_Tur_Off_weapon01_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.05,
+      "m_internalFiringDelayMax": 0.15,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Pri_Missile_Repeater_TurretWeapon_BP": {
+      "m_projectilesPerShoot": 8,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_AS_Pri_Missile_Repeater_TurretWeapon_T5_BP": {
+      "m_projectilesPerShoot": 8,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Per_Tur_OffH_weapon_BP": {
+      "m_projectilesPerShoot": 2,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Per_Tur_OffH_weapon_T2_BP": {
+      "m_projectilesPerShoot": 2,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Per_Tur_OffH_weapon_T3_BP": {
+      "m_projectilesPerShoot": 2,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Per_Tur_OffH_weapon_T5_BP": {
+      "m_projectilesPerShoot": 2,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Per_Tur_OffM_weapon_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Pri_Jet_Fighter_weapon_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Pri_Jet_Fighter_weapon_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Sec_TurretH_TurretWeapon_BP": {
+      "m_projectilesPerShoot": 8,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.1,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_DN_Sec_TurretH_TurretWeapon_T5_BP": {
+      "m_projectilesPerShoot": 8,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.1,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SC_Per_Tur_Off_weapon01_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Per_Tur_Off_weapon01_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Per_Tur_Off_weapon01_T2_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Per_Tur_Off_weapon01_T3_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Per_Tur_Off_weapon01_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.1,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon02_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SN_Pri_Catapult_Turret_Weapon02_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 30
+    },
+    "AB_SU_Pri_TurretH_Weapon_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 60
+    },
+    "AB_SU_Pri_TurretH_Weapon_T5_BP": {
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0,
+      "m_ammoMagazinSize": 60
+    }
+  },
+  "row_count": 27
+}

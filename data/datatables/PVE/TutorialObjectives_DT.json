@@ -1,0 +1,155 @@
+{
+  "rows": {
+    "01": {
+      "m_id": "StandBy",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "02": {
+      "m_id": "MoveOutOfHangar",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "03": {
+      "m_id": "BasicMovement",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "04": {
+      "m_id": "AscendDescend",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "05": {
+      "m_id": "UpAndOver",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "06": {
+      "m_id": "IncreaseThrust",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "07": {
+      "m_id": "PrimaryWeapons",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "08": {
+      "m_id": "WaitForWarp",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "09": {
+      "m_id": "SecondaryWeaponTest",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "10": {
+      "m_id": "Reticule",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "11": {
+      "m_id": "BroadsideMissiles",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "12": {
+      "m_id": "AML",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "13": {
+      "m_id": "Shields",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "14": {
+      "m_id": "ReturnToHangar",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    },
+    "15": {
+      "m_id": "DestroyRaiders",
+      "m_type": "EYObjectiveType::YOT_GENERIC",
+      "m_state": "EYObjectiveState::YOS_INACTIVE",
+      "m_mainObjective": true,
+      "m_message": "[text]",
+      "m_markerText": "[text_5b]",
+      "m_amountToComplete": -1,
+      "m_currentAmount": 0
+    }
+  },
+  "row_count": 15
+}

@@ -1,0 +1,33 @@
+{
+  "rows": {
+    "Light0": {
+      "m_levelFullPath": "/Game/Maps/Menu/MN_Hangar_Light01",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": false,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": true,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": true,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Light1": {
+      "m_levelFullPath": "/Game/Maps/Menu/MN_Hangar_Light02",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": false,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": true,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": true,
+      "m_levelVariationIndex": 1,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    }
+  },
+  "row_count": 2
+}

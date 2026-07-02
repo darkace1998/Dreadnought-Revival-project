@@ -1,0 +1,75 @@
+{
+  "rows": {
+    "ModifierSpeed": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +600%) : Stacks(99);AM(PawnReverseForceModifier +600%) : Stacks(99);AM(PawnVerticalForceModifier +300%) : Stacks(99);AM(PawnSteerForceModifier +300%) : Stacks(99);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierDamage": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +50%) : Stacks(99);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierHealthRegen": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +50%) : Stacks(99);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierEnergyRegen": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM ( PawnEnergyRegenerationRateModifier +50%) :Stacks(99);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierFireRate": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnPrimaryWeaponCoolDownModifier -50%) : Stacks(10); AM(PawnWeaponsCoolDownModifier -50%) : Stacks(10); AM(PawnReloadTimePriModifier -50%) : Stacks(10); AM(PawnReloadTimeSecModifier -50%) : Stacks(10);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierDamageResistance": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +50%  : Stacks(99)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierHealthIncrease": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +50%) : Stacks(99);RM(Health +100%) : Stacks(99);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierEnergyIncrease": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM( PawnMaxEnergyModifier +50%) : Stacks(99)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierCooldownRate": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -50%) : Stacks(99)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "ModifierTurbo": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +600%) : Stacks(1) : D(1200) : Buff(Turbo);AM(PawnReverseForceModifier +600%) : Stacks(1);AM(PawnVerticalForceModifier +300%) : Stacks(1);AM(PawnSteerForceModifier +300%) : Stacks(1); AM(PawnDamageModifier +50%) : Stacks(1); AM(PawnAbilityCooldownTimeModifier -50%) : Stacks(1);AM(PawnProjectileSpeedModifier +250%) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 10
+}

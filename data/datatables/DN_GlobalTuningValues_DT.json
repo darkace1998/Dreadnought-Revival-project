@@ -1,0 +1,10 @@
+{
+  "rows": {
+    "Default": {
+      "m_rangeToViewTargetMarkerForClassReveal": 20000.0,
+      "m_projectileCloseInProjectileSpeedModifier": 0.5,
+      "m_afkTimer": 119.5
+    }
+  },
+  "row_count": 1
+}

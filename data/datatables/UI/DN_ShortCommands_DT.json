@@ -1,0 +1,37 @@
+{
+  "rows": {
+    "Point": {
+      "m_shortCommand": "EYUISC_PointAtTarget",
+      "m_icon": "import[16]"
+    },
+    "Attack": {
+      "m_shortCommand": "EYUISC_AttackTarget",
+      "m_icon": "import[12]"
+    },
+    "Backup": {
+      "m_shortCommand": "EYUISC_NeedBackup",
+      "m_icon": "import[17]"
+    },
+    "Follow": {
+      "m_shortCommand": "EYUISC_FollowMe",
+      "m_icon": "import[14]"
+    },
+    "Repair": {
+      "m_shortCommand": "EYUISC_NeedRepair",
+      "m_icon": "import[19]"
+    },
+    "Regroup": {
+      "m_shortCommand": "EYUISC_ReGroup",
+      "m_icon": "import[18]"
+    },
+    "Destroy": {
+      "m_shortCommand": "EYUISC_DestroyTarget",
+      "m_icon": "import[13]"
+    },
+    "Thanks": {
+      "m_shortCommand": "EYUISC_Thanks",
+      "m_icon": "import[15]"
+    }
+  },
+  "row_count": 8
+}

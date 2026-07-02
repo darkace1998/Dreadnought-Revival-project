@@ -1,0 +1,135 @@
+{
+  "rows": {
+    "DN_WeaponBroadside_DT": {
+      "m_spreadValue": 0.0,
+      "m_coolDownTime": 0.0,
+      "m_maxRange": 10000.0,
+      "m_projectilesPerShoot": 1,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 6,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T0_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 2,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T1_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 3,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T2_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 4,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T3_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 5,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Plasma_Weapon_T5_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 2.5,
+      "m_maxRange": 15000.0,
+      "m_projectilesPerShoot": 8,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_BP": {
+      "m_spreadValue": 7.5,
+      "m_coolDownTime": 5.0,
+      "m_maxRange": 10000.0,
+      "m_projectilesPerShoot": 20,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.005
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T2_BP": {
+      "m_spreadValue": 7.5,
+      "m_coolDownTime": 5.0,
+      "m_maxRange": 10000.0,
+      "m_projectilesPerShoot": 10,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.005
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T3_BP": {
+      "m_spreadValue": 7.5,
+      "m_coolDownTime": 5.0,
+      "m_maxRange": 10000.0,
+      "m_projectilesPerShoot": 10,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.005
+    },
+    "AB_DN_Pri_BS_Scatter_Weapon_T5_BP": {
+      "m_spreadValue": 7.5,
+      "m_coolDownTime": 5.0,
+      "m_maxRange": 10000.0,
+      "m_projectilesPerShoot": 30,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.005
+    },
+    "AB_DN_Pri_BS_MG_Weapon_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 0.45,
+      "m_maxRange": 18000.0,
+      "m_projectilesPerShoot": 20,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    },
+    "AB_DN_Pri_BS_MG_Weapon_T5_BP": {
+      "m_spreadValue": 1.0,
+      "m_coolDownTime": 0.45,
+      "m_maxRange": 18000.0,
+      "m_projectilesPerShoot": 25,
+      "m_internalFiringDelayMin": 0.0,
+      "m_internalFiringDelayMax": 0.0,
+      "m_projectileFiringDelayMin": 0.0,
+      "m_projectileFiringDelayMax": 0.0
+    }
+  },
+  "row_count": 13
+}

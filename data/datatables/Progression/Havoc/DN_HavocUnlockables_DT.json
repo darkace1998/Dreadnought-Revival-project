@@ -1,0 +1,10 @@
+{
+  "rows": {
+    "UnlockHeroShip": {
+      "m_highscore": 10000,
+      "m_rewardType": "EYHavocRewardType::YHRT_ITEM",
+      "m_value": 67043338
+    }
+  },
+  "row_count": 1
+}

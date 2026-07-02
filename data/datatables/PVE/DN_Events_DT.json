@@ -1,0 +1,203 @@
+{
+  "rows": {
+    "PVE_DebugEvent": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_DebugEvent_Name\u0000\u0010\u0000\u0000\u0000PVE Debug Event",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u001a\u0000\u0000\u0000PVE_DebugEvent_Desc_Short\u0000\u0018\u0000\u0000\u0000Debug short description",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0019\u0000\u0000\u0000PVE_DebugEvent_Desc_Long\u0000\u0017\u0000\u0000\u0000Debug long description",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 0,
+        "g": 0,
+        "b": 255,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:63b]",
+      "m_imageLarge": "[AssetObjectProperty:63b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.01.01-00.00.00",
+      "m_endDate": "2018.01.31-23.59.59",
+      "m_season": "PVE_DebugSeason"
+    },
+    "PVE_S3E1": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S3E1_Name\u0000\f\u0000\u0000\u0000Infestation",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S3E2_Desc_Short\u0000\f\u0000\u0000\u0000Infestation",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S3E1_Desc_Long\u0000X\u0001\u0000\u0000House Oberon industrial installations and Transhuman tech research centers on the Jovian moon Callisto have been targetted by an unknown raider fleet. With Oberon's own Navy too far away to defend their assets from the next attack and an open contract set up, it's up to the Scumbelt's more adventurous mercenary captains to handle the threat.",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 159,
+        "g": 195,
+        "b": 231,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.02.06-00.00.00",
+      "m_endDate": "2018.02.08-23.59.59",
+      "m_season": "PVE_Season3"
+    },
+    "PVE_S3E2": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S3E2_Name\u0000\u000e\u0000\u0000\u0000Rabbit Season",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S3E2_Desc_Short\u0000 \u0000\u0000\u0000Battleship Down - Rabbit Season",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S3E2_Desc_Long\u0000X\u0001\u0000\u0000While no longer a threat in orbit, many of the raiders reached Callisto's surface. House Oberon's Navy is en route to the moon, where they hope to make a spectacle of vanquishing the raiders in front of the press, but before that they want you to whittle down the remaining cultist forces to a size the corporate navy can handle without worry.",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 255,
+        "g": 184,
+        "b": 118,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.02.09-23.59.59",
+      "m_endDate": "2018.02.10-23.59.59",
+      "m_season": "PVE_Season3"
+    },
+    "PVE_S3E3": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S3E3_Name\u0000\b\u0000\u0000\u0000Culling",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S3E3_Desc_Short\u0000\u001a\u0000\u0000\u0000Battleship Down - Culling",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S3E3_Desc_Long\u0000\u001d\u0001\u0000\u0000The Bun Bun Cult brought more to the field than house Oberon planned for, and now their fleet is tangled fighting a new wave of raider ships in orbit. On Callisto's surface, cultist ships prepare to raze the corp's installations and supporting colony. Destroy every last enemy vessel!",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "?ylevelvariation=1",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 230,
+        "g": 204,
+        "b": 167,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.02.11-23.59.59",
+      "m_endDate": "2018.02.12-23.59.59",
+      "m_season": "PVE_Season3"
+    },
+    "PVE_S3E4": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S3E4_Name\u0000\u000e\u0000\u0000\u0000Pet the Bunny",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S3E4_Desc_Short\u0000 \u0000\u0000\u0000Battleship Down - Pet the Bunny",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S3E4_Desc_Long\u0000\u00a1\u0000\u0000\u0000With the battle for Callisto won and the Cult's fleets all but destroyed, the hunt has begun for the cult's scattered remnants, and more importantly, for their ",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 221,
+        "g": 164,
+        "b": 129,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.02.13-23.59.59",
+      "m_endDate": "2018.02.14-23.59.59",
+      "m_season": "PVE_Season3"
+    },
+    "PVE_S1E1": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S1E1_Name\u0000\u0014\u0000\u0000\u0000Incident Management",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S1E1_Desc_Short\u0000*\u0000\u0000\u0000Miner Inconvenience - Incident Management",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S1E1_Desc_Long\u0000U\u0001\u0000\u0000Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics to wear down the corp's spread out defenses. The megacorp is now contacting  mercenary captains directly to assist their forces and protect Jupiter Arms assets, hoping to finally put an end to these costly attacks.",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 160,
+        "g": 144,
+        "b": 131,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.05.16-16.00.00",
+      "m_endDate": "2018.05.16-16.19.59",
+      "m_season": "PVE_Season1"
+    },
+    "PVE_S1E2": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S1E2_Name\u0000\u0012\u0000\u0000\u0000Operational Risks",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S1E2_Desc_Short\u0000(\u0000\u0000\u0000Miner Inconvenience - Operational Risks",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S1E2_Desc_Long\u0000'\u0001\u0000\u0000The bandits harassing Jupiter Arms' installations turned out to be the Jovian Raiders, ex-PCF Navy captains gone rogue that want Io for themselves. Now that they have a real opponent to size up against they'll be bringing their best ships and captains to the field; be ready for a proper fight!",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "?ylevelvariation=1",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 219,
+        "g": 132,
+        "b": 124,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.05.16-16.20.00",
+      "m_endDate": "2018.05.16-16.39.59",
+      "m_season": "PVE_Season1"
+    },
+    "PVE_S1E3": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S1E3_Name\u0000\u0010\u0000\u0000\u0000Asset Write Off",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S1E3_Desc_Short\u0000&\u0000\u0000\u0000Miner Inconvenience - Asset Write Off",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S1E3_Desc_Long\u0000\u000f\u0001\u0000\u0000Jupiter Arms' evacuation of their installations on Io has hit a hitch, with workers remaining on the moon left stranded. As the Jovian Raiders prepare their next attack on Kappa Base, it fall on to you to defend the installation and those trapped in it from the assault.",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_HORDE",
+      "m_color": {
+        "r": 203,
+        "g": 159,
+        "b": 166,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.05.16-16.40.00",
+      "m_endDate": "2018.05.16-16.59.59",
+      "m_season": "PVE_Season1"
+    },
+    "PVE_S1E4": {
+      "m_name": "\u0000YSeasonsDataManager\u0000\u000e\u0000\u0000\u0000PVE_S1E4_Name\u0000\u0012\u0000\u0000\u0000Goodwill Expenses",
+      "m_descShort": "\u0000YSeasonsDataManager\u0000\u0014\u0000\u0000\u0000PVE_S1E4_Desc_Short\u0000(\u0000\u0000\u0000Miner Inconvenience - Goodwill Expenses",
+      "m_descLong": "\u0000YSeasonsDataManager\u0000\u0013\u0000\u0000\u0000PVE_S1E4_Desc_Long\u0000z\u0001\u0000\u0000The evacuation of Io is nearly complete, but a mining complex has suffered a collapse, trapping scores of workers underground. With Jupiter Arms nowhere to be seen and the Jovian Raiders still on the offensive, the Miners Union is setting up a rescue operation lead by the captain of the Deliverance. Escort the hauler through hostile territory and evacuate the trapped miners!",
+      "m_map": "[AssetObjectProperty:58b]",
+      "m_mapParameters": "",
+      "m_gameMode": "YGMT_ESCORT",
+      "m_color": {
+        "r": 182,
+        "g": 213,
+        "b": 235,
+        "a": 255
+      },
+      "m_imageSmall": "[AssetObjectProperty:72b]",
+      "m_imageLarge": "[AssetObjectProperty:72b]",
+      "m_rewardLevels": [
+        "[StructProperty\u00d79]"
+      ],
+      "m_startDate": "2018.05.07-09.45.00",
+      "m_endDate": "2018.05.07-09.59.59",
+      "m_season": "PVE_Season1"
+    }
+  },
+  "row_count": 9
+}

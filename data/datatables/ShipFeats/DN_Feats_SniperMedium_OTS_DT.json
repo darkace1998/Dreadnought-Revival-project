@@ -1,0 +1,19 @@
+{
+  "rows": {
+    "EnergyOnThrust": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnFeat1(CC(Energy>1))",
+      "m_effects": "RM(Energy InitialEnergyCosts -0); AM(PawnVerticalForceModifier +125%) :Stacks(1) ; AM(PawnForwardForceModifier +250%) :Stacks(1) ;AM(PawnReverseForceModifier +100%) :Stacks(1); AM(PawnSteerForceModifier +80%) :Stacks(1) ; AM(PawnEnergyConsumptionRateModifier -30%) :Stacks(1); DFS(EnergyOnShield) ;DFS(EnergyOnDamage); DFS(EnergyOff); PCFS(#Energy_To_Engine)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyOnDamage": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnFeat3(CC(Energy>0))",
+      "m_effects": "RM(Energy InitialEnergyCosts -20); AM(PawnEnergyConsumptionRateModifier +50%) :Stacks(1); DFS(EnergyOnThrust) ;DFS(EnergyOnShield) ;DFS(EnergyOff); PCFS(#Energy_To_Weapons)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 2
+}

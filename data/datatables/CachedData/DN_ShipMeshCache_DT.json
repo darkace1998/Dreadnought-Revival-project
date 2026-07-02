@@ -1,0 +1,65 @@
+{
+  "rows": {
+    "AssaultHeavy": {
+      "m_shipClass": "YSC_ASSAULT_HEAVY",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    },
+    "AssaultLight": {
+      "m_shipClass": "YSC_ASSAULT_LIGHT",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    },
+    "AssaultMedium": {
+      "m_shipClass": "YSC_ASSAULT_MEDIUM",
+      "m_mesh": "[AssetObjectProperty:69b]"
+    },
+    "DreadnoughtHeavy": {
+      "m_shipClass": "YSC_DREADNOUGHT_HEAVY",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    },
+    "DreadnoughtLight": {
+      "m_shipClass": "YSC_DREADNOUGHT_LIGHT",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    },
+    "DreadnoughtMedium": {
+      "m_shipClass": "YSC_DREADNOUGHT_MEDIUM",
+      "m_mesh": "[AssetObjectProperty:69b]"
+    },
+    "ScoutHeavy": {
+      "m_shipClass": "YSC_SCOUT_HEAVY",
+      "m_mesh": "[AssetObjectProperty:62b]"
+    },
+    "ScoutLight": {
+      "m_shipClass": "YSC_SCOUT_LIGHT",
+      "m_mesh": "[AssetObjectProperty:62b]"
+    },
+    "ScoutMedium": {
+      "m_shipClass": "YSC_SCOUT_MEDIUM",
+      "m_mesh": "[AssetObjectProperty:63b]"
+    },
+    "SniperHeavy": {
+      "m_shipClass": "YSC_SNIPER_HEAVY",
+      "m_mesh": "[AssetObjectProperty:65b]"
+    },
+    "SniperLight": {
+      "m_shipClass": "YSC_SNIPER_LIGHT",
+      "m_mesh": "[AssetObjectProperty:65b]"
+    },
+    "SniperMedium": {
+      "m_shipClass": "YSC_SNIPER_MEDIUM",
+      "m_mesh": "[AssetObjectProperty:66b]"
+    },
+    "SupportLight": {
+      "m_shipClass": "YSC_SUPPORT_LIGHT",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    },
+    "SupportMedium": {
+      "m_shipClass": "YSC_SUPPORT_MEDIUM",
+      "m_mesh": "[AssetObjectProperty:69b]"
+    },
+    "SupportHeavy": {
+      "m_shipClass": "YSC_SUPPORT_HEAVY",
+      "m_mesh": "[AssetObjectProperty:68b]"
+    }
+  },
+  "row_count": 15
+}

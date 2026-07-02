@@ -1,0 +1,85 @@
+{
+  "rows": {
+    "0": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "1": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "2": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "3": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "4": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "5": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "6": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "7": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "8": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    },
+    "9": {
+      "m_bonusOneLeft": 1000,
+      "m_bonusTwoLeft": 1000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 1000,
+      "m_bonusFiveLeft": 1000,
+      "m_bonusDecreasePerDeath": 100
+    }
+  },
+  "row_count": 10
+}

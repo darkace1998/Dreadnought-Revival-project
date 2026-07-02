@@ -1,0 +1,95 @@
+{
+  "rows": {
+    "AssaultH": {
+      "m_staticMesh": "import[20]",
+      "m_damageModifier": 0.001,
+      "m_damagePassThroughFactor": 0.25
+    },
+    "AssaultL": {
+      "m_staticMesh": "import[21]",
+      "m_damageModifier": 0.001,
+      "m_damagePassThroughFactor": 0.25
+    },
+    "AssaultM": {
+      "m_staticMesh": "import[22]",
+      "m_damageModifier": 0.001,
+      "m_damagePassThroughFactor": 0.25
+    },
+    "DreadH": {
+      "m_staticMesh": "import[23]",
+      "m_damageModifier": 0.0,
+      "m_damagePassThroughFactor": 0.35
+    },
+    "DreadL": {
+      "m_staticMesh": "import[24]",
+      "m_damageModifier": 0.0,
+      "m_damagePassThroughFactor": 0.35
+    },
+    "DreadM": {
+      "m_staticMesh": "import[25]",
+      "m_damageModifier": 0.0,
+      "m_damagePassThroughFactor": 0.35
+    },
+    "ScoutH": {
+      "m_staticMesh": "import[27]",
+      "m_damageModifier": 0.006,
+      "m_damagePassThroughFactor": 0.05
+    },
+    "ScoutL": {
+      "m_staticMesh": "import[28]",
+      "m_damageModifier": 0.006,
+      "m_damagePassThroughFactor": 0.05
+    },
+    "ScoutM": {
+      "m_staticMesh": "import[29]",
+      "m_damageModifier": 0.006,
+      "m_damagePassThroughFactor": 0.05
+    },
+    "SniperH": {
+      "m_staticMesh": "import[30]",
+      "m_damageModifier": 0.0025,
+      "m_damagePassThroughFactor": 0.2
+    },
+    "SniperL": {
+      "m_staticMesh": "import[31]",
+      "m_damageModifier": 0.0025,
+      "m_damagePassThroughFactor": 0.2
+    },
+    "SniperM": {
+      "m_staticMesh": "import[32]",
+      "m_damageModifier": 0.0025,
+      "m_damagePassThroughFactor": 0.2
+    },
+    "SupportH": {
+      "m_staticMesh": "import[33]",
+      "m_damageModifier": 0.003,
+      "m_damagePassThroughFactor": 0.15
+    },
+    "SupportL": {
+      "m_staticMesh": "import[34]",
+      "m_damageModifier": 0.003,
+      "m_damagePassThroughFactor": 0.15
+    },
+    "SupportM": {
+      "m_staticMesh": "import[35]",
+      "m_damageModifier": 0.003,
+      "m_damagePassThroughFactor": 0.15
+    },
+    "TitanCarrier": {
+      "m_staticMesh": "import[26]",
+      "m_damageModifier": 0.0,
+      "m_damagePassThroughFactor": 0.35
+    },
+    "CargoShip_Escort": {
+      "m_staticMesh": "import[25]",
+      "m_damageModifier": 0.0006,
+      "m_damagePassThroughFactor": 0.0
+    },
+    "DreadE": {
+      "m_staticMesh": "import[24]",
+      "m_damageModifier": 0.006,
+      "m_damagePassThroughFactor": 0.0
+    }
+  },
+  "row_count": 18
+}

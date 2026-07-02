@@ -1,0 +1,12 @@
+{
+  "rows": {
+    "Tier5Modifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 1
+}

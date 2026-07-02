@@ -1,0 +1,40 @@
+{
+  "rows": {
+    "Beginner": {
+      "m_highscore": 1000,
+      "m_rewardType": "EYHavocRewardType::YHRT_FREEXP",
+      "m_value": 500
+    },
+    "2": {
+      "m_highscore": 1500,
+      "m_rewardType": "EYHavocRewardType::YHRT_CREDITS",
+      "m_value": 750
+    },
+    "3": {
+      "m_highscore": 2500,
+      "m_rewardType": "EYHavocRewardType::YHRT_CREDITS",
+      "m_value": 1000
+    },
+    "4": {
+      "m_highscore": 4500,
+      "m_rewardType": "EYHavocRewardType::YHRT_FREEXP",
+      "m_value": 2000
+    },
+    "5": {
+      "m_highscore": 8500,
+      "m_rewardType": "EYHavocRewardType::YHRT_CREDITS",
+      "m_value": 2500
+    },
+    "6": {
+      "m_highscore": 15000,
+      "m_rewardType": "EYHavocRewardType::YHRT_FREEXP",
+      "m_value": 5000
+    },
+    "7": {
+      "m_highscore": 25000,
+      "m_rewardType": "EYHavocRewardType::YHRT_CREDITS",
+      "m_value": 7500
+    }
+  },
+  "row_count": 7
+}

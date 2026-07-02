@@ -1,0 +1,68 @@
+{
+  "rows": {
+    "BuffPod_Modules": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -50%) : Stacks(1) : D(30) : Buff(AbilityIncrease);AbilityCoolDown() : D(-10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_Armor": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +45%) : Stacks(1) : D(30) : Buff(ArmorIncrease)",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_Weapons": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +30%) : Stacks(1) : D(30) : Buff(FirepowerIncrease);AM(PawnWeaponsCoolDownModifier -50%) : Stacks(1) : D(30);AM(PawnReloadTimePriModifier -50%) : Stacks(1) : D(30);AM(PawnReloadTimeSecModifier -50%) : Stacks(1) : D(30);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_RapidFire": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnPrimaryWeaponCoolDownModifier -40%) : Stacks(1) : D(30) : Buff(FirepowerIncrease);AM(PawnSecondaryWeaponCoolDownModifier -40%) : Stacks(1) : D(30): Buff(FirepowerIncrease);AM(PawnReloadTimePriModifier -30%) : Stacks(1): D(30);AM(PawnReloadTimeSecModifier -30%) : Stacks(1): D(30);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_Health": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealthRegenerationModifier +30%): Stacks(1) : D(30) : Buff(HealthIncrease);AM(PawnHealthCooldownTimeModifier -30%): Stacks(1) : D(30);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_MovementSpeed": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnForwardForceModifier +150%) : Stacks(1) : D(30) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +150%) : D(30) : Stacks(1);AM(PawnSteerForceModifier +100%) : D(30) : Stacks(1);AM(PawnVerticalForceModifier +100%) : D(30) : Stacks(1);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "BuffPod_Energy": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier +40%) : Stacks(1) : D(20) : Buff(EnergyIncrease);AM(PawnEnergyCooldownTimeModifier -40%) : Stacks(1) : D(20);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpawnProtectionTER": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageResistance +100%) : Stacks(1) : D(9.0) : Buff(ArmorIncrease); PlayFeedback(SpawnprotectionTER):D(9.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpawnProtectionDebuffTER": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier -75%) : Stacks(1) : D(4.0) : Buff(FirepowerDecrease); PlayFeedback(SpawnprotectionDebuffTER):D(4.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 9
+}

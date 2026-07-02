@@ -1,0 +1,40 @@
+{
+  "rows": {
+    "STM_WeaponModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier +90%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_EnergyRegen": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyRegenerationRateModifier +100%);AM(PawnEnergyCooldownTimeModifier -90%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_HealthModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth +0%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_EnergyUsageRate": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnEnergyConsumptionRateModifier -42%%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_AbilityDmgModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier +40%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 5
+}

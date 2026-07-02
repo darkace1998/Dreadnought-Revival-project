@@ -1,0 +1,789 @@
+{
+  "rows": {
+    "EnergyDecreasePulseHitShield(DefaultValues)": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecreasePulse))",
+      "m_effects": "RM(Energy CrippleEnergyCost -65);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreasePulseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecreasePulse_T5))",
+      "m_effects": "RM(Energy CrippleEnergyCost -85);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShield_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecrease_T1))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(5.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(5.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(5.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(5.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecrease_T2))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(6.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(6.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(6.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(6.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(6.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecrease_T3))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(7.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(7.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(7.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(7.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(7.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecrease))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(8.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(8.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(8.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(8.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecrease_T5))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(10.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(10.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(10.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(10.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreasePulseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreasePulse))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(6.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(6.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(6.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(6.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(6.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreasePulseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreasePulse_T5))",
+      "m_effects": "AM(PawnForwardForceModifier -95%%):D(8.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -95%%):D(8.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(8.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(8.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShieldShort_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreaseShort_T2))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(3.5) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(3.5) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(3.5) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(3.5) :Stacks(1);PlayFeedback(SpeedDecrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShieldShort_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreaseShort_T3))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(3.5) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(3.5) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(3.5) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(3.5) :Stacks(1);PlayFeedback(SpeedDecrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShieldShort": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreaseShort))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(3.5) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(3.5) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(3.5) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(3.5) :Stacks(1);PlayFeedback(SpeedDecrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedDecreaseHitShieldShort_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedDecreaseShort_T5))",
+      "m_effects": "AM(PawnForwardForceModifier -90%%):D(5.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%%):D(5.0) :Stacks(1);AM(PawnSteerForceModifier -80%%):D(5.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%%):D(5.0) :Stacks(1);PlayFeedback(SpeedDecrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecrease_T2))",
+      "m_effects": "RM(Energy CrippleEnergyCost -17.5);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecrease_T3))",
+      "m_effects": "RM(Energy CrippleEnergyCost -30);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecrease))",
+      "m_effects": "RM(Energy CrippleEnergyCost -40);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecrease_T5))",
+      "m_effects": "RM(Energy CrippleEnergyCost -62.5);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseMineShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecreaseMine_T3))",
+      "m_effects": "RM(Energy CrippleEnergyCost -80);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseMineShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecreaseMine))",
+      "m_effects": "RM(Energy CrippleEnergyCost -100);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "EnergyDecreaseMineShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==EnergyDecreaseMine_T5))",
+      "m_effects": "RM(Energy CrippleEnergyCost -125);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10.0) : Buff(EnergyDecrease); PlayFeedback(EnergyDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "FirepowerDecreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==FirepowerDecrease))",
+      "m_effects": "AM(PawnDamageModifier -85%) : Stacks(1) : D(12.0) : Buff(FirepowerDecrease); PlayFeedback(FirepowerDecrease):D(12.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "FirepowerIncreaseHitShieldShort_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==FirepowerIncreaseShort_T2))",
+      "m_effects": "AM(PawnDamageModifier +75%) : Stacks(1) : D(3.5) : Buff(FirepowerIncrease);PlayFeedback(FirepowerIncrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "FirepowerIncreaseHitShieldShort_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==FirepowerIncreaseShort_T3))",
+      "m_effects": "AM(PawnDamageModifier +75%) : Stacks(1) : D(3.5) : Buff(FirepowerIncrease);PlayFeedback(FirepowerIncrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "FirepowerIncreaseHitShieldShort": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==FirepowerIncreaseShort))",
+      "m_effects": "AM(PawnDamageModifier +75%) : Stacks(1) : D(3.5) : Buff(FirepowerIncrease);PlayFeedback(FirepowerIncrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "FirepowerIncreaseHitShieldShort_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==FirepowerIncreaseShort_T5))",
+      "m_effects": "AM(PawnDamageModifier +75%) : Stacks(1) : D(3.5) : Buff(FirepowerIncrease);PlayFeedback(FirepowerIncrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ArmorDecreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ArmorDecrease))",
+      "m_effects": "DFS(ArmoredLockdown); DFS(ArmorAmp); DFS(ArmorboosterPulse); AM(PawnDamageResistance -20%) : Stacks(1) : D(5.0) : Buff(ArmorDecrease);PlayFeedback(ArmorDecrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Scramble_T2))",
+      "m_effects": "UIScramble() : D(5.0) : Buff(Scramble);PlayFeedback(Scramble):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Scramble_T3))",
+      "m_effects": "UIScramble() : D(6.5) : Buff(Scramble);PlayFeedback(Scramble):D(6.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Scramble))",
+      "m_effects": "UIScramble() : D(8.0) : Buff(Scramble);PlayFeedback(Scramble):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Scramble_T5))",
+      "m_effects": "UIScramble() : D(10.0) : Buff(Scramble);PlayFeedback(Scramble):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShieldShort_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ScrambleShort_T2))",
+      "m_effects": "UIScramble() : D(0.5) : Buff(Scramble);PlayFeedback(Scramble):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShieldShort_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ScrambleShort_T3))",
+      "m_effects": "UIScramble() : D(0.5) : Buff(Scramble);PlayFeedback(Scramble):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShieldShort": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ScrambleShort))",
+      "m_effects": "UIScramble() : D(0.5) : Buff(Scramble);PlayFeedback(Scramble):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ScrambleHitShieldShort_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ScrambleShort_T5))",
+      "m_effects": "UIScramble() : D(1.0) : Buff(Scramble);PlayFeedback(Scramble):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecrease_T2))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(5.0);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecrease_T3))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(7.5);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(7.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecrease))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(10.0);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecrease_T5))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(15.0);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShieldShort_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecreaseShort_T2))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(0.15);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShieldShort_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecreaseShort_T3))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(0.15);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShieldShort": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecreaseShort))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(3.6);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "AbilityDecreaseHitShieldShort_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==AbilityDecreaseShort_T5))",
+      "m_effects": "AbilityCoolDown() : Buff(AbilityDecrease) : D(2.6);AbiliyInterrupt();PlayFeedback(AbilityDecrease):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "PulseAbilityIncreaseShieldHit": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Pulse_AbiInc))",
+      "m_effects": "AbilityCoolDown() : D(-5.0);AM(PawnDamageResistance +0%) : Stacks(1) : D(2.0): Buff(AbilityIncrease);AM(PawnHealthRegenerationModifier +350): Stacks(1): D(2.0);PlayFeedback(AbilityHealthIncrease):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeakenHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==WarpM_Weaken_T2))",
+      "m_effects": "AbilityCoolDown() : D(10.0) : Buff(AbilityDecrease); AbiliyInterrupt(); RM(Energy WarpWeakenEnergyCost -100); AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1) : Buff(EnergyDecrease): D(10.0);AM(PawnForwardForceModifier -90%):D(10.0) : stacks(1) : Buff(SpeedDecrease); AM(PawnReverseForceModifier -90%):D(10.0) :Stacks(1); AM(PawnSteerForceModifier -80%):D(10.0) :Stacks(1); AM(PawnVerticalForceModifier  -80%):D(10.0) :Stacks(1); PlayFeedback(Weaken):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeakenHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==WarpM_Weaken_T3))",
+      "m_effects": "AbilityCoolDown() : D(20.0) : Buff(AbilityDecrease);AbiliyInterrupt();RM(Energy WarpWeakenEnergyCost -100);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1) : Buff(EnergyDecrease): D(15.0);AM(PawnForwardForceModifier -90%):D(10.0) : stacks(1) : Buff(SpeedDecrease);AM(PawnReverseForceModifier -90%):D(10.0) :Stacks(1);AM(PawnSteerForceModifier -80%):D(10.0) :Stacks(1);AM(PawnVerticalForceModifier  -80%):D(10.0) :Stacks(1);PlayFeedback(Weaken):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeakenHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Weaken))",
+      "m_effects": "DFS(ArmoredLockdown); DFS(ArmorAmp); DFS(ArmorboosterPulse); AM(PawnDamageResistance -20%) : Stacks(1) : D(10.0) : Buff(ArmorDecrease); PlayFeedback(Weaken):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedIncreaseHitShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedIncrease_T2))",
+      "m_effects": "AM(PawnForwardForceModifier +100%) :Stacks(1) : D(3.0) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +100%) :Stacks(1) : D(3.0);AM(PawnSteerForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnVerticalForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnStrafeForceModifier +100%) :Stacks(1) : D(3.0); PlayFeedback(SpeedIncrease):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedIncreaseHitShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedIncrease_T3))",
+      "m_effects": "AM(PawnForwardForceModifier +100%) :Stacks(1) : D(3.0) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +100%) :Stacks(1) : D(3.0);AM(PawnSteerForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnVerticalForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnStrafeForceModifier +100%) :Stacks(1) : D(3.0); PlayFeedback(SpeedIncrease):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedIncreaseHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedIncrease))",
+      "m_effects": "AM(PawnForwardForceModifier +100%) :Stacks(1) : D(3.0) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +100%) :Stacks(1) : D(3.0);AM(PawnSteerForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnVerticalForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnStrafeForceModifier +100%) :Stacks(1) : D(3.0);PlayFeedback(SpeedIncrease):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SpeedIncreaseHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==SpeedIncrease_T5))",
+      "m_effects": "AM(PawnForwardForceModifier +100%) :Stacks(1) : D(3.0) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +100%) :Stacks(1) : D(3.0);AM(PawnSteerForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnVerticalForceModifier +50%) :Stacks(1) : D(3.0);AM(PawnStrafeForceModifier +100%) :Stacks(1) : D(3.0); PlayFeedback(SpeedIncrease):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TurretSpeedDecHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Turret_SpeedDec))",
+      "m_effects": "AM(PawnForwardForceModifier -80%) :Stacks(1) : D(6.0) :Buff(SpeedDecrease);AM(PawnReverseForceModifier -80%) : Stacks(1) : D(6.0);AM(PawnSteerForceModifier -80%) : Stacks(1) : D(6.0);AM(PawnVerticalForceModifier -80%) : Stacks(1) : D(6.0);RM(Energy -100);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(1.0) : Buff(EnergyDecrease);PlayFeedback(SpeedEnergyDecrease):D(6.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TurretAbiDecHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Turret_AbiDec))",
+      "m_effects": "AbilityCooldown() : D(0.2);AbiliyInterrupt();AM(PawnDamageResistance -0%) : Stacks(1) : D(0.5) : Buff(AbilityDecrease); PlayFeedback(AbilityDecrease):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocus": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==WeaponFocus))",
+      "m_effects": "AM(PawnSpreadEaseModifier +2000%) : Stacks(1);AM(PawnDamageModifier +30%) : D(15.0) : Buff(FirepowerIncrease) : Stacks(1);AM(PawnReloadTimePriModifier -50%) :Stacks(1);AM(PawnReloadTimeSecModifier -50%) :Stacks(1); PlayFeedback(FirepowerIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocus_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==WeaponFocus_T3))",
+      "m_effects": "AM(PawnSpreadEaseModifier +2000%) : Stacks(1);AM(PawnDamageModifier +25%) : D(15.0) : Buff(FirepowerIncrease) : Stacks(1);AM(PawnReloadTimePriModifier -40%) :Stacks(1);AM(PawnReloadTimeSecModifier -40%) :Stacks(1); PlayFeedback(FirepowerIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocus_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==WeaponFocus_T5))",
+      "m_effects": "AM(PawnSpreadEaseModifier +2000%) : Stacks(1);AM(PawnDamageModifier +35%) : D(15.0) : Buff(FirepowerIncrease) : Stacks(1);AM(PawnReloadTimePriModifier -60%) :Stacks(1);AM(PawnReloadTimeSecModifier -60%) :Stacks(1); PlayFeedback(FirepowerIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost1_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T5) | CC(DamageAmount <250) | CC(DamageAmount>0) )",
+      "m_effects": "AM(PawnDamageModifier +1.5%) : D(2) : Stacks(40): Buff(FirepowerIncrease);  PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost2_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T5) | CC(DamageAmount >=250) | CC(DamageAmount<1650) )",
+      "m_effects": "AM(PawnDamageModifier +6.5%) : D(2.5) : Stacks(10): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost3_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T5) | CC(DamageAmount >=1650)  )",
+      "m_effects": "AM(PawnDamageModifier +15.0%) : D(4) : Stacks(5): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus) | CC(DamageAmount <225) | CC(DamageAmount>0) )",
+      "m_effects": "AM(PawnDamageModifier +1.25%) : D(2) : Stacks(40): Buff(FirepowerIncrease);  PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus) | CC(DamageAmount >=225) | CC(DamageAmount<1500) )",
+      "m_effects": "AM(PawnDamageModifier +5%) : D(2.5) : Stacks(10): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus) | CC(DamageAmount >=1500)  )",
+      "m_effects": "AM(PawnDamageModifier +12.5%) : D(4) : Stacks(5): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost1_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T3) | CC(DamageAmount <200) | CC(DamageAmount>0) )",
+      "m_effects": "AM(PawnDamageModifier +1.00%) : D(2) : Stacks(40): Buff(FirepowerIncrease);  PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost2_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T3) | CC(DamageAmount >=200) | CC(DamageAmount<1250) )",
+      "m_effects": "AM(PawnDamageModifier +4%) : D(2.5) : Stacks(10): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoost3_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHit(CC(ActiveFeat==WeaponFocus_T3) | CC(DamageAmount >=1250)  )",
+      "m_effects": "AM(PawnDamageModifier +10%) : D(4) : Stacks(5): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": true,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoostShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==WeaponFocus))",
+      "m_effects": "AM(PawnDamageModifier +0.02%) : D(1.0) : Stacks(5000): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoostShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==WeaponFocus_T3))",
+      "m_effects": "AM(PawnDamageModifier +0.01%) : D(1.0) : Stacks(5000): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeaponFocusBoostShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==WeaponFocus_T5))",
+      "m_effects": "AM(PawnDamageModifier +0.035%) : D(1.0) : Stacks(5000): Buff(FirepowerIncrease); PlayFeedback(FirepowerIncreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocus": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==MovementFocus))",
+      "m_effects": "AM(PawnForwardForceModifier +300%) : D(17.5) : Stacks(1) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +250%) :Stacks(1);AM(PawnSteerForceModifier +125%) :Stacks(1);AM(PawnVerticalForceModifier +125%) :Stacks(1);AM(PawnStrafeForceModifier +150%) :Stacks(1);PlayFeedback(SpeedIncrease):D(17.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocus_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==MovementFocus_T1))",
+      "m_effects": "AM(PawnForwardForceModifier +200%) : D(10.0) : Stacks(1) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +250%) :Stacks(1);AM(PawnSteerForceModifier +125%) :Stacks(1);AM(PawnVerticalForceModifier +125%) :Stacks(1);AM(PawnStrafeForceModifier +150%) :Stacks(1);PlayFeedback(SpeedIncrease):D(10.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocus_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==MovementFocus_T2))",
+      "m_effects": "AM(PawnForwardForceModifier +230%) : D(12.5) : Stacks(1) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +250%) :Stacks(1);AM(PawnSteerForceModifier +125%) :Stacks(1);AM(PawnVerticalForceModifier +125%) :Stacks(1);AM(PawnStrafeForceModifier +150%) :Stacks(1);PlayFeedback(SpeedIncrease):D(12.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocus_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==MovementFocus_T3))",
+      "m_effects": "AM(PawnForwardForceModifier +260%) : D(15.0) : Stacks(1) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +250%) :Stacks(1);AM(PawnSteerForceModifier +125%) :Stacks(1);AM(PawnVerticalForceModifier +125%) :Stacks(1);AM(PawnStrafeForceModifier +150%) :Stacks(1);PlayFeedback(SpeedIncrease):D(15.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocus_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==MovementFocus_T5))",
+      "m_effects": "AM(PawnForwardForceModifier +350%) : D(20.0) : Stacks(1) : Buff(SpeedIncrease);AM(PawnReverseForceModifier +250%) :Stacks(1);AM(PawnSteerForceModifier +125%) :Stacks(1);AM(PawnVerticalForceModifier +125%) :Stacks(1);AM(PawnStrafeForceModifier +150%) :Stacks(1);PlayFeedback(SpeedIncrease):D(20.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoost_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==DefensiveFocus_T3))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.0075);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoostShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==DefensiveFocus_T3))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.0075);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoost": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==DefensiveFocus))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.0125);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoostShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==DefensiveFocus))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.0125);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoost_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==DefensiveFocus_T5))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.02);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DefensiveFocusBoostShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==DefensiveFocus_T5))",
+      "m_effects": "RM(Energy DefensiveFocusEnergy +0.02);;PlayFeedback(EnergyRefill):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoost": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==MovementFocus))",
+      "m_effects": "AbilityCoolDown() : D(-0.004);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoost_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==MovementFocus_T1))",
+      "m_effects": "AbilityCoolDown() : D(-0.001);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoost_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==MovementFocus_T2))",
+      "m_effects": "AbilityCoolDown() : D(-0.002);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoost_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==MovementFocus_T3))",
+      "m_effects": "AbilityCoolDown() : D(-0.003);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoost_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeHitPerHitPoint(CC(ActiveFeat==MovementFocus_T5))",
+      "m_effects": "AbilityCoolDown() : D(-0.005);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoostShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==MovementFocus))",
+      "m_effects": "AbilityCoolDown() : D(-0.004);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoostShield_T1": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==MovementFocus_T1))",
+      "m_effects": "AbilityCoolDown() : D(-0.001);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoostShield_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==MovementFocus_T2))",
+      "m_effects": "AbilityCoolDown() : D(-0.002);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoostShield_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==MovementFocus_T3))",
+      "m_effects": "AbilityCoolDown() : D(-0.003);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementFocusBoostShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHitPerHitPoint(CC(ActiveFeat==MovementFocus_T5))",
+      "m_effects": "AbilityCoolDown() : D(-0.005);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "CloakingPulseShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==Cloak))",
+      "m_effects": "CloakShip(CloakPulse):Stacks(1) : D(5.0); PlayFeedback(Cloak):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HeavyCloak": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakH))",
+      "m_effects": "CloakShip(CloakH):Stacks(1);AM(PawnDamageResistance -100%) : D(30.0) : Buff(ArmorDecrease) : Stacks(1);PlayFeedback(CloakHeavy):D(30.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HeavyCloak_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakH_T5))",
+      "m_effects": "CloakShip(CloakH):Stacks(1);AM(PawnDamageResistance -80%) : D(30.0) : Buff(ArmorDecrease) : Stacks(1);PlayFeedback(CloakHeavy):D(30.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Immelman_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Immelmann_T2))",
+      "m_effects": "AM(PawnDamageResistance +50%) : D(5.0) : Stacks(1) : Buff(ArmorIncrease);PlayFeedback(Evasion):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Immelman_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Immelmann_T3))",
+      "m_effects": "AM(PawnDamageResistance +50%) : D(5.0) : Stacks(1) : Buff(ArmorIncrease);AM(PawnDamageModifier +10%) : D(5.0) : Buff(FirepowerIncrease) : Stacks(1);PlayFeedback(Evasion):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Immelmann": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Immelmann))",
+      "m_effects": "AM(PawnDamageResistance +60%) : D(5.0) : Stacks(1) : Buff(ArmorIncrease);AM(PawnDamageModifier +15%) : D(5.0) : Buff(FirepowerIncrease) : Stacks(1);PlayFeedback(Evasion):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Immelmann_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Immelmann_T5))",
+      "m_effects": "AM(PawnDamageResistance +75%) : D(5.0) : Stacks(1) : Buff(ArmorIncrease);AM(PawnDamageModifier +20%) : D(5.0) : Buff(FirepowerIncrease) : Stacks(1);PlayFeedback(Evasion):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "Afterburner": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==Afterburner))",
+      "m_effects": "PlayFeedback(SpeedThrust) : Buff(SpeedIncrease) : D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MediumCloak": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakM))",
+      "m_effects": "CloakShip(CloakM):Stacks(1);PlayFeedback(Cloak):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "LightCloak": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakL))",
+      "m_effects": "CloakShip(CloakL):Stacks(1);PlayFeedback(Cloak):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StasisBeamHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(InstigatorActiveFeat==StasisBeam))",
+      "m_effects": "AM(PawnVerticalForceModifier -90%%) :Stacks(1):D(1.0) : Buff(SpeedDecrease);AM(PawnForwardForceModifier -90%%) :Stacks(1):D(1.0);AM(PawnReverseForceModifier -90%%) :Stacks(1):D(1.0);AM(PawnSteerForceModifier -90%%) :Stacks(1):D(1.0); PlayFeedback(SpeedDecreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StasisBeamHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(InstigatorActiveFeat==StasisBeam_T5))",
+      "m_effects": "AM(PawnVerticalForceModifier -100%%) :Stacks(1):D(0.5) : Buff(SpeedDecrease);AM(PawnForwardForceModifier -100%%) :Stacks(1):D(1.0);AM(PawnReverseForceModifier -100%%) :Stacks(1):D(1.0);AM(PawnSteerForceModifier -100%%) :Stacks(1):D(1.0); PlayFeedback(SpeedDecreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ClearFeats": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==ClearFeats))",
+      "m_effects": "DFSB(EnergyOnThrust&EnergyOnShield&EnergyOnDamage&COMMUNICATIONS101&ENGINEERING101&REINFORCED&MaxHealthPerkFeat&TIPTHESCALES&SLOWANDSTEADY&NAVIGATIONEXPERT&NERVESOFSTEEL&NAVIGATION101&ENGINERIGGER&MODULEAMPER&GLASSCANNON&WEAPONS101&SURVIVALINSTINCT&ModifierTurbo); PlayFeedback(ClearFeats):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "WeakenBeamHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(InstigatorActiveFeat==WeakenBeam))",
+      "m_effects": "DFS(ArmoredLockdown); DFS(ArmorAmp); DFS(ArmorboosterPulse); AM(PawnDamageResistance -20%) : Stacks(1) : D(2.0) : Buff(ArmorDecrease);PlayFeedback(EnergyArmorAbilityDecreaseHit):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +1500): Stacks(1): D(4.0) : Buff(HealthIncrease); PlayFeedback(HealthPack):D(4.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T2))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +650): Stacks(1): D(6.0) : Buff(HealthIncrease); PlayFeedback(HealthPack):D(6.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T3))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +960): Stacks(1): D(5.0) : Buff(HealthIncrease); PlayFeedback(HealthPack):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "HealthPack_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==HealthPack_T5))",
+      "m_effects": "RM(healthregeneration PawnHealthRegenerationModifier +2400): Stacks(1): D(3.0) : Buff(HealthIncrease); PlayFeedback(HealthPack):D(3.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RespawnJetBuffHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==RespawnJetBuff))",
+      "m_effects": "AM(PawnDamageResistance +45%) : Stacks(1) : D(1.5) : Buff(ArmorIncrease);AM(PawnDamageModifier +75%) : Stacks(1) : D(1.5) : Buff(FirepowerIncrease); PlayFeedback(JetBuff):D(1.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DrainDroneHitShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==DrainDrone))",
+      "m_effects": "RM(Energy EnergyDec -6.5) : D(1.0) : Buff(EnergyDecrease);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10); PlayFeedback(EnergyDecreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "DrainDroneHitShield_T5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==DrainDrone_T5))",
+      "m_effects": "RM(Energy EnergyDec -14) : D(1.0) : Buff(EnergyDecrease);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(10); PlayFeedback(EnergyDecreaseHit):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RetaliatorFeat": {
+      "m_enabling": " ByRemote()",
+      "m_triggers": " BeShieldHitPerHitPoint()",
+      "m_effects": "AbilityCooldown() : D(-0.0016);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease); PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "ArmorboosterPulseShield": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "BeShieldHit(CC(DamageType==ArmorboosterPulse))",
+      "m_effects": "AM(PawnDamageResistance +50%) : Stacks(1) : D(3.5) : Buff(ArmorIncrease); PlayFeedback(ArmorIncrease):D(3.5);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "SC_ArmorAmp": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==SC_ArmorAmp))",
+      "m_effects": "AM(PawnDamageResistance +80%) : Stacks(1) : D(5.0) : Buff(ArmorIncrease);PlayFeedback(ArmorIncrease):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 112
+}

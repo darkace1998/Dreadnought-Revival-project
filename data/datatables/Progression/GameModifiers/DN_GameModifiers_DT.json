@@ -1,0 +1,23 @@
+{
+  "rows": {
+    "DN_GameModifiers_DT.cfg": {
+      "m_gameModeName": "none",
+      "m_excludes": "",
+      "m_feats": "",
+      "m_affectedTeam": "EYGameModeModifierAffectedTeam::YHMAT_NONE"
+    },
+    "YGMT_TURBO_TDM": {
+      "m_gameModeName": "YGMT_TURBO_TDM",
+      "m_excludes": "",
+      "m_feats": "ModifierSpeed;ModifierDamage;ModifierFireRate",
+      "m_affectedTeam": "EYGameModeModifierAffectedTeam::YHMAT_ALL"
+    },
+    "YGMT_TDM": {
+      "m_gameModeName": "YGMT_TDM",
+      "m_excludes": "",
+      "m_feats": "",
+      "m_affectedTeam": "EYGameModeModifierAffectedTeam::YHMAT_ALL"
+    }
+  },
+  "row_count": 3
+}

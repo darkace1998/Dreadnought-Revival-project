@@ -1,0 +1,152 @@
+{
+  "rows": {
+    "Territory": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_Territory",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [
+        51
+      ],
+      "m_excludeGameModes": []
+    },
+    "BaseLighting": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_BaseLighting",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": false,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": true,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Light": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_LIGHT",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": false,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Arena": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_Arena",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Creeps": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_Creeps",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": [
+        50,
+        0
+      ]
+    },
+    "Audio": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_AUDIO",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "VFX": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_VFX",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": false,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Intro": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_INTRO",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": true,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "BSP": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_BSP",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [],
+      "m_excludeGameModes": []
+    },
+    "Onslaught": {
+      "m_levelFullPath": "/Game/Maps/MP/DansMap/MP_DansMap_Onslaught",
+      "m_blockOnLoad": true,
+      "m_loadOnDedicatedServer": true,
+      "m_isOrbitLevel": false,
+      "m_isHiddenWhileInOrbit": false,
+      "m_neededForEndOfMatch": false,
+      "m_isLevelVariationSublevel": false,
+      "m_levelVariationIndex": 0,
+      "m_onlyLoadWithAVSM": false,
+      "m_onlyLoadWithoutAVSM": false,
+      "m_includeGameModes": [
+        50
+      ],
+      "m_excludeGameModes": []
+    }
+  },
+  "row_count": 10
+}

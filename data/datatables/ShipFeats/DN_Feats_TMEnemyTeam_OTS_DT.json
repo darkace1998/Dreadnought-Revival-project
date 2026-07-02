@@ -1,0 +1,33 @@
+{
+  "rows": {
+    "STM_WeaponModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnDamageModifier -75%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_HealthModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(MaxHealth -0%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_AbilityDmgModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityDamageModifier -75%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    },
+    "STM_HealingModifier": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnHealingModifier -75%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": true
+    }
+  },
+  "row_count": 4
+}

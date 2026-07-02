@@ -1,0 +1,61 @@
+{
+  "rows": {
+    "DN_CreepPawn_DT": {
+      "m_health": 0.0,
+      "m_maxHealth": 25000.0
+    },
+    "AB_DN_Pri_Jet_Bomber_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3000.0
+    },
+    "AB_DN_Pri_Jet_Bomber_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 4500.0
+    },
+    "AB_DN_Pri_Jet_Fighter_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 1000.0
+    },
+    "AB_DN_Pri_Jet_Fighter_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 2000.0
+    },
+    "AB_Jet_YPawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 1000.0
+    },
+    "AB_SU_Pri_Drone_EnDecEsc_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_SU_Pri_Drone_EnDecEsc_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_SU_Pri_Drone_EnIncEsc_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_SU_Pri_Drone_EnIncEsc_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_SU_Pri_Drone_HealEsc_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_SU_Pri_Drone_HealEsc_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 3500.0
+    },
+    "AB_DN_Pri_Jet_Interceptor_Pawn_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 1000.0
+    },
+    "AB_DN_Pri_Jet_Interceptor_Pawn_T5_BP": {
+      "m_health": 0.0,
+      "m_maxHealth": 2000.0
+    }
+  },
+  "row_count": 14
+}

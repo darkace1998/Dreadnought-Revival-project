@@ -1,0 +1,122 @@
+{
+  "rows": {
+    "DN_AbilityBeamModifier_DT": {
+      "m_abilityName": "None",
+      "m_triggerName": "None",
+      "m_activeTime": 0.0,
+      "m_coolDown": 0.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_T0_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance_T0",
+      "m_activeTime": 5.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_T1_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance_T1",
+      "m_activeTime": 5.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_T2_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance_T2",
+      "m_activeTime": 5.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_T3_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance_T3",
+      "m_activeTime": 10.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance",
+      "m_activeTime": 12.0,
+      "m_coolDown": 45.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Dmg_Ability_T5_BP": {
+      "m_abilityName": "Beam Amplifier",
+      "m_triggerName": "EnergyLance_T5",
+      "m_activeTime": 15.0,
+      "m_coolDown": 40.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_SpdDec_Ability_T3_BP": {
+      "m_abilityName": "Stasis Beam",
+      "m_triggerName": "StasisBeam_T3",
+      "m_activeTime": 8.0,
+      "m_coolDown": 55.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_SpdDec_Ability_BP": {
+      "m_abilityName": "Stasis Beam",
+      "m_triggerName": "StasisBeam",
+      "m_activeTime": 8.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_SpdDec_Ability_Hero_BP": {
+      "m_abilityName": "Stasis Beam",
+      "m_triggerName": "StasisBeam",
+      "m_activeTime": 8.0,
+      "m_coolDown": 50.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_SpdDec_Ability_T5_BP": {
+      "m_abilityName": "Stasis Beam",
+      "m_triggerName": "StasisBeam_T5",
+      "m_activeTime": 10.0,
+      "m_coolDown": 45.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Weaken_Ability_BP": {
+      "m_abilityName": "Rupture Beam",
+      "m_triggerName": "WeakenBeam",
+      "m_activeTime": 10.0,
+      "m_coolDown": 25.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    },
+    "AB_SU_Pri_BeamAmp_Weaken_Ability_T5_BP": {
+      "m_abilityName": "Rupture Beam",
+      "m_triggerName": "WeakenBeam",
+      "m_activeTime": 10.0,
+      "m_coolDown": 15.0,
+      "m_contextActionType": "EYContextActionType::YCAT_None",
+      "m_contextActionEndTime": -1.0,
+      "m_contextActionStartTime": -1.0
+    }
+  },
+  "row_count": 13
+}

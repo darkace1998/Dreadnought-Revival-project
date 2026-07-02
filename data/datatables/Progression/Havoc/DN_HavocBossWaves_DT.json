@@ -1,0 +1,17 @@
+{
+  "rows": {
+    "First_Boss_Wave": {
+      "m_waveNumber": 7
+    },
+    "Second_Boss_Wave": {
+      "m_waveNumber": 12
+    },
+    "Third_Boss_Wave": {
+      "m_waveNumber": 17
+    },
+    "Fourth_Boss_Wave": {
+      "m_waveNumber": 22
+    }
+  },
+  "row_count": 4
+}

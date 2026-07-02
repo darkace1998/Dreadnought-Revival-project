@@ -1,0 +1,347 @@
+{
+  "rows": {
+    "HVC_Boost_Def_HpInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HpInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HpInc_Large.UI_HVC_Boost_Def_HpInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_HpInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HpInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HpInc_Small.UI_HVC_Boost_Def_HpInc_Small'",
+      "m_weight": 2,
+      "m_cost": 300,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_HpInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HpInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HpInc_Medium.UI_HVC_Boost_Def_HpInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HCV_Boost_Def_RegtimeDec_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HPRegtimeDec_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HPRegInc_Medium.UI_HVC_Boost_Def_HPRegInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_HPRegInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HPRegInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HPRegInc_Small.UI_HVC_Boost_Def_HPRegInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_HPRegInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HPRegInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HPRegInc_Medium.UI_HVC_Boost_Def_HPRegInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_HPRegInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_HPRegInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_HPRegInc_Large.UI_HVC_Boost_Def_HPRegInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ArInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Small.UI_HVC_Boost_Def_ArInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ArInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Medium.UI_HVC_Boost_Def_ArInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ArInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Large.UI_HVC_Boost_Def_ArInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_DefArIncFr_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArIncFr_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Medium.UI_HVC_Boost_Def_ArInc_Medium'",
+      "m_weight": 0,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ArIncSid_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArIncSid_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Medium.UI_HVC_Boost_Def_ArInc_Medium'",
+      "m_weight": 0,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ArincBk_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ArIncBk_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ArInc_Medium.UI_HVC_Boost_Def_ArInc_Medium'",
+      "m_weight": 0,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ShieldEnDec_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ShieldEnDec_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_EnInc_Medium.UI_HVC_Boost_Util_EnInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Off_DmgInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_DmgInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_DmgInc_Small.UI_HVC_Boost_Off_DmgInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_DmgInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_DmgInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_DmgInc_Medium.UI_HVC_Boost_Off_DmgInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_DmgInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_DmgInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_DmgInc_Large.UI_HVC_Boost_Off_DmgInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_AbiInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_AbiInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_AbiInc_Large.UI_HVC_Boost_Off_AbiInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_AbiInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_AbiInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_AbiInc_Small.UI_HVC_Boost_Off_AbiInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_AbiInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_AbiInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_AbiInc_Medium.UI_HVC_Boost_Off_AbiInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_RldTDec_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_RldTDec_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_RldTDec_Medium.UI_HVC_Boost_Off_RldTDec_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_WpnEnDec": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_WpnEnDec",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_WpnEnDec.UI_HVC_Boost_Off_WpnEnDec'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_OFFENSIVE"
+    },
+    "HVC_Boost_Off_WpnEnRelDec_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Off_WpnEnRelDec_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Off_WpnEnRelDec_Medium.UI_HVC_Boost_Off_WpnEnRelDec_Medium'",
+      "m_weight": 2,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Def_ThrustEnArmInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Def_ThrustEnArmInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Def_ThrustEnArmInc_Medium.UI_HVC_Boost_Def_ThrustEnArmInc_Medium'",
+      "m_weight": 2,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Util_EnInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_EnInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_EnInc_Large.UI_HVC_Boost_Util_EnInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_EnInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_EnInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_EnInc_Medium.UI_HVC_Boost_Util_EnInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_EnInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_EnInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_EnInc_Small.UI_HVC_Boost_Util_EnInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdInc_Small": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdInc_Small",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdInc_Small.UI_HVC_Boost_Util_SpdInc_Small'",
+      "m_weight": 2,
+      "m_cost": 350,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdInc_Medium.UI_HVC_Boost_Util_SpdInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdInc_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdInc_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdInc_Large.UI_HVC_Boost_Util_SpdInc_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdIncFwd_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdIncFwd_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdIncFwd_Large.UI_HVC_Boost_Util_SpdIncFwd_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdIncStr_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdIncStr_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdIncStr_Large.UI_HVC_Boost_Util_SpdIncStr_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdIncVert_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdIncVert_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdIncVert_Large.UI_HVC_Boost_Util_SpdIncVert_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_SpdIncBk_Large": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_SpdIncBk_Large",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_SpdIncBk_Large.UI_HVC_Boost_Util_SpdIncBk_Large'",
+      "m_weight": 2,
+      "m_cost": 1000,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_EnRegInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_EnReginc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_EnRegInc_Medium.UI_HVC_Boost_Util_EnRegInc_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HCV_Boost_Util_EnThrustSpdInc_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_EnThrustSpdInc_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_ThrustEnDec.UI_HVC_Boost_Util_ThrustEnDec'",
+      "m_weight": 2,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_DEFENSIVE"
+    },
+    "HVC_Boost_Util_AbiTDec_Medium": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_AbiTDec_Medium",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_AbiTDec_Medium.UI_HVC_Boost_Util_AbiTDec_Medium'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    },
+    "HVC_Boost_Util_ThrustEnDec": {
+      "m_title": "[text]",
+      "m_description": "[text]",
+      "m_feats": "HVC_Boost_Util_ThrustEnDec",
+      "m_iconPath": "Texture2D'/Game/Generic/UI/Havoc/UI_HVC_Boost_Util_ThrustEnDec.UI_HVC_Boost_Util_ThrustEnDec'",
+      "m_weight": 5,
+      "m_cost": 600,
+      "m_category": "EYHavocUpgradeCategory::YHUC_UTILITY"
+    }
+  },
+  "row_count": 38
+}

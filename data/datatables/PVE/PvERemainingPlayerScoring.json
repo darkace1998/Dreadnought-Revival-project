@@ -1,0 +1,173 @@
+{
+  "rows": {
+    "0": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "1": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "2": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "3": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "4": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "5": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "6": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "7": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "8": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "9": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 1000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "10": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "11": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "12": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "13": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "14": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 3000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "15": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "16": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 3000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "17": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 3000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "18": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "19": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 3000,
+      "m_bonusDecreasePerDeath": 500
+    },
+    "20": {
+      "m_bonusOneLeft": 2000,
+      "m_bonusTwoLeft": 2000,
+      "m_bonusThreeLeft": 2000,
+      "m_bonusFourLeft": 2000,
+      "m_bonusFiveLeft": 2000,
+      "m_bonusDecreasePerDeath": 500
+    }
+  },
+  "row_count": 21
+}

@@ -1,0 +1,47 @@
+{
+  "rows": {
+    "ArtilleryMode": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==ArtilleryMode))",
+      "m_effects": "AM(PawnVerticalForceModifier -100%) :Stacks(1) : Buff(SpeedDecrease): D(7.0);AM(PawnForwardForceModifier -100%) :Stacks(1) : D(7.0) : Buff(FirepowerIncrease);AM(PawnReverseForceModifier -100%) :Stacks(1): D(7.0);AM(PawnSteerForceModifier -100%) :Stacks(1) : D(7.0);RM(Energy ArtilleryModeCost -100) :Stacks(1);AM(PawnEnergyRegenerationRateModifier -100%): Stacks(1): D(7.0) : Buff(EnergyDecrease);PlayFeedback(Artillery):D(7.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "MovementCloak": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakMove))",
+      "m_effects": "CloakShip(CloakMove):Stacks(1);PlayFeedback(Cloak):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "StaticCloak": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnUseAbility(CC(AbilityTriggerName==CloakStatic))",
+      "m_effects": "CloakShip(CloakStatic):Stacks(1);PlayFeedback(Cloak):D(2.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TurnBoost": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==TurnBoost))",
+      "m_effects": "AM(PawnSteerForceModifier +300%) : Stacks(1): D(5.0) : Buff(SpeedIncrease);AM(PawnForwardForceModifier +0%) : Stacks(1): D(5.0);PlayFeedback(TurnBoost):D(5.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TurnBoost_T5": {
+      "m_enabling": " OnAcquire()",
+      "m_triggers": " OnUseAbility(CC(AbilityTriggerName==TurnBoost_T5))",
+      "m_effects": "AM(PawnSteerForceModifier +300%) : Stacks(1): D(8.0) : Buff(SpeedIncrease);AM(PawnForwardForceModifier +0%) : Stacks(1): D(8.0);PlayFeedback(TurnBoost):D(8.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "RetaliatorFeat": {
+      "m_enabling": "ByRemote()",
+      "m_triggers": "BeShieldHitPerHitPoint()",
+      "m_effects": "AbilityCooldown() : D(-0.0009);AM(PawnDamageResistance +0%) : Stacks(1) : D(0.5): Buff(AbilityIncrease);PlayFeedback(AbilityCooldownReduce):D(1.0);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 6
+}

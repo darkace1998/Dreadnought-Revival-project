@@ -1,0 +1,77 @@
+{
+  "rows": {
+    "identifier": {
+      "m_pcText": "[text_5b]",
+      "m_ps4Text": "[text_5b]"
+    },
+    "ObjectiveAbilityActivated": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveAbilityActivatedAlt": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveEnergyOnShields": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveEnergyOnWeapon": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveFinishMatch": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveMoveToBattleZone": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveOpenHelpScreen": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveWeaponHitPrimary": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveWeaponHitPrimaryAlt": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveWeaponHitSecondary": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "ObjectiveWeaponHitSecondaryAlt": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialEnergyDrain": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialAscendDescend": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialNavigate": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialMoveForward": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialAimShoot": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    },
+    "TutorialOpenEnergyWheelForThrust": {
+      "m_pcText": "[text]",
+      "m_ps4Text": "[text]"
+    }
+  },
+  "row_count": 18
+}

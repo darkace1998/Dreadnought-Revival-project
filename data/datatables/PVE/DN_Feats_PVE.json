@@ -1,0 +1,54 @@
+{
+  "rows": {
+    "TestDrainEnergyFeat_2": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(Energy -25) : Stacks(4); AM(PawnMaxEnergyModifier -25) : Stacks(4);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TestDrainEnergyFeat_3": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(Energy -25) : Stacks(4); AM(PawnMaxEnergyModifier -25) : Stacks(4);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TestDrainEnergyFeat_4": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(Energy -25) : Stacks(4); AM(PawnMaxEnergyModifier -25) : Stacks(4);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "TestDrainEnergyFeat_5": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "RM(Energy -25) : Stacks(4); AM(PawnMaxEnergyModifier -25) : Stacks(4);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "S6E4BossMultiplierFull": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -100%) ; AM(PawnDamageModifier +100%) ; AM(PawnAbilityDamageModifier +100%) ; AM(PawnForwardForceModifier +100%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "S6E4BossMultiplierHalf": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -50%) ; AM(PawnDamageModifier +50%) ; AM(PawnAbilityDamageModifier +50%) ; AM(PawnForwardForceModifier +50%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    },
+    "S6E4BossMultiplierBase": {
+      "m_enabling": "OnAcquire()",
+      "m_triggers": "OnEnable()",
+      "m_effects": "AM(PawnAbilityCooldownTimeModifier -25%) ; AM(PawnDamageModifier +25%) ; AM(PawnAbilityDamageModifier +25%) ; AM(PawnForwardForceModifier +25%);",
+      "m_stackOnAdding": false,
+      "m_isPerkFeat": false
+    }
+  },
+  "row_count": 7
+}
