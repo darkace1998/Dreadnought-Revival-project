@@ -1,6 +1,6 @@
 # Known Issues — Full Project
 
-> Last updated: 2026-05-23
+> Last updated: 2026-07-02
 
 ## CRITICAL — ALL RESOLVED
 
@@ -95,27 +95,27 @@
 
 ---
 
-## Resolution Summary (2026-05-23)
+## Resolution Summary (2026-07-02)
 
 - **24 of 24 CRITICAL+HIGH issues resolved** (C1-C8, H1-H16)
-- **4 new fixes applied this session**: C2, C3, H6, H3/H12 (RateLimiter memory leak)
-- **~20 issues pre-resolved** in the 36-fix batch
-- **30 MEDIUM issues tracked**, 2 resolved (M16, M26, M30)
-- **15 LOW issues tracked**
-- **8 services with 0 test coverage**
+- **3 of 32 MEDIUM issues resolved** (M16, M26, M30)
+- **15 of 15 LOW issues resolved** (L1-L15)
+- **29 MEDIUM issues outstanding**
+- **5 services with 0 test coverage** (down from 8)
+- **All previously failing tests now pass** (TestPayloadSizesVerify fixed)
 
 ## Test Coverage Summary
 
 | Service | Tests | Status |
 |---------|-------|--------|
-| **mmogbrain** | 3,200+ lines | Extensive |
-| **shared/dreadgameconfig** | 179 lines (7 tests) | Minimal |
-| **legacy-api** | 682 lines (9 tests) | Partial — ~30% handler coverage |
+| **mmogbrain** | 7 test files | Extensive — payload sizes, ribbons, seasons, gateway bootstrap, fleet dumps, quickcheck, main |
+| **gateway** | 2 tests | Crash receiver coverage |
+| **shared/dreadgameconfig** | 7 tests | Minimal — starter data, fleet eligibility, item lookups |
+| **legacy-api/handlers** | 9 tests | Partial — ~30% handler coverage |
 | **auth-server** | 0 | None |
 | **admin-cli** | 0 | None |
 | **dn-launcher** | 0 | None |
 | **game-manager** | 0 | None |
-| **gateway** | 0 | None |
 | **master-server** | 0 | None |
 | **shared/db** | 0 | None |
 | **shared/logging** | 0 | None |

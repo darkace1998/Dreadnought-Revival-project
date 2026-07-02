@@ -15,10 +15,11 @@ cd dreadnought-private-server/legacy-api && go test ./...
 cd dreadnought-private-server/shared && go test ./...
 ```
 
-**Current test status (2026-05-26):**
-- `mmogbrain`: `TestPayloadSizesVerify` FAILS — `YA_PlayerFleets` target=2116 got=588 (delta=-1528)
+**Current test status (2026-07-02):**
+- `mmogbrain`: all tests pass (7 test files — payload sizes, ribbons, seasons, gateway bootstrap, fleet dumps, quickcheck, main)
 - `legacy-api/handlers`: 9 tests pass
 - `shared/dreadgameconfig`: 7 tests pass
+- `gateway`: 2 tests pass (crash receiver)
 - All other modules: no test files
 
 **Lint from workspace root reports 0 issues but shows typecheck error:**
@@ -100,11 +101,13 @@ Beyond HTTP REST, runs Firmament TLS server on `:48843` speaking proprietary bin
 | `certs/server.crt` | Gateway HTTPS | Self-signed; clients trust `certs/ca.crt` |
 | `certs/firmament.crt` | Firmament :48843 | Issuer spoofed as `Amazon RSA 2048 M01` to bypass game's CA pinning |
 
-## Current State (2026-05-26)
+## Current State (2026-07-02)
 
 - All 8 services build; 0 golangci-lint issues per-module
-- 24/24 CRITICAL+HIGH issues resolved; 30 MEDIUM tracked
+- All tests pass across 4 modules (mmogbrain, legacy-api, shared, gateway)
+- 24/24 CRITICAL+HIGH issues resolved; 29 MEDIUM tracked; 15 LOW resolved
 - mmogbrain refactored: 4,720-line `main.go` → 218-line entry point + 11 files
+- ~114 YA_* handlers dispatched; ~45 with dedicated payload builders
 - Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks
+- Phases 1-6 complete: hangar, matchmaking, progression, market/economy, PvE/AI
 - Feature coverage: ~30%
-- **Known failing test:** `TestPayloadSizesVerify` in mmogbrain (YA_PlayerFleets size mismatch)
