@@ -4,6 +4,11 @@ import (
 	"log"
 )
 
+// WeaponWithProjectile represents a weapon that has a projectile
+type WeaponWithProjectile interface {
+	ProjectileRowName() string
+}
+
 // ProjectileStatsFromRow creates a ProjectileStats struct from a Row
 func ProjectileStatsFromRow(row Row) ProjectileStats {
 	return ProjectileStats{
@@ -214,6 +219,24 @@ func LoadProjectiles() error {
 	projectilesLoaded = true
 	log.Printf("Loaded %d projectiles from %s", len(projectilesByRowName), projectilesPath)
 	return nil
+}
+
+// ProjectileForWeapon returns the projectile stats for a given weapon
+func ProjectileForWeapon(weapon WeaponWithProjectile) (ProjectileStats, bool) {
+	projectileRowName := weapon.ProjectileRowName()
+	if projectileRowName == "" {
+		return ProjectileStats{}, false
+	}
+
+	// Ensure projectiles are loaded
+	if !projectilesLoaded {
+		if err := LoadProjectiles(); err != nil {
+			log.Printf("Failed to load projectiles: %v", err)
+			return ProjectileStats{}, false
+		}
+	}
+
+	return ProjectileByRowName(projectileRowName)
 }
 
 // ProjectileByRowName returns the projectile stats for a given row name

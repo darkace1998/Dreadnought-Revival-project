@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"reflect"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 )
 
 const fieldStatus = "status"
@@ -526,7 +530,53 @@ func (h *Handler) Season(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		fieldStatus: "ok",
 		"seasons":   "see mmogbrain YA_GetSeasonData for full data",
-	})
+	});
+}
+
+// Projectiles handles GET /v2/dreadnought/projectiles
+// Returns all projectile data for the game client
+func (h *Handler) Projectiles(w http.ResponseWriter, r *http.Request) {
+	projectiles := dreadconfig.AllProjectiles()
+	
+	// Convert projectiles to a format suitable for the client
+	projectileData := make([]map[string]interface{}, 0, len(projectiles))
+	for rowName, projectile := range projectiles {
+		projectileMap := make(map[string]interface{})
+		// Use reflection to convert all fields to a map
+		val := reflect.ValueOf(projectile)
+		typeOf := val.Type()
+		
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldName := typeOf.Field(i).Name
+			// Convert field name to snake_case for JSON
+			jsonName := toSnakeCase(fieldName)
+			projectileMap[jsonName] = field.Interface()
+		}
+		projectileMap["row_name"] = rowName
+		projectileData = append(projectileData, projectileMap)
+	}
+	
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus:    "ok",
+		"projectiles": projectileData,
+	});
+}
+
+// toSnakeCase converts CamelCase to snake_case
+func toSnakeCase(s string) string {
+	var result strings.Builder
+	for i, r := range s {
+		if unicode.IsUpper(r) {
+			if i > 0 {
+				result.WriteRune('_')
+			}
+			result.WriteRune(unicode.ToLower(r))
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }
 
 // XPConvert handles POST /xp/convert

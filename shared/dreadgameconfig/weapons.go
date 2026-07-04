@@ -57,6 +57,7 @@ type WeaponStats struct {
 	HitzoneDamageMultiplier           float64 `json:"m_hitzoneDamageMultiplier"`
 	HitzoneHitPenetrationDistance     float64 `json:"m_hitzoneHitPenetrationDistance"`
 	PreciseAimingRange                int32   `json:"m_preciseAimingRange"`
+	projectileRowName                 string  `json:"-"` // Derived from weapon name, private field
 }
 
 var (
@@ -146,6 +147,7 @@ func LoadWeapons() error {
 			AmmoMagazinSize:                   row.GetInt32("m_ammoMagazinSize"),
 			AmmoMagazinReloadTime:             row.GetFloat64("m_ammoMagazinReloadTime"),
 			AmplifiedAmmoMagazinReloadTime:    row.GetFloat64("m_amplifiedAmmoMagazinReloadTime"),
+			projectileRowName:                 deriveProjectileRowName(rowName),
 			SpreadBaseValue:                   row.GetFloat64("m_spreadBaseValue"),
 			SpreadMaxValue:                    row.GetFloat64("m_spreadMaxValue"),
 			SpreadEase:                        row.GetFloat64("m_spreadEase"),
@@ -185,6 +187,8 @@ func WeaponByID(itemID int32) (WeaponStats, bool) {
 	return w, ok
 }
 
+
+
 func AllWeapons() map[int32]WeaponStats {
 	if !weaponsLoaded {
 		if err := LoadWeapons(); err != nil {
@@ -196,4 +200,56 @@ func AllWeapons() map[int32]WeaponStats {
 		result[k] = v
 	}
 	return result
+}
+
+// ProjectileRowName returns the projectile row name for this weapon
+func (w WeaponStats) ProjectileRowName() string {
+	return w.projectileRowName
+}
+
+// deriveProjectileRowName maps weapon names to their corresponding projectile names
+func deriveProjectileRowName(weaponRowName string) string {
+	// Implement mapping logic from weapon names to projectile names
+	// Example pattern: "WP_AssaultHPri01_weapon01_BP" -> "WP_AssaultHPri01_proj01_BP"
+	// Example pattern: "WP_AssaultHPri01_weapon01_T3_BP" -> "WP_AssaultHPri01_proj01_T3_BP"
+
+	// Check if this weapon has a projectile
+	if !strings.Contains(weaponRowName, "_weapon") {
+		return ""
+	}
+
+	// Extract tier suffix if present
+	tier := ""
+	if strings.Contains(weaponRowName, "_T") {
+		parts := strings.Split(weaponRowName, "_T")
+		if len(parts) > 1 {
+			tierPart := parts[1]
+			if len(tierPart) > 0 && tierPart[0] >= '0' && tierPart[0] <= '9' {
+				tier = "_T" + string(tierPart[0])
+			}
+		}
+	}
+
+	// Extract the base weapon name (remove tier suffix and _BP if present)
+	baseName := strings.TrimSuffix(weaponRowName, "_BP")
+	if strings.Contains(baseName, "_T") {
+		baseName = strings.Split(baseName, "_T")[0]
+	}
+
+	// Map weapon names to projectile names based on observed patterns
+	weaponToProjectile := map[string]string{
+		"WP_AssaultHPri01_weapon01":   "WP_AssaultHPri01_proj01",
+		"WP_AssaultMPri01_weapon01":   "WP_AssaultMPri01_proj01",
+		"WP_AssaultSPri01_weapon01":   "WP_AssaultSPri01_proj01",
+		"WP_AssaultMSec01_weapon01":   "WP_AssaultMSec01_proj01",
+		// Add more mappings as needed
+	}
+
+	projectileBase, ok := weaponToProjectile[baseName]
+	if !ok {
+		return ""
+	}
+
+	// Return projectile with tier suffix
+	return projectileBase + tier + "_BP"
 }
