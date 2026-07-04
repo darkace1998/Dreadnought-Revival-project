@@ -415,3 +415,69 @@ func AbilityAssetPathByID(id string) (string, bool) {
 	}
 	return ability.AssetPath, ability.AssetPath != ""
 }
+
+// AbilityIDs returns all ability IDs that have been loaded
+func AbilityIDs() []string {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	ids := make([]string, 0, len(abilities))
+	for id := range abilities {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// FilterAbilitiesByName returns abilities whose names contain the given substring (case-insensitive)
+func FilterAbilitiesByName(nameSubstring string) []AbilityStats {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	var result []AbilityStats
+	lowerSubstring := strings.ToLower(nameSubstring)
+	
+	for _, ability := range abilities {
+		if strings.Contains(strings.ToLower(ability.AbilityName), lowerSubstring) {
+			result = append(result, ability)
+		}
+	}
+	return result
+}
+
+// FilterAbilitiesByCooldown returns abilities with cooldown within the specified range
+func FilterAbilitiesByCooldown(minCooldown, maxCooldown float64) []AbilityStats {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	var result []AbilityStats
+	
+	for _, ability := range abilities {
+		if ability.CoolDown >= minCooldown && ability.CoolDown <= maxCooldown {
+			result = append(result, ability)
+		}
+	}
+	return result
+}
+
+// FilterAbilitiesByDamage returns abilities with damage within the specified range
+func FilterAbilitiesByDamage(minDamage, maxDamage float64) []AbilityStats {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	var result []AbilityStats
+	
+	for _, ability := range abilities {
+		// Check various damage fields
+		damage := ability.AbilityDamage
+		if damage == 0 {
+			damage = ability.DamageAmount
+		}
+		if damage == 0 {
+			damage = ability.MaxDamage
+		}
+		if damage >= minDamage && damage <= maxDamage {
+			result = append(result, ability)
+		}
+	}
+	return result
+}

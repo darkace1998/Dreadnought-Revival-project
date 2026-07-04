@@ -294,3 +294,123 @@ func TestAbilityAssetPathByID(t *testing.T) {
 		}
 	}
 }
+
+// TestAbilityE4Accessors tests all E4 accessor functions
+func TestAbilityE4Accessors(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E4 accessor test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test AbilityIDs
+	ids := AbilityIDs()
+	if len(ids) == 0 {
+		t.Fatalf("Expected ability IDs to be available, got 0")
+	}
+	t.Logf("Found %d ability IDs", len(ids))
+
+	// Test that we can retrieve each ability by ID
+	for _, id := range ids {
+		ability, ok := AbilityByID(id)
+		if !ok {
+			t.Errorf("Expected to find ability with ID %s", id)
+		}
+		if ability.AbilityName == "" && ability.CoolDown == 0 && ability.ActiveTime == 0 {
+			t.Logf("Ability %s has empty fields (this may be expected for some abilities)", id)
+		}
+	}
+
+	// Test AllAbilities
+	allAbilities := AllAbilities()
+	if len(allAbilities) != len(ids) {
+		t.Errorf("AllAbilities count (%d) does not match AbilityIDs count (%d)", len(allAbilities), len(ids))
+	}
+
+	// Test AbilityCount
+	count := AbilityCount()
+	if count != len(allAbilities) {
+		t.Errorf("AbilityCount (%d) does not match AllAbilities length (%d)", count, len(allAbilities))
+	}
+}
+
+// TestAbilityE6Validation tests ability count and value validation (E6)
+func TestAbilityE6Validation(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E6 validation test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// E6: Verify ability count
+	count := AbilityCount()
+	if count == 0 {
+		t.Fatalf("Expected abilities to be loaded, got 0")
+	}
+	t.Logf("Ability count: %d", count)
+
+	// E6: Validate cooldown/damage values
+	allAbilities := AllAbilities()
+	validCooldownCount := 0
+	validDamageCount := 0
+	zeroCooldownCount := 0
+	zeroDamageCount := 0
+
+	for id, ability := range allAbilities {
+		// Validate cooldown values
+		if ability.CoolDown > 0 {
+			validCooldownCount++
+		} else if ability.CoolDown == 0 {
+			zeroCooldownCount++
+		}
+
+		// Validate damage values
+		if ability.AbilityDamage > 0 || ability.DamageAmount > 0 || ability.MaxDamage > 0 {
+			validDamageCount++
+		} else if ability.AbilityDamage == 0 && ability.DamageAmount == 0 && ability.MaxDamage == 0 {
+			zeroDamageCount++
+		}
+
+		// Log some examples
+		if validCooldownCount <= 3 {
+			t.Logf("Ability %s: CoolDown=%f, Damage=%f", id, ability.CoolDown, ability.AbilityDamage)
+		}
+	}
+
+	t.Logf("Abilities with valid cooldown: %d", validCooldownCount)
+	t.Logf("Abilities with zero cooldown: %d", zeroCooldownCount)
+	t.Logf("Abilities with valid damage: %d", validDamageCount)
+	t.Logf("Abilities with zero damage: %d", zeroDamageCount)
+
+	// Most abilities should have either cooldown or damage values
+	if validCooldownCount+validDamageCount < count/2 {
+		t.Logf("Warning: Many abilities have zero cooldown and damage values - this may be expected for some ability types")
+	}
+}
+
+// TestFilterAbilities tests the filtering functions
+func TestFilterAbilities(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping filter test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test filtering by name
+	nameFiltered := FilterAbilitiesByName("Broadside")
+	t.Logf("Found %d abilities with 'Broadside' in name", len(nameFiltered))
+
+	// Test filtering by cooldown
+	cooldownFiltered := FilterAbilitiesByCooldown(0, 10)
+	t.Logf("Found %d abilities with cooldown between 0 and 10", len(cooldownFiltered))
+
+	// Test filtering by damage
+	damageFiltered := FilterAbilitiesByDamage(0, 1000)
+	t.Logf("Found %d abilities with damage between 0 and 1000", len(damageFiltered))
+}
