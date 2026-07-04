@@ -81,27 +81,10 @@ func LoadWeapons() error {
 		return fmt.Errorf("parse weapons datatable: %w", err)
 	}
 
-	itemIDRegisterPath := AssetPath("ItemIDRegister.json")
-	registerData, err := os.ReadFile(itemIDRegisterPath)
+	// Load ItemIDRegister for cross-referencing
+	pathToItemID, err := loadItemIDRegisterForType("/Weapons/")
 	if err != nil {
-		return fmt.Errorf("read item ID register: %w", err)
-	}
-
-	var register struct {
-		ItemIDRegister []struct {
-			ItemID int32  `json:"ItemID"`
-			Path   string `json:"Path"`
-		} `json:"ItemIDRegister"`
-	}
-	if err := json.Unmarshal(registerData, &register); err != nil {
-		return fmt.Errorf("parse item ID register: %w", err)
-	}
-
-	pathToItemID := make(map[string]int32)
-	for _, entry := range register.ItemIDRegister {
-		if strings.Contains(entry.Path, "/Weapons/") {
-			pathToItemID[entry.Path] = entry.ItemID
-		}
+		return fmt.Errorf("load item ID register for weapons: %w", err)
 	}
 
 	weaponsByItemID = make(map[int32]WeaponStats)

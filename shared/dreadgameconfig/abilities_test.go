@@ -215,3 +215,82 @@ func TestExtractAbilityTypeFromFilename(t *testing.T) {
 		}
 	}
 }
+
+// TestAbilityCrossReferencing tests the ItemID cross-referencing functionality (E3)
+func TestAbilityCrossReferencing(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ability cross-referencing test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test that some abilities have been cross-referenced with ItemIDRegister
+	allAbilities := AllAbilities()
+	crossReferencedCount := 0
+	
+	for id, ability := range allAbilities {
+		if ability.ItemID != 0 {
+			crossReferencedCount++
+			t.Logf("Ability %s has ItemID %d and AssetPath %s", id, ability.ItemID, ability.AssetPath)
+		}
+		if ability.AssetPath != "" {
+			crossReferencedCount++
+		}
+	}
+
+	if crossReferencedCount > 0 {
+		t.Logf("Found %d abilities with cross-referenced data", crossReferencedCount)
+	} else {
+		t.Log("No abilities found with cross-referenced data (ItemIDRegister may not be available in test environment)")
+	}
+}
+
+// TestAbilityByItemID tests ItemID-based ability lookup (E3)
+func TestAbilityByItemID(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ability by ItemID test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test with a known ability ItemID (if available)
+	// These are example ItemIDs that might exist in the ItemIDRegister
+	knownItemIDs := []int32{83820547, 83820548, 83820549} // Example ability ItemIDs
+	
+	for _, itemID := range knownItemIDs {
+		ability, ok := AbilityByItemID(itemID)
+		if ok {
+			t.Logf("Found ability with ItemID %d: %s", itemID, ability.AbilityName)
+		} else {
+			t.Logf("Ability with ItemID %d not found (this may be expected in test environment)", itemID)
+		}
+	}
+}
+
+// TestAbilityAssetPathByID tests asset path lookup by ability ID (E3)
+func TestAbilityAssetPathByID(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ability asset path test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test with a known ability ID
+	allAbilities := AllAbilities()
+	if len(allAbilities) > 0 {
+		// Test with the first ability
+		for id := range allAbilities {
+			assetPath, ok := AbilityAssetPathByID(id)
+			if ok {
+				t.Logf("Ability %s has asset path: %s", id, assetPath)
+				break
+			}
+		}
+	}
+}

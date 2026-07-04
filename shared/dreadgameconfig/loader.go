@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -207,4 +208,45 @@ func (dt *DataTable) RowNames() []string {
 func (dt *DataTable) GetRow(name string) (Row, bool) {
 	r, ok := dt.Rows[name]
 	return r, ok
+}
+
+// ItemIDRegisterEntry represents an entry from the ItemIDRegister
+type ItemIDRegisterEntry struct {
+	ItemID int32  `json:"ItemID"`
+	Path   string `json:"Path"`
+}
+
+// loadItemIDRegister loads the ItemIDRegister from the assets directory
+func loadItemIDRegister() ([]ItemIDRegisterEntry, error) {
+	itemIDRegisterPath := AssetPath("ItemIDRegister.json")
+	registerData, err := os.ReadFile(itemIDRegisterPath)
+	if err != nil {
+		return nil, fmt.Errorf("read item ID register: %w", err)
+	}
+	
+	var register struct {
+		ItemIDRegister []ItemIDRegisterEntry `json:"ItemIDRegister"`
+	}
+	if err := json.Unmarshal(registerData, &register); err != nil {
+		return nil, fmt.Errorf("parse item ID register: %w", err)
+	}
+	
+	return register.ItemIDRegister, nil
+}
+
+// loadItemIDRegisterForType loads ItemIDRegister entries filtered by path type
+func loadItemIDRegisterForType(pathType string) (map[string]int32, error) {
+	entries, err := loadItemIDRegister()
+	if err != nil {
+		return nil, err
+	}
+	
+	pathToItemID := make(map[string]int32)
+	for _, entry := range entries {
+		if strings.Contains(entry.Path, pathType) {
+			pathToItemID[entry.Path] = entry.ItemID
+		}
+	}
+	
+	return pathToItemID, nil
 }

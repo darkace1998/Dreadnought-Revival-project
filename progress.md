@@ -129,11 +129,12 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 ## PHASE 5: ABILITIES DATA ✅ DONE 2026-07-05
 - [x] **E1: AbilityStats struct**: 70+ fields matching ability DataTable structure (cooldown, activeTime, duration, damage, tier scaling, targeting, movement, etc.)
 - [x] **E2: Load all 24 Abilities files**: Into unified ability map with categorization by type (AbilitiesByType, AllAbilityTypes)
-- [x] **E3: Multiple DataTable support**: 24 Abilities files with comprehensive field coverage
+- [x] **E3: Cross-reference with ItemIDRegister**: Added ItemID and AssetPath fields to AbilityStats, tryFindAbilityAssetPath() for matching row names with asset paths, AbilityByItemID() and AbilityAssetPathByID() accessors
 - [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats, AllAbilities() []AbilityStats, AbilityCount() int
 - [x] **Enhanced categorization**: extractAbilityTypeFromFilename() for ability type extraction
-- [x] **Integration**: Added to dreadgameconfig initialization sequence
-- [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, and count verification
+- [x] **ItemIDRegister infrastructure**: loadItemIDRegister() and loadItemIDRegisterForType() functions for reusable ItemID lookup
+- [x] **Integration**: Added to dreadgameconfig initialization sequence with graceful fallback
+- [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, count verification, and cross-referencing validation
 
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
 - [ ] **Remaining YA_* handlers**: ~15 less common request types

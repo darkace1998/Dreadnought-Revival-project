@@ -16,6 +16,10 @@ type AbilityStats struct {
 	AbilityName string `json:"m_abilityName"`
 	TriggerName string `json:"m_triggerName"`
 	
+	// Item and asset information (E3: Cross-reference with ItemIDRegister)
+	ItemID    int32  `json:"-"` // Cross-referenced from ItemIDRegister
+	AssetPath string `json:"-"` // Cross-referenced from ItemIDRegister
+	
 	// Timing and cooldown
 	CoolDown        float64 `json:"m_coolDown"`
 	CoolDownTime    float64 `json:"m_coolDownTime"`
@@ -197,12 +201,20 @@ var (
 )
 
 // LoadAbilities loads all ability data from DataTables (E2)
+// Also cross-references with ItemIDRegister to resolve ItemID→AssetPath (E3)
 func LoadAbilities() error {
 	abilitiesLock.Lock()
 	defer abilitiesLock.Unlock()
 	
 	if abilitiesLoaded {
 		return nil
+	}
+	
+	// Load ItemIDRegister for cross-referencing (E3)
+	itemIDRegister, err := loadItemIDRegister()
+	if err != nil {
+		log.Printf("Warning: Failed to load ItemIDRegister for abilities: %v", err)
+		// Continue without ItemID cross-referencing
 	}
 	
 	// Find all ability files
@@ -214,6 +226,8 @@ func LoadAbilities() error {
 	
 	loadedCount := 0
 	fileCount := 0
+	crossReferencedCount := 0
+	
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
@@ -239,6 +253,23 @@ func LoadAbilities() error {
 			if err != nil {
 				return fmt.Errorf("parse ability row %s in %s: %w", rowName, entry.Name(), err)
 			}
+			
+			// Cross-reference with ItemIDRegister (E3)
+			if itemIDRegister != nil {
+				assetPath := tryFindAbilityAssetPath(rowName, itemIDRegister)
+				if assetPath != "" {
+					ability.AssetPath = assetPath
+					// Try to find corresponding ItemID
+					for _, regEntry := range itemIDRegister {
+						if regEntry.Path == assetPath {
+							ability.ItemID = regEntry.ItemID
+							crossReferencedCount++
+							break
+						}
+					}
+				}
+			}
+			
 			// Use composite name: filename_rowname
 			fullName := fmt.Sprintf("%s_%s", filepath.Base(entry.Name()[:len(entry.Name())-5]), rowName)
 			// Remove _OTS_DT or _DT suffix from filename
@@ -256,8 +287,22 @@ func LoadAbilities() error {
 	
 	abilitiesLoaded = true
 	abilityCount = loadedCount
-	log.Printf("Loaded %d abilities from %d files", loadedCount, fileCount)
+	log.Printf("Loaded %d abilities from %d files (%d cross-referenced with ItemIDRegister)", loadedCount, fileCount, crossReferencedCount)
 	return nil
+}
+
+// tryFindAbilityAssetPath attempts to find the asset path for an ability row name
+func tryFindAbilityAssetPath(rowName string, itemIDRegister []ItemIDRegisterEntry) string {
+	// Try to match the row name with asset paths in ItemIDRegister
+	// Ability row names typically look like: AB_AS_Int_Buff_AbInc_Ability_T5_BP
+	// Asset paths typically look like: /Game/Generic/Abilities/Assault/Int_Buff_AbInc/T5/AB_AS_Int_Buff_AbInc_Ability_T5_BP
+	
+	for _, entry := range itemIDRegister {
+		if strings.Contains(entry.Path, "Abilities") && strings.Contains(entry.Path, rowName) {
+			return entry.Path
+		}
+	}
+	return ""
 }
 
 // extractAbilityTypeFromFilename extracts the ability type from the filename
@@ -347,4 +392,26 @@ func AbilityCount() int {
 	defer abilitiesLock.RUnlock()
 	
 	return abilityCount
+}
+
+// AbilityByItemID returns an ability by its ItemID (E3)
+func AbilityByItemID(itemID int32) (AbilityStats, bool) {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	for _, ability := range abilities {
+		if ability.ItemID == itemID {
+			return ability, true
+		}
+	}
+	return AbilityStats{}, false
+}
+
+// AbilityAssetPathByID returns the asset path for an ability by its composite ID
+func AbilityAssetPathByID(id string) (string, bool) {
+	ability, ok := AbilityByID(id)
+	if !ok {
+		return "", false
+	}
+	return ability.AssetPath, ability.AssetPath != ""
 }
