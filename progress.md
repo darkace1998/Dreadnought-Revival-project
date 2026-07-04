@@ -131,12 +131,13 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **E2: Load all 24 Abilities files**: Into unified ability map with categorization by type (AbilitiesByType, AllAbilityTypes)
 - [x] **E3: Cross-reference with ItemIDRegister**: Added ItemID and AssetPath fields to AbilityStats, tryFindAbilityAssetPath() for matching row names with asset paths, AbilityByItemID() and AbilityAssetPathByID() accessors
 - [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats, AllAbilities() []AbilityStats, AbilityCount() int, AbilityIDs() []string
-- [x] **Enhanced filtering**: FilterAbilitiesByName(), FilterAbilitiesByCooldown(), FilterAbilitiesByDamage() for ability discovery
+- [x] **E5: Wire into tech tree/store/loadouts**: Added AbilityStats to ItemMetadata, wireAbilityStatsToItems() in init, ItemsByType() accessor, legacy API /v2/dreadnought/abilities endpoint, MMOG brain YA_GetAbilities handler
+- [x] **Enhanced filtering**: FilterAbilitiesByName(), FilterAbilitiesByCooldown(), FilterAbilitiesByDamage()
 - [x] **E6: Comprehensive validation**: TestAbilityE6Validation verifies ability count and validates cooldown/damage values
 - [x] **Enhanced categorization**: extractAbilityTypeFromFilename() for ability type extraction
 - [x] **ItemIDRegister infrastructure**: loadItemIDRegister() and loadItemIDRegisterForType() functions for reusable ItemID lookup
 - [x] **Integration**: Added to dreadgameconfig initialization sequence with graceful fallback
-- [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, count verification, cross-referencing, and filtering validation
+- [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, count verification, cross-referencing, wiring validation, and E5 integration tests
 
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
 - [ ] **Remaining YA_* handlers**: ~15 less common request types

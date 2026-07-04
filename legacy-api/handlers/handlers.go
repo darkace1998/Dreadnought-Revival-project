@@ -592,6 +592,39 @@ func (h *Handler) ShipFeats(w http.ResponseWriter, r *http.Request) {
 	});
 }
 
+// Abilities returns all ability data (E5)
+func (h *Handler) Abilities(w http.ResponseWriter, r *http.Request) {
+	abilities := dreadconfig.AllAbilities()
+	
+	// Convert abilities to a format suitable for the client
+	abilityData := make([]map[string]interface{}, 0, len(abilities))
+	for compositeName, ability := range abilities {
+		abilityMap := make(map[string]interface{})
+		// Use reflection to convert all fields to a map
+		val := reflect.ValueOf(ability)
+		typeOf := val.Type()
+		
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldName := typeOf.Field(i).Name
+			// Convert field name to snake_case for JSON
+			jsonName := toSnakeCase(fieldName)
+			// Skip unexported fields
+			if fieldName == "AbilityStats" {
+				continue
+			}
+			abilityMap[jsonName] = field.Interface()
+		}
+		abilityMap["composite_name"] = compositeName
+		abilityData = append(abilityData, abilityMap)
+	}
+	
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus: "ok",
+		"abilities": abilityData,
+	});
+}
+
 // toSnakeCase converts CamelCase to snake_case
 func toSnakeCase(s string) string {
 	var result strings.Builder

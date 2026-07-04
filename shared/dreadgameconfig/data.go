@@ -53,6 +53,8 @@ type ItemMetadata struct {
 	TableCategory string
 	CatalogBucket string
 	AssetPath     string
+	// Ability-specific data (E5: Wire ability stats into item metadata)
+	AbilityStats *AbilityStats `json:"-"`
 }
 
 type LoadoutSlot struct {
@@ -408,8 +410,14 @@ func init() {
 	// Load abilities data
 	if err := LoadAbilities(); err != nil {
 		log.Printf("Warning: Failed to load abilities: %v", err)
+	} else {
+		// E5: Wire ability stats into item metadata
+		wireAbilityStatsToItems()
 	}
-
+	
+	// E5: Wire ability stats into item metadata
+	wireAbilityStatsToItems()
+	
 	starterLoadoutsByShip = make(map[string]StarterLoadout, len(starterInventoryLoadouts))
 	for _, loadout := range starterInventoryLoadouts {
 		starterLoadoutsByShip[strings.ToLower(loadout.ShipName)] = cloneStarterLoadout(loadout)
@@ -418,6 +426,32 @@ func init() {
 	fleetEligibilityByToken = make(map[string]FleetEligibility, len(fleetEligibilityValues))
 	for _, eligibility := range fleetEligibilityValues {
 		fleetEligibilityByToken[strings.ToLower(eligibility.Token)] = cloneFleetEligibility(eligibility)
+	}
+}
+
+// wireAbilityStatsToItems wires ability stats into ability items in the catalog (E5)
+func wireAbilityStatsToItems() {
+	// Get all abilities
+	allAbilities := AllAbilities()
+	if len(allAbilities) == 0 {
+		log.Printf("Warning: No abilities loaded to wire into item catalog")
+		return
+	}
+
+	// Wire ability stats to ability items in the catalog
+	for i := range itemCatalog {
+		item := &itemCatalog[i]
+		if item.ItemType == ItemTypeAbility && item.AssetPath != "" {
+			// Try to find matching ability by asset path
+			for _, ability := range allAbilities {
+				if ability.AssetPath == item.AssetPath {
+					// Create a copy of the ability stats to avoid race conditions
+					abilityCopy := ability
+					item.AbilityStats = &abilityCopy
+					break
+				}
+			}
+		}
 	}
 }
 
@@ -474,6 +508,17 @@ func MustItemByTypeAndDisplayName(itemType string, displayName string) ItemMetad
 		panic(fmt.Sprintf("missing dreadgame item %s:%s", itemType, displayName))
 	}
 	return item
+}
+
+// ItemsByType returns all items of a specific type (E5)
+func ItemsByType(itemType string) []ItemMetadata {
+	var result []ItemMetadata
+	for _, item := range itemCatalog {
+		if item.ItemType == itemType {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func mustItemByID(itemID int32) ItemMetadata {

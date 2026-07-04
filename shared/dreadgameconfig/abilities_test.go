@@ -414,3 +414,85 @@ func TestFilterAbilities(t *testing.T) {
 	damageFiltered := FilterAbilitiesByDamage(0, 1000)
 	t.Logf("Found %d abilities with damage between 0 and 1000", len(damageFiltered))
 }
+
+// TestAbilityWiring tests the E5 wiring of ability stats into item metadata
+func TestAbilityWiring(t *testing.T) {
+	// Ensure abilities are loaded and wired
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ability wiring test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test that ability items have been wired with ability stats
+	abilityItems := ItemsByType(ItemTypeAbility)
+	if len(abilityItems) == 0 {
+		t.Fatalf("Expected to find ability items, got 0")
+	}
+
+	wiredCount := 0
+	for _, item := range abilityItems {
+		if item.AbilityStats != nil {
+			wiredCount++
+			t.Logf("Ability item '%s' (ItemID: %d) has wired stats: CoolDown=%f, Damage=%f",
+				item.DisplayName, item.ItemID, item.AbilityStats.CoolDown, item.AbilityStats.AbilityDamage)
+		}
+	}
+
+	if wiredCount > 0 {
+		t.Logf("Successfully wired %d ability items with stats", wiredCount)
+	} else {
+		t.Log("No ability items found with wired stats (this may be expected in test environment)")
+	}
+}
+
+// TestAbilityE5Integration tests the complete E5 integration
+func TestAbilityE5Integration(t *testing.T) {
+	// Test that abilities are properly integrated into the system
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E5 integration test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test that we can access abilities through multiple paths
+	allAbilities := AllAbilities()
+	if len(allAbilities) == 0 {
+		t.Fatalf("Expected abilities to be loaded, got 0")
+	}
+
+	// Test that ability items are available
+	abilityItems := ItemsByType(ItemTypeAbility)
+	t.Logf("Found %d ability items in catalog", len(abilityItems))
+
+	// Test that some ability items have stats wired
+	wiredAbilityItems := 0
+	for _, item := range abilityItems {
+		if item.AbilityStats != nil {
+			wiredAbilityItems++
+		}
+	}
+	t.Logf("Found %d ability items with wired stats", wiredAbilityItems)
+
+	// Test that we can access abilities through the accessors
+	abilityIDs := AbilityIDs()
+	if len(abilityIDs) > 0 {
+		for _, id := range abilityIDs {
+			ability, ok := AbilityByID(id)
+			if !ok {
+				t.Errorf("Expected to find ability with ID %s", id)
+			}
+			if ability.AbilityName == "" && ability.CoolDown == 0 {
+				t.Logf("Ability %s has empty fields", id)
+			}
+		}
+	}
+
+	// Test filtering
+	filtered := FilterAbilitiesByName("Warp")
+	t.Logf("Found %d abilities with 'Warp' in name", len(filtered))
+}

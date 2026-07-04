@@ -1229,6 +1229,53 @@ func BuildYAGetShipFeatsPayload() []byte {
 	return b
 }
 
+// BuildYAGetAbilitiesPayload builds the payload for YA_GetAbilities (E5)
+func BuildYAGetAbilitiesPayload() []byte {
+	var b []byte
+	var stack []int
+	abilities := dreadconfig.AllAbilities()
+
+	b = protocol.AppendStringField(b, "RT", "YA_GetAbilities")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b, stack = protocol.AppendArrayStart(b, stack, "Abilities")
+	
+	for compositeName, ability := range abilities {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "CompositeName", compositeName)
+		
+		// Use reflection to add all ability fields
+		val := reflect.ValueOf(ability)
+		typeOf := val.Type()
+		
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldName := typeOf.Field(i).Name
+			
+			// Convert field name to the format expected by the client
+			clientFieldName := "m_" + toSnakeCase(fieldName)
+			
+			switch field.Kind() {
+			case reflect.Float32, reflect.Float64:
+				b = protocol.AppendStringField(b, clientFieldName, fmt.Sprintf("%.6f", field.Float()))
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				b = protocol.AppendInt32Field(b, clientFieldName, int32(field.Int()))
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				b = protocol.AppendInt32Field(b, clientFieldName, int32(field.Uint()))
+			case reflect.Bool:
+				b = protocol.AppendBoolField(b, clientFieldName, field.Bool())
+			case reflect.String:
+				b = protocol.AppendStringField(b, clientFieldName, field.String())
+			}
+		}
+		
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
 func toSnakeCase(s string) string {
 	var result strings.Builder
 	for i, r := range s {
