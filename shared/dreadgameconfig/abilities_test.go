@@ -138,3 +138,80 @@ func TestAllAbilities(t *testing.T) {
 
 	t.Logf("Successfully loaded %d abilities", len(allAbilities))
 }
+
+// TestAbilitiesByType tests the ability categorization by type (E2 enhancement)
+func TestAbilitiesByType(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping abilities by type test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// Test retrieving abilities by type
+	abilityTypes := AllAbilityTypes()
+	if len(abilityTypes) == 0 {
+		t.Fatalf("Expected ability types to be available, got 0")
+	}
+
+	// Test that we can retrieve abilities for each type
+	for _, abilityType := range abilityTypes {
+		abilities := AbilitiesByType(abilityType)
+		if len(abilities) == 0 {
+			t.Errorf("Expected abilities for type %s, got 0", abilityType)
+		}
+	}
+
+	// Test specific known types
+	knownTypes := []string{"AbilityBroadside", "Projectile", "WeaponBroadside"}
+	for _, knownType := range knownTypes {
+		abilities := AbilitiesByType(knownType)
+		t.Logf("Found %d abilities of type %s", len(abilities), knownType)
+	}
+}
+
+// TestAbilityCount tests the ability count function
+func TestAbilityCount(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ability count test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	count := AbilityCount()
+	if count == 0 {
+		t.Error("Expected ability count to be greater than 0")
+	}
+
+	// Verify count matches the number of abilities
+	allAbilities := AllAbilities()
+	if count != len(allAbilities) {
+		t.Errorf("AbilityCount (%d) does not match AllAbilities length (%d)", count, len(allAbilities))
+	}
+
+	t.Logf("Ability count: %d", count)
+}
+
+// TestExtractAbilityTypeFromFilename tests the ability type extraction
+func TestExtractAbilityTypeFromFilename(t *testing.T) {
+	tests := []struct {
+		filename string
+		expected string
+	}{
+		{"DN_AbilityBroadside_OTS_DT.json", "AbilityBroadside"},
+		{"DN_Projectile_OTS_DT.json", "Projectile"},
+		{"DN_WeaponBroadside_OTS_DT.json", "WeaponBroadside"},
+		{"DN_AbilityWarpJump_OTS_DT.json", "AbilityWarpJump"},
+		{"DN_ProjectileMissile_OTS_DT.json", "ProjectileMissile"},
+	}
+
+	for _, test := range tests {
+		result := extractAbilityTypeFromFilename(test.filename)
+		if result != test.expected {
+			t.Errorf("extractAbilityTypeFromFilename(%s) = %s, expected %s", test.filename, result, test.expected)
+		}
+	}
+}

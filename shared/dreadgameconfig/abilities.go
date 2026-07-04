@@ -190,8 +190,10 @@ type AbilityStats struct {
 // abilitiesData holds the loaded ability data
 var (
 	abilities     = make(map[string]AbilityStats)
+	abilitiesByType = make(map[string][]AbilityStats)
 	abilitiesLock sync.RWMutex
 	abilitiesLoaded bool
+	abilityCount int
 )
 
 // LoadAbilities loads all ability data from DataTables (E2)
@@ -211,11 +213,13 @@ func LoadAbilities() error {
 	}
 	
 	loadedCount := 0
+	fileCount := 0
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
 		
+		fileCount++
 		filePath := filepath.Join(abilityDir, entry.Name())
 		data, err := os.ReadFile(filePath)
 		if err != nil {
@@ -226,6 +230,9 @@ func LoadAbilities() error {
 		if err := json.Unmarshal(data, &dt); err != nil {
 			return fmt.Errorf("parse ability file %s: %w", entry.Name(), err)
 		}
+		
+		// Extract ability type from filename for categorization
+		abilityType := extractAbilityTypeFromFilename(entry.Name())
 		
 		for rowName, row := range dt.Rows {
 			ability, err := parseAbilityRow(row)
@@ -238,13 +245,35 @@ func LoadAbilities() error {
 			fullName = strings.ReplaceAll(fullName, "_OTS_DT_", "_")
 			fullName = strings.ReplaceAll(fullName, "_DT_", "_")
 			abilities[fullName] = ability
+			
+			// Categorize by type
+			if abilityType != "" {
+				abilitiesByType[abilityType] = append(abilitiesByType[abilityType], ability)
+			}
 			loadedCount++
 		}
 	}
 	
 	abilitiesLoaded = true
-	log.Printf("Loaded %d abilities from %d files", loadedCount, len(entries))
+	abilityCount = loadedCount
+	log.Printf("Loaded %d abilities from %d files", loadedCount, fileCount)
 	return nil
+}
+
+// extractAbilityTypeFromFilename extracts the ability type from the filename
+// Examples: "DN_AbilityBroadside_OTS_DT.json" -> "AbilityBroadside"
+//           "DN_Projectile_OTS_DT.json" -> "Projectile"
+//           "DN_WeaponBroadside_OTS_DT.json" -> "WeaponBroadside"
+func extractAbilityTypeFromFilename(filename string) string {
+	// Remove extension
+	baseName := strings.TrimSuffix(filename, ".json")
+	
+	// Remove common prefixes and suffixes
+	baseName = strings.TrimPrefix(baseName, "DN_")
+	baseName = strings.TrimSuffix(baseName, "_OTS_DT")
+	baseName = strings.TrimSuffix(baseName, "_DT")
+	
+	return baseName
 }
 
 // parseAbilityRow parses a single ability row from DataTable
@@ -284,4 +313,38 @@ func AllAbilities() map[string]AbilityStats {
 		abilitiesCopy[k] = v
 	}
 	return abilitiesCopy
+}
+
+// AbilitiesByType returns all abilities of a specific type (E2 enhancement)
+func AbilitiesByType(abilityType string) []AbilityStats {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	// Return a copy to avoid race conditions
+	if abilities, ok := abilitiesByType[abilityType]; ok {
+		abilitiesCopy := make([]AbilityStats, len(abilities))
+		copy(abilitiesCopy, abilities)
+		return abilitiesCopy
+	}
+	return nil
+}
+
+// AllAbilityTypes returns all ability types that have been loaded
+func AllAbilityTypes() []string {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	types := make([]string, 0, len(abilitiesByType))
+	for abilityType := range abilitiesByType {
+		types = append(types, abilityType)
+	}
+	return types
+}
+
+// AbilityCount returns the total number of abilities loaded
+func AbilityCount() int {
+	abilitiesLock.RLock()
+	defer abilitiesLock.RUnlock()
+	
+	return abilityCount
 }

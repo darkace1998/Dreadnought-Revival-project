@@ -126,13 +126,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **AI customization**: Player-controlled difficulty, behavior, spawn rate, and boss frequency
 - [x] **9 new MMOG handlers**: YA_GetPvEProgress, YA_GetBossKills, YA_GetAIPreferences, YA_SetAIPreferences, YA_GetHavocWaves, YA_GetBossTypes, YA_GetAIDifficultyLevels, YA_GetHavocModifiers, YA_GetPvERewardTiers
 
-## PHASE 5: ABILITIES DATA ✅ DONE 2026-07-04
+## PHASE 5: ABILITIES DATA ✅ DONE 2026-07-05
 - [x] **E1: AbilityStats struct**: 70+ fields matching ability DataTable structure (cooldown, activeTime, duration, damage, tier scaling, targeting, movement, etc.)
-- [x] **E2: Loading infrastructure**: LoadAbilities, AbilityByID, AllAbilities with thread-safe access
+- [x] **E2: Load all 24 Abilities files**: Into unified ability map with categorization by type (AbilitiesByType, AllAbilityTypes)
 - [x] **E3: Multiple DataTable support**: 24 Abilities files with comprehensive field coverage
-- [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats and AllAbilities() []AbilityStats
+- [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats, AllAbilities() []AbilityStats, AbilityCount() int
+- [x] **Enhanced categorization**: extractAbilityTypeFromFilename() for ability type extraction
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
-- [x] **Comprehensive testing**: Struct validation, loading, and access pattern tests
+- [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, and count verification
 
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
 - [ ] **Remaining YA_* handlers**: ~15 less common request types
