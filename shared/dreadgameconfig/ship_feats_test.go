@@ -217,3 +217,70 @@ func TestParseFeatEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestFeatsForShip(t *testing.T) {
+	// Test that ship feats can be retrieved by ship ID
+	err := LoadShipFeats()
+	if err != nil {
+		// If the data directory is not found, skip the test
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping ship feats test - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load ship feats: %v", err)
+	}
+
+	// Test retrieving feats for specific ship IDs
+	shipIDs := []string{
+		"AssaultMedium_T5",
+		"Shared",
+		"SupportLight_T3",
+	}
+
+	for _, shipID := range shipIDs {
+		feats := FeatsForShip(shipID)
+		if len(feats) == 0 {
+			t.Logf("No feats found for ship ID %s (this may be expected if the ship has no feats)", shipID)
+		} else {
+			// Verify that each feat has the expected structure
+			for _, feat := range feats {
+				if feat.Enabling == "" && feat.Triggers == "" && feat.Effects == "" {
+					t.Errorf("Ship %s has feat with empty fields", shipID)
+				}
+			}
+		}
+	}
+
+	// Test AllShipFeatIDs
+	allIDs := AllShipFeatIDs()
+	if len(allIDs) == 0 {
+		t.Fatalf("Expected to find ship feat IDs, got 0")
+	}
+
+	// Verify that we can retrieve feats for each ID
+	for _, id := range allIDs {
+		feats := FeatsForShip(id)
+		if len(feats) == 0 {
+			t.Errorf("Expected feats for ship ID %s, got 0", id)
+		}
+	}
+}
+
+func TestExtractShipIDFromFilename(t *testing.T) {
+	tests := []struct {
+		filename string
+		expected string
+	}{
+		{"DN_Feats_AssaultMedium_T5_OTS_DT.json", "AssaultMedium_T5"},
+		{"DN_Feats_Shared_OTS_DT.json", "Shared"},
+		{"DN_Feats_Custom_Modifiers_OTS_DT.json", "Custom_Modifiers"},
+		{"DN_Feats_SupportLight_T3_OTS_DT.json", "SupportLight_T3"},
+		{"DN_Feats_Havoc_Boosts_Shared_OTS_DT.json", "Havoc_Boosts_Shared"},
+	}
+
+	for _, test := range tests {
+		result := extractShipIDFromFilename(test.filename)
+		if result != test.expected {
+			t.Errorf("extractShipIDFromFilename(%s) = %s, expected %s", test.filename, result, test.expected)
+		}
+	}
+}

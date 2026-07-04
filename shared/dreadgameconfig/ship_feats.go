@@ -41,6 +41,7 @@ type FeatDSLParser struct{}
 // shipFeatsData holds the loaded ship feat data
 var (
 	shipFeats     = make(map[string]ShipFeat)
+	shipFeatsByID = make(map[string][]ShipFeat)
 	shipFeatsLock sync.RWMutex
 	shipFeatsLoaded bool
 )
@@ -78,6 +79,9 @@ func LoadShipFeats() error {
 			return fmt.Errorf("parse ship feat file %s: %w", entry.Name(), err)
 		}
 		
+		// Extract ship ID from filename for D3/D4
+		shipID := extractShipIDFromFilename(entry.Name())
+		
 		for rowName, row := range dt.Rows {
 			feat, err := parseShipFeatRow(row)
 			if err != nil {
@@ -88,13 +92,34 @@ func LoadShipFeats() error {
 			fullName = strings.ReplaceAll(fullName, "_OTS_DT_", "_")
 			fullName = strings.ReplaceAll(fullName, "_DT_", "_")
 			shipFeats[fullName] = feat
+			
+			// For D3: Store by ship ID
+			if shipID != "" {
+				shipFeatsByID[shipID] = append(shipFeatsByID[shipID], feat)
+			}
 			loadedCount++
 		}
 	}
 	
 	shipFeatsLoaded = true
-	log.Printf("Loaded %d ship feats", loadedCount)
+	log.Printf("Loaded %d ship feats from %d files", loadedCount, len(entries))
 	return nil
+}
+
+// extractShipIDFromFilename extracts a ship ID from the filename
+// Examples: "DN_Feats_AssaultMedium_T5_OTS_DT.json" -> "AssaultMedium_T5"
+//           "DN_Feats_Shared_OTS_DT.json" -> "Shared"
+//           "DN_Feats_Custom_Modifiers_OTS_DT.json" -> "Custom_Modifiers"
+func extractShipIDFromFilename(filename string) string {
+	// Remove extension
+	baseName := strings.TrimSuffix(filename, ".json")
+	
+	// Remove common prefixes and suffixes
+	baseName = strings.TrimPrefix(baseName, "DN_Feats_")
+	baseName = strings.TrimSuffix(baseName, "_OTS_DT")
+	baseName = strings.TrimSuffix(baseName, "_DT")
+	
+	return baseName
 }
 
 // parseShipFeatRow parses a single ship feat row from DataTable
@@ -137,6 +162,32 @@ func AllShipFeats() map[string]ShipFeat {
 		featsCopy[k] = v
 	}
 	return featsCopy
+}
+
+// FeatsForShip returns all ship feats for a specific ship ID (D4)
+func FeatsForShip(shipID string) []ShipFeat {
+	shipFeatsLock.RLock()
+	defer shipFeatsLock.RUnlock()
+	
+	// Return a copy to avoid race conditions
+	if feats, ok := shipFeatsByID[shipID]; ok {
+		featsCopy := make([]ShipFeat, len(feats))
+		copy(featsCopy, feats)
+		return featsCopy
+	}
+	return nil
+}
+
+// AllShipFeatIDs returns all ship IDs that have feats loaded
+func AllShipFeatIDs() []string {
+	shipFeatsLock.RLock()
+	defer shipFeatsLock.RUnlock()
+	
+	ids := make([]string, 0, len(shipFeatsByID))
+	for id := range shipFeatsByID {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // ParseFeatEffects parses the effects DSL string into structured FeatEffect objects
