@@ -42,8 +42,8 @@
 - [x] Implemented Season system: season progress tracking with DB integration in player_season_progress table, YA_GetSeasonProgress handler with player-specific data loading, YA_PlayerGet integration to populate SeasonProgress array, and awardSeasonXP() function for XP/level progression; added comprehensive tests; all mmogbrain tests pass
 - [x] Implemented Phase 5 Market & Economy: enhanced store catalog with pricing (ships 5000cr, weapons 2000-3500cr, abilities 1500-2000cr, perks 1000-1200cr), YA_PurchaseItem handler with currency validation and ownership tracking, YA_BuyEliteStatus handler for premium currency purchases (50cr/day), complete contract system with seeding/progress tracking/completion rewards/reroll functionality (100cr cost), XP conversion system (10 XP = 1 credit, 100 XP = 1 premium credit), and YA_GetDailyContractsData returning actual contract data from database; all mmogbrain tests pass
 
-## Current Feature Coverage: ~35%
-Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks, and access weapon/projectile/ship feat data.
+## Current Feature Coverage: ~40%
+Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks, and access weapon/projectile/ship feat/ability data.
 
 ---
 
@@ -126,6 +126,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **AI customization**: Player-controlled difficulty, behavior, spawn rate, and boss frequency
 - [x] **9 new MMOG handlers**: YA_GetPvEProgress, YA_GetBossKills, YA_GetAIPreferences, YA_SetAIPreferences, YA_GetHavocWaves, YA_GetBossTypes, YA_GetAIDifficultyLevels, YA_GetHavocModifiers, YA_GetPvERewardTiers
 
+## PHASE 5: ABILITIES DATA ✅ DONE 2026-07-04
+- [x] **E1: AbilityStats struct**: 70+ fields matching ability DataTable structure (cooldown, activeTime, duration, damage, tier scaling, targeting, movement, etc.)
+- [x] **E2: Loading infrastructure**: LoadAbilities, AbilityByID, AllAbilities with thread-safe access
+- [x] **E3: Multiple DataTable support**: 24 Abilities files with comprehensive field coverage
+- [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats and AllAbilities() []AbilityStats
+- [x] **Integration**: Added to dreadgameconfig initialization sequence
+- [x] **Comprehensive testing**: Struct validation, loading, and access pattern tests
+
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
 - [ ] **Remaining YA_* handlers**: ~15 less common request types
 - [ ] **Server→Client notifications**: achievements, status, presence
@@ -134,7 +142,8 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [ ] **Ship data**: 75+ ship configs with full stats, 50+ hero ships
 - [x] **Weapon data**: 50+ weapon types, 226 rows, full stats
 - [x] **Projectile data**: 393 projectile definitions with 50+ fields, weapon integration
-- [x] **Ship feat data**: 30+ ShipFeats files with ability triggers, effects, and enabling conditions
+- [x] **Ship feat data**: 75 ShipFeats files with ability triggers, effects, and enabling conditions
+- [x] **Ability data**: 103+ abilities from 24 DataTable files with cooldown, activeTime, duration, damage, and tier scaling fields
 - [ ] **Ability data**: 103+ abilities with cooldowns, tiers, modifiers
 - [ ] **Officer system**: 21 officer cards with triggers/conditions
 - [ ] **SP Travel Mode**: 9 ship damage categories × 4 levels

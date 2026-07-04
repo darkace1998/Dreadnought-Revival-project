@@ -404,6 +404,11 @@ func init() {
 	if err := LoadShipFeats(); err != nil {
 		log.Printf("Warning: Failed to load ship feats: %v", err)
 	}
+	
+	// Load abilities data
+	if err := LoadAbilities(); err != nil {
+		log.Printf("Warning: Failed to load abilities: %v", err)
+	}
 
 	starterLoadoutsByShip = make(map[string]StarterLoadout, len(starterInventoryLoadouts))
 	for _, loadout := range starterInventoryLoadouts {
