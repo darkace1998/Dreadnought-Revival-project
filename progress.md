@@ -75,9 +75,10 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [x] **Custom Match lobby**: all YA_CustomRoom* operations return success
 
 ## PHASE 3: PROJECTILES DATA ✅ DONE 2026-07-04
-- [x] **ProjectileStats struct**: 50+ fields from DN_Projectile_OTS_DT.json
-- [x] **Loading infrastructure**: LoadProjectiles, ProjectileByRowName, AllProjectiles
-- [x] **Weapon integration**: ProjectileRowName field, deriveProjectileRowName mapping, ProjectileForWeapon accessor
+- [x] **C1: ProjectileStats struct**: 50+ fields from DN_Projectile_OTS_DT.json
+- [x] **C2: Loading infrastructure**: LoadProjectiles, ProjectileByRowName, AllProjectiles
+- [x] **C3: Weapon integration**: ProjectileRowName field, deriveProjectileRowName mapping, ProjectileForWeapon accessor
+- [x] **C4: API endpoint**: /v2/dreadnought/projectiles exposing all 393 projectiles
 - [x] **393 projectiles**: Successfully loaded from DataTable
 - [x] **Weapon-projectile mapping**: 1:1 mapping with tier suffix preservation
 - [x] **Integration tests**: Weapon-projectile mapping validation
@@ -121,7 +122,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [ ] **API parity**: missing legacy-api endpoints (store, contracts, season, techtree, server status)
 - [ ] **Ship data**: 75+ ship configs with full stats, 50+ hero ships
 - [x] **Weapon data**: 50+ weapon types, 226 rows, full stats
-- [ ] **Projectile data**: 393 projectile definitions with 50+ fields
+- [x] **Projectile data**: 393 projectile definitions with 50+ fields, weapon integration
 - [ ] **Ability data**: 103+ abilities with cooldowns, tiers, modifiers
 - [ ] **Officer system**: 21 officer cards with triggers/conditions
 - [ ] **SP Travel Mode**: 9 ship damage categories × 4 levels

@@ -60,6 +60,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogPlayerPurchasesPayloadForPlayer(playerPID) // Fixed: Added playerPID
 	case "YA_GetScoringData":
 		return buildMmogScoringDataPayload()
+	case "YA_GetProjectileData":
+		return buildMmogProjectileDataPayload()
 	case "YA_GetDailyContractsData":
 		return buildMmogDailyContractsDataPayloadForPlayer(playerPID)
 	case "YA_GetBoosterData":
