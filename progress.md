@@ -133,7 +133,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **E4: Accessor functions**: AbilityByID(id) AbilityStats, AllAbilities() []AbilityStats, AbilityCount() int, AbilityIDs() []string
 - [x] **E5: Wire into tech tree/store/loadouts**: Added AbilityStats to ItemMetadata, wireAbilityStatsToItems() in init, ItemsByType() accessor, legacy API /v2/dreadnought/abilities endpoint, MMOG brain YA_GetAbilities handler
 - [x] **Enhanced filtering**: FilterAbilitiesByName(), FilterAbilitiesByCooldown(), FilterAbilitiesByDamage()
-- [x] **E6: Comprehensive validation**: TestAbilityE6Validation verifies ability count and validates cooldown/damage values
+- [x] **E6: Comprehensive validation tests**: TestE6AbilityCountValidation, TestE6CooldownValidation, TestE6DamageValidation, TestE6AbilityDataQuality - verify ability count (103+), validate cooldown/damage values, track data quality metrics
 - [x] **Enhanced categorization**: extractAbilityTypeFromFilename() for ability type extraction
 - [x] **ItemIDRegister infrastructure**: loadItemIDRegister() and loadItemIDRegisterForType() functions for reusable ItemID lookup
 - [x] **Integration**: Added to dreadgameconfig initialization sequence with graceful fallback

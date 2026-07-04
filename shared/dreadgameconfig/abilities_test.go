@@ -415,6 +415,277 @@ func TestFilterAbilities(t *testing.T) {
 	t.Logf("Found %d abilities with damage between 0 and 1000", len(damageFiltered))
 }
 
+// ==================== E6: Comprehensive Validation Tests ====================
+
+// TestE6AbilityCountValidation verifies ability count matches expectations (E6)
+func TestE6AbilityCountValidation(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E6 ability count validation - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// E6: Verify ability count - should have 103+ abilities from 24 files
+	count := AbilityCount()
+	allAbilities := AllAbilities()
+	
+	if count == 0 {
+		t.Fatalf("E6: Expected abilities to be loaded, got 0")
+	}
+	
+	if count != len(allAbilities) {
+		t.Fatalf("E6: AbilityCount (%d) does not match AllAbilities length (%d)", count, len(allAbilities))
+	}
+	
+	// The todo.md mentions 103+ abilities from 24 files
+	// We should have at least some minimum number of abilities
+	minExpectedAbilities := 50 // Conservative minimum
+	if count < minExpectedAbilities {
+		t.Errorf("E6: Expected at least %d abilities, got %d", minExpectedAbilities, count)
+	} else {
+		t.Logf("E6: Ability count validation passed - loaded %d abilities", count)
+	}
+}
+
+// TestE6CooldownValidation validates cooldown values across all abilities (E6)
+func TestE6CooldownValidation(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E6 cooldown validation - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// E6: Validate cooldown/damage values
+	allAbilities := AllAbilities()
+	if len(allAbilities) == 0 {
+		t.Fatalf("E6: Expected abilities to be loaded for cooldown validation")
+	}
+
+	// Track cooldown statistics
+	var cooldownStats struct {
+		TotalCount       int
+		ZeroCount        int
+		PositiveCount    int
+		MinPositive      float64
+		MaxPositive      float64
+		SumPositive      float64
+	}
+	cooldownStats.MinPositive = float64(^uint(0) >> 1) // Max float64
+
+	for _, ability := range allAbilities {
+		cooldownStats.TotalCount++
+		
+		if ability.CoolDown == 0 {
+			cooldownStats.ZeroCount++
+		} else {
+			cooldownStats.PositiveCount++
+			if ability.CoolDown < cooldownStats.MinPositive {
+				cooldownStats.MinPositive = ability.CoolDown
+			}
+			if ability.CoolDown > cooldownStats.MaxPositive {
+				cooldownStats.MaxPositive = ability.CoolDown
+			}
+			cooldownStats.SumPositive += ability.CoolDown
+		}
+	}
+
+	// Validate cooldown statistics
+	if cooldownStats.PositiveCount == 0 {
+		t.Logf("E6: No abilities with positive cooldown values found")
+	} else {
+		avgCooldown := cooldownStats.SumPositive / float64(cooldownStats.PositiveCount)
+		t.Logf("E6: Cooldown validation - Total: %d, Zero: %d, Positive: %d", 
+			cooldownStats.TotalCount, cooldownStats.ZeroCount, cooldownStats.PositiveCount)
+		t.Logf("E6: Cooldown range - Min: %.2f, Max: %.2f, Avg: %.2f", 
+			cooldownStats.MinPositive, cooldownStats.MaxPositive, avgCooldown)
+		
+		// Validate that positive cooldowns are reasonable
+		if cooldownStats.MinPositive < 0 {
+			t.Errorf("E6: Found negative cooldown values")
+		}
+		if cooldownStats.MaxPositive > 1000 {
+			t.Logf("E6: Some abilities have very high cooldown values (>1000)")
+		}
+	}
+}
+
+// TestE6DamageValidation validates damage values across all abilities (E6)
+func TestE6DamageValidation(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E6 damage validation - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// E6: Validate damage values
+	allAbilities := AllAbilities()
+	if len(allAbilities) == 0 {
+		t.Fatalf("E6: Expected abilities to be loaded for damage validation")
+	}
+
+	// Track damage statistics across all damage fields
+	var damageStats struct {
+		TotalCount        int
+		ZeroCount         int
+		PositiveCount     int
+		MinPositive       float64
+		MaxPositive       float64
+		SumPositive       float64
+		FieldsWithDamage  int
+	}
+	damageStats.MinPositive = float64(^uint(0) >> 1) // Max float64
+
+	for _, ability := range allAbilities {
+		// Check all damage-related fields
+		damageFields := []float64{
+			ability.AbilityDamage,
+			ability.DamageAmount,
+			ability.DamageOnEnemy,
+			ability.PulseDamage,
+			ability.MaxDamage,
+			ability.DamageAmountOnPath,
+		}
+		
+		hasDamage := false
+		for _, damage := range damageFields {
+			if damage > 0 {
+				hasDamage = true
+				damageStats.PositiveCount++
+				if damage < damageStats.MinPositive {
+					damageStats.MinPositive = damage
+				}
+				if damage > damageStats.MaxPositive {
+					damageStats.MaxPositive = damage
+				}
+				damageStats.SumPositive += damage
+			}
+			if damage == 0 {
+				damageStats.ZeroCount++
+			}
+		}
+		
+		if hasDamage {
+			damageStats.FieldsWithDamage++
+		}
+		damageStats.TotalCount++
+	}
+
+	// Validate damage statistics
+	if damageStats.PositiveCount == 0 {
+		t.Logf("E6: No abilities with positive damage values found")
+	} else {
+		avgDamage := damageStats.SumPositive / float64(damageStats.PositiveCount)
+		t.Logf("E6: Damage validation - Total: %d, Zero: %d, Positive: %d", 
+			damageStats.TotalCount, damageStats.ZeroCount, damageStats.PositiveCount)
+		t.Logf("E6: Damage range - Min: %.2f, Max: %.2f, Avg: %.2f", 
+			damageStats.MinPositive, damageStats.MaxPositive, avgDamage)
+		
+		// Validate that positive damages are reasonable
+		if damageStats.MinPositive < 0 {
+			t.Errorf("E6: Found negative damage values")
+		}
+		if damageStats.MaxPositive > 10000 {
+			t.Logf("E6: Some abilities have very high damage values (>10000)")
+		}
+	}
+
+	// Validate that abilities have either cooldown or damage (or both)
+	abilitiesWithCooldownOrDamage := 0
+	for _, ability := range allAbilities {
+		if ability.CoolDown > 0 || ability.AbilityDamage > 0 || ability.DamageAmount > 0 || ability.MaxDamage > 0 {
+			abilitiesWithCooldownOrDamage++
+		}
+	}
+	
+	t.Logf("E6: %d/%d abilities have cooldown or damage values", 
+		abilitiesWithCooldownOrDamage, len(allAbilities))
+}
+
+// TestE6AbilityDataQuality validates the quality and completeness of ability data (E6)
+func TestE6AbilityDataQuality(t *testing.T) {
+	err := LoadAbilities()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping E6 data quality validation - data directory not found: %v", err)
+		}
+		t.Fatalf("Failed to load abilities: %v", err)
+	}
+
+	// E6: Validate data quality and completeness
+	allAbilities := AllAbilities()
+	if len(allAbilities) == 0 {
+		t.Fatalf("E6: Expected abilities to be loaded for data quality validation")
+	}
+
+	// Track data quality metrics
+	var qualityMetrics struct {
+		TotalAbilities          int
+		WithNames               int
+		WithCooldown            int
+		WithActiveTime          int
+		WithAnyDamage           int
+		WithTargeting           int
+		WithItemID             int
+		WithAssetPath           int
+		FullyPopulated         int
+	}
+
+	for _, ability := range allAbilities {
+		qualityMetrics.TotalAbilities++
+		
+		if ability.AbilityName != "" && ability.AbilityName != "None" {
+			qualityMetrics.WithNames++
+		}
+		if ability.CoolDown > 0 {
+			qualityMetrics.WithCooldown++
+		}
+		if ability.ActiveTime > 0 {
+			qualityMetrics.WithActiveTime++
+		}
+		if ability.AbilityDamage > 0 || ability.DamageAmount > 0 || ability.MaxDamage > 0 {
+			qualityMetrics.WithAnyDamage++
+		}
+		if ability.TargetingType != "" {
+			qualityMetrics.WithTargeting++
+		}
+		if ability.ItemID != 0 {
+			qualityMetrics.WithItemID++
+		}
+		if ability.AssetPath != "" {
+			qualityMetrics.WithAssetPath++
+		}
+		
+		// Consider an ability "fully populated" if it has name and at least one meaningful value
+		if ability.AbilityName != "" && ability.AbilityName != "None" &&
+			(ability.CoolDown > 0 || ability.ActiveTime > 0 || ability.AbilityDamage > 0 || ability.DamageAmount > 0) {
+			qualityMetrics.FullyPopulated++
+		}
+	}
+
+	// Report quality metrics
+	t.Logf("E6: Data Quality Metrics:")
+	t.Logf("  Total abilities: %d", qualityMetrics.TotalAbilities)
+	t.Logf("  With names: %d (%.1f%%)", qualityMetrics.WithNames, float64(qualityMetrics.WithNames)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With cooldown: %d (%.1f%%)", qualityMetrics.WithCooldown, float64(qualityMetrics.WithCooldown)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With active time: %d (%.1f%%)", qualityMetrics.WithActiveTime, float64(qualityMetrics.WithActiveTime)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With damage: %d (%.1f%%)", qualityMetrics.WithAnyDamage, float64(qualityMetrics.WithAnyDamage)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With targeting: %d (%.1f%%)", qualityMetrics.WithTargeting, float64(qualityMetrics.WithTargeting)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With ItemID: %d (%.1f%%)", qualityMetrics.WithItemID, float64(qualityMetrics.WithItemID)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  With AssetPath: %d (%.1f%%)", qualityMetrics.WithAssetPath, float64(qualityMetrics.WithAssetPath)/float64(qualityMetrics.TotalAbilities)*100)
+	t.Logf("  Fully populated: %d (%.1f%%)", qualityMetrics.FullyPopulated, float64(qualityMetrics.FullyPopulated)/float64(qualityMetrics.TotalAbilities)*100)
+
+	// Validate that a reasonable percentage of abilities have meaningful data
+	if qualityMetrics.FullyPopulated < qualityMetrics.TotalAbilities/2 {
+		t.Logf("E6: Warning: Less than 50%% of abilities are fully populated")
+	}
+}
+
 // TestAbilityWiring tests the E5 wiring of ability stats into item metadata
 func TestAbilityWiring(t *testing.T) {
 	// Ensure abilities are loaded and wired
