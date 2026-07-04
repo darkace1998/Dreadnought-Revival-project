@@ -78,7 +78,8 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [x] **C1: ProjectileStats struct**: 50+ fields from DN_Projectile_OTS_DT.json
 - [x] **C2: Loading infrastructure**: LoadProjectiles, ProjectileByRowName, AllProjectiles
 - [x] **C3: Weapon integration**: ProjectileRowName field, deriveProjectileRowName mapping, ProjectileForWeapon accessor
-- [x] **C4: API endpoint**: /v2/dreadnought/projectiles exposing all 393 projectiles
+- [x] **C4: Legacy API endpoint**: /v2/dreadnought/projectiles exposing all 393 projectiles
+- [x] **C5: MMOG brain handler**: YA_GetProjectileData for binary protocol clients
 - [x] **393 projectiles**: Successfully loaded from DataTable
 - [x] **Weapon-projectile mapping**: 1:1 mapping with tier suffix preservation
 - [x] **Integration tests**: Weapon-projectile mapping validation
