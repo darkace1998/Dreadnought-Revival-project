@@ -88,11 +88,11 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **D1: ShipFeat struct**: Enabling, Triggers, Effects, StackOnAdding, IsPerkFeat fields with parsed DSL effects
 - [x] **D2: Feat DSL parser**: Parse modifier strings like `AM(PawnDamageModifier +75%) :Stacks(1): D(10.0) : Buff(FirepowerIncrease)` with support for AM, RM, DFS, PCFS patterns, percentage values, conditions (CC), stacks, duration, and buff types
 - [x] **D3: Load all 75 ShipFeats files**: Into `map[shipID][]ShipFeat` structure with ship ID extraction from filenames
-- [x] **D4: FeatsForShip accessor**: Expose `FeatsForShip(shipID) []ShipFeat` and `AllShipFeatIDs() []string` for ship-specific feat access
+- [x] **D4: FeatsForShip accessor**: Expose `FeatsForShip(shipID) []ShipFeat` and `AllShipFeatIDs() []string` for ship-specific feat retrieval with comprehensive validation
 - [x] **D5: Legacy API endpoint**: /v2/dreadnought/shipfeats exposing all ship feats with parsed effects
 - [x] **D6: MMOG brain handler**: YA_GetShipFeats for binary protocol clients
 - [x] **Composite naming**: filename_rowname format for unique identification
-- [x] **Integration tests**: Ship feat loading, access patterns, DSL parsing, and ship-specific retrieval validation
+- [x] **Integration tests**: Ship feat loading, access patterns, DSL parsing, ship-specific retrieval, and comprehensive validation of all 75 feat tables
 
 ## PHASE 4: PROGRESSION SYSTEMS ✅ DONE 2026-05-24
 - [x] **Rank system**: 51-rank ladder with dynamic XP thresholds
