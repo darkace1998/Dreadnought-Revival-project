@@ -42,8 +42,8 @@
 - [x] Implemented Season system: season progress tracking with DB integration in player_season_progress table, YA_GetSeasonProgress handler with player-specific data loading, YA_PlayerGet integration to populate SeasonProgress array, and awardSeasonXP() function for XP/level progression; added comprehensive tests; all mmogbrain tests pass
 - [x] Implemented Phase 5 Market & Economy: enhanced store catalog with pricing (ships 5000cr, weapons 2000-3500cr, abilities 1500-2000cr, perks 1000-1200cr), YA_PurchaseItem handler with currency validation and ownership tracking, YA_BuyEliteStatus handler for premium currency purchases (50cr/day), complete contract system with seeding/progress tracking/completion rewards/reroll functionality (100cr cost), XP conversion system (10 XP = 1 credit, 100 XP = 1 premium credit), and YA_GetDailyContractsData returning actual contract data from database; all mmogbrain tests pass
 
-## Current Feature Coverage: ~30%
-Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and earn XP/ranks.
+## Current Feature Coverage: ~35%
+Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks, and access weapon/projectile/ship feat data.
 
 ---
 
@@ -83,6 +83,16 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [x] **393 projectiles**: Successfully loaded from DataTable
 - [x] **Weapon-projectile mapping**: 1:1 mapping with tier suffix preservation
 - [x] **Integration tests**: Weapon-projectile mapping validation
+
+## PHASE 4: SHIP FEATS ✅ DONE 2026-07-04
+- [x] **D1: ShipFeat struct**: Enabling, Triggers, Effects, StackOnAdding, IsPerkFeat fields
+- [x] **D2: Feat DSL parser**: Parse modifier strings like `AM(PawnDamageModifier +75%) :Stacks(1): D(10.0) : Buff(FirepowerIncrease)` with support for AM, RM, DFS, PCFS patterns, percentage values, conditions (CC), stacks, duration, and buff types
+- [x] **D3: Loading infrastructure**: LoadShipFeats, ShipFeatByName, AllShipFeats with thread-safe access
+- [x] **D4: Multiple DataTable support**: 30+ ShipFeats files (class/tier variations)
+- [x] **D5: Legacy API endpoint**: /v2/dreadnought/shipfeats exposing all ship feats with parsed effects
+- [x] **D6: MMOG brain handler**: YA_GetShipFeats for binary protocol clients
+- [x] **Composite naming**: filename_rowname format for unique identification
+- [x] **Integration tests**: Ship feat loading, access patterns, and DSL parsing validation
 
 ## PHASE 4: PROGRESSION SYSTEMS ✅ DONE 2026-05-24
 - [x] **Rank system**: 51-rank ladder with dynamic XP thresholds
@@ -124,6 +134,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, and 
 - [ ] **Ship data**: 75+ ship configs with full stats, 50+ hero ships
 - [x] **Weapon data**: 50+ weapon types, 226 rows, full stats
 - [x] **Projectile data**: 393 projectile definitions with 50+ fields, weapon integration
+- [x] **Ship feat data**: 30+ ShipFeats files with ability triggers, effects, and enabling conditions
 - [ ] **Ability data**: 103+ abilities with cooldowns, tiers, modifiers
 - [ ] **Officer system**: 21 officer cards with triggers/conditions
 - [ ] **SP Travel Mode**: 9 ship damage categories × 4 levels

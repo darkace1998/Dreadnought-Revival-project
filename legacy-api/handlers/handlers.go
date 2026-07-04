@@ -563,6 +563,35 @@ func (h *Handler) Projectiles(w http.ResponseWriter, r *http.Request) {
 	});
 }
 
+// ShipFeats returns all ship feat data
+func (h *Handler) ShipFeats(w http.ResponseWriter, r *http.Request) {
+	shipFeats := dreadconfig.AllShipFeats()
+	
+	// Convert ship feats to a format suitable for the client
+	shipFeatData := make([]map[string]interface{}, 0, len(shipFeats))
+	for compositeName, feat := range shipFeats {
+		featMap := make(map[string]interface{})
+		// Use reflection to convert all fields to a map
+		val := reflect.ValueOf(feat)
+		typeOf := val.Type()
+		
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldName := typeOf.Field(i).Name
+			// Convert field name to snake_case for JSON
+			jsonName := toSnakeCase(fieldName)
+			featMap[jsonName] = field.Interface()
+		}
+		featMap["composite_name"] = compositeName
+		shipFeatData = append(shipFeatData, featMap)
+	}
+	
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		fieldStatus: "ok",
+		"ship_feats": shipFeatData,
+	});
+}
+
 // toSnakeCase converts CamelCase to snake_case
 func toSnakeCase(s string) string {
 	var result strings.Builder

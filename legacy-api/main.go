@@ -62,6 +62,7 @@ func main() {
 	auth.HandleFunc("/season", h.Season).Methods(http.MethodGet)
 	auth.HandleFunc("/xp/convert", h.XPConvert).Methods(http.MethodPost)
 	auth.HandleFunc("/v2/dreadnought/projectiles", h.Projectiles).Methods(http.MethodGet)
+auth.HandleFunc("/v2/dreadnought/shipfeats", h.ShipFeats).Methods(http.MethodGet)
 
 	srv := &http.Server{
 		Addr:         addr,

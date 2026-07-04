@@ -2,6 +2,7 @@ package dreadgameconfig
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -397,6 +398,11 @@ func init() {
 			panic(fmt.Sprintf("duplicate dreadgame item key %q", key))
 		}
 		itemsByTypeAndName[key] = item
+	}
+	
+	// Load ship feats data
+	if err := LoadShipFeats(); err != nil {
+		log.Printf("Warning: Failed to load ship feats: %v", err)
 	}
 
 	starterLoadoutsByShip = make(map[string]StarterLoadout, len(starterInventoryLoadouts))
