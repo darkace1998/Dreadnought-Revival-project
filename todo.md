@@ -23,7 +23,7 @@
 - [x] **B2**: Load `DN_Weapons_OTS_DT.json` into `map[int32]WeaponStats` keyed by ItemID
 - [x] **B3**: Expose `WeaponByID(id) WeaponStats` and `AllWeapons() []WeaponStats` accessors
 - [x] **B4**: Wire weapon stats into `YA_GetTechTree` and store catalog payloads
-- [ ] **B5**: Add tests — verify all 226 weapons load, spot-check damage/cooldown values against `lookup_tables.md`
+- [x] **B5**: Add tests — verify all 226 weapons load, spot-check damage/cooldown values against `lookup_tables.md`
 
 ---
 

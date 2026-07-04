@@ -301,6 +301,77 @@ func TestAllWeapons(t *testing.T) {
 	}
 }
 
+func TestWeaponCountAndSpotCheck(t *testing.T) {
+	original := os.Getenv("DATA_DIR")
+	defer func() { _ = os.Setenv("DATA_DIR", original) }()
+
+	dataDir := filepath.Join("..", "..", "data")
+	if err := os.Setenv("DATA_DIR", dataDir); err != nil {
+		t.Fatal(err)
+	}
+
+	weaponsLoaded = false
+	weaponsByItemID = nil
+
+	if err := LoadWeapons(); err != nil {
+		t.Fatalf("LoadWeapons() error = %v", err)
+	}
+
+	// Verify weapons with ItemIDs (these are the usable weapons)
+	if len(weaponsByItemID) != 159 {
+		t.Errorf("loaded %d weapons with ItemIDs, want 159 (weapons with ItemIDs)", len(weaponsByItemID))
+	}
+
+	t.Logf("Loaded %d weapons with ItemIDs", len(weaponsByItemID))
+
+	// Spot-check specific weapon values against actual known values
+	// Using weapon 100597768 (ASSAULT YST_Primary) with verified values
+	spotCheckWeaponID := int32(100597768)
+	weapon, ok := WeaponByID(spotCheckWeaponID)
+	if !ok {
+		t.Fatalf("WeaponByID(%d) not found", spotCheckWeaponID)
+	}
+
+	// Verify specific values for this weapon
+	expectedDamageHigh := int32(120)
+	expectedCooldown := float64(0.19)
+	expectedAmmo := int32(15)
+	expectedSpreadBase := float64(0.8)
+	expectedRange := int32(25000)
+
+	if weapon.DamageHigh != expectedDamageHigh {
+		t.Errorf("Weapon %d DamageHigh = %d, want %d", spotCheckWeaponID, weapon.DamageHigh, expectedDamageHigh)
+	}
+	if weapon.WeaponCooldownTime != expectedCooldown {
+		t.Errorf("Weapon %d WeaponCooldownTime = %f, want %f", spotCheckWeaponID, weapon.WeaponCooldownTime, expectedCooldown)
+	}
+	if weapon.AmmoMagazinSize != expectedAmmo {
+		t.Errorf("Weapon %d AmmoMagazinSize = %d, want %d", spotCheckWeaponID, weapon.AmmoMagazinSize, expectedAmmo)
+	}
+	if weapon.SpreadBaseValue != expectedSpreadBase {
+		t.Errorf("Weapon %d SpreadBaseValue = %f, want %f", spotCheckWeaponID, weapon.SpreadBaseValue, expectedSpreadBase)
+	}
+	if weapon.MaxRange != expectedRange {
+		t.Errorf("Weapon %d MaxRange = %d, want %d", spotCheckWeaponID, weapon.MaxRange, expectedRange)
+	}
+
+	// Count weapons with valid values (non-zero damage, cooldown, ammo, range)
+	validWeaponCount := 0
+	for _, weapon := range weaponsByItemID {
+		if weapon.DamageHigh > 0 && weapon.WeaponCooldownTime > 0 && 
+			weapon.AmmoMagazinSize > 0 && weapon.MaxRange > 0 {
+			validWeaponCount++
+		}
+	}
+
+	if validWeaponCount < 100 {
+		t.Errorf("Found only %d weapons with valid values, expected at least 100", validWeaponCount)
+	}
+
+	t.Logf("Found %d weapons with valid values (positive damage, cooldown, ammo, range)", validWeaponCount)
+	}
+
+
 func TestLoadWeaponsIdempotent(t *testing.T) {
 	original := os.Getenv("DATA_DIR")
 	defer func() { _ = os.Setenv("DATA_DIR", original) }()
