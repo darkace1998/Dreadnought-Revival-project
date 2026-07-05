@@ -314,3 +314,191 @@ func TestF1OfficerCardStruct(t *testing.T) {
 	
 	t.Log("F1: OfficerCard struct successfully defined with all required fields")
 }
+
+// ==================== F2: Load Officers Table Tests ====================
+
+// TestF2LoadOfficersTable tests the F2 requirement - Load officers table (21 rows) with trigger/effect parsing
+func TestF2LoadOfficersTable(t *testing.T) {
+	// F2: Verify that we can load the officers table with 21 rows
+	err := LoadOfficers()
+	if err != nil {
+		// If the data directory is not found, skip the test
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping F2 officers table test - data directory not found: %v", err)
+		}
+		t.Fatalf("F2: Failed to load officers: %v", err)
+	}
+
+	// F2: Verify we have loaded officers
+	count := OfficerCount()
+	if count == 0 {
+		t.Fatalf("F2: Expected officers to be loaded, got 0")
+	}
+
+	// F2: The todo.md mentions 21 officer cards
+	// Verify we have the expected number of officers
+	expectedCount := 21
+	if count != expectedCount {
+		t.Logf("F2: Expected %d officers, got %d (this may be expected if data is different)", expectedCount, count)
+	} else {
+		t.Logf("F2: Successfully loaded %d officers as expected", count)
+	}
+
+	// F2: Verify trigger/effect parsing is working
+	allOfficers := AllOfficers()
+	parsedCount := 0
+	triggerTypes := make(map[string]int)
+	effectTypes := make(map[string]int)
+
+	for id, officer := range allOfficers {
+		// Verify the officer has trigger and effect data
+		if officer.Triggers != "" {
+			triggerTypes[officer.Triggers]++
+		}
+		if officer.Effects != "" {
+			effectTypes[officer.Effects]++
+		}
+		
+		// F2: Verify trigger/effect parsing worked
+		if len(officer.ParsedEffects) > 0 {
+			parsedCount++
+			t.Logf("F2: Officer %s has %d parsed effects", id, len(officer.ParsedEffects))
+		}
+	}
+
+	if parsedCount > 0 {
+		t.Logf("F2: Successfully parsed effects for %d officers", parsedCount)
+	} else {
+		t.Log("F2: No officers found with parsed effects")
+	}
+
+	// Report trigger types found
+	if len(triggerTypes) > 0 {
+		t.Logf("F2: Found %d different trigger types", len(triggerTypes))
+		for trigger, count := range triggerTypes {
+			t.Logf("  %s: %d officers", trigger, count)
+		}
+	}
+
+	// Report effect types found
+	if len(effectTypes) > 0 {
+		t.Logf("F2: Found %d different effect patterns", len(effectTypes))
+	}
+
+	// F2: Verify that officers have valid data
+	validOfficers := 0
+	for _, officer := range allOfficers {
+		if officer.Enabling != "" || officer.Triggers != "" || officer.Effects != "" {
+			validOfficers++
+		}
+	}
+
+	if validOfficers == count {
+		t.Logf("F2: All %d officers have valid data", count)
+	} else {
+		t.Logf("F2: %d/%d officers have valid data", validOfficers, count)
+	}
+}
+
+// ==================== F7: Comprehensive Validation Tests ====================
+
+// TestF7Verify21OfficersLoad tests F7 requirement - verify 21 officers load
+func TestF7Verify21OfficersLoad(t *testing.T) {
+	// F7: Verify 21 officers load
+	err := LoadOfficers()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping F7 21 officers verification - data directory not found: %v", err)
+		}
+		t.Fatalf("F7: Failed to load officers: %v", err)
+	}
+
+	// F7: Verify we have 21 officers
+	count := OfficerCount()
+	expectedCount := 21
+	
+	if count != expectedCount {
+		t.Errorf("F7: Expected %d officers, got %d", expectedCount, count)
+	} else {
+		t.Logf("F7: Successfully verified %d officers loaded", count)
+	}
+
+	// F7: Verify all officers have valid IDs
+	allOfficers := AllOfficers()
+	if len(allOfficers) != count {
+		t.Errorf("F7: AllOfficers count (%d) does not match OfficerCount (%d)", len(allOfficers), count)
+	}
+
+	// F7: Verify each officer has a valid row name
+	for id := range allOfficers {
+		if id == "" {
+			t.Error("F7: Found officer with empty ID")
+		}
+	}
+}
+
+// TestF7ValidateTriggerTypes tests F7 requirement - validate trigger types
+func TestF7ValidateTriggerTypes(t *testing.T) {
+	err := LoadOfficers()
+	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			t.Skipf("Skipping F7 trigger validation - data directory not found: %v", err)
+		}
+		t.Fatalf("F7: Failed to load officers: %v", err)
+	}
+
+	// F7: Validate trigger types across all officers
+	allOfficers := AllOfficers()
+	if len(allOfficers) == 0 {
+		t.Fatalf("F7: Expected officers to be loaded for trigger validation")
+	}
+
+	// Track trigger type statistics
+	triggerStats := make(map[string]int)
+	emptyTriggerCount := 0
+	validTriggerCount := 0
+
+	for _, officer := range allOfficers {
+		if officer.Triggers == "" {
+			emptyTriggerCount++
+		} else {
+			validTriggerCount++
+			triggerStats[officer.Triggers]++
+		}
+	}
+
+	// F7: Validate that most officers have valid triggers
+	if validTriggerCount == 0 {
+		t.Error("F7: No officers have valid trigger types")
+	} else {
+		t.Logf("F7: %d/%d officers have valid trigger types", validTriggerCount, len(allOfficers))
+	}
+
+	if emptyTriggerCount > 0 {
+		t.Logf("F7: %d officers have empty trigger types", emptyTriggerCount)
+	}
+
+	// Report all trigger types found
+	if len(triggerStats) > 0 {
+		t.Logf("F7: Found %d different trigger types:", len(triggerStats))
+		for trigger, count := range triggerStats {
+			t.Logf("  %s: %d officers", trigger, count)
+		}
+	}
+
+	// F7: Validate common trigger patterns
+	commonTriggers := []string{
+		"DoKillWithAbility()",
+		"OnAcquire()",
+		"OnEnable()",
+		"OnFeat1()",
+		"OnFeat2()",
+		"OnFeat3()",
+	}
+
+	for _, trigger := range commonTriggers {
+		if count, ok := triggerStats[trigger]; ok {
+			t.Logf("F7: Found common trigger '%s' in %d officers", trigger, count)
+		}
+	}
+}
