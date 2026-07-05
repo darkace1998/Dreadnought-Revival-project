@@ -419,7 +419,10 @@ func init() {
 	if err := LoadOfficers(); err != nil {
 		log.Printf("Warning: Failed to load officers: %v", err)
 	}
-	
+
+	// Load perks data (F4)
+	LoadPerks()
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	
