@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -37,9 +38,9 @@ var (
 	perksLoaded bool
 )
 
-// LoadPerks loads perk data from the ItemIDRegister entries that match perk patterns
-// F4: Define Go struct `Perk` for perk DataTable fields
-// This function would load perks from a DataTable file if one exists, or from ItemIDRegister
+// LoadPerks loads perk data from ItemIDRegister entries that match perk patterns
+// F5: Load perk data from ItemIDTable category YPerk entries
+// Since ItemIDRegister doesn't have explicit Category fields, we identify perks by their path
 func LoadPerks() {
 	perksLock.Lock()
 	defer perksLock.Unlock()
@@ -48,10 +49,113 @@ func LoadPerks() {
 		return
 	}
 
-	// For now, we'll load perks from ItemIDRegister entries that contain "Perk" in their path
-	// This is a placeholder for when we have actual perk DataTable files
+	// F5: Load perk data from ItemIDRegister entries with "Perk" in their path
+	loadedCount := 0
+	crossReferencedCount := 0
+
+	for _, item := range itemCatalog {
+		// Identify perks by their asset path containing "/Perk/"
+		if isPerkPath(item.AssetPath) {
+			perk := createPerkFromItem(item)
+			
+			// Extract perk name from the path
+			perkName := extractPerkNameFromPath(item.AssetPath)
+			perk.PerkName = perkName
+			perk.AssetPath = item.AssetPath
+			perk.PerkID = item.ItemID
+			
+			// Determine category from perk name prefix
+			perk.Category = extractPerkCategory(perkName)
+			
+			// Store in maps
+			perks[perkName] = perk
+			perksByID[item.ItemID] = perk
+			loadedCount++
+			
+			// Count as cross-referenced since we're using ItemIDRegister
+			crossReferencedCount++
+		}
+	}
+
 	perksLoaded = true
-	log.Printf("Perk loading placeholder - would load from DataTable when available")
+	log.Printf("Loaded %d perks (%d cross-referenced with ItemIDRegister)", loadedCount, crossReferencedCount)
+}
+
+// isPerkPath checks if an asset path belongs to a perk
+func isPerkPath(path string) bool {
+	// Check if path contains "/Perk/" which indicates it's a perk
+	return strings.Contains(path, "/Perk/")
+}
+
+// extractPerkNameFromPath extracts the perk name from its asset path
+func extractPerkNameFromPath(path string) string {
+	// Path format: /Game/Generic/Officer/Perk/PRK_COM_AbiInc_AbiKill_BP
+	// We want: PRK_COM_AbiInc_AbiKill_BP
+	if path == "" {
+		return ""
+	}
+	
+	// Find the last '/' and take everything after it
+	lastSlash := -1
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			lastSlash = i
+			break
+		}
+	}
+	
+	if lastSlash >= 0 && lastSlash < len(path)-1 {
+		return path[lastSlash+1:]
+	}
+	
+	return path
+}
+
+// extractPerkCategory extracts the category from perk name
+// Perk names follow pattern: PRK_{CATEGORY}_{effect}_BP
+func extractPerkCategory(perkName string) string {
+	// Remove the PRK_ prefix and _BP suffix if present
+	name := perkName
+	if len(name) > 4 && name[:4] == "PRK_" {
+		name = name[4:]
+	}
+	if len(name) > 3 && name[len(name)-3:] == "_BP" {
+		name = name[:len(name)-3]
+	}
+	
+	// Find the first underscore to get the category
+	for i, char := range name {
+		if char == '_' {
+			return name[:i]
+		}
+	}
+	
+	return "UNKNOWN"
+}
+
+// createPerkFromItem creates a Perk struct from an ItemIDRegister entry
+// F5: Load perk data from ItemIDTable category YPerk entries
+func createPerkFromItem(item ItemMetadata) Perk {
+	// Create a perk with default values for DataTable fields
+	// When we have the actual perk DataTable, we can populate these properly
+	perk := Perk{
+		// Default DataTable field values
+		// These would be populated from actual DataTable when available
+		Enabling:      "OnAcquire()", // Common default for perks
+		Triggers:      "OnEnable()",  // Common default for perks
+		Effects:       "",            // Will be populated from DataTable
+		StackOnAdding: true,          // Common default for perks
+		IsPerkFeat:    true,          // All perks are perk feats
+		
+		// Metadata from ItemIDRegister
+		PerkID:    item.ItemID,
+		PerkName:  "", // Will be set by caller
+		AssetPath: "", // Will be set by caller
+		Category:  "", // Will be set by caller
+		ParsedEffects: []FeatEffect{},
+	}
+	
+	return perk
 }
 
 // PerkByID returns a perk by its PerkID

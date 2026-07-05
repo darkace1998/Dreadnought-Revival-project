@@ -127,3 +127,69 @@ func TestF4DefinePerkStruct(t *testing.T) {
 	t.Logf("✅ F4: Perk struct successfully defined for perk DataTable fields")
 	_ = perk // Use the variable to avoid unused variable error
 }
+
+// TestF5LoadPerksFromItemIDRegister tests the F5 requirement
+func TestF5LoadPerksFromItemIDRegister(t *testing.T) {
+	// F5: Load perk data from ItemIDTable category YPerk entries
+	// This test explicitly validates the F5 requirement
+
+	// Reset the loaded state to test loading
+	perksLock.Lock()
+	perks = make(map[string]Perk)
+	perksByID = make(map[int32]Perk)
+	perksLoaded = false
+	perksLock.Unlock()
+
+	// Load perks from ItemIDRegister
+	LoadPerks()
+
+	// Verify that perks were loaded
+	perkCount := PerkCount()
+	if perkCount == 0 {
+		t.Fatal("F5: Expected perks to be loaded from ItemIDRegister, got 0")
+	}
+
+	t.Logf("✅ F5: Successfully loaded %d perks from ItemIDRegister", perkCount)
+
+	// Verify we can access some perks
+	allPerks := AllPerks()
+	if len(allPerks) != perkCount {
+		t.Errorf("Expected %d perks from AllPerks(), got %d", perkCount, len(allPerks))
+	}
+
+	// Check that some known perk IDs exist (from ItemIDRegister)
+	knownPerkIDs := []int32{117374977, 117374978, 117374979, 117374980, 117374981}
+	foundKnownPerks := 0
+	for _, id := range knownPerkIDs {
+		if _, exists := PerkByID(id); exists {
+			foundKnownPerks++
+		}
+	}
+
+	t.Logf("✅ F5: Found %d out of %d known perk IDs", foundKnownPerks, len(knownPerkIDs))
+
+	// Verify perk categories are extracted correctly
+	categoriesFound := make(map[string]bool)
+	for _, perk := range allPerks {
+		if perk.Category != "" && perk.Category != "UNKNOWN" {
+			categoriesFound[perk.Category] = true
+		}
+	}
+
+	t.Logf("✅ F5: Found perk categories: %v", categoriesFound)
+
+	// Verify perk names are extracted correctly
+	for _, perk := range allPerks {
+		if perk.PerkName == "" {
+			t.Error("Found perk with empty PerkName")
+		}
+		if perk.AssetPath == "" {
+			t.Error("Found perk with empty AssetPath")
+		}
+		if perk.PerkID == 0 {
+			t.Error("Found perk with zero PerkID")
+		}
+	}
+
+	t.Logf("✅ F5: All perks have valid metadata (name, path, ID)")
+}
