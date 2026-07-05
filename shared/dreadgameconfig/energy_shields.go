@@ -8,9 +8,10 @@ import (
 	"sync"
 )
 
-// EnergyShield represents an energy shield configuration from EnergyShields_DT.json
-type EnergyShield struct {
-	// Core shield fields from DataTable
+// EnergyShieldStats represents an energy shield configuration from EnergyShields_DT.json
+// G1: Define Go struct `EnergyShieldStats` matching `DN_EnergyShields_DT.json` fields
+type EnergyShieldStats struct {
+	// Core shield fields from DataTable (per-class shield damage modifiers, pass-through factors)
 	StaticMesh          string  `json:"m_staticMesh"`
 	DamageModifier     float64 `json:"m_damageModifier"`
 	DamagePassThrough  float64 `json:"m_damagePassThroughFactor"`
@@ -22,8 +23,8 @@ type EnergyShield struct {
 
 // energyShieldsData holds the loaded energy shield data
 var (
-	energyShields     = make(map[string]EnergyShield)
-	energyShieldsByID = make(map[string]EnergyShield) // Keyed by shield name
+	energyShields     = make(map[string]EnergyShieldStats)
+	energyShieldsByID = make(map[string]EnergyShieldStats) // Keyed by shield name
 	energyShieldsLock sync.RWMutex
 	energyShieldsLoaded bool
 )
@@ -63,7 +64,7 @@ func LoadEnergyShields() error {
 
 	loadedCount := 0
 	for rowName, rowData := range dataTable.Rows {
-		shield := EnergyShield{
+		shield := EnergyShieldStats{
 			StaticMesh:         rowData.StaticMesh,
 			DamageModifier:    rowData.DamageModifier,
 			DamagePassThrough: rowData.DamagePassThrough,
@@ -114,7 +115,7 @@ func extractShipClassFromShieldName(name string) string {
 }
 
 // EnergyShieldByName returns an energy shield by its row name
-func EnergyShieldByName(name string) (EnergyShield, bool) {
+func EnergyShieldByName(name string) (EnergyShieldStats, bool) {
 	energyShieldsLock.RLock()
 	defer energyShieldsLock.RUnlock()
 
@@ -123,11 +124,11 @@ func EnergyShieldByName(name string) (EnergyShield, bool) {
 }
 
 // AllEnergyShields returns all loaded energy shields
-func AllEnergyShields() []EnergyShield {
+func AllEnergyShields() []EnergyShieldStats {
 	energyShieldsLock.RLock()
 	defer energyShieldsLock.RUnlock()
 
-	shields := make([]EnergyShield, 0, len(energyShields))
+	shields := make([]EnergyShieldStats, 0, len(energyShields))
 	for _, shield := range energyShields {
 		shields = append(shields, shield)
 	}
@@ -154,11 +155,11 @@ func AllEnergyShieldNames() []string {
 }
 
 // EnergyShieldsForShipClass returns all energy shields for a specific ship class
-func EnergyShieldsForShipClass(shipClass string) []EnergyShield {
+func EnergyShieldsForShipClass(shipClass string) []EnergyShieldStats {
 	energyShieldsLock.RLock()
 	defer energyShieldsLock.RUnlock()
 
-	var shields []EnergyShield
+	var shields []EnergyShieldStats
 	for _, shield := range energyShields {
 		if shield.ShipClass == shipClass {
 			shields = append(shields, shield)

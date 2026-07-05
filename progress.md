@@ -149,12 +149,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **F7: Comprehensive validation**: TestF7Verify21OfficersLoad verifies 21 officers load, TestF7ValidateTriggerTypes validates trigger types across all officers
 
 ## PHASE 7: ENERGY SHIELDS & GLOBAL TUNING ✅ DONE 2026-07-05
-- [x] **G1: Define Go structs**: EnergyShield struct (m_staticMesh, m_damageModifier, m_damagePassThrough) and GlobalTuningValue struct (m_rangeToViewTargetMarkerForClassReveal, m_projectileCloseInProjectileSpeedModifier, m_afkTimer) with metadata and accessor functions
-- [x] **G1: Load data**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json, LoadGlobalTuningValues() loads 1 value from DN_GlobalTuningValues_DT.json
+- [x] **G1: Define Go structs**: EnergyShieldStats struct (m_staticMesh, m_damageModifier, m_damagePassThrough) and GlobalTuning struct (m_rangeToViewTargetMarkerForClassReveal, m_projectileCloseInProjectileSpeedModifier, m_afkTimer) with metadata and accessor functions
+- [x] **G2: Load energy shields table**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json with per-class shield damage modifiers and pass-through factors
+- [x] **G3: Define Go struct**: GlobalTuning struct matching DN_GlobalTuningValues_DT.json fields (AFK timer, projectile speed modifier, reveal range)
+- [x] **G4: Load global tuning table**: LoadGlobalTuningValues() loads 1 value from DN_GlobalTuningValues_DT.json
 - [x] **G1: Integration**: Added to dreadgameconfig initialization sequence with proper error handling
 - [x] **G1: Accessor functions**: EnergyShieldByName, AllEnergyShields, EnergyShieldCount, EnergyShieldsForShipClass, GlobalTuningByName, AllGlobalTuningValues, convenience getters
 - [x] **G1: Ship class extraction**: extractShipClassFromShieldName handles all shield naming patterns including Dreadnought special case
-- [x] **G1: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions
+- [x] **G2-G4: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions, explicit G2 and G4 requirement validation
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence

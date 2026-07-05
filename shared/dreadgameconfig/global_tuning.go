@@ -8,9 +8,10 @@ import (
 	"sync"
 )
 
-// GlobalTuningValue represents a global tuning value from DN_GlobalTuningValues_DT.json
-type GlobalTuningValue struct {
-	// Core tuning fields from DataTable
+// GlobalTuning represents a global tuning value from DN_GlobalTuningValues_DT.json
+// G3: Define Go struct `GlobalTuning` matching `DN_GlobalTuningValues_DT.json` fields
+type GlobalTuning struct {
+	// Core tuning fields from DataTable (AFK timer, projectile speed modifier, reveal range)
 	RangeToViewTargetMarkerForClassReveal    float64 `json:"m_rangeToViewTargetMarkerForClassReveal"`
 	ProjectileCloseInProjectileSpeedModifier float64 `json:"m_projectileCloseInProjectileSpeedModifier"`
 	AFKTimer                                      float64 `json:"m_afkTimer"`
@@ -21,7 +22,7 @@ type GlobalTuningValue struct {
 
 // globalTuningData holds the loaded global tuning data
 var (
-	globalTuningValues     = make(map[string]GlobalTuningValue)
+	globalTuningValues     = make(map[string]GlobalTuning)
 	globalTuningValuesLock sync.RWMutex
 	globalTuningLoaded     bool
 )
@@ -61,7 +62,7 @@ func LoadGlobalTuningValues() error {
 
 	loadedCount := 0
 	for rowName, rowData := range dataTable.Rows {
-		tuning := GlobalTuningValue{
+		tuning := GlobalTuning{
 			RangeToViewTargetMarkerForClassReveal:    rowData.RangeToViewTargetMarkerForClassReveal,
 			ProjectileCloseInProjectileSpeedModifier: rowData.ProjectileCloseInProjectileSpeedModifier,
 			AFKTimer:                                      rowData.AFKTimer,
@@ -78,7 +79,7 @@ func LoadGlobalTuningValues() error {
 }
 
 // GlobalTuningByName returns a global tuning value by its row name
-func GlobalTuningByName(name string) (GlobalTuningValue, bool) {
+func GlobalTuningByName(name string) (GlobalTuning, bool) {
 	globalTuningValuesLock.RLock()
 	defer globalTuningValuesLock.RUnlock()
 
@@ -87,11 +88,11 @@ func GlobalTuningByName(name string) (GlobalTuningValue, bool) {
 }
 
 // AllGlobalTuningValues returns all loaded global tuning values
-func AllGlobalTuningValues() []GlobalTuningValue {
+func AllGlobalTuningValues() []GlobalTuning {
 	globalTuningValuesLock.RLock()
 	defer globalTuningValuesLock.RUnlock()
 
-	tunings := make([]GlobalTuningValue, 0, len(globalTuningValues))
+	tunings := make([]GlobalTuning, 0, len(globalTuningValues))
 	for _, tuning := range globalTuningValues {
 		tunings = append(tunings, tuning)
 	}

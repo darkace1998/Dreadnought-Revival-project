@@ -4,13 +4,13 @@ import (
 	"testing"
 )
 
-// TestEnergyShieldStructDefinition tests that the EnergyShield struct is properly defined (G1)
-func TestEnergyShieldStructDefinition(t *testing.T) {
-	// G1: Define Go structs for energy shield DataTable fields
-	// This test verifies that the EnergyShield struct exists and has the expected fields
+// TestEnergyShieldStatsStructDefinition tests that the EnergyShieldStats struct is properly defined (G1)
+func TestEnergyShieldStatsStructDefinition(t *testing.T) {
+	// G1: Define Go struct `EnergyShieldStats` matching `DN_EnergyShields_DT.json` fields
+	// This test explicitly validates the G1 requirement
 
 	// Create a sample energy shield to test the struct
-	shield := EnergyShield{
+	shield := EnergyShieldStats{
 		StaticMesh:         "import[20]",
 		DamageModifier:    0.001,
 		DamagePassThrough: 0.25,
@@ -35,16 +35,16 @@ func TestEnergyShieldStructDefinition(t *testing.T) {
 		t.Errorf("Expected ShipClass to be 'Assault', got '%s'", shield.ShipClass)
 	}
 
-	t.Logf("✅ EnergyShield struct properly defined with all required fields")
+	t.Logf("✅ EnergyShieldStats struct properly defined with all required fields")
 }
 
-// TestGlobalTuningValueStructDefinition tests that the GlobalTuningValue struct is properly defined (G1)
-func TestGlobalTuningValueStructDefinition(t *testing.T) {
-	// G1: Define Go structs for global tuning DataTable fields
-	// This test verifies that the GlobalTuningValue struct exists and has the expected fields
+// TestGlobalTuningStructDefinition tests that the GlobalTuning struct is properly defined (G3)
+func TestGlobalTuningStructDefinition(t *testing.T) {
+	// G3: Define Go struct `GlobalTuning` matching `DN_GlobalTuningValues_DT.json` fields
+	// This test explicitly validates the G3 requirement
 
 	// Create a sample global tuning value to test the struct
-	tuning := GlobalTuningValue{
+	tuning := GlobalTuning{
 		RangeToViewTargetMarkerForClassReveal:    20000.0,
 		ProjectileCloseInProjectileSpeedModifier: 0.5,
 		AFKTimer:                                      119.5,
@@ -64,44 +64,76 @@ func TestGlobalTuningValueStructDefinition(t *testing.T) {
 		t.Errorf("Expected AFKTimer to be 119.5, got %f", tuning.AFKTimer)
 	}
 
-	t.Logf("✅ GlobalTuningValue struct properly defined with all required fields")
+	t.Logf("✅ GlobalTuning struct properly defined with all required fields")
 }
 
-// TestG1DefineEnergyShieldAndGlobalTuningStructs tests the G1 requirement explicitly
-func TestG1DefineEnergyShieldAndGlobalTuningStructs(t *testing.T) {
-	// G1: Define Go structs for energy shield DataTable fields
-	// This test explicitly validates the G1 requirement
+// TestG2LoadEnergyShieldsTable tests the G2 requirement explicitly
+func TestG2LoadEnergyShieldsTable(t *testing.T) {
+	// G2: Load energy shields table
+	// This test explicitly validates the G2 requirement
 
-	// Test EnergyShield struct
-	shield := EnergyShield{
-		StaticMesh:         "import[23]",
-		DamageModifier:    0.0,
-		DamagePassThrough: 0.35,
-		ShieldName:        "DreadH",
-		ShipClass:         "Dreadnought",
+	// Test that energy shields can be loaded
+	shieldCount := EnergyShieldCount()
+	if shieldCount == 0 {
+		t.Fatal("G2: Expected energy shields to be loaded, got 0")
 	}
 
-	// Verify the struct can hold DataTable values
-	if shield.StaticMesh == "" || shield.DamageModifier < 0 || shield.DamagePassThrough < 0 {
-		t.Fatal("EnergyShield struct cannot hold DataTable field values")
+	t.Logf("✅ G2: Successfully loaded %d energy shields from EnergyShields_DT.json", shieldCount)
+
+	// Test that we can access specific shields
+	_, exists := EnergyShieldByName("AssaultH")
+	if !exists {
+		t.Error("G2: Expected to find AssaultH energy shield")
 	}
 
-	// Test GlobalTuningValue struct
-	tuning := GlobalTuningValue{
-		RangeToViewTargetMarkerForClassReveal:    20000.0,
-		ProjectileCloseInProjectileSpeedModifier: 0.5,
-		AFKTimer:                                      119.5,
-		TuningName:                                   "Default",
+	// Test that all shields have valid data
+	allShields := AllEnergyShields()
+	for _, shield := range allShields {
+		if shield.StaticMesh == "" {
+			t.Error("G2: Found energy shield with empty StaticMesh")
+		}
+		if shield.ShipClass == "" {
+			t.Error("G2: Found energy shield with empty ShipClass")
+		}
 	}
 
-	// Verify the struct can hold DataTable values
-	if tuning.RangeToViewTargetMarkerForClassReveal == 0 || tuning.ProjectileCloseInProjectileSpeedModifier == 0 || tuning.AFKTimer == 0 {
-		t.Fatal("GlobalTuningValue struct cannot hold DataTable field values")
+	t.Logf("✅ G2: All energy shields have valid DataTable field values")
+}
+
+// TestG4LoadGlobalTuningTable tests the G4 requirement explicitly
+func TestG4LoadGlobalTuningTable(t *testing.T) {
+	// G4: Load global tuning table
+	// This test explicitly validates the G4 requirement
+
+	// Test that global tuning values can be loaded
+	tuningCount := GlobalTuningCount()
+	if tuningCount == 0 {
+		t.Fatal("G4: Expected global tuning values to be loaded, got 0")
 	}
 
-	t.Logf("✅ G1: EnergyShield and GlobalTuningValue structs successfully defined for DataTable fields")
-	_ = shield // Use the variable to avoid unused variable error
-	_ = tuning // Use the variable to avoid unused variable error
+	t.Logf("✅ G4: Successfully loaded %d global tuning values from DN_GlobalTuningValues_DT.json", tuningCount)
+
+	// Test that we can access specific tuning values
+	_, exists := GlobalTuningByName("Default")
+	if !exists {
+		t.Error("G4: Expected to find Default global tuning value")
+	}
+
+	// Test that all tuning values have valid data
+	allTunings := AllGlobalTuningValues()
+	for _, tuning := range allTunings {
+		if tuning.RangeToViewTargetMarkerForClassReveal == 0 {
+			t.Error("G4: Found global tuning with zero RangeToViewTargetMarkerForClassReveal")
+		}
+		if tuning.ProjectileCloseInProjectileSpeedModifier == 0 {
+			t.Error("G4: Found global tuning with zero ProjectileCloseInProjectileSpeedModifier")
+		}
+		if tuning.AFKTimer == 0 {
+			t.Error("G4: Found global tuning with zero AFKTimer")
+		}
+	}
+
+	t.Logf("✅ G4: All global tuning values have valid DataTable field values")
 }
 
 // TestShipClassExtraction tests the ship class extraction from shield names
