@@ -423,6 +423,16 @@ func init() {
 	// Load perks data (F4)
 	LoadPerks()
 
+	// Load energy shields data (G1)
+	if err := LoadEnergyShields(); err != nil {
+		log.Printf("Warning: Failed to load energy shields: %v", err)
+	}
+
+	// Load global tuning values (G1)
+	if err := LoadGlobalTuningValues(); err != nil {
+		log.Printf("Warning: Failed to load global tuning values: %v", err)
+	}
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

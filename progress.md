@@ -147,6 +147,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **F5: Load perk data from ItemIDTable**: LoadPerks() loads 12 perks from itemCatalog entries with "/Perk/" in AssetPath, with automatic category extraction (COM, ENG, NAV, WPN) and cross-referencing
 - [x] **F6: Wire perks into tech tree**: Modified starterModuleUIDataSeeds() to include all 12 perks in tech tree module UI data, making them available in the tech tree interface
 - [x] **F7: Comprehensive validation**: TestF7Verify21OfficersLoad verifies 21 officers load, TestF7ValidateTriggerTypes validates trigger types across all officers
+
+## PHASE 7: ENERGY SHIELDS & GLOBAL TUNING ✅ DONE 2026-07-05
+- [x] **G1: Define Go structs**: EnergyShield struct (m_staticMesh, m_damageModifier, m_damagePassThrough) and GlobalTuningValue struct (m_rangeToViewTargetMarkerForClassReveal, m_projectileCloseInProjectileSpeedModifier, m_afkTimer) with metadata and accessor functions
+- [x] **G1: Load data**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json, LoadGlobalTuningValues() loads 1 value from DN_GlobalTuningValues_DT.json
+- [x] **G1: Integration**: Added to dreadgameconfig initialization sequence with proper error handling
+- [x] **G1: Accessor functions**: EnergyShieldByName, AllEnergyShields, EnergyShieldCount, EnergyShieldsForShipClass, GlobalTuningByName, AllGlobalTuningValues, convenience getters
+- [x] **G1: Ship class extraction**: extractShipClassFromShieldName handles all shield naming patterns including Dreadnought special case
+- [x] **G1: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
