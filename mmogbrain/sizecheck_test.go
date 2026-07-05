@@ -27,7 +27,7 @@ var targetSizes = map[string]int{
 	"YA_FleetEligibility":          305,
 	"YA_Tune":                      579,
 	"YA_GetSeasonData":             1080,
-	"YA_PlayerGet":                 4848,
+	"YA_PlayerGet":                 11387,
 	"YA_PlayerFleets":              2101,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,
@@ -122,7 +122,7 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 	}
 	minReductions := map[string]int{
 		"YA_RequestStaticFleetData": 30000,
-		"YA_PlayerGet":              45000,
+		"YA_PlayerGet":              44628,
 		"YA_PlayerFleets":           900,
 	}
 

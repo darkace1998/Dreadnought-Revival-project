@@ -735,6 +735,16 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
+	// F3: Wire officer data into YA_PlayerGet Officers array
+	for _, officer := range dreadconfig.AllOfficers() {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "m_enabling", officer.Enabling)
+		b = protocol.AppendStringField(b, "m_triggers", officer.Triggers)
+		b = protocol.AppendStringField(b, "m_effects", officer.Effects)
+		b = protocol.AppendBoolField(b, "m_stackOnAdding", officer.StackOnAdding)
+		b = protocol.AppendBoolField(b, "m_isPerkFeat", officer.IsPerkFeat)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
 	for _, loadout := range state.shipLoadouts() {

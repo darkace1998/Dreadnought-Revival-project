@@ -126,7 +126,7 @@ type AbilityStats struct {
 	TargetLockRequired       bool `json:"m_targetLockRequired"`
 	
 	// Warp and movement
-	WarpOnDirection      string  `json:"m_warpOnDirection"`
+	WarpOnDirection      bool    `json:"m_warpOnDirection"`
 	WarpWarmUpTime       float64 `json:"m_warpWarmUpTime"`
 	
 	// Boost and scaling
