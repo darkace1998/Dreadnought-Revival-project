@@ -415,6 +415,11 @@ func init() {
 		wireAbilityStatsToItems()
 	}
 	
+	// Load officers data (F2)
+	if err := LoadOfficers(); err != nil {
+		log.Printf("Warning: Failed to load officers: %v", err)
+	}
+	
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

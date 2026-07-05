@@ -139,6 +139,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **Integration**: Added to dreadgameconfig initialization sequence with graceful fallback
 - [x] **Comprehensive testing**: Struct validation, loading, access patterns, type categorization, count verification, cross-referencing, wiring validation, and E5 integration tests
 
+## PHASE 6: OFFICERS & PERKS ✅ DONE 2026-07-05
+- [x] **F1: OfficerCard struct**: Matches DN_Officers_OTS_DT.json fields (m_enabling, m_triggers, m_effects, m_stackOnAdding, m_isPerkFeat) with additional metadata (OfficerID, OfficerName, AssetPath, Rarity, ParsedEffects)
+- [x] **F2: Load officers table**: LoadOfficers() loads 21 rows from DN_Officers_OTS_DT.json with ItemIDRegister cross-referencing
+- [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
+- [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
+- [x] **Integration**: Added to dreadgameconfig initialization sequence
+- [x] **Comprehensive testing**: Struct validation, loading, access patterns, DSL parsing validation
+
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
 - [ ] **Remaining YA_* handlers**: ~15 less common request types
 - [ ] **Server→Client notifications**: achievements, status, presence
