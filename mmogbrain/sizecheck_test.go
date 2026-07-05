@@ -21,7 +21,7 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":            855,
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           233,
-	"YA_GetTechTree":               26289,
+	"YA_GetTechTree":               33717,
 	"YA_GetPlayerProgression":      1035,
 	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,

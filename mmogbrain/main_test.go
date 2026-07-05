@@ -563,6 +563,50 @@ func TestTechTreeModuleUIDataIncludesStarterItems(t *testing.T) {
 	}
 }
 
+// TestF6WirePerksIntoTechTree tests that perks are wired into tech tree (F6)
+func TestF6WirePerksIntoTechTree(t *testing.T) {
+	// F6: Wire perks into tech tree and store catalog
+	payload := buildMmogTechTreePayload()
+
+	moduleUiData := extractNamedMmogArray(t, payload, "moduleUiData")
+	if len(moduleUiData) == 0 {
+		t.Fatal("YA_GetTechTree missing moduleUiData array")
+	}
+
+	// Check that perk items are included in the module UI data
+	// We know from F5 that we have perks loaded
+	perkCount := dreadconfig.PerkCount()
+	if perkCount == 0 {
+		t.Fatal("No perks loaded, cannot test F6")
+	}
+
+	// Check that the seeds include perks
+	seeds := starterModuleUIDataSeeds()
+	perkFoundInSeeds := false
+	for _, seed := range seeds {
+		// Check if this seed's itemID corresponds to a perk
+		if _, exists := dreadconfig.PerkByID(seed.itemID); exists {
+			perkFoundInSeeds = true
+			break
+		}
+	}
+
+	if !perkFoundInSeeds {
+		t.Fatal("F6: Expected to find perks in starterModuleUIDataSeeds")
+	}
+
+	// Count how many perks are in the seeds
+	perkCountInSeeds := 0
+	for _, seed := range seeds {
+		if _, exists := dreadconfig.PerkByID(seed.itemID); exists {
+			perkCountInSeeds++
+		}
+	}
+
+	t.Logf("✅ F6: Found %d perks in tech tree moduleUiData seeds out of %d total perks", perkCountInSeeds, perkCount)
+	t.Logf("✅ F6: Perks successfully wired into tech tree")
+}
+
 func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	const pid = defaultMmogPlayerPID
 

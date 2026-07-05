@@ -145,6 +145,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **F3: Wire officer data into YA_PlayerGet**: Replaced empty Officers array with actual officer data (m_enabling, m_triggers, m_effects, m_stackOnAdding, m_isPerkFeat) for all 21 officers
 - [x] **F4: Define Go struct `Perk`**: Perk struct with DataTable fields (m_enabling, m_triggers, m_effects, m_stackOnAdding, m_isPerkFeat) plus metadata (PerkID, PerkName, AssetPath, Category) and parsed DSL effects
 - [x] **F5: Load perk data from ItemIDTable**: LoadPerks() loads 12 perks from itemCatalog entries with "/Perk/" in AssetPath, with automatic category extraction (COM, ENG, NAV, WPN) and cross-referencing
+- [x] **F6: Wire perks into tech tree**: Modified starterModuleUIDataSeeds() to include all 12 perks in tech tree module UI data, making them available in the tech tree interface
 - [x] **F7: Comprehensive validation**: TestF7Verify21OfficersLoad verifies 21 officers load, TestF7ValidateTriggerTypes validates trigger types across all officers
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()

@@ -174,6 +174,25 @@ func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
 	loadouts := starterShipLoadouts()
 	seen := make(map[int32]int)
 	seeds := make([]mmogModuleUIDataSeed, 0, len(loadouts)*6)
+	
+	// F6: Wire perks into tech tree - add perk items to module UI data
+	// Load all perks and add them to the seeds
+	for _, perk := range dreadconfig.AllPerks() {
+		if perk.PerkID == 0 {
+			continue
+		}
+		if _, exists := seen[perk.PerkID]; exists {
+			continue
+		}
+		seen[perk.PerkID] = len(seeds)
+		seeds = append(seeds, mmogModuleUIDataSeed{
+			itemID:   perk.PerkID,
+			index:    int32(len(seeds)),
+			owned:    true,
+			equipped: false, // Perks are not equipped by default
+		})
+	}
+	
 	for _, loadout := range loadouts {
 		for _, slot := range loadout.loadoutSlots() {
 			if slot.itemID == 0 {
