@@ -151,7 +151,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 ## PHASE 7: ENERGY SHIELDS & GLOBAL TUNING ✅ DONE 2026-07-05
 - [x] **G1: Define Go structs**: EnergyShieldStats struct (m_staticMesh, m_damageModifier, m_damagePassThrough) and GlobalTuning struct (m_rangeToViewTargetMarkerForClassReveal, m_projectileCloseInProjectileSpeedModifier, m_afkTimer) with metadata and accessor functions
 - [x] **G2: Load energy shields table**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json with per-class shield damage modifiers and pass-through factors
-- [x] **G3: Define Go struct**: GlobalTuning struct matching DN_GlobalTuningValues_DT.json fields (AFK timer, projectile speed modifier, reveal range)
+- [x] **G3: Define Go struct `GlobalTuning`**: GlobalTuning struct matching DN_GlobalTuningValues_DT.json fields (AFK timer, projectile speed modifier, reveal range) with metadata and accessor functions
 - [x] **G4: Load global tuning table**: LoadGlobalTuningValues() loads 1 value from DN_GlobalTuningValues_DT.json
 - [x] **G1: Integration**: Added to dreadgameconfig initialization sequence with proper error handling
 - [x] **G1: Accessor functions**: EnergyShieldByName, AllEnergyShields, EnergyShieldCount, EnergyShieldsForShipClass, GlobalTuningByName, AllGlobalTuningValues, convenience getters

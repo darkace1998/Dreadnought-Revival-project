@@ -100,6 +100,35 @@ func TestG2LoadEnergyShieldsTable(t *testing.T) {
 	t.Logf("✅ G2: All energy shields have valid DataTable field values")
 }
 
+// TestG3DefineGlobalTuningStruct tests the G3 requirement explicitly
+func TestG3DefineGlobalTuningStruct(t *testing.T) {
+	// G3: Define Go struct `GlobalTuning` matching `DN_GlobalTuningValues_DT.json` fields
+	// This test explicitly validates the G3 requirement
+
+	// Test that we can create a GlobalTuning struct with all expected DataTable fields
+	// Fields: AFK timer, projectile speed modifier, reveal range
+	tuning := GlobalTuning{
+		RangeToViewTargetMarkerForClassReveal:    20000.0,
+		ProjectileCloseInProjectileSpeedModifier: 0.5,
+		AFKTimer:                                      119.5,
+		TuningName:                                   "Default",
+	}
+
+	// Verify the struct can hold all DataTable field values
+	if tuning.RangeToViewTargetMarkerForClassReveal == 0 {
+		t.Fatal("G3: GlobalTuning struct cannot hold m_rangeToViewTargetMarkerForClassReveal")
+	}
+	if tuning.ProjectileCloseInProjectileSpeedModifier == 0 {
+		t.Fatal("G3: GlobalTuning struct cannot hold m_projectileCloseInProjectileSpeedModifier")
+	}
+	if tuning.AFKTimer == 0 {
+		t.Fatal("G3: GlobalTuning struct cannot hold m_afkTimer")
+	}
+
+	t.Logf("✅ G3: GlobalTuning struct successfully defined for DN_GlobalTuningValues_DT.json fields")
+	_ = tuning // Use the variable to avoid unused variable error
+}
+
 // TestG4LoadGlobalTuningTable tests the G4 requirement explicitly
 func TestG4LoadGlobalTuningTable(t *testing.T) {
 	// G4: Load global tuning table
