@@ -433,6 +433,9 @@ func init() {
 		log.Printf("Warning: Failed to load global tuning values: %v", err)
 	}
 
+	// Load game balance config (G5)
+	LoadGameBalanceConfig()
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

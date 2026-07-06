@@ -153,10 +153,11 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **G2: Load energy shields table**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json with per-class shield damage modifiers and pass-through factors
 - [x] **G3: Define Go struct `GlobalTuning`**: GlobalTuning struct matching DN_GlobalTuningValues_DT.json fields (AFK timer, projectile speed modifier, reveal range) with metadata and accessor functions
 - [x] **G4: Load global tuning table**: LoadGlobalTuningValues() loads 1 value from DN_GlobalTuningValues_DT.json
+- [x] **G5: Expose tuning values**: Created GameBalanceConfig struct with AFKTimer, RangeToViewTargetMarkerForClassReveal, ProjectileCloseInProjectileSpeedModifier, and EnergyShieldModifiers by ship class. Added convenience getters: GetGameBalanceConfig(), GetAFKDuration(), GetRangeToViewTargetMarker(), GetProjectileCloseInSpeedModifier(), GetEnergyShieldModifier(), GetEnergyShieldDamageModifier(), GetEnergyShieldPassThrough()
 - [x] **G1: Integration**: Added to dreadgameconfig initialization sequence with proper error handling
 - [x] **G1: Accessor functions**: EnergyShieldByName, AllEnergyShields, EnergyShieldCount, EnergyShieldsForShipClass, GlobalTuningByName, AllGlobalTuningValues, convenience getters
 - [x] **G1: Ship class extraction**: extractShipClassFromShieldName handles all shield naming patterns including Dreadnought special case
-- [x] **G2-G4: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions, explicit G2 and G4 requirement validation
+- [x] **G2-G5: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions, explicit G2-G5 requirement validation
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
