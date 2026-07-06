@@ -166,6 +166,12 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H1: Accessor functions**: GetItemCategory, GetItemCategoryByID, GetItemIDsByCategory, GetCategoryForItemID, GetAllCategories, GetCategoryCount, GetTotalItemCount, GetCategoryItemCount, GetAllCategoryNames
 - [x] **H1: Comprehensive testing**: TestH1LoadItemIDTable, TestH1CategoryToItemIDMap, TestH1ItemIDToCategoryMap, TestH1CategoryCounts, TestH1KnownCategories
 - [x] **H1: Validation**: Verified 26 categories loaded with 3,497 total item IDs, all known categories present, bidirectional mappings working correctly
+- [x] **H2: Load ItemIDRegister**: LoadItemIDRegister() loads 3,086 entries from data/assets/ItemIDRegister.json into itemID→assetPath map with bidirectional lookup
+- [x] **H2: Data structure**: ItemRegistryEntry struct with ItemID, Path fields plus bidirectional mapping (itemID→path and path→itemID)
+- [x] **H2: Accessor functions**: GetItemRegistryEntry, GetAssetPathForItemID, GetItemIDForAssetPath, GetAllRegistryEntries, GetRegistryEntryCount, GetAllItemIDs, GetAllAssetPaths
+- [x] **H2: Search functions**: FindItemsByPathPrefix, FindItemsByPathContains for flexible asset discovery
+- [x] **H2: Comprehensive testing**: TestH2LoadItemIDRegister, TestH2ItemIDToAssetPathMap, TestH2AssetPathToItemIDMap, TestH2PathSearch, TestH2KnownItems
+- [x] **H2: Validation**: Verified 3,086 entries loaded, all bidirectional mappings consistent, all known items present, path search working
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
