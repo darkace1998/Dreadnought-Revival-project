@@ -781,3 +781,54 @@ func TestI2LoadoutCrossReferenceIntegration(t *testing.T) {
 		t.Log("  Note: No perk ItemIDs resolved - this may indicate a data version mismatch")
 	}
 }
+
+// TestI3DevLoadoutsWired tests that development loadouts are wired into the system
+func TestI3DevLoadoutsWired(t *testing.T) {
+	// Reset the singleton for testing
+	devLoadoutsOnce = sync.Once{}
+	devLoadouts = nil
+
+	// Load development loadouts
+	err := LoadDevLoadouts()
+	if err != nil {
+		t.Fatalf("Failed to load development loadouts: %v", err)
+	}
+
+	// Test DevLoadouts function
+	loadouts := DevLoadouts()
+	if len(loadouts) == 0 {
+		t.Error("Expected DevLoadouts() to return at least one loadout")
+	}
+	t.Logf("DevLoadouts() returned %d loadouts", len(loadouts))
+
+	// Test DevLoadoutByShipID function
+	if len(loadouts) > 0 {
+		shipID := loadouts[0].ShipID
+		loadout, exists := DevLoadoutByShipID(shipID)
+		if !exists {
+			t.Errorf("Expected DevLoadoutByShipID(%d) to return a loadout", shipID)
+		} else if loadout.ShipID != shipID {
+			t.Errorf("Expected DevLoadoutByShipID(%d) to return loadout with ShipID %d, got %d",
+				shipID, shipID, loadout.ShipID)
+		}
+	}
+
+	// Test DevLoadoutToStarterLoadout function
+	if len(loadouts) > 0 {
+		devLoadout := loadouts[0]
+		starterLoadout := DevLoadoutToStarterLoadout(devLoadout)
+		if starterLoadout.ShipID != devLoadout.ShipID {
+			t.Errorf("Expected DevLoadoutToStarterLoadout to preserve ShipID")
+		}
+		if starterLoadout.ShipName != devLoadout.Name {
+			t.Errorf("Expected DevLoadoutToStarterLoadout to map Name to ShipName")
+		}
+		if len(starterLoadout.Slots) == 0 {
+			t.Error("Expected DevLoadoutToStarterLoadout to create slots")
+		} else {
+			t.Logf("DevLoadoutToStarterLoadout created %d slots", len(starterLoadout.Slots))
+		}
+	}
+
+	t.Log("I3: Development loadouts are wired into the system")
+}

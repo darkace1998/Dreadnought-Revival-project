@@ -563,6 +563,11 @@ func starterShipLoadouts() []mmogShipLoadoutSeed {
 			perkIDs:           identity.perks,
 		})
 	}
+
+	// I3: Add development loadouts as precast loadout references
+	devLoadouts := developmentShipLoadouts()
+	loadouts = append(loadouts, devLoadouts...)
+
 	return loadouts
 }
 
@@ -586,6 +591,95 @@ func starterLoadoutIDs() []int32 {
 		ids = append(ids, loadout.loadoutID())
 	}
 	return ids
+}
+
+// developmentShipLoadouts returns development loadouts as mmogShipLoadoutSeed objects
+// I3: Wire into YA_PlayerFleets and YA_RequestStaticFleetData as precast loadout references
+func developmentShipLoadouts() []mmogShipLoadoutSeed {
+	// Load development loadouts
+	if err := dreadconfig.LoadDevLoadouts(); err != nil {
+		log.Printf("Warning: Failed to load development loadouts: %v", err)
+		return nil
+	}
+
+	devLoadouts := dreadconfig.DevLoadouts()
+	loadouts := make([]mmogShipLoadoutSeed, 0, len(devLoadouts))
+
+	for idx, devLoadout := range devLoadouts {
+		// Try to get ship data using starterBootstrapShipByID
+		ship, ok := starterBootstrapShipByID(devLoadout.ShipID)
+		if !ok {
+			// Skip development loadouts that don't have fleet ship data
+			// I3: For now, only include development loadouts with known fleet ship IDs
+			continue
+		}
+
+		// Create a native loadout ID from the DevLoadout ID
+		// The DevLoadout ID is a string like "Default__VH_SupportHeavy_Indrik_DevLoadout_BP_C"
+		// We'll use this as the nativeLoadoutID
+		nativeID := devLoadout.ID
+
+		// Create mmogShipLoadoutSeed
+		loadoutSeed := mmogShipLoadoutSeed{
+			ship:              ship,
+			fleetShipID:       devLoadout.ShipID, // Use ShipID as fleetShipID
+			precastLoadoutID:  0,                // Will be set later if needed
+			nativeLoadoutID:   nativeID,
+			loadoutIndex:      0,
+			loadoutName:       devLoadout.Name,
+			position:          int32(idx),
+			active:            true,
+			weaponPrimaryID:   devLoadout.WeaponPrimary,
+			weaponSecondaryID: devLoadout.WeaponSecondary,
+			abilityIDs: [4]int32{
+				devLoadout.AbilityPrimary,
+				devLoadout.AbilitySecondary,
+				devLoadout.AbilityPerimeter,
+				devLoadout.AbilityInternal,
+			},
+			perkIDs: [4]int32{
+				devLoadout.PerkCom,
+				devLoadout.PerkWeapon,
+				devLoadout.PerkNavigation,
+				devLoadout.PerkEngineer,
+			},
+		}
+
+		// Filter out invalid ItemIDs (0 or -1) from ability and perk arrays
+		// For abilities
+		validAbilities := [4]int32{}
+		abilityIndex := 0
+		for _, abilityID := range loadoutSeed.abilityIDs {
+			if abilityID != 0 && abilityID != -1 && abilityIndex < 4 {
+				validAbilities[abilityIndex] = abilityID
+				abilityIndex++
+			}
+		}
+		loadoutSeed.abilityIDs = validAbilities
+
+		// For perks
+		validPerks := [4]int32{}
+		perkIndex := 0
+		for _, perkID := range loadoutSeed.perkIDs {
+			if perkID != 0 && perkID != -1 && perkIndex < 4 {
+				validPerks[perkIndex] = perkID
+				perkIndex++
+			}
+		}
+		loadoutSeed.perkIDs = validPerks
+
+		// Handle weapon slots
+		if loadoutSeed.weaponPrimaryID == 0 || loadoutSeed.weaponPrimaryID == -1 {
+			loadoutSeed.weaponPrimaryID = 0
+		}
+		if loadoutSeed.weaponSecondaryID == 0 || loadoutSeed.weaponSecondaryID == -1 {
+			loadoutSeed.weaponSecondaryID = 0
+		}
+
+		loadouts = append(loadouts, loadoutSeed)
+	}
+
+	return loadouts
 }
 
 type mmogInventoryItemSeed struct {

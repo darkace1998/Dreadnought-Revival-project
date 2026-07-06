@@ -644,12 +644,48 @@ func StarterInventoryLoadoutByShipName(shipName string) (StarterLoadout, bool) {
 	return cloneStarterLoadout(loadout), true
 }
 
-func MustStarterInventoryLoadoutByShipName(shipName string) StarterLoadout {
-	loadout, ok := StarterInventoryLoadoutByShipName(shipName)
-	if !ok {
-		panic(fmt.Sprintf("missing starter loadout for ship %q", shipName))
+// DevLoadouts returns all development loadouts from LoadoutDevelopmentTable
+// I3: Wire into YA_PlayerFleets and YA_RequestStaticFleetData as precast loadout references
+func DevLoadouts() []DevLoadout {
+	return GetAllDevLoadouts()
+}
+
+// DevLoadoutByShipID returns the development loadout for a specific ship
+// I3: Wire into YA_PlayerFleets and YA_RequestStaticFleetData as precast loadout references
+func DevLoadoutByShipID(shipID int32) (*DevLoadout, bool) {
+	return GetDevLoadoutByShipID(shipID)
+}
+
+// DevLoadoutToStarterLoadout converts a DevLoadout to a StarterLoadout for use with existing fleet logic
+// I3: Wire into YA_PlayerFleets and YA_RequestStaticFleetData as precast loadout references
+func DevLoadoutToStarterLoadout(devLoadout DevLoadout) StarterLoadout {
+	slots := []LoadoutSlot{
+		{SlotName: SlotWeaponPrimary, ItemID: devLoadout.WeaponPrimary},
+		{SlotName: SlotWeaponSecondary, ItemID: devLoadout.WeaponSecondary},
+		{SlotName: SlotAbilityPrimary, ItemID: devLoadout.AbilityPrimary},
+		{SlotName: SlotAbilitySecondary, ItemID: devLoadout.AbilitySecondary},
+		{SlotName: SlotAbilityPerimeter, ItemID: devLoadout.AbilityPerimeter},
+		{SlotName: SlotAbilityInternal, ItemID: devLoadout.AbilityInternal},
+		{SlotName: SlotPerkCom, ItemID: devLoadout.PerkCom},
+		{SlotName: SlotPerkWeapon, ItemID: devLoadout.PerkWeapon},
+		{SlotName: SlotPerkNavigation, ItemID: devLoadout.PerkNavigation},
+		{SlotName: SlotPerkEngineer, ItemID: devLoadout.PerkEngineer},
 	}
-	return loadout
+
+	// Filter out slots with ItemID 0 or -1
+	var validSlots []LoadoutSlot
+	for _, slot := range slots {
+		if slot.ItemID != 0 && slot.ItemID != -1 {
+			validSlots = append(validSlots, slot)
+		}
+	}
+
+	return StarterLoadout{
+		ShipName:  devLoadout.Name,
+		ShipID:    devLoadout.ShipID,
+		LoadoutID: 0, // Will be set later if needed
+		Slots:     validSlots,
+	}
 }
 
 func StarterInventoryShipIDs() []int32 {

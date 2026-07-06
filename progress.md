@@ -222,15 +222,18 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
 - [x] **Comprehensive testing**: Struct validation, loading, access patterns, DSL parsing, count verification, trigger type validation
 
-## PHASE 9: LOADOUT DEVELOPMENT TABLE ✅ IN PROGRESS 2026-07-06
+## PHASE 9: LOADOUT DEVELOPMENT TABLE ✅ IN PROGRESS 2026-07-07
 - [x] **I1: Define Go struct `DevLoadout`**: DevLoadout struct with ShipID, Name, Class, weapon/ability/perk slot ItemIDs, and DisplayInfo fields
 - [x] **I1: Load development loadouts**: LoadDevLoadouts() loads 137 hero ship loadouts from data/loadouts/LoadoutDevelopmentTable.json
 - [x] **I1: Accessor functions**: GetAllDevLoadouts, GetDevLoadoutByShipID, GetDevLoadoutByID, GetDevLoadoutCount, GetAllDevLoadoutShipIDs, HasDevLoadout, GetDevLoadoutsByClass
 - [x] **I1: Comprehensive testing**: TestI1LoadDevLoadouts, TestI1DevLoadoutStructure, TestI1DevLoadoutAccessors, TestI1DevLoadoutSlotItemIDs, TestI1DevLoadoutShipIDUniqueness, TestI1DevLoadoutClassDistribution, TestI1DevLoadoutCrossReference
 - [x] **I1: Validation**: Verified 137 loadouts loaded with 136 unique ShipIDs, 15 ship classes represented, slot coverage: WeaponPrimary 100%, AbilityPrimary 100%, PerkCom 89.1%
 - [x] **I1: Integration**: Added to dreadgameconfig initialization sequence
-- [ ] **I2**: Cross-reference loadout slot ItemIDs with weapon/ability/perk data from phases B/E
-- [ ] **I3**: Wire into `YA_PlayerFleets` and `YA_RequestStaticFleetData` as precast loadout references
+- [x] **I2: Cross-reference loadout slot ItemIDs with weapon/ability/perk data**: Added ValidateLoadoutSlots(), ValidateAllLoadoutSlots(), GetLoadoutSlotValidationSummary() functions with comprehensive validation
+- [x] **I2: Comprehensive testing**: TestI2LoadoutSlotCrossReference, TestI2ValidateAllLoadoutSlots, TestI2LoadoutCrossReferenceIntegration - all passing
+- [x] **I2: Validation results**: 159 weapons loaded, 1104 abilities loaded, 12 perks loaded; 147 unique weapon ItemIDs, 441 unique ability ItemIDs, 34 unique perk ItemIDs in loadouts
+- [x] **I3: Wire into YA_PlayerFleets and YA_RequestStaticFleetData as precast loadout references**: Added DevLoadouts(), DevLoadoutByShipID(), DevLoadoutToStarterLoadout() functions in dreadgameconfig; added developmentShipLoadouts() function in mmogbrain; modified starterShipLoadouts() to include development loadouts
+- [x] **I3: Integration**: Development loadouts now available as precast loadout references in fleet data
 - [ ] **I4**: Add tests — verify loadout count, validate slot ItemIDs resolve to known items
 
 ## PHASE 7: COMPLETENESS ✅ DONE 2026-07-04
