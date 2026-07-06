@@ -477,6 +477,9 @@ func init() {
 	// H6: Verify all hardcoded items resolve correctly via the new loader
 	VerifyAllHardcodedItems()
 
+	// H7: Validate asset tables - verify item counts per category, validate ID→path mappings
+	ValidateAssetTables()
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

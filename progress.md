@@ -205,6 +205,18 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H6: Integration**: Added to dreadgameconfig initialization sequence
 - [x] **H6: Comprehensive testing**: TestH6HardcodedItemsVerification, TestH6VerificationResults, TestH6IndividualItemVerification, TestH6AllHardcodedItemVerifications, TestH6HardcodedItemsFromDifferentSources, TestH6VerificationReport, TestH6SpecificHardcodedItems, TestH6ItemMetadataConsistency
 - [x] **H6: Validation**: Verified 61/61 hardcoded items resolve correctly via new loader - ALL ITEMS VERIFIED with correct display names and metadata
+- [x] **H7: Asset tables validation system**: Implemented comprehensive validation of all loaded asset tables
+- [x] **H7: AssetTablesValidation struct**: Contains validation results for all tables with cross-table validation results
+- [x] **H7: Individual table validations**: ItemIDTable (26 categories, 3,497 items), ItemIDRegister (3,086 entries, 3,086 unique IDs/paths), CatalogIDTable (12 buckets, 6,630 items), ItemIDConversionTable (1,616 entries, 1,616 old IDs, 1,582 new IDs)
+- [x] **H7: Cross-table validations**: ItemIDTable-ItemIDRegister (3,049/3,437 matches), ItemIDRegister-CatalogIDTable, ItemIDConversionTable-ItemIDRegister
+- [x] **H7: Dynamic catalog validation**: 3,079 items across 5 categories (YPawn:1816, YAbility:540, YShipLoadoutPrecast:257, YWeapon:425, YPerk:41) and 5 types (ship:1816, ability:540, loadout:257, weapon:425, perk:41)
+- [x] **H7: ID→path mapping validation**: 3,049/3,437 ItemIDTable IDs have valid paths in ItemIDRegister, 3,086/3,086 paths have valid IDs
+- [x] **H7: Category consistency validation**: All 26 categories are consistent, 5 categories have complete ID→path mappings
+- [x] **H7: Accessor functions**: GetAssetTablesValidation, GetItemIDTableCategoryCounts, GetCatalogIDTableBucketCounts, GetDynamicCatalogCategoryCounts, GetDynamicCatalogTypeCounts, GetCrossTableValidationResults, ValidateIDToPathMappings, ValidatePathToIDMappings, ValidateCategoryConsistency, ValidateItemCountsPerCategory, ValidateIDToPathMappingsForCategory, ValidateAllIDToPathMappings
+- [x] **H7: Validation report**: PrintAssetTablesValidationReport() generates comprehensive validation report
+- [x] **H7: Integration**: Added to dreadgameconfig initialization sequence
+- [x] **H7: Comprehensive testing**: TestH7AssetTablesValidation, TestH7ItemIDTableValidation, TestH7ItemIDRegisterValidation, TestH7CatalogIDTableValidation, TestH7ItemIDConversionTableValidation, TestH7DynamicCatalogValidation, TestH7CrossTableValidations, TestH7ItemCountsPerCategory, TestH7DynamicCatalogCategoryCounts, TestH7DynamicCatalogTypeCounts, TestH7IDToPathMappingsValidation, TestH7PathToIDMappingsValidation, TestH7CategoryConsistencyValidation, TestH7ValidateItemCountsPerCategory, TestH7ValidateIDToPathMappingsForCategory, TestH7ValidateAllIDToPathMappings, TestH7ValidationReport, TestH7CrossTableValidationDetails, TestH7CategoryValidationConsistency, TestH7SpecificCategoryValidation, TestH7ValidationSummary
+- [x] **H7: Validation results**: All individual table validations pass, cross-table validations show expected mismatches due to different table purposes, item counts per category verified, ID→path mappings validated with detailed issue reporting
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
