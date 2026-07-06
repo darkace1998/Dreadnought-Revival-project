@@ -178,6 +178,14 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H3: Search functions**: FindCatalogItemsByName for case-insensitive bucket name search, GetCatalogBucketsForItemIDs for multi-ID lookup
 - [x] **H3: Comprehensive testing**: TestH3LoadCatalogIDTable, TestH3CatalogBucketAccess, TestH3CatalogBucketItemCounts, TestH3AllCatalogBuckets, TestH3CatalogBucketNames, TestH3CatalogItemIDs, TestH3ItemIDInCatalog, TestH3CatalogSearch, TestH3CatalogBucketsForItemIDs, TestH3DataConsistency
 - [x] **H3: Validation**: Verified 12 catalog buckets loaded (Bundles:59, Captain Vanity:1856, Coatings Collection:78, Code Redemptions:30, Decals Collection:86, Emblems Collection:25, GP to CR:8, Heroships:46, Modules:1163, Patterns Collection:7, Weapons:140, un_typed:3132), all 6,630 item IDs unique, mixed int64/string ID types handled correctly
+- [x] **H4: Load ItemIDConversionTable**: LoadItemIDConversionTable() loads 1,616 conversion entries from data/assets/ItemIDConversionTable.json into oldItemID→newItemID map
+- [x] **H4: Data structure**: ItemIDConversionEntry struct with Name, Asset, OldItemID, NewItemID fields; bidirectional mappings (old→new and new→old)
+- [x] **H4: Accessor functions**: GetItemIDConversionEntry, GetItemIDConversionEntryByNewID, ConvertOldToNewItemID, ConvertNewToOldItemID, GetAllItemIDConversionEntries, GetItemIDConversionEntryCount, GetAllOldItemIDs, GetAllNewItemIDs
+- [x] **H4: Search functions**: FindConversionEntriesByName, FindConversionEntriesByAsset for flexible lookup
+- [x] **H4: Batch functions**: BatchConvertOldToNewItemIDs, BatchConvertNewToOldItemIDs for bulk conversions
+- [x] **H4: Validation functions**: IsOldItemIDInConversionTable, IsNewItemIDInConversionTable
+- [x] **H4: Comprehensive testing**: TestH4LoadItemIDConversionTable, TestH4ConversionEntryAccess, TestH4ConversionByNewID, TestH4DirectConversion, TestH4AllConversionEntries, TestH4AllItemIDs, TestH4ConversionSearch, TestH4BatchConversion, TestH4ExistenceChecks, TestH4DataConsistency, TestH4KnownConversions
+- [x] **H4: Validation**: Verified 1,616 entries loaded, 1,616 unique old IDs, 1,582 unique new IDs (some shared), handles invalid entries (-1) and mapping inconsistencies (34 cases of multiple old IDs mapping to same new ID)
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
