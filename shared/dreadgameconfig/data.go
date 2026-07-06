@@ -480,6 +480,11 @@ func init() {
 	// H7: Validate asset tables - verify item counts per category, validate ID→path mappings
 	ValidateAssetTables()
 
+	// I1: Load development loadouts from LoadoutDevelopmentTable.json
+	if err := LoadDevLoadouts(); err != nil {
+		log.Printf("Warning: Failed to load development loadouts: %v", err)
+	}
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	
