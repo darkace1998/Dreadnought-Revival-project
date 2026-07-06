@@ -172,6 +172,12 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H2: Search functions**: FindItemsByPathPrefix, FindItemsByPathContains for flexible asset discovery
 - [x] **H2: Comprehensive testing**: TestH2LoadItemIDRegister, TestH2ItemIDToAssetPathMap, TestH2AssetPathToItemIDMap, TestH2PathSearch, TestH2KnownItems
 - [x] **H2: Validation**: Verified 3,086 entries loaded, all bidirectional mappings consistent, all known items present, path search working
+- [x] **H3: Load CatalogIDTable**: LoadCatalogIDTable() loads 6,630 catalog IDs across 12 buckets from data/assets/CatalogIDTable.json
+- [x] **H3: Data structure**: CatalogBucket struct with BucketName, ItemIDs ([]CatalogItemID), TypeID, ItemCount fields; CatalogItemID handles both int64 and string IDs
+- [x] **H3: Accessor functions**: GetCatalogBucket, GetCatalogBucketByItemID, GetAllCatalogBuckets, GetAllCatalogBucketNames, GetCatalogBucketCount, GetCatalogTotalItemCount, GetCatalogItemCount, GetCatalogItemIDs
+- [x] **H3: Search functions**: FindCatalogItemsByName for case-insensitive bucket name search, GetCatalogBucketsForItemIDs for multi-ID lookup
+- [x] **H3: Comprehensive testing**: TestH3LoadCatalogIDTable, TestH3CatalogBucketAccess, TestH3CatalogBucketItemCounts, TestH3AllCatalogBuckets, TestH3CatalogBucketNames, TestH3CatalogItemIDs, TestH3ItemIDInCatalog, TestH3CatalogSearch, TestH3CatalogBucketsForItemIDs, TestH3DataConsistency
+- [x] **H3: Validation**: Verified 12 catalog buckets loaded (Bundles:59, Captain Vanity:1856, Coatings Collection:78, Code Redemptions:30, Decals Collection:86, Emblems Collection:25, GP to CR:8, Heroships:46, Modules:1163, Patterns Collection:7, Weapons:140, un_typed:3132), all 6,630 item IDs unique, mixed int64/string ID types handled correctly
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence

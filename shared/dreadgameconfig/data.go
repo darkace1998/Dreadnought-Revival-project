@@ -446,6 +446,11 @@ func init() {
 		log.Printf("Warning: Failed to load ItemIDRegister: %v", err)
 	}
 
+	// Load CatalogIDTable (H3)
+	if err := LoadCatalogIDTable(); err != nil {
+		log.Printf("Warning: Failed to load CatalogIDTable: %v", err)
+	}
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	
