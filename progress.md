@@ -186,6 +186,16 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H4: Validation functions**: IsOldItemIDInConversionTable, IsNewItemIDInConversionTable
 - [x] **H4: Comprehensive testing**: TestH4LoadItemIDConversionTable, TestH4ConversionEntryAccess, TestH4ConversionByNewID, TestH4DirectConversion, TestH4AllConversionEntries, TestH4AllItemIDs, TestH4ConversionSearch, TestH4BatchConversion, TestH4ExistenceChecks, TestH4DataConsistency, TestH4KnownConversions
 - [x] **H4: Validation**: Verified 1,616 entries loaded, 1,616 unique old IDs, 1,582 unique new IDs (some shared), handles invalid entries (-1) and mapping inconsistencies (34 cases of multiple old IDs mapping to same new ID)
+- [x] **H5: Replace hardcoded itemCatalog**: Built dynamic item catalog from loaded asset tables (ItemIDTable, ItemIDRegister, CatalogIDTable, ItemIDConversionTable)
+- [x] **H5: DynamicItemCatalog struct**: Contains ItemsByID, ItemsByAssetPath, ItemsByTypeAndName maps and AllItems slice
+- [x] **H5: BuildDynamicItemCatalog()**: Creates catalog with 3,079 items from loaded tables, with fallback to hardcoded items for backward compatibility
+- [x] **H5: Display name extraction**: Uses known name mappings for ships, loadouts, weapons, abilities, perks; falls back to asset path parsing for unknown items
+- [x] **H5: Category determination**: Maps asset paths to categories (YPawn, YWeapon, YAbility, YPerk, YShipLoadoutPrecast)
+- [x] **H5: Item type determination**: Maps categories to item types (ship, weapon, ability, perk, loadout)
+- [x] **H5: Integration**: Modified init() to use dynamic catalog when available, falls back to hardcoded catalog
+- [x] **H5: Accessor functions**: GetDynamicItemCatalog, GetDynamicItemByID, GetDynamicItemByAssetPath, GetDynamicItemByTypeAndName, GetAllDynamicItems, GetDynamicItemCount
+- [x] **H5: Comprehensive testing**: TestH5DynamicItemCatalog, TestH5DynamicItemCatalogReplacesHardcoded, TestH5DynamicItemAccess, TestH5DynamicItemMetadata, TestH5HardcodedItemsInDynamicCatalog, TestH5DisplayNameExtraction, TestH5CategoryDetermination, TestH5ItemTypeDetermination, TestH5DynamicCatalogIntegration
+- [x] **H5: Validation**: All 61 hardcoded items found in dynamic catalog with correct display names, global item lookup functions work with dynamic catalog
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence

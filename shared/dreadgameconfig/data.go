@@ -381,10 +381,24 @@ var (
 )
 
 func init() {
-	itemsByID = make(map[int32]ItemMetadata, len(itemCatalog))
-	itemsByAssetPath = make(map[string]ItemMetadata, len(itemCatalog))
-	itemsByTypeAndName = make(map[string]ItemMetadata, len(itemCatalog))
-	for _, item := range itemCatalog {
+	// H5: Use dynamic item catalog if available, otherwise fall back to hardcoded
+	var catalogItems []ItemMetadata
+	
+	// Try to build dynamic catalog - this will load all required tables
+	dynamicCatalog := BuildDynamicItemCatalog()
+	if dynamicCatalog != nil && len(dynamicCatalog.AllItems) > 0 {
+		catalogItems = dynamicCatalog.AllItems
+		log.Printf("Using dynamic item catalog with %d items", len(catalogItems))
+	} else {
+		// Fall back to hardcoded catalog
+		catalogItems = itemCatalog
+		log.Printf("Using hardcoded item catalog with %d items", len(catalogItems))
+	}
+
+	itemsByID = make(map[int32]ItemMetadata, len(catalogItems))
+	itemsByAssetPath = make(map[string]ItemMetadata, len(catalogItems))
+	itemsByTypeAndName = make(map[string]ItemMetadata, len(catalogItems))
+	for _, item := range catalogItems {
 		if _, exists := itemsByID[item.ItemID]; exists {
 			panic(fmt.Sprintf("duplicate dreadgame item id %d", item.ItemID))
 		}
@@ -455,6 +469,10 @@ func init() {
 	if err := LoadItemIDConversionTable(); err != nil {
 		log.Printf("Warning: Failed to load ItemIDConversionTable: %v", err)
 	}
+
+	// H5: Build dynamic item catalog from loaded asset tables
+	// This replaces the hardcoded itemCatalog with data from loaded tables
+	BuildDynamicItemCatalog()
 
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
