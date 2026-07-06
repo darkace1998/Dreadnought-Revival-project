@@ -436,6 +436,11 @@ func init() {
 	// Load game balance config (G5)
 	LoadGameBalanceConfig()
 
+	// Load ItemIDTable (H1)
+	if err := LoadItemIDTable(); err != nil {
+		log.Printf("Warning: Failed to load ItemIDTable: %v", err)
+	}
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

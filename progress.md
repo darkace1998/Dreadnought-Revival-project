@@ -148,7 +148,7 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **F6: Wire perks into tech tree**: Modified starterModuleUIDataSeeds() to include all 12 perks in tech tree module UI data, making them available in the tech tree interface
 - [x] **F7: Comprehensive validation**: TestF7Verify21OfficersLoad verifies 21 officers load, TestF7ValidateTriggerTypes validates trigger types across all officers
 
-## PHASE 7: ENERGY SHIELDS & GLOBAL TUNING ✅ DONE 2026-07-05
+## PHASE 7: ENERGY SHIELDS & GLOBAL TUNING ✅ DONE 2026-07-06
 - [x] **G1: Define Go structs**: EnergyShieldStats struct (m_staticMesh, m_damageModifier, m_damagePassThrough) and GlobalTuning struct (m_rangeToViewTargetMarkerForClassReveal, m_projectileCloseInProjectileSpeedModifier, m_afkTimer) with metadata and accessor functions
 - [x] **G2: Load energy shields table**: LoadEnergyShields() loads 18 shields from EnergyShields_DT.json with per-class shield damage modifiers and pass-through factors
 - [x] **G3: Define Go struct `GlobalTuning`**: GlobalTuning struct matching DN_GlobalTuningValues_DT.json fields (AFK timer, projectile speed modifier, reveal range) with metadata and accessor functions
@@ -159,6 +159,13 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **G1: Accessor functions**: EnergyShieldByName, AllEnergyShields, EnergyShieldCount, EnergyShieldsForShipClass, GlobalTuningByName, AllGlobalTuningValues, convenience getters
 - [x] **G1: Ship class extraction**: extractShipClassFromShieldName handles all shield naming patterns including Dreadnought special case
 - [x] **G2-G6: Comprehensive testing**: Struct validation, loading, access patterns, ship class extraction, convenience functions, explicit G2-G6 requirement validation
+
+## PHASE 8: ASSET MANAGEMENT & ITEM REGISTRY ✅ DONE 2026-07-06
+- [x] **H1: Load ItemIDTable**: LoadItemIDTable() loads 3,497 item IDs across 26 categories from data/assets/ItemIDTable.json into category→itemID map with comprehensive accessor functions
+- [x] **H1: Data structure**: ItemCategory struct with CategoryName, CategoryID, ItemIDs fields plus bidirectional mapping (category→itemIDs and itemID→category)
+- [x] **H1: Accessor functions**: GetItemCategory, GetItemCategoryByID, GetItemIDsByCategory, GetCategoryForItemID, GetAllCategories, GetCategoryCount, GetTotalItemCount, GetCategoryItemCount, GetAllCategoryNames
+- [x] **H1: Comprehensive testing**: TestH1LoadItemIDTable, TestH1CategoryToItemIDMap, TestH1ItemIDToCategoryMap, TestH1CategoryCounts, TestH1KnownCategories
+- [x] **H1: Validation**: Verified 26 categories loaded with 3,497 total item IDs, all known categories present, bidirectional mappings working correctly
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
