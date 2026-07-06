@@ -474,6 +474,9 @@ func init() {
 	// This replaces the hardcoded itemCatalog with data from loaded tables
 	BuildDynamicItemCatalog()
 
+	// H6: Verify all hardcoded items resolve correctly via the new loader
+	VerifyAllHardcodedItems()
+
 	// E5: Wire ability stats into item metadata
 	wireAbilityStatsToItems()
 	

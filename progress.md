@@ -196,6 +196,15 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **H5: Accessor functions**: GetDynamicItemCatalog, GetDynamicItemByID, GetDynamicItemByAssetPath, GetDynamicItemByTypeAndName, GetAllDynamicItems, GetDynamicItemCount
 - [x] **H5: Comprehensive testing**: TestH5DynamicItemCatalog, TestH5DynamicItemCatalogReplacesHardcoded, TestH5DynamicItemAccess, TestH5DynamicItemMetadata, TestH5HardcodedItemsInDynamicCatalog, TestH5DisplayNameExtraction, TestH5CategoryDetermination, TestH5ItemTypeDetermination, TestH5DynamicCatalogIntegration
 - [x] **H5: Validation**: All 61 hardcoded items found in dynamic catalog with correct display names, global item lookup functions work with dynamic catalog
+- [x] **H6: Verify hardcoded items resolve correctly**: Implemented comprehensive verification system for all hardcoded items via new loader
+- [x] **H6: HardcodedItemsVerification struct**: Contains verification results with TotalItems, VerifiedItems, MissingItems counts and detailed item info
+- [x] **H6: HardcodedItemInfo struct**: Contains ItemID, DisplayName, ItemType, TableCategory, CatalogBucket, AssetPath, Source, Verified status, DynamicName
+- [x] **H6: VerifyAllHardcodedItems()**: Main verification function that checks all hardcoded items from itemCatalog and starterInventoryLoadouts against dynamic catalog
+- [x] **H6: Accessor functions**: GetHardcodedItemsVerification, GetHardcodedItemVerification, GetAllHardcodedItemVerifications, GetMissingHardcodedItems, GetHardcodedItemCount, GetVerifiedHardcodedItemCount, GetMissingHardcodedItemCount, IsAllHardcodedItemsVerified
+- [x] **H6: Verification report**: PrintHardcodedItemsVerificationReport() generates detailed verification report
+- [x] **H6: Integration**: Added to dreadgameconfig initialization sequence
+- [x] **H6: Comprehensive testing**: TestH6HardcodedItemsVerification, TestH6VerificationResults, TestH6IndividualItemVerification, TestH6AllHardcodedItemVerifications, TestH6HardcodedItemsFromDifferentSources, TestH6VerificationReport, TestH6SpecificHardcodedItems, TestH6ItemMetadataConsistency
+- [x] **H6: Validation**: Verified 61/61 hardcoded items resolve correctly via new loader - ALL ITEMS VERIFIED with correct display names and metadata
 - [x] **DSL parsing**: Reuses ParseFeatEffects() from ship feats for officer effect parsing
 - [x] **Accessor functions**: OfficerByID(id), OfficerByItemID(itemID), AllOfficers(), OfficerCount(), OfficerIDs()
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
