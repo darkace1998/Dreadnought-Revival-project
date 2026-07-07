@@ -437,6 +437,11 @@ func init() {
 	// Load perks data (F4)
 	LoadPerks()
 
+	// Load ranks data (J1)
+	if err := LoadRanks(); err != nil {
+		log.Printf("Warning: Failed to load ranks: %v", err)
+	}
+
 	// Load energy shields data (G1)
 	if err := LoadEnergyShields(); err != nil {
 		log.Printf("Warning: Failed to load energy shields: %v", err)

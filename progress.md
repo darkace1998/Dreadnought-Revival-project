@@ -222,7 +222,15 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **Integration**: Added to dreadgameconfig initialization sequence
 - [x] **Comprehensive testing**: Struct validation, loading, access patterns, DSL parsing, count verification, trigger type validation
 
-## PHASE 9: LOADOUT DEVELOPMENT TABLE ✅ COMPLETE 2026-07-07
+## PHASE 10: PROGRESSION TABLES ✅ IN PROGRESS 2026-07-07
+- [x] **J1: Load DN_Ranks_Player.json**: Define Rank struct with RankID and RankName fields; LoadRanks() loads 51 ranks from DN_Ranks_Player.json; AllRanks(), RankByID(), RankByName(), RankCount() accessor functions; RankXPThreshold() function with hardcoded thresholds (can be updated when proper data available)
+- [x] **J1: Comprehensive testing**: TestJ1LoadRanks, TestJ1RankStructure, TestJ1RankAccessorFunctions, TestJ1RankCountValidation, TestJ1RankXPThresholds - all passing
+- [x] **J1: Validation**: Verified 51 ranks loaded with IDs 0-50, all accessor functions working, XP thresholds validated
+- [x] **J1: Integration**: Added to dreadgameconfig initialization sequence
+- [ ] **J2**: Load DN_GameModifiers_DT.json — game mode tuning values
+- [ ] **J3**: Load DN_PlayerMatchStatistics_DT.json — match stat category definitions
+- [ ] **J4**: Verify rank names/thresholds match current hardcoded values
+- [ ] **J5**: Add tests — verify rank count, validate game modifier fields
 - [x] **I1: Define Go struct `DevLoadout`**: DevLoadout struct with ShipID, Name, Class, weapon/ability/perk slot ItemIDs, and DisplayInfo fields
 - [x] **I1: Load development loadouts**: LoadDevLoadouts() loads 137 hero ship loadouts from data/loadouts/LoadoutDevelopmentTable.json
 - [x] **I1: Accessor functions**: GetAllDevLoadouts, GetDevLoadoutByShipID, GetDevLoadoutByID, GetDevLoadoutCount, GetAllDevLoadoutShipIDs, HasDevLoadout, GetDevLoadoutsByClass
