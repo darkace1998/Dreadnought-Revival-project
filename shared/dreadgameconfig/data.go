@@ -447,6 +447,11 @@ func init() {
 		log.Printf("Warning: Failed to load game modifiers: %v", err)
 	}
 
+	// Load player match statistics data (J3)
+	if err := LoadPlayerMatchStatistics(); err != nil {
+		log.Printf("Warning: Failed to load player match statistics: %v", err)
+	}
+
 	// Load energy shields data (G1)
 	if err := LoadEnergyShields(); err != nil {
 		log.Printf("Warning: Failed to load energy shields: %v", err)

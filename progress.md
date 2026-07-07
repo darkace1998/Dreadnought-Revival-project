@@ -232,7 +232,12 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **J2: Comprehensive testing**: TestJ2LoadGameModifiers, TestJ2GameModifierStructure, TestJ2GameModifierAccessorFunctions, TestJ2GameModifierCountValidation, TestJ2GameModifierFeatsValidation, TestJ2GameModifierAffectedTeamValidation - all passing
 - [x] **J2: Validation**: Verified 2 game modifiers loaded (YGMT_TURBO_TDM with 3 feats, YGMT_TDM with 0 feats), all accessor functions working, feat parsing validated
 - [x] **J2: Integration**: Added to dreadgameconfig initialization sequence
-- [ ] **J3**: Load DN_PlayerMatchStatistics_DT.json — match stat category definitions
+- [x] **J3: Load DN_PlayerMatchStatistics_DT.json**: Define PlayerMatchStat struct with CategoryID, Name, Priority fields; LoadPlayerMatchStatistics() loads 15 stat categories from DN_PlayerMatchStatistics_DT.json; AllPlayerMatchStatistics(), PlayerMatchStatByID(), PlayerMatchStatByShortName(), PlayerMatchStatCount(), PlayerMatchStatPriorities(), PlayerMatchStatShortNames(), HasPlayerMatchStat() accessor functions
+- [x] **J3: Short name extraction**: Automatic extraction of short names from CategoryID (e.g., "EYPlayerMatchStatisticsCategoryID::YPMSCID_Assists" -> "Assists")
+- [x] **J3: Priority sorting**: Stats are sorted by priority in descending order for consistent display
+- [x] **J3: Comprehensive testing**: TestJ3LoadPlayerMatchStatistics, TestJ3PlayerMatchStatStructure, TestJ3PlayerMatchStatAccessorFunctions, TestJ3PlayerMatchStatCountValidation, TestJ3PlayerMatchStatShortNamesValidation, TestJ3PlayerMatchStatPrioritiesValidation, TestJ3PlayerMatchStatCategoryIDValidation - all passing
+- [x] **J3: Validation**: Verified 15 stat categories loaded with unique CategoryIDs and ShortNames, all accessor functions working, priority values validated
+- [x] **J3: Integration**: Added to dreadgameconfig initialization sequence
 - [ ] **J4**: Verify rank names/thresholds match current hardcoded values
 - [ ] **J5**: Add tests — verify rank count, validate game modifier fields
 - [x] **I1: Define Go struct `DevLoadout`**: DevLoadout struct with ShipID, Name, Class, weapon/ability/perk slot ItemIDs, and DisplayInfo fields
