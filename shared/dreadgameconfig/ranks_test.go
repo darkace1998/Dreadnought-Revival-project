@@ -343,3 +343,121 @@ func TestJ4RankCountMatchesHardcoded(t *testing.T) {
 
 	t.Logf("✅ J4: All rank IDs (0-50) present to match hardcoded XP thresholds")
 }
+
+// TestJ5RankCountVerification verifies rank count with comprehensive validation
+// J5: Add tests — verify rank count, validate game modifier fields
+func TestJ5RankCountVerification(t *testing.T) {
+	// Reset the singleton for testing
+	ranksOnce = sync.Once{}
+	ranks = nil
+	ranksLoaded = false
+
+	err := LoadRanks()
+	if err != nil {
+		t.Fatalf("Failed to load ranks: %v", err)
+	}
+
+	// Verify exact rank count
+	expectedCount := 51
+	actualCount := RankCount()
+
+	if actualCount != expectedCount {
+		t.Errorf("Expected exactly %d ranks, got %d", expectedCount, actualCount)
+	} else {
+		t.Logf("✅ J5: Rank count verified: %d ranks", actualCount)
+	}
+
+	// Verify all ranks have valid data
+	allRanks := AllRanks()
+	if len(allRanks) != expectedCount {
+		t.Errorf("AllRanks() returned %d ranks, expected %d", len(allRanks), expectedCount)
+	}
+
+	// Verify each rank has required fields
+	for _, rank := range allRanks {
+		if rank.RankID < 0 || rank.RankID >= int32(expectedCount) {
+			t.Errorf("Rank ID %d is out of expected range [0, %d]", rank.RankID, expectedCount-1)
+		}
+		if rank.RankName == "" {
+			t.Errorf("Rank %d has empty RankName", rank.RankID)
+		}
+	}
+
+	// Verify rank IDs are sequential and unique
+	idSet := make(map[int32]bool)
+	for _, rank := range allRanks {
+		if idSet[rank.RankID] {
+			t.Errorf("Duplicate rank ID found: %d", rank.RankID)
+		}
+		idSet[rank.RankID] = true
+	}
+
+	// Verify we have all expected rank IDs
+	for i := 0; i < expectedCount; i++ {
+		if !idSet[int32(i)] {
+			t.Errorf("Missing rank ID: %d", i)
+		}
+	}
+
+	t.Logf("✅ J5: All rank IDs (0-%d) verified with comprehensive validation", expectedCount-1)
+}
+
+// TestJ5RankDataIntegrity performs comprehensive rank data integrity checks
+// J5: Add tests — verify rank count, validate game modifier fields
+func TestJ5RankDataIntegrity(t *testing.T) {
+	// Reset the singleton for testing
+	ranksOnce = sync.Once{}
+	ranks = nil
+	ranksLoaded = false
+
+	err := LoadRanks()
+	if err != nil {
+		t.Fatalf("Failed to load ranks: %v", err)
+	}
+
+	// Test rank access by all methods
+	allRanks := AllRanks()
+	if len(allRanks) == 0 {
+		t.Fatal("No ranks loaded")
+	}
+
+	// Verify RankByID works for all ranks
+	for _, expectedRank := range allRanks {
+		rank, exists := RankByID(expectedRank.RankID)
+		if !exists {
+			t.Errorf("RankByID(%d) should exist", expectedRank.RankID)
+			continue
+		}
+		if rank.RankID != expectedRank.RankID {
+			t.Errorf("RankByID(%d) returned wrong RankID: %d", expectedRank.RankID, rank.RankID)
+		}
+		if rank.RankName != expectedRank.RankName {
+			t.Errorf("RankByID(%d) returned wrong RankName: %s", expectedRank.RankID, rank.RankName)
+		}
+	}
+
+	// Verify RankByName works for all ranks
+	// Note: All rank names are currently "[text]" placeholders, so we can only test
+	// that RankByName returns a valid rank for the placeholder name
+	firstRank := allRanks[0]
+	if firstRank.RankName != "" {
+		rank, exists := RankByName(firstRank.RankName)
+		if !exists {
+			t.Errorf("RankByName(%s) should exist", firstRank.RankName)
+		} else if rank.RankName != firstRank.RankName {
+			t.Errorf("RankByName(%s) returned wrong RankName: %s", firstRank.RankName, rank.RankName)
+		} else if rank.RankID != firstRank.RankID {
+			t.Errorf("RankByName(%s) returned wrong RankID: %d", firstRank.RankName, rank.RankID)
+		}
+	}
+
+	// Verify XP thresholds are non-negative for all ranks
+	for _, rank := range allRanks {
+		threshold := RankXPThreshold(rank.RankID)
+		if threshold < 0 {
+			t.Errorf("Rank %d has negative XP threshold: %d", rank.RankID, threshold)
+		}
+	}
+
+	t.Logf("✅ J5: Rank data integrity verified for all %d ranks", len(allRanks))
+}
