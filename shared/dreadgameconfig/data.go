@@ -475,6 +475,47 @@ func init() {
 		log.Printf("Warning: Failed to load Havoc unlockables: %v", err)
 	}
 
+	// Load PvE data (K2)
+	if err := LoadPvEKillScoring(); err != nil {
+		log.Printf("Warning: Failed to load PvE kill scoring: %v", err)
+	}
+	if err := LoadPvEWaveScoring(); err != nil {
+		log.Printf("Warning: Failed to load PvE wave scoring: %v", err)
+	}
+	if err := LoadPvEDefendScoring(); err != nil {
+		log.Printf("Warning: Failed to load PvE defend scoring: %v", err)
+	}
+	if err := LoadPvEMedalScoring(); err != nil {
+		log.Printf("Warning: Failed to load PvE medal scoring: %v", err)
+	}
+	if err := LoadPvEObjectives(); err != nil {
+		log.Printf("Warning: Failed to load PvE objectives: %v", err)
+	}
+	if err := LoadPvESeasons(); err != nil {
+		log.Printf("Warning: Failed to load PvE seasons: %v", err)
+	}
+	if err := LoadPvEEvents(); err != nil {
+		log.Printf("Warning: Failed to load PvE events: %v", err)
+	}
+	if err := LoadPvETutorialObjectives(); err != nil {
+		log.Printf("Warning: Failed to load PvE tutorial objectives: %v", err)
+	}
+	if err := LoadPvEKillScoringHavoc(); err != nil {
+		log.Printf("Warning: Failed to load PvE kill scoring Havoc: %v", err)
+	}
+	if err := LoadPvEWaveScoringHavoc(); err != nil {
+		log.Printf("Warning: Failed to load PvE wave scoring Havoc: %v", err)
+	}
+	if err := LoadPvERemainingPlayerScoring(); err != nil {
+		log.Printf("Warning: Failed to load PvE remaining player scoring: %v", err)
+	}
+	if err := LoadPvERemainingPlayerScoringEscort(); err != nil {
+		log.Printf("Warning: Failed to load PvE remaining player scoring Escort: %v", err)
+	}
+	if err := LoadPvERemainingPlayerScoringHavoc(); err != nil {
+		log.Printf("Warning: Failed to load PvE remaining player scoring Havoc: %v", err)
+	}
+
 	// Load energy shields data (G1)
 	if err := LoadEnergyShields(); err != nil {
 		log.Printf("Warning: Failed to load energy shields: %v", err)

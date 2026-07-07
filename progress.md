@@ -1,7 +1,7 @@
 # Developer Agent Progress Tracker
 
 ## Last Updated
-2026-07-07 (Phase 11 K1 complete; all tests passing)
+2026-07-08 (Phase 11 K2 complete; all tests passing)
 
 ## Completed Steps
 - [x] All CRITICAL issues resolved (C1-C8)
@@ -295,8 +295,27 @@ Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn
 - [x] **K1: Integration**: All 7 Havoc loaders added to dreadgameconfig initialization sequence
 - [x] **K1: Comprehensive testing**: TestK1LoadHavocBoosts, TestK1HavocBoostStructure, TestK1HavocBoostAccessorFunctions, TestK1HavocBoostCountValidation, TestK1LoadHavocModifiers, TestK1HavocModifierStructure, TestK1HavocModifierAccessorFunctions, TestK1HavocModifierCountValidation, TestK1LoadHavocBossWaves, TestK1HavocBossWaveCountValidation, TestK1LoadHavocRewards, TestK1HavocRewardCountValidation, TestK1LoadHavocLoadouts, TestK1HavocLoadoutStructure, TestK1LoadHavocEnemyModifiers, TestK1LoadHavocUnlockables, TestK1AllHavocDataLoaded - all passing
 - [x] **K1: Validation**: Verified expected counts (38 boosts, 26 modifiers, 4 boss waves, 7 rewards), all accessor functions working, data structure validation completed
-- [ ] **K2**: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
+- [x] **K2: Load PVE/ — 14 files**: Implemented loading for all 14 PVE files:
+  - **PvE Kill Scoring**: LoadPvEKillScoring() loads 21 scorings from PvEKillScoring.json with StarterKillScore, DeductionTime, ScoreToDeduct fields
+  - **PvE Wave Scoring**: LoadPvEWaveScoring() loads 21 scorings from PvEWaveScoring.json with StarterWaveScore, DeductionTime, ScoreToDeduct fields
+  - **PvE Defend Scoring**: LoadPvEDefendScoring() loads 1 scoring from PvEDefendScoring.json with StarterDefendScore, DeductionTime, ScoreToDeduct fields
+  - **PvE Medal Scoring**: LoadPvEMedalScoring() loads 3 scorings from PvEMedalScoring.json with MedalScore field
+  - **PvE Objectives**: LoadPvEObjectives() loads 31 objectives from PvEObjectives.json with ID, Type, State, MainObjective, Message, MarkerText, AmountToComplete, CurrentAmount fields
+  - **PvE Seasons**: LoadPvESeasons() loads 3 seasons from DN_Seasons_DT.json with Name, DescShort, DescLong, Map, MapParameters, GameMode fields
+  - **PvE Events**: LoadPvEEvents() loads 9 events from DN_Events_DT.json with Name, DescShort, DescLong, Map, MapParameters, GameMode fields
+  - **PvE Tutorial Objectives**: LoadPvETutorialObjectives() loads 15 objectives from TutorialObjectives_DT.json with ID, Type, State, MainObjective, Message, MarkerText, AmountToComplete, CurrentAmount fields
+  - **PvE Kill Scoring Havoc**: LoadPvEKillScoringHavoc() loads 26 scorings from PvEKillScoring_Havoc.json
+  - **PvE Wave Scoring Havoc**: LoadPvEWaveScoringHavoc() loads 26 scorings from PvEWaveScoring_Havoc.json
+  - **PvE Remaining Player Scoring**: LoadPvERemainingPlayerScoring() loads 21 scorings from PvERemainingPlayerScoring.json
+  - **PvE Remaining Player Scoring Escort**: LoadPvERemainingPlayerScoringEscort() loads 10 scorings from PvERemainingPlayerScoring_Escort.json
+  - **PvE Remaining Player Scoring Havoc**: LoadPvERemainingPlayerScoringHavoc() loads 26 scorings from vERemainingPlayerScoring_Havoc.json
+- [x] **K2: Accessor functions**: All PVE data types have comprehensive accessor functions (All*, ByRowName, Count, ByID where applicable)
+- [x] **K2: Integration**: All 14 PVE loaders added to dreadgameconfig initialization sequence
+- [x] **K2: Comprehensive testing**: TestK2LoadPvEKillScoring, TestK2PvEKillScoringCountValidation, TestK2LoadPvEWaveScoring, TestK2PvEWaveScoringCountValidation, TestK2LoadPvEDefendScoring, TestK2PvEDefendScoringCountValidation, TestK2LoadPvEMedalScoring, TestK2PvEMedalScoringCountValidation, TestK2LoadPvEObjectives, TestK2PvEObjectiveStructure, TestK2PvEObjectiveAccessorFunctions, TestK2PvEObjectiveCountValidation, TestK2LoadPvESeasons, TestK2PvESeasonCountValidation, TestK2LoadPvEEvents, TestK2PvEEventCountValidation, TestK2LoadPvETutorialObjectives, TestK2PvETutorialObjectiveCountValidation, TestK2LoadPvEKillScoringHavoc, TestK2PvEKillScoringHavocCountValidation, TestK2LoadPvEWaveScoringHavoc, TestK2PvEWaveScoringHavocCountValidation, TestK2LoadPvERemainingPlayerScoring, TestK2PvERemainingPlayerScoringCountValidation, TestK2LoadPvERemainingPlayerScoringEscort, TestK2PvERemainingPlayerScoringEscortCountValidation, TestK2LoadPvERemainingPlayerScoringHavoc, TestK2PvERemainingPlayerScoringHavocCountValidation, TestK2AllPvEDataLoaded - all passing
+- [x] **K2: Validation**: Verified all 14 PVE files load successfully with total 213 entries, all accessor functions working, data structure validation completed
 - [ ] **K3**: Replace hardcoded Havoc modifier/boost/reward data in mmogbrain with loaded table data
+- [ ] **K4**: Wire PvE scoring tables into match result processing
+- [ ] **K5**: Add tests — verify boost/modifier counts match (38 boosts, 26 modifiers)
 - [ ] **K4**: Wire PvE scoring tables into match result processing
 - [ ] **K5**: Add tests — verify boost/modifier counts match (38 boosts, 26 modifiers)
 - [ ] **Remaining YA_* handlers**: ~15 less common request types
