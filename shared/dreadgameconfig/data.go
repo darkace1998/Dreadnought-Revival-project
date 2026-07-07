@@ -442,6 +442,11 @@ func init() {
 		log.Printf("Warning: Failed to load ranks: %v", err)
 	}
 
+	// Load game modifiers data (J2)
+	if err := LoadGameModifiers(); err != nil {
+		log.Printf("Warning: Failed to load game modifiers: %v", err)
+	}
+
 	// Load energy shields data (G1)
 	if err := LoadEnergyShields(); err != nil {
 		log.Printf("Warning: Failed to load energy shields: %v", err)
