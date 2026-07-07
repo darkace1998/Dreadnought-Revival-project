@@ -452,6 +452,29 @@ func init() {
 		log.Printf("Warning: Failed to load player match statistics: %v", err)
 	}
 
+	// Load Havoc data (K1)
+	if err := LoadHavocBoosts(); err != nil {
+		log.Printf("Warning: Failed to load Havoc boosts: %v", err)
+	}
+	if err := LoadHavocModifiers(); err != nil {
+		log.Printf("Warning: Failed to load Havoc modifiers: %v", err)
+	}
+	if err := LoadHavocBossWaves(); err != nil {
+		log.Printf("Warning: Failed to load Havoc boss waves: %v", err)
+	}
+	if err := LoadHavocRewards(); err != nil {
+		log.Printf("Warning: Failed to load Havoc rewards: %v", err)
+	}
+	if err := LoadHavocLoadouts(); err != nil {
+		log.Printf("Warning: Failed to load Havoc loadouts: %v", err)
+	}
+	if err := LoadHavocEnemyModifiers(); err != nil {
+		log.Printf("Warning: Failed to load Havoc enemy modifiers: %v", err)
+	}
+	if err := LoadHavocUnlockables(); err != nil {
+		log.Printf("Warning: Failed to load Havoc unlockables: %v", err)
+	}
+
 	// Load energy shields data (G1)
 	if err := LoadEnergyShields(); err != nil {
 		log.Printf("Warning: Failed to load energy shields: %v", err)
