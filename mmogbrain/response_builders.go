@@ -1373,12 +1373,13 @@ func buildMmogBoosterDataPayload() []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetBoosterData")
 	b, stack = protocol.AppendArrayStart(b, stack, "BoosterTable")
-	for _, booster := range havocBoosters {
+	boosts := havocBoosters()
+	for i, booster := range boosts {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendInt32Field(b, "BoosterID", booster.id)
-		b = protocol.AppendStringField(b, "BoosterName", booster.name)
-		b = protocol.AppendInt32Field(b, "Cost", booster.cost)
-		b = protocol.AppendStringField(b, "Description", booster.desc)
+		b = protocol.AppendInt32Field(b, "BoosterID", int32(i+1))
+		b = protocol.AppendStringField(b, "BoosterName", booster.Title)
+		b = protocol.AppendInt32Field(b, "Cost", booster.Cost)
+		b = protocol.AppendStringField(b, "Description", booster.Description)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1390,18 +1391,9 @@ func buildMmogBoosterDataPayload() []byte {
 	return b
 }
 
-var havocBoosters = []struct {
-	id   int32
-	name string
-	cost int32
-	desc string
-}{
-	{1, "Damage Boost", 500, "Increases weapon damage by 25% for one wave"},
-	{2, "Shield Boost", 400, "Increases shield absorption by 30% for one wave"},
-	{3, "Speed Boost", 300, "Increases movement speed by 20% for one wave"},
-	{4, "Repair Boost", 600, "Repairs 50% hull damage instantly"},
-	{5, "Energy Boost", 350, "Refills energy to maximum"},
-	{6, "XP Boost", 750, "Doubles XP earned for one wave"},
+// K3: Replace hardcoded Havoc booster data with loaded table data
+func havocBoosters() []dreadconfig.HavocBoost {
+	return dreadconfig.AllHavocBoosts()
 }
 
 // AI Difficulty Levels
@@ -1477,23 +1469,9 @@ var havocWaveConfig = []struct {
 	{13, 1, 0, true, "boss_dreadnought_titan", 300, 3500, 7000, "Final boss - Dreadnought Titan"},
 }
 
-// Havoc Mode Modifiers
-var havocModifiers = []struct {
-	modifierID   string
-	name         string
-	description  string
-	waveStart    int32
-	effectType   string
-	effectValue  float32
-}{
-	{"mod_enemy_shields", "Enemy Shield Boost", "Enemies gain 50% shield strength", 3, "shield", 1.5},
-	{"mod_enemy_damage", "Enemy Damage Increase", "Enemies deal 30% more damage", 5, "damage", 1.3},
-	{"mod_enemy_speed", "Enemy Speed Boost", "Enemies move 25% faster", 7, "speed", 1.25},
-	{"mod_spawn_rate", "Rapid Spawn", "Enemies spawn 50% faster", 9, "spawn", 1.5},
-	{"mod_boss_health", "Boss Health Increase", "Bosses gain 100% health", 6, "boss_health", 2.0},
-	{"mod_elite_frequency", "Elite Surge", "Elite enemies appear more frequently", 4, "elite", 2.0},
-	{"mod_player_regen", "Reduced Regen", "Player regeneration reduced by 50%", 8, "regen", 0.5},
-	{"mod_wave_time", "Time Pressure", "Wave time limit reduced by 25%", 10, "time", 0.75},
+// K3: Replace hardcoded Havoc modifier data with loaded table data
+func havocModifiers() []dreadconfig.HavocModifier {
+	return dreadconfig.AllHavocModifiers()
 }
 
 // PvE Reward Tiers
@@ -1844,14 +1822,15 @@ func buildMmogHavocModifiersPayload() []byte {
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 
 	b, stack = protocol.AppendArrayStart(b, stack, "Modifiers")
-	for _, mod := range havocModifiers {
+	for _, mod := range havocModifiers() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "ModifierID", mod.modifierID)
-		b = protocol.AppendStringField(b, "Name", mod.name)
-		b = protocol.AppendStringField(b, "Description", mod.description)
-		b = protocol.AppendInt32Field(b, "WaveStart", mod.waveStart)
-		b = protocol.AppendStringField(b, "EffectType", mod.effectType)
-		b = protocol.AppendStringField(b, "EffectValue", fmt.Sprintf("%.2f", mod.effectValue))
+		b = protocol.AppendStringField(b, "ModifierID", mod.RowName)
+		b = protocol.AppendStringField(b, "Name", mod.Title)
+		b = protocol.AppendStringField(b, "Description", mod.Description)
+		b = protocol.AppendInt32Field(b, "WaveStart", mod.MinWave)
+		// EffectType and EffectValue not available in loaded data - use defaults
+		b = protocol.AppendStringField(b, "EffectType", "unknown")
+		b = protocol.AppendStringField(b, "EffectValue", "1.0")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)

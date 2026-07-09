@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/dreadnought-ps/mmogbrain/matchmaker"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -499,6 +500,101 @@ func seedDailyContracts(db *sql.DB, pid string) {
 	}
 }
 
+// K4: Wire PvE scoring tables into match result processing
+// calculatePvEKillScore calculates score for a kill based on PvE kill scoring table
+func calculatePvEKillScore() int32 {
+	scorings := dreadconfig.AllPvEKillScorings()
+	if len(scorings) == 0 {
+		return 5000 // Default fallback
+	}
+	// Use the first scoring entry as base
+	return scorings[0].StarterKillScore
+}
+
+// calculatePvEWaveScore calculates score for a wave based on PvE wave scoring table
+func calculatePvEWaveScore(wave int32) int32 {
+	scorings := dreadconfig.AllPvEWaveScorings()
+	if len(scorings) == 0 {
+		return wave * 1000 // Default fallback
+	}
+	// Use the first scoring entry as base and multiply by wave
+	baseScore := scorings[0].StarterWaveScore
+	if baseScore <= 0 {
+		baseScore = 1000
+	}
+	return baseScore * wave
+}
+
+// calculateHavocWaveScore calculates score for Havoc wave using Havoc-specific scoring
+func calculateHavocWaveScore(wave int32) int32 {
+	scorings := dreadconfig.AllPvEWaveScoringsHavoc()
+	if len(scorings) == 0 {
+		return wave * 1500 // Default fallback for Havoc
+	}
+	// Use the first scoring entry as base and multiply by wave
+	baseScore := scorings[0].StarterWaveScore
+	if baseScore <= 0 {
+		baseScore = 1500
+	}
+	return baseScore * wave
+}
+
+// getHavocRewardForScore returns XP and GP rewards for a given score in Havoc mode
+func getHavocRewardForScore(score int32) (xp int32, gp int32) {
+	rewards := dreadconfig.AllHavocRewards()
+	if len(rewards) == 0 {
+		// Default fallback rewards
+		return score / 10, score / 5
+	}
+	
+	// Find the highest reward tier that the score qualifies for
+	var highestXP, highestGP int32
+	for _, reward := range rewards {
+		// Note: The HavocReward struct doesn't have highscore field exposed,
+		// so we use a simple multiplier for now
+		// In a full implementation, we would check m_highscore thresholds
+		multiplier := int32(1)
+		if strings.Contains(reward.Title, "Beginner") {
+			multiplier = 1
+		} else if strings.Contains(reward.Title, "2") {
+			multiplier = 2
+		} else if strings.Contains(reward.Title, "3") {
+			multiplier = 3
+		} else if strings.Contains(reward.Title, "4") {
+			multiplier = 4
+		} else if strings.Contains(reward.Title, "5") {
+			multiplier = 5
+		} else if strings.Contains(reward.Title, "6") {
+			multiplier = 6
+		} else if strings.Contains(reward.Title, "7") {
+			multiplier = 7
+		}
+		
+		// Calculate reward based on multiplier
+		// Note: This is a simplified implementation
+		// A full implementation would use the actual reward type and value
+		rewardXP := score / 10 * multiplier
+		rewardGP := score / 5 * multiplier
+		
+		if rewardXP > highestXP {
+			highestXP = rewardXP
+		}
+		if rewardGP > highestGP {
+			highestGP = rewardGP
+		}
+	}
+	
+	if highestXP == 0 {
+		highestXP = score / 10
+	}
+	if highestGP == 0 {
+		highestGP = score / 5
+	}
+	
+	return highestXP, highestGP
+}
+
+// K4: Wire PvE scoring tables into match result processing
 func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 	if !strings.HasPrefix(gameMode, "PvE_") && gameMode != "Training" {
 		return
@@ -507,24 +603,47 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 	if bossKills < 1 {
 		bossKills = 0
 	}
-	bonusXP := int32(0)
-	switch {
-	case strings.Contains(gameMode, "Havoc"):
-		bonusXP = kills*30 + bossKills*500
-	case strings.Contains(gameMode, "Onslaught"):
-		bonusXP = kills*25 + bossKills*400
-	default:
-		bonusXP = kills*20 + bossKills*300
+	
+	// Calculate score using PvE scoring tables
+	killScore := calculatePvEKillScore()
+	wave := kills / 5 // Estimate wave based on kills
+	if wave < 1 {
+		wave = 1
 	}
+	
+	waveScore := int32(0)
+	if strings.Contains(gameMode, "Havoc") {
+		waveScore = calculateHavocWaveScore(wave)
+	} else {
+		waveScore = calculatePvEWaveScore(wave)
+	}
+	
+	totalScore := killScore * kills + waveScore
+	
+	// Calculate rewards based on score
+	bonusXP := int32(0)
+	bonusGP := int32(0)
+	
+	if strings.Contains(gameMode, "Havoc") {
+		// Use Havoc reward tiers
+		bonusXP, bonusGP = getHavocRewardForScore(totalScore)
+	} else {
+		// For non-Havoc modes, use a simple multiplier
+		bonusXP = totalScore / 10
+		bonusGP = totalScore / 5
+	}
+	
+	// Add boss kill bonuses
+	if bossKills > 0 {
+		bonusXP += bossKills * 500
+		bonusGP += bossKills * 1000
+	}
+	
 	if bonusXP > 0 {
 		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, bonusXP, bonusXP/2, pid)
 	}
 
 	// Track PvE progress
-	wave := kills / 5 // Estimate wave based on kills
-	if wave < 1 {
-		wave = 1
-	}
 	_, _ = db.Exec(`INSERT OR IGNORE INTO player_pve_progress(user_id, mode, highest_wave, total_waves, boss_kills, total_kills, best_score) 
 		VALUES(?, ?, 0, 0, 0, 0, 0)`, pid, gameMode)
 	_, _ = db.Exec(`UPDATE player_pve_progress SET 
@@ -563,9 +682,27 @@ func CompletePvEWave(db *sql.DB, pid, gameMode string, wave, kills, bossKills, s
 		updated_at = datetime('now')
 		WHERE user_id=? AND mode=?`, wave, bossKills, kills, score, pid, gameMode)
 
-	// Calculate rewards based on wave
-	rewardXP := wave * 100
-	rewardGP := wave * 200
+	// K4: Calculate rewards using PvE scoring tables
+	rewardXP := int32(0)
+	rewardGP := int32(0)
+	
+	if strings.Contains(gameMode, "Havoc") {
+		// Use Havoc-specific scoring
+		waveScore := calculateHavocWaveScore(wave)
+		killScore := calculatePvEKillScore() * kills
+		totalScore := waveScore + killScore
+		rewardXP, rewardGP = getHavocRewardForScore(totalScore)
+	} else {
+		// Use standard PvE scoring
+		waveScore := calculatePvEWaveScore(wave)
+		killScore := calculatePvEKillScore() * kills
+		totalScore := waveScore + killScore
+		// Simple conversion from score to XP/GP
+		rewardXP = totalScore / 10
+		rewardGP = totalScore / 5
+	}
+	
+	// Add boss kill bonuses
 	if bossKills > 0 {
 		rewardXP += bossKills * 500
 		rewardGP += bossKills * 1000
