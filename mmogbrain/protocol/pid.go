@@ -161,6 +161,13 @@ func NormalizePlayerPID(value string) string {
 	return cleaned
 }
 
+func DenormalizePlayerPID(normalized string) string {
+	if len(normalized) != 32 {
+		return normalized
+	}
+	return normalized[0:8] + "-" + normalized[8:12] + "-" + normalized[12:16] + "-" + normalized[16:20] + "-" + normalized[20:32]
+}
+
 func NumericPlayerID(normalizedPID string) int32 {
 	if len(normalizedPID) < 8 {
 		return 1

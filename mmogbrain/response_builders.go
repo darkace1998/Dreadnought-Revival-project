@@ -290,7 +290,7 @@ func buildMmogSquadPayload(requestName string, playerPID string) []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "Code", 0)
-	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b, stack = protocol.AppendArrayStart(b, stack, "Squad")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Members")
@@ -380,7 +380,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "FID", fleet.token)
-	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
 	b = protocol.AppendStringField(b, "Name", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "DisplayName", fleet.displayName)
@@ -416,7 +416,7 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
 	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
-	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
@@ -648,7 +648,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	starterFleet := state.activeFleet()
 
 	b = protocol.AppendStringField(b, "RT", rt)
-	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b = protocol.AppendStringField(b, "SID", "local_session")
 	b = protocol.AppendInt32Field(b, "tll", 1)
 	b = protocol.AppendInt32Field(b, "tpl", 1)
@@ -782,7 +782,7 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "ID", loadout.entryID())
 	if includePID {
-		b = protocol.AppendStringField(b, "PID", playerPID)
+		b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	}
 	b = protocol.AppendInt32Field(b, "LoadoutID", loadoutID)
 	b = protocol.AppendInt32Field(b, "m_loadoutID", loadoutID)
@@ -897,7 +897,7 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerProgression")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b = protocol.AppendInt32Field(b, "CurrentXP", state.currentXP)
 	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
 	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
@@ -1972,14 +1972,14 @@ func buildMmogTunePayload() []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_Tune")
 	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
 	b = protocol.AppendStringField(b, "Version", "1.0.0")
-	b = protocol.AppendStringField(b, "WeaponsTune", dreadconfig.WeaponsTuneJSON())
+	b = protocol.AppendStringField(b, "WeaponsTune", `[]`)
 	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
-	b = protocol.AppendStringField(b, "ProjectilesTune", dreadconfig.ProjectilesTuneJSON())
-	b = protocol.AppendStringField(b, "AbilitiesTune", dreadconfig.AbilitiesTuneJSON())
-	b = protocol.AppendStringField(b, "OfficersTune", dreadconfig.OfficersTuneJSON())
-	b = protocol.AppendStringField(b, "FeatsTune", dreadconfig.FeatsTuneJSON())
+	b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
+	b = protocol.AppendStringField(b, "AbilitiesTune", `[]`)
+	b = protocol.AppendStringField(b, "OfficersTune", `[]`)
+	b = protocol.AppendStringField(b, "FeatsTune", `[]`)
 	b = protocol.AppendStringField(b, "HavocTune", `[]`)
-	b = protocol.AppendStringField(b, "GameModifiersTune", dreadconfig.GameModifiersTuneJSON())
+	b = protocol.AppendStringField(b, "GameModifiersTune", `[]`)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
@@ -2017,7 +2017,7 @@ func buildMmogConnectPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_Connect")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

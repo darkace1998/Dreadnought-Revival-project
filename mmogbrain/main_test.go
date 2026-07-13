@@ -268,15 +268,16 @@ func TestExtractMmogPlayerPIDRejectsUnsignedJWT(t *testing.T) {
 
 func TestPlayerDataResponsesUseHexPlayerPID(t *testing.T) {
 	const pid = "b7c42c0f3ac648a182ccfd35eb24f128"
+	const denormalizedPID = "b7c42c0f-3ac6-48a1-82cc-fd35eb24f128"
 
 	for name, payload := range map[string][]byte{
 		"YA_PlayerGet":    buildMmogRequestResponsePayload("YA_PlayerGet", pid, buildMmogPlayerDataPayload("YA_PlayerGet", pid)),
 		"YA_PlayerFleets": buildMmogRequestResponsePayload("YA_PlayerFleets", pid, buildMmogPlayerFleetsPayload(pid)),
 	} {
-		validPIDField := protocol.AppendStringField(nil, "PID", pid)
+		validPIDField := protocol.AppendStringField(nil, "PID", denormalizedPID)
 		invalidPIDField := protocol.AppendStringField(nil, "PID", "local")
 		if !bytes.Contains(payload, validPIDField) {
-			t.Fatalf("%s response does not include player PID %q", name, pid)
+			t.Fatalf("%s response does not include player PID %q", name, denormalizedPID)
 		}
 		if bytes.Contains(payload, invalidPIDField) {
 			t.Fatalf("%s response still contains invalid local PID", name)
