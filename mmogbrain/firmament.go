@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/hex"
@@ -218,8 +219,13 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 		return
 	}
 	hello = append(hello, '\r', '\n')
-	if _, err := conn.Write(hello); err != nil {
+	writer := bufio.NewWriter(conn)
+	if _, err := writer.Write(hello); err != nil {
 		log.WithError(err).WithField("remote", remote).Error("firmament: write hello failed")
+		return
+	}
+	if err := writer.Flush(); err != nil {
+		log.WithError(err).WithField("remote", remote).Error("firmament: flush hello failed")
 		return
 	}
 	log.WithFields(logrus.Fields{"remote": remote, "peer_id": peerID}).Info("firmament: sent connection_successful")
