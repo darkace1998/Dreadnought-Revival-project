@@ -35,7 +35,7 @@ var (
 func LoadPlayerMatchStatistics() error {
 	var loadErr error
 	playerMatchStatsOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "DN_PlayerMatchStatistics_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "DN_PlayerMatchStatistics_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

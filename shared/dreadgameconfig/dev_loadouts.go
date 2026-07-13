@@ -41,7 +41,7 @@ var (
 func LoadDevLoadouts() error {
 	var loadErr error
 	devLoadoutsOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "loadouts", "LoadoutDevelopmentTable.json")
+		filePath := LoadoutPath(filepath.Join("LoadoutDevelopmentTable.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

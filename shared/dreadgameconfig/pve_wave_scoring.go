@@ -31,7 +31,7 @@ var (
 func LoadPvEWaveScoring() error {
 	var loadErr error
 	pveWaveScoringOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvEWaveScoring.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvEWaveScoring.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

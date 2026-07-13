@@ -765,7 +765,7 @@ func TestGatewayCatalogEntitiesExposeMarketUICompatibilityFields(t *testing.T) {
 	firstStarter := starterShipLoadouts()[0]
 	sharedFirstStarter := sharedStarterLoadoutByID(t, firstStarter.loadoutID())
 	starterLoadout := gatewayCatalogEntityByItemID(t, entities, firstStarter.loadoutID(), "item_catalog_real entity")
-	assertGatewayMarketUICompatibilityFields(t, starterLoadout, "starter loadout catalog item", true, "0", "Loadout", sharedFirstStarter.ShipName)
+	assertGatewayMarketUICompatibilityFields(t, starterLoadout, "starter loadout catalog item", true, "0", "Loadouts", sharedFirstStarter.ShipName)
 
 	for _, entity := range entities {
 		entityMap, ok := entity.(map[string]any)

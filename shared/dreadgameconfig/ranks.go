@@ -29,7 +29,7 @@ var (
 func LoadRanks() error {
 	var loadErr error
 	ranksOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Ranks", "DN_Ranks_Player.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Ranks", "DN_Ranks_Player.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

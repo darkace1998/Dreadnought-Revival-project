@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 )
 
@@ -37,7 +36,7 @@ var (
 // LoadCatalogIDTable loads the CatalogIDTable.json file and parses it into catalog buckets
 func LoadCatalogIDTable() error {
 	catalogIDTableOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "assets", "CatalogIDTable.json")
+		filePath := AssetPath("CatalogIDTable.json")
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

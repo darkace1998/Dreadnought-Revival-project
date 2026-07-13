@@ -1129,15 +1129,14 @@ func buildMmogStaticCareerDataPayload() []byte {
 func buildMmogScoringDataPayload() []byte {
 	var b []byte
 	var stack []int
-	const emptyTableJSON = `[]`
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetScoringData")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "YScoringDataTableRow", emptyTableJSON)
-	b = protocol.AppendStringField(b, "m_defendScoringDataTable", emptyTableJSON)
-	b = protocol.AppendStringField(b, "m_remainingPlayerScoringDataTable", emptyTableJSON)
-	b = protocol.AppendStringField(b, "m_killScoringDataTable", emptyTableJSON)
-	b = protocol.AppendStringField(b, "m_waveScoringDataTable", emptyTableJSON)
+	b = protocol.AppendStringField(b, "YScoringDataTableRow", dreadconfig.MedalScoringTuneJSON())
+	b = protocol.AppendStringField(b, "m_defendScoringDataTable", dreadconfig.DefendScoringTuneJSON())
+	b = protocol.AppendStringField(b, "m_remainingPlayerScoringDataTable", dreadconfig.RemainingPlayerScoringTuneJSON())
+	b = protocol.AppendStringField(b, "m_killScoringDataTable", dreadconfig.KillScoringTuneJSON())
+	b = protocol.AppendStringField(b, "m_waveScoringDataTable", dreadconfig.WaveScoringTuneJSON())
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -1373,13 +1372,36 @@ func buildMmogBoosterDataPayload() []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetBoosterData")
 	b, stack = protocol.AppendArrayStart(b, stack, "BoosterTable")
-	boosts := havocBoosters()
-	for i, booster := range boosts {
+	for _, booster := range standardBoosterSeeds() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendInt32Field(b, "BoosterID", int32(i+1))
-		b = protocol.AppendStringField(b, "BoosterName", booster.Title)
-		b = protocol.AppendInt32Field(b, "Cost", booster.Cost)
-		b = protocol.AppendStringField(b, "Description", booster.Description)
+		b = protocol.AppendInt32Field(b, "id", booster.id)
+		b = protocol.AppendBoolField(b, "active", booster.active)
+		b = protocol.AppendInt32Field(b, "type", booster.boosterType)
+		b, stack = protocol.AppendArrayStart(b, stack, "effects")
+		for _, eff := range booster.effects {
+			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+			b = protocol.AppendInt32Field(b, "type", eff.effectType)
+			b = protocol.AppendInt32Field(b, "target", eff.target)
+			b, stack = protocol.AppendArrayStart(b, stack, "appliesToCreditsPool")
+			for _, pool := range eff.creditsPools {
+				b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+				b = protocol.AppendInt32Field(b, "pool", pool)
+				b, stack = protocol.AppendObjectEnd(b, stack)
+			}
+			b, stack = protocol.AppendObjectEnd(b, stack)
+			b, stack = protocol.AppendArrayStart(b, stack, "appliesToReputationPool")
+			for _, pool := range eff.repPools {
+				b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+				b = protocol.AppendInt32Field(b, "pool", pool)
+				b, stack = protocol.AppendObjectEnd(b, stack)
+			}
+			b, stack = protocol.AppendObjectEnd(b, stack)
+			b = protocol.AppendStringField(b, "multiplier", eff.multiplier)
+			b, stack = protocol.AppendArrayStart(b, stack, "multiplierAdditives")
+			b, stack = protocol.AppendObjectEnd(b, stack)
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1391,9 +1413,43 @@ func buildMmogBoosterDataPayload() []byte {
 	return b
 }
 
-// K3: Replace hardcoded Havoc booster data with loaded table data
-func havocBoosters() []dreadconfig.HavocBoost {
-	return dreadconfig.AllHavocBoosts()
+type boosterEffectSeed struct {
+	effectType int32
+	target     int32
+	creditsPools []int32
+	repPools   []int32
+	multiplier string
+}
+
+type boosterSeed struct {
+	id          int32
+	active      bool
+	boosterType int32
+	effects     []boosterEffectSeed
+}
+
+func standardBoosterSeeds() []boosterSeed {
+	return []boosterSeed{
+		{id: 520028165, active: false, boosterType: 0, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{5}, repPools: []int32{3}, multiplier: "1.5"},
+		}},
+		{id: 520028166, active: false, boosterType: 1, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{6}, repPools: []int32{4}, multiplier: "2.0"},
+		}},
+		{id: 536805377, active: false, boosterType: 2, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{7}, repPools: []int32{5}, multiplier: "1.5"},
+			{effectType: 0, target: 2, creditsPools: []int32{8}, repPools: []int32{6}, multiplier: "1.25"},
+		}},
+		{id: 520028167, active: false, boosterType: 3, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{9}, repPools: []int32{7}, multiplier: "1.25"},
+		}},
+		{id: 520028169, active: false, boosterType: 4, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{10}, repPools: []int32{8}, multiplier: "1.5"},
+		}},
+		{id: 520028170, active: false, boosterType: 5, effects: []boosterEffectSeed{
+			{effectType: 0, target: 1, creditsPools: []int32{11}, repPools: []int32{9}, multiplier: "1.75"},
+		}},
+	}
 }
 
 // AI Difficulty Levels
@@ -1912,31 +1968,24 @@ func buildMmogFleetEligibilityPayload() []byte {
 func buildMmogTunePayload() []byte {
 	var b []byte
 	var stack []int
+
 	b = protocol.AppendStringField(b, "RT", "YA_Tune")
 	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
-	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
 	b = protocol.AppendStringField(b, "Version", "1.0.0")
+	b = protocol.AppendStringField(b, "WeaponsTune", dreadconfig.WeaponsTuneJSON())
+	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
+	b = protocol.AppendStringField(b, "ProjectilesTune", dreadconfig.ProjectilesTuneJSON())
+	b = protocol.AppendStringField(b, "AbilitiesTune", dreadconfig.AbilitiesTuneJSON())
+	b = protocol.AppendStringField(b, "OfficersTune", dreadconfig.OfficersTuneJSON())
+	b = protocol.AppendStringField(b, "FeatsTune", dreadconfig.FeatsTuneJSON())
+	b = protocol.AppendStringField(b, "HavocTune", `[]`)
+	b = protocol.AppendStringField(b, "GameModifiersTune", dreadconfig.GameModifiersTuneJSON())
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	for _, section := range []string{
-		"WeaponsTune",
-		"BattleReadyTune",
-		"ProjectilesTune",
-		"AbilitiesTune",
-		"OfficersTune",
-		"FeatsTune",
-		"HavocTune",
-		"GameModifiersTune",
-	} {
-		b, stack = protocol.AppendObjectStart(b, stack, section)
-		b, stack = protocol.AppendObjectStart(b, stack, "rows")
-		b, stack = protocol.AppendObjectEnd(b, stack)
-		b = protocol.AppendInt32Field(b, "row_count", 0)
-		b, stack = protocol.AppendObjectEnd(b, stack)
-	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b, _ = protocol.AppendObjectEnd(b, stack)
+
 	return b
 }
 

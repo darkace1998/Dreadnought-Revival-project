@@ -31,7 +31,7 @@ var (
 func LoadPvEKillScoringHavoc() error {
 	var loadErr error
 	pveKillScoringHavocOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvEKillScoring_Havoc.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvEKillScoring_Havoc.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
@@ -124,7 +124,7 @@ var (
 func LoadPvEWaveScoringHavoc() error {
 	var loadErr error
 	pveWaveScoringHavocOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvEWaveScoring_Havoc.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvEWaveScoring_Havoc.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

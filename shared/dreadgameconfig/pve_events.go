@@ -34,7 +34,7 @@ var (
 func LoadPvEEvents() error {
 	var loadErr error
 	pveEventsOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "DN_Events_DT.json")
+		filePath := DataTablePath(filepath.Join("PVE", "DN_Events_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

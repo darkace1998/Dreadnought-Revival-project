@@ -29,7 +29,7 @@ var (
 func LoadPvEMedalScoring() error {
 	var loadErr error
 	pveMedalScoringOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvEMedalScoring.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvEMedalScoring.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

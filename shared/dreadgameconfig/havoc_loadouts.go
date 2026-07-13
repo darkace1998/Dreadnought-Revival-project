@@ -32,7 +32,7 @@ var (
 func LoadHavocLoadouts() error {
 	var loadErr error
 	havocLoadoutsOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Havoc", "DN_HavocLoadouts_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocLoadouts_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

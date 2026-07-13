@@ -36,7 +36,7 @@ var (
 func LoadHavocEnemyModifiers() error {
 	var loadErr error
 	havocEnemyModifiersOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Havoc", "DN_HavocPermanentEnemyModifiers_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocPermanentEnemyModifiers_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

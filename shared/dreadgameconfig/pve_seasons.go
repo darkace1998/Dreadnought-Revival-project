@@ -34,7 +34,7 @@ var (
 func LoadPvESeasons() error {
 	var loadErr error
 	pveSeasonsOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "DN_Seasons_DT.json")
+		filePath := DataTablePath(filepath.Join("PVE", "DN_Seasons_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

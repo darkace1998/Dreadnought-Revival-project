@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 )
 
@@ -33,7 +32,7 @@ var (
 // LoadItemIDConversionTable loads the ItemIDConversionTable.json file and creates bidirectional mappings
 func LoadItemIDConversionTable() error {
 	itemIDConversionTableOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "assets", "ItemIDConversionTable.json")
+		filePath := AssetPath("ItemIDConversionTable.json")
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

@@ -31,7 +31,7 @@ var (
 func LoadPvERemainingPlayerScoringEscort() error {
 	var loadErr error
 	pveRemainingPlayerScoringEscortOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvERemainingPlayerScoring_Escort.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvERemainingPlayerScoring_Escort.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

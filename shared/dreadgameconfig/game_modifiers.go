@@ -36,7 +36,7 @@ var (
 func LoadGameModifiers() error {
 	var loadErr error
 	gameModifiersOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "GameModifiers", "DN_GameModifiers_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "GameModifiers", "DN_GameModifiers_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

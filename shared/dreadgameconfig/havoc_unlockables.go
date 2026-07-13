@@ -31,7 +31,7 @@ var (
 func LoadHavocUnlockables() error {
 	var loadErr error
 	havocUnlockablesOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Havoc", "DN_HavocUnlockables_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocUnlockables_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

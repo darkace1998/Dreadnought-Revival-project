@@ -498,7 +498,10 @@ func addHardcodedFallbackItems(catalog *DynamicItemCatalog) {
 		{ItemID: 184484171, DisplayName: "Aion", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/VH_SupportM_Pawn_BP"},
 		{ItemID: 184484180, DisplayName: "Valcour", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Scout/Light/VH_ScoutL_Pawn_BP"},
 		{ItemID: 184484184, DisplayName: "Svarog", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Sniper/Medium/VH_SniperM_Pawn_BP"},
-		
+		{ItemID: 184483981, DisplayName: "Leipzig", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP"},
+		{ItemID: 184483972, DisplayName: "Trieste", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP"},
+		{ItemID: 184484148, DisplayName: "Ceres", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/T3/VH_SupportM_Pawn_T3_BP"},
+
 		// Loadouts
 		{ItemID: 33489315, DisplayName: "Athos", ItemType: ItemTypeLoadout, TableCategory: TableCategoryLoadout, AssetPath: "/Game/Generic/Loadouts/Precast/VH_AssaultMedium_PrecastLoadout_BP"},
 		{ItemID: 33489318, DisplayName: "Zmey", ItemType: ItemTypeLoadout, TableCategory: TableCategoryLoadout, AssetPath: "/Game/Generic/Loadouts/Precast/VH_DreadnoughtMedium_PrecastLoadout_BP"},

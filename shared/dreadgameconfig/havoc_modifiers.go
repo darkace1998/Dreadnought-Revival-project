@@ -45,7 +45,7 @@ var (
 func LoadHavocModifiers() error {
 	var loadErr error
 	havocModifiersOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Havoc", "DN_HavocModifiers_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocModifiers_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

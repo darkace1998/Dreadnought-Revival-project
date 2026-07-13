@@ -37,7 +37,7 @@ func LoadItemIDTable() error {
 	}
 
 	// Path to the ItemIDTable.json file
-	tablePath := filepath.Join("..", "..", "data", "assets", "ItemIDTable.json")
+	tablePath := AssetPath("ItemIDTable.json")
 	
 	data, err := os.ReadFile(tablePath)
 	if err != nil {

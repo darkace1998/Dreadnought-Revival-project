@@ -40,7 +40,7 @@ func LoadEnergyShields() error {
 	}
 
 	// Path to the energy shields DataTable
-	shieldsPath := filepath.Join("..", "..", "data", "datatables", "EnergyShields_DT.json")
+	shieldsPath := DataTablePath(filepath.Join("EnergyShields_DT.json"))
 	
 	data, err := os.ReadFile(shieldsPath)
 	if err != nil {

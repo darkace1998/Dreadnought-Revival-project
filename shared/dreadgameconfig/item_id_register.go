@@ -33,7 +33,7 @@ func LoadItemIDRegister() error {
 	}
 
 	// Path to the ItemIDRegister.json file
-	registerPath := filepath.Join("..", "..", "data", "assets", "ItemIDRegister.json")
+	registerPath := AssetPath("ItemIDRegister.json")
 	
 	data, err := os.ReadFile(registerPath)
 	if err != nil {

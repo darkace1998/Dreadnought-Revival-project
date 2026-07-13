@@ -2167,9 +2167,8 @@ func TestTunePayloadUsesClientParserShape(t *testing.T) {
 	}
 
 	returning := extractNamedMmogObject(t, payload, "Returning")
-	metaData := extractNamedMmogObject(t, returning, "MetaData")
-	if version := protocol.ExtractStringField(metaData, "Version"); version != "1.0.0" {
-		t.Fatalf("YA_Tune MetaData.Version = %q, want 1.0.0", version)
+	if version := protocol.ExtractStringField(returning, "Version"); version != "1.0.0" {
+		t.Fatalf("YA_Tune Version = %q, want 1.0.0", version)
 	}
 
 	for _, section := range []string{
@@ -2182,10 +2181,9 @@ func TestTunePayloadUsesClientParserShape(t *testing.T) {
 		"HavocTune",
 		"GameModifiersTune",
 	} {
-		sectionObject := extractNamedMmogObject(t, returning, section)
-		_ = extractNamedMmogObject(t, sectionObject, "rows")
-		if rowCount, ok := protocol.ExtractInt32Field(sectionObject, "row_count"); !ok || rowCount != 0 {
-			t.Fatalf("YA_Tune %s row_count = %d, %t; want 0, true", section, rowCount, ok)
+		sectionJSON := protocol.ExtractStringField(returning, section)
+		if sectionJSON == "" {
+			t.Fatalf("YA_Tune %s missing or empty", section)
 		}
 	}
 

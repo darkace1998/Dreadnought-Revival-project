@@ -31,7 +31,7 @@ var (
 func LoadHavocBossWaves() error {
 	var loadErr error
 	havocBossWavesOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "Progression", "Havoc", "DN_HavocBossWaves_DT.json")
+		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocBossWaves_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

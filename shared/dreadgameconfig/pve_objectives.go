@@ -36,7 +36,7 @@ var (
 func LoadPvEObjectives() error {
 	var loadErr error
 	pveObjectivesOnce.Do(func() {
-		filePath := filepath.Join("..", "..", "data", "datatables", "PVE", "PvEObjectives.json")
+		filePath := DataTablePath(filepath.Join("PVE", "PvEObjectives.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {

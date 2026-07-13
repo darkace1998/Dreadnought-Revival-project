@@ -38,7 +38,7 @@ func LoadGlobalTuningValues() error {
 	}
 
 	// Path to the global tuning values DataTable
-	tuningPath := filepath.Join("..", "..", "data", "datatables", "DN_GlobalTuningValues_DT.json")
+	tuningPath := DataTablePath(filepath.Join("DN_GlobalTuningValues_DT.json"))
 	
 	data, err := os.ReadFile(tuningPath)
 	if err != nil {
