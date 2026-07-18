@@ -264,6 +264,10 @@ func parseFeatEffectStatement(statement string) *FeatEffect {
 
 	// Parse the main effect (AM, RM, DFS, PCFS patterns)
 	statement = strings.TrimSpace(statement)
+	// Some data rows have a stray space between the effect-type token and its
+	// opening parenthesis (e.g. "AM ( PawnEnergyRegenerationRateModifier
+	// +50%)"), which would otherwise defeat the tight-prefix checks below.
+	statement = leadingCallSpacePattern.ReplaceAllString(statement, "$1(")
 	if strings.HasPrefix(statement, "AM(") {
 		effect.EffectType = "AM" // Additive Modifier
 		parseAMEffect(statement, effect)
@@ -276,10 +280,28 @@ func parseFeatEffectStatement(statement string) *FeatEffect {
 	} else if strings.HasPrefix(statement, "PCFS(") {
 		effect.EffectType = "PCFS" // Per-Condition Feat Stack
 		parsePCFSEffect(statement, effect)
+	} else if match := effectTokenPattern.FindStringSubmatch(statement); match != nil {
+		// Officer/perk DSL uses additional effect-type tokens beyond ship
+		// feats' AM/RM/DFS/PCFS (e.g. EFS, DFSB, AbilityCoolDown,
+		// PlayFeedback, CloakShip, UIScramble). We don't yet have dedicated
+		// parameter extraction for these, but the token itself is always a
+		// meaningful classification, so tag EffectType with it rather than
+		// leaving it empty.
+		effect.EffectType = match[1]
 	}
 
 	return effect
 }
+
+// effectTokenPattern matches the leading "Token(" of an effect statement,
+// used as a fallback classification for effect types not covered by the
+// AM/RM/DFS/PCFS branches above.
+var effectTokenPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*)\(`)
+
+// leadingCallSpacePattern matches a leading effect-type token followed by
+// whitespace before its opening parenthesis, so it can be normalized to a
+// tight "Token(" prefix before dispatch.
+var leadingCallSpacePattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*)\s+\(`)
 
 // parseAMEffect parses Additive Modifier effects like "AM(PawnDamageModifier +75%)"
 func parseAMEffect(statement string, effect *FeatEffect) {

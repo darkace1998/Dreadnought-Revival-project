@@ -320,38 +320,55 @@
 
 ---
 
-## Phase 29: Medium Issues (29 outstanding)
+## Phase 29: Medium Issues (10 outstanding)
 > Fix remaining medium-priority bugs and code quality issues.
+> 2026-07-18: swept all MEDIUM items — most were already fixed in prior commits
+> (`68c208d`, `d748548`, `7ba6a3a0`) with stale checkboxes; verified each against
+> current code/tests rather than assuming. Genuinely fixed this pass: M4 (mmogbrain
+> case-sensitivity + auth-server/legacy-api hardening), M5, M11, M12, M13, M18
+> (real offender was `mmogbrain/mmogbrain`, not gateway — untracked + gitignored),
+> M25 (this one had actually *regressed* — a prior `url.PathEscape` fix was
+> replaced by unescaped `url.JoinPath`, reopening path traversal).
 
-- [ ] **M1**: shared/db — Migrations not transactional (DDL + schema_versions insert not atomic)
+- [x] **M1**: shared/db — Migrations not transactional (already fixed, `68c208d`)
 - [ ] **M2**: shared/middleware — JWTMiddleware claims RS256 support but only HMAC implemented
 - [ ] **M3**: shared/middleware — Claims passed via request headers instead of context.WithValue
-- [ ] **M4**: auth-server — Brittle authHeader[7:] stripping (mmogbrain, legacy-api)
-- [ ] **M5**: auth-server — Duplicate username detection via error-string matching (brittle)
-- [ ] **M6**: auth-server — prometheus incorrectly marked `// indirect` in go.mod
+- [x] **M4**: auth-server — Brittle authHeader[7:] stripping (mmogbrain, legacy-api)
+- [x] **M5**: auth-server — Duplicate username detection via error-string matching (brittle)
+- [x] **M6**: auth-server — prometheus incorrectly marked `// indirect` in go.mod (already correct)
 - [ ] **M7**: auth-server — Zero test files
-- [ ] **M8**: legacy-api — PostMatchResult no transaction (partial data committed on mid-loop failure)
-- [ ] **M9**: legacy-api — GetInventory defers rows.Close() then explicitly calls it again
-- [ ] **M10**: legacy-api — No request body size limit on PostMatchResult
-- [ ] **M11**: legacy-api — No DB health check in /health endpoint
-- [ ] **M12**: game-manager — DELETE returns 404 when process already dead
-- [ ] **M13**: game-manager — No input validation on POST /instances (unbounded player list)
-- [ ] **M14**: game-manager — List() returns pointers to internal state (data race risk)
+- [x] **M8**: legacy-api — PostMatchResult no transaction (already fixed, `d748548`)
+- [x] **M9**: legacy-api — GetInventory defers rows.Close() then explicitly calls it again (already fixed)
+- [x] **M10**: legacy-api — No request body size limit on PostMatchResult (already fixed)
+- [x] **M11**: legacy-api — No DB health check in /health endpoint
+- [x] **M12**: game-manager — DELETE returns 404 when process already dead
+- [x] **M13**: game-manager — No input validation on POST /instances (unbounded player list)
+- [x] **M14**: game-manager — List() returns pointers to internal state (data race risk) (already fixed, `32d3bb5`)
 - [ ] **M15**: game-manager — Zero test files
-- [ ] **M17**: gateway — promhttp incorrectly marked `// indirect`
-- [ ] **M18**: gateway — 9.8 MB compiled binary committed to repo
+- [x] **M17**: gateway — promhttp incorrectly marked `// indirect` (already correct)
+- [x] **M18**: gateway — 9.8 MB compiled binary committed to repo (real offender was `mmogbrain/mmogbrain`, untracked + gitignored)
 - [ ] **M19**: gateway — Zero test files
-- [ ] **M20**: dn-launcher — HTTP response status code not checked
-- [ ] **M21**: dn-launcher — No response body size limit (memory DoS)
+- [x] **M20**: dn-launcher — HTTP response status code not checked (already fixed, `7ba6a3a0`)
+- [x] **M21**: dn-launcher — No response body size limit (memory DoS) (already fixed, `7ba6a3a0`)
 - [ ] **M22**: dn-launcher — Player ID deterministic from hostname+username (weak identity)
 - [ ] **M23**: dn-launcher — Corrupted player.json silently regenerates identity
 - [ ] **M24**: dn-launcher — Zero tests
-- [ ] **M25**: admin-cli — URL path injection in stopInstance() (unsanitized ID)
-- [ ] **M27**: admin-cli — io.ReadAll errors silently swallowed (x3)
+- [x] **M25**: admin-cli — URL path injection in stopInstance() (unsanitized ID) — regressed by `32d3bb5`, re-fixed with UUID validation + PathEscape
+- [x] **M27**: admin-cli — io.ReadAll errors silently swallowed (x3) (already fixed, `68c208d`)
 - [ ] **M28**: admin-cli — Zero tests
-- [ ] **M29**: master-server — go.sum corrupted (hashes for x/sys v0.13.0 but go.mod declares v0.35.0)
-- [ ] **M31**: master-server — RowsAffected() errors silently discarded
+- [x] **M29**: master-server — go.sum corrupted (already fixed, `68c208d`)
+- [x] **M31**: master-server — RowsAffected() errors silently discarded (already fixed, `68c208d`)
 - [ ] **M32**: master-server — Zero test files
+
+**Also fixed this pass (not in the M-list above):** `shared/dreadgameconfig` had 3
+real, reproducible test failures (`TestOfficerDSLParsing`, `TestLoadShipFeats`,
+`TestAllShipFeatsLoad`) — the officer/perk DSL uses effect-type tokens beyond ship
+feats' AM/RM/DFS/PCFS (EFS, DFSB, AbilityCoolDown, PlayFeedback, CloakShip,
+UIScramble), which `ParseFeatEffects` silently left with an empty `EffectType`;
+added a fallback classification branch plus a fix for a data-formatting quirk
+("AM (" with a stray space breaking the tight prefix match). Also fixed a bogus
+test fixture referencing a non-existent feat ID
+(`DN_Feats_AssaultMedium_T5_Afterburner`). All `shared` tests pass now.
 
 ---
 
@@ -377,9 +394,9 @@
 ## Quick Reference
 
 **Current state:**
-- All 8 services build, 0 lint issues
-- All tests pass (mmogbrain, legacy-api, shared, gateway)
-- 24/24 CRITICAL+HIGH resolved, 3/32 MEDIUM resolved, 15/15 LOW resolved
+- All 8 services build, 0 new lint issues (6 pre-existing unrelated staticcheck/errcheck issues remain in shared/dreadgameconfig)
+- All tests pass (mmogbrain, legacy-api, shared, gateway) — shared/dreadgameconfig's 3 previously-failing DSL tests now pass too
+- 24/24 CRITICAL+HIGH resolved, 22/32 MEDIUM resolved, 15/15 LOW resolved
 - ~114 YA_* handlers dispatched, ~45 with dedicated payload builders
 - Phases 1-6 complete: hangar, matchmaking, progression, market/economy, PvE/AI
 - Feature coverage: ~30%

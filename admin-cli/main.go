@@ -8,9 +8,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// instanceIDPattern matches the canonical UUID format game-manager assigns to
+// instances (uuid.New().String(), e.g. "3fa85f64-5717-4562-b3fc-2c963f66afa6").
+// Instance IDs are validated against this before being used to build a
+// request URL, so path-traversal or query/fragment injection via a crafted
+// "id" argument (e.g. "../admin", "foo?x=1") is rejected up front.
+var instanceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 const (
 	commandStatus = "status"
@@ -264,7 +272,12 @@ func (c *client) instances() {
 }
 
 func (c *client) stopInstance(id string) {
-	r := c.del(c.joinPath(c.gmURL, "/instances/", id))
+	if !instanceIDPattern.MatchString(id) {
+		die(fmt.Sprintf("invalid instance id %q: expected a UUID (e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6)", id))
+	}
+	// url.PathEscape is redundant once the UUID format above is enforced, but
+	// is kept as defense-in-depth against future changes to the ID format.
+	r := c.del(c.joinPath(c.gmURL, "/instances", url.PathEscape(id)))
 	printJSON(r)
 }
 

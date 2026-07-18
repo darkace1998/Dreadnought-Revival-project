@@ -26,7 +26,7 @@ func TestLoadShipFeats(t *testing.T) {
 	testFeats := []string{
 		"DN_Feats_Shared_EnergyPack",
 		"DN_Feats_Shared_EnergyPack_T2",
-		"DN_Feats_AssaultMedium_T5_Afterburner",
+		"DN_Feats_AssaultMedium_T5_Int_FirepowerInc_T5",
 	}
 
 	for _, featName := range testFeats {

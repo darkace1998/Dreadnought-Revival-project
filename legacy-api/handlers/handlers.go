@@ -458,11 +458,17 @@ func (h *Handler) PostMatchResult(w http.ResponseWriter, r *http.Request) {
 
 // Health handles GET /health
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	dbOK := "ok"
 	if err := h.DB.Ping(); err != nil {
-		dbOK = "error"
+		h.Log.WithError(err).Warn("health: database ping failed")
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			fieldStatus: "error",
+			"service":   "legacy-api",
+			"database":  "error",
+			"error":     "database unreachable",
+		})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api", "database": dbOK})
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "service": "legacy-api", "database": "ok"})
 }
 
 func newMmogProgressionRequest(body []byte) (*http.Request, error) {

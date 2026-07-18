@@ -29,6 +29,16 @@ Thumbs.db
 
 # Build
 bin/
+/mmogbrain/mmogbrain
+/admin-cli/admin-cli
+/auth-server/auth-server
+/legacy-api/legacy-api
+/game-manager/game-manager
+/gateway/gateway
+/master-server/master-server
+/dn-launcher/dn-launcher
+/dn-launcher/dn-launcher.exe
+/dn-launcher/dreadnought-launcher.exe
 
 # GitHub CLI config
 .config/

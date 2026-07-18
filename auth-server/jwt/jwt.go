@@ -2,10 +2,30 @@ package jwt
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
+
+// bearerPrefix is the case-insensitive scheme prefix on the Authorization header.
+const bearerPrefix = "Bearer "
+
+// ExtractBearerToken parses an "Authorization: Bearer <token>" header value
+// and returns the token string. It matches the "Bearer " scheme
+// case-insensitively (per RFC 6750, the scheme token is case-insensitive)
+// and reports ok=false — instead of panicking or silently misbehaving — if
+// the header is missing the prefix or the token is empty.
+func ExtractBearerToken(authHeader string) (token string, ok bool) {
+	if len(authHeader) < len(bearerPrefix) || !strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+		return "", false
+	}
+	token = strings.TrimSpace(authHeader[len(bearerPrefix):])
+	if token == "" {
+		return "", false
+	}
+	return token, true
+}
 
 // Claims are the JWT payload fields expected by the Dreadnought client.
 // Used only for the Parse return value; signing uses MapClaims (see Issue).

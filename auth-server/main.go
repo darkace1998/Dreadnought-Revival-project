@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -122,8 +121,8 @@ func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {
 func jwtMiddleware(secret []byte, database *sql.DB, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenStr == authHeader || tokenStr == "" {
+		tokenStr, ok := jwtPkg.ExtractBearerToken(authHeader)
+		if !ok {
 			http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
 			return
 		}

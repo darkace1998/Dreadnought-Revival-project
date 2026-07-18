@@ -40,6 +40,77 @@ func TestNewMmogProgressionRequestUsesInternalEndpointAndKey(t *testing.T) {
 	}
 }
 
+func TestHealthReturnsOKWhenDatabaseReachable(t *testing.T) {
+	database, err := legacydb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			t.Fatalf("close test db: %v", err)
+		}
+	}()
+
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	handler := &Handler{DB: database, Log: logger}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Health(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		Status   string `json:"status"`
+		Database string `json:"database"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode health payload: %v", err)
+	}
+	if payload.Status != "ok" || payload.Database != "ok" {
+		t.Fatalf("payload = %+v, want status/database = ok/ok", payload)
+	}
+}
+
+func TestHealthReturnsServiceUnavailableWhenDatabaseUnreachable(t *testing.T) {
+	database, err := legacydb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	// Close the DB up front so Ping() fails, simulating an unreachable database.
+	if err := database.Close(); err != nil {
+		t.Fatalf("close test db: %v", err)
+	}
+
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	handler := &Handler{DB: database, Log: logger}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Health(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	var payload struct {
+		Status   string `json:"status"`
+		Database string `json:"database"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode health payload: %v", err)
+	}
+	if payload.Status != "error" || payload.Database != "error" {
+		t.Fatalf("payload = %+v, want status/database = error/error", payload)
+	}
+}
+
 func TestGetInventoryPinsStarterIdentityListsToSharedConfig(t *testing.T) {
 	database, err := legacydb.Open(":memory:")
 	if err != nil {

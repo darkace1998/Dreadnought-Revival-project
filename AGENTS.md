@@ -15,10 +15,28 @@ cd dreadnought-private-server/legacy-api && go test ./...
 cd dreadnought-private-server/shared && go test ./...
 ```
 
-**Current test status (2026-07-02):**
+**`shared/dreadgameconfig` and `legacy-api/handlers` tests require `DATA_DIR` set explicitly:**
+```bash
+# WRONG — panics: shared/dreadgameconfig's package-level init() eagerly loads
+# game data via a cwd-relative default path ("../data/"), which only resolves
+# correctly when cwd is a module root that sits directly under the repo root
+# (e.g. mmogbrain/). legacy-api/handlers/ and shared/dreadgameconfig/ are one
+# level deeper, so the relative default resolves to a nonexistent directory —
+# and because the load happens in init() (before any test or TestMain can run),
+# there is no way to fix this from within the test binary; DATA_DIR must be set
+# in the environment before `go test` starts.
+cd shared && go test ./...
+cd legacy-api && go test ./...
+
+# CORRECT
+DATA_DIR=/root/projects/dreadnought-private-server/data bash -c 'cd shared && go test ./...'
+DATA_DIR=/root/projects/dreadnought-private-server/data bash -c 'cd legacy-api && go test ./...'
+```
+
+**Current test status (2026-07-18):**
 - `mmogbrain`: all tests pass (7 test files — payload sizes, ribbons, seasons, gateway bootstrap, fleet dumps, quickcheck, main)
-- `legacy-api/handlers`: 9 tests pass
-- `shared/dreadgameconfig`: 7 tests pass
+- `legacy-api/handlers`: 11 tests pass (with `DATA_DIR` set — see gotcha above)
+- `shared/dreadgameconfig`: 31 test files pass (with `DATA_DIR` set — see gotcha above)
 - `gateway`: 2 tests pass (crash receiver)
 - All other modules: no test files
 
@@ -101,11 +119,11 @@ Beyond HTTP REST, runs Firmament TLS server on `:48843` speaking proprietary bin
 | `certs/server.crt` | Gateway HTTPS | Self-signed; clients trust `certs/ca.crt` |
 | `certs/firmament.crt` | Firmament :48843 | Issuer spoofed as `Amazon RSA 2048 M01` to bypass game's CA pinning |
 
-## Current State (2026-07-02)
+## Current State (2026-07-18)
 
-- All 8 services build; 0 golangci-lint issues per-module
+- All 8 services build; 0 new golangci-lint issues per-module (6 pre-existing unrelated issues remain in shared/dreadgameconfig, see todo.md)
 - All tests pass across 4 modules (mmogbrain, legacy-api, shared, gateway)
-- 24/24 CRITICAL+HIGH issues resolved; 29 MEDIUM tracked; 15 LOW resolved
+- 24/24 CRITICAL+HIGH issues resolved; 22/32 MEDIUM resolved (see todo.md Phase 29); 15 LOW resolved
 - mmogbrain refactored: 4,720-line `main.go` → 218-line entry point + 11 files
 - ~114 YA_* handlers dispatched; ~45 with dedicated payload builders
 - Client can log in, enter hangar, modify fleets/loadouts, queue for matches, earn XP/ranks

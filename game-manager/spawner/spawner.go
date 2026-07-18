@@ -3,6 +3,7 @@ package spawner
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -193,8 +194,15 @@ func (s *Spawner) cleanupInstance(inst *Instance) {
 	}
 }
 
-// Stop terminates a running instance by ID. Returns nil on success, or an error
-// if the instance was not found or is already stopped.
+// Stop terminates a running instance by ID. Returns nil on success.
+//
+// Stop is idempotent with respect to process liveness (M12): if the instance
+// ID is not tracked at all, that's a genuine "not found" error. But if the
+// instance IS tracked and its underlying OS process has already exited (e.g.
+// it crashed moments before the delete request arrived, racing the monitor
+// goroutine's own cleanup), bookkeeping/port-pool cleanup still happens and
+// Stop reports success rather than surfacing the "already finished" kill
+// error to the caller.
 func (s *Spawner) Stop(id string) error {
 	s.mu.Lock()
 	inst, ok := s.instances[id]
@@ -211,7 +219,9 @@ func (s *Spawner) Stop(id string) error {
 	s.cleanupInstance(inst)
 
 	if inst.Cmd != nil && inst.Cmd.Process != nil {
-		return inst.Cmd.Process.Kill()
+		if err := inst.Cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return fmt.Errorf("kill instance %s: %w", id, err)
+		}
 	}
 	return nil
 }

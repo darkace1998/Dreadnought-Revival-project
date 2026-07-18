@@ -21,6 +21,12 @@ import (
 
 const fieldStatus = "status"
 
+// maxPlayersPerInstance bounds the player list accepted on instance creation.
+// Production match size caps at 10 players (see spawner's "-maxplayers=10"
+// and master-server's default max_players); allow up to 2x that as headroom
+// without permitting an unbounded payload (M13).
+const maxPlayersPerInstance = 20
+
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -57,9 +63,23 @@ func main() {
 			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 			return
 		}
-		if len(req.Players) > 20 {
+		if len(req.Players) == 0 {
+			http.Error(w, `{"error":"players list is required and cannot be empty"}`, http.StatusBadRequest)
+			return
+		}
+		if len(req.Players) > maxPlayersPerInstance {
 			http.Error(w, `{"error":"too many players"}`, http.StatusBadRequest)
 			return
+		}
+		for _, p := range req.Players {
+			if strings.TrimSpace(p) == "" {
+				http.Error(w, `{"error":"player id cannot be empty"}`, http.StatusBadRequest)
+				return
+			}
+			if len(p) > 64 {
+				http.Error(w, `{"error":"player id too long"}`, http.StatusBadRequest)
+				return
+			}
 		}
 		if len(req.GameMode) > 100 {
 			http.Error(w, `{"error":"game_mode too long"}`, http.StatusBadRequest)

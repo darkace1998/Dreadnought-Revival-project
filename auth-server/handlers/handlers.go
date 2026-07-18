@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/dreadnought-ps/auth-server/jwt"
 	"github.com/dreadnought-ps/auth-server/models"
 	"github.com/google/uuid"
+	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -303,6 +305,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fast-path pre-check: gives a clean 409 without paying for a bcrypt hash
+	// in the common case. This is inherently racy (TOCTOU) under concurrent
+	// registrations, so it is NOT the source of truth for duplicate
+	// detection — the INSERT below is, via a typed constraint-error check.
 	var existingID string
 	if err := h.DB.QueryRow(`SELECT id FROM users WHERE username=? OR email=?`, req.Username, req.Email).Scan(&existingID); err == nil {
 		writeGreyboxError(w, http.StatusConflict, -32002, "username or email already taken")
@@ -315,6 +321,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		id, req.Username, req.Email, string(hash),
 	)
 	if err != nil {
+		// Authoritative duplicate check: rely on the driver's typed
+		// constraint-violation error rather than matching on err.Error()
+		// text, which is brittle across mattn/go-sqlite3 versions/wording.
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			writeGreyboxError(w, http.StatusConflict, -32002, "username or email already taken")
+			return
+		}
 		h.Log.WithError(err).Error("register: db insert")
 		writeGreyboxError(w, http.StatusInternalServerError, -32603, "registration failed")
 		return
@@ -342,8 +356,8 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 // Logout handles POST /auth/logout — invalidates the session token.
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
-	tokenStr := strings.TrimPrefix(auth, "Bearer ")
-	if tokenStr != "" {
+	tokenStr, ok := jwt.ExtractBearerToken(auth)
+	if ok {
 		sum := sha256.Sum256([]byte(tokenStr))
 		tokenHash := fmt.Sprintf("%x", sum[:])
 		if _, err := h.DB.Exec(`DELETE FROM sessions WHERE token_hash=?`, tokenHash); err != nil {

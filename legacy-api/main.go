@@ -103,11 +103,16 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
-			if !strings.HasPrefix(auth, "Bearer ") {
+			const bearerPrefix = "Bearer "
+			if !strings.HasPrefix(auth, bearerPrefix) {
 				http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
 				return
 			}
-			tokenStr := auth[7:]
+			tokenStr := strings.TrimPrefix(auth, bearerPrefix)
+			if tokenStr == "" {
+				http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
+				return
+			}
 			type claims struct {
 				UserID   string `json:"sub"`
 				Username string `json:"username"`
