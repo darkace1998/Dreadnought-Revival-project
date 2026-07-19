@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,11 @@ import (
 // "id" argument (e.g. "../admin", "foo?x=1") is rejected up front.
 var instanceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// usernamePattern is a conservative allowlist for the username argument to
+// ban/unban — rejects obvious typos/garbage (whitespace, control characters,
+// empty string) before it's sent to auth-server's /admin/ban|unban.
+var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_\-.]{1,64}$`)
+
 const (
 	commandStatus = "status"
 	fieldError    = "error"
@@ -30,22 +36,26 @@ const usage = `Dreadnought Private Server — Admin CLI
 Usage: admin-cli <command> [args...]
 
 Environment variables:
-  AUTH_URL    Auth server base URL   (default: http://127.0.0.1:8081)
-  MASTER_URL  Master server base URL (default: http://127.0.0.1:8084)
-  MMOG_URL    Mmogbrain base URL     (default: http://127.0.0.1:8083)
-  GM_URL      Game manager base URL  (default: http://127.0.0.1:8085)
-  ADMIN_KEY   Shared admin secret    (required — must match the target services' own ADMIN_KEY)
+  AUTH_URL       Auth server base URL   (default: http://127.0.0.1:8081)
+  LEGACY_API_URL Legacy API base URL    (default: http://127.0.0.1:8082)
+  MASTER_URL     Master server base URL (default: http://127.0.0.1:8084)
+  MMOG_URL       Mmogbrain base URL     (default: http://127.0.0.1:8083)
+  GM_URL         Game manager base URL  (default: http://127.0.0.1:8085)
+  ADMIN_KEY      Shared admin secret    (required — must match the target services' own ADMIN_KEY)
 
 Commands:
-  status                    Show all services health
-  servers                   List active game servers
-  instances                 List running game instances
-  stop-instance <id>        Stop a running game instance
-  ban <username> <reason>   Ban a player
-  unban <username>          Unban a player
-  queue                     Show current matchmaking queue
-  chat [channel]            Show recent chat (default channel: global)
-  help                      Show this help
+  status                        Show all services health
+  servers                       List active game servers
+  instances                     List running game instances
+  stop-instance [-y] <id>       Stop a running game instance
+  ban [-y] <username> <reason>  Ban a player
+  unban [-y] <username>         Unban a player
+  queue                         Show current matchmaking queue
+  chat [channel]                Show recent chat (default channel: global)
+  help                          Show this help
+
+Destructive commands (ban, unban, stop-instance) prompt for
+confirmation unless -y/--yes is passed as the first argument.
 `
 
 func main() {
@@ -58,6 +68,7 @@ func main() {
 	args := os.Args[2:]
 
 	authURL := getenv("AUTH_URL", "http://127.0.0.1:8081")
+	legacyAPIURL := getenv("LEGACY_API_URL", "http://127.0.0.1:8082")
 	masterURL := getenv("MASTER_URL", "http://127.0.0.1:8084")
 	mmogURL := getenv("MMOG_URL", "http://127.0.0.1:8083")
 	gmURL := getenv("GM_URL", "http://127.0.0.1:8085")
@@ -71,12 +82,13 @@ func main() {
 	}
 
 	c := &client{
-		http:      &http.Client{Timeout: 10 * time.Second},
-		authURL:   authURL,
-		masterURL: masterURL,
-		mmogURL:   mmogURL,
-		gmURL:     gmURL,
-		adminKey:  adminKey,
+		http:         &http.Client{Timeout: 10 * time.Second},
+		authURL:      authURL,
+		legacyAPIURL: legacyAPIURL,
+		masterURL:    masterURL,
+		mmogURL:      mmogURL,
+		gmURL:        gmURL,
+		adminKey:     adminKey,
 	}
 
 	switch cmd {
@@ -87,18 +99,30 @@ func main() {
 	case "instances":
 		c.instances()
 	case "stop-instance":
+		args, skipConfirm := stripYesFlag(args)
 		if len(args) < 1 {
-			die("usage: stop-instance <id>")
+			die("usage: stop-instance [-y] <id>")
+		}
+		if !skipConfirm && !confirm(fmt.Sprintf("Stop instance %s?", args[0])) {
+			die("aborted")
 		}
 		c.stopInstance(args[0])
 	case "ban":
+		args, skipConfirm := stripYesFlag(args)
 		if len(args) < 2 {
-			die("usage: ban <username> <reason>")
+			die("usage: ban [-y] <username> <reason>")
+		}
+		if !skipConfirm && !confirm(fmt.Sprintf("Ban user %q?", args[0])) {
+			die("aborted")
 		}
 		c.ban(args[0], strings.Join(args[1:], " "))
 	case "unban":
+		args, skipConfirm := stripYesFlag(args)
 		if len(args) < 1 {
-			die("usage: unban <username>")
+			die("usage: unban [-y] <username>")
+		}
+		if !skipConfirm && !confirm(fmt.Sprintf("Unban user %q?", args[0])) {
+			die("aborted")
 		}
 		c.unban(args[0])
 	case "queue":
@@ -119,12 +143,13 @@ func main() {
 }
 
 type client struct {
-	http      *http.Client
-	authURL   string
-	masterURL string
-	mmogURL   string
-	gmURL     string
-	adminKey  string
+	http         *http.Client
+	authURL      string
+	legacyAPIURL string
+	masterURL    string
+	mmogURL      string
+	gmURL        string
+	adminKey     string
 }
 
 func (c *client) joinPath(base string, elem ...string) string {
@@ -206,7 +231,7 @@ func (c *client) del(url string) map[string]interface{} {
 func (c *client) status() {
 	services := []struct{ name, url string }{
 		{"auth-server", c.joinPath(c.authURL, "/health")},
-		{"legacy-api", c.joinPath(strings.Replace(c.authURL, "8081", "8082", 1), "/health")},
+		{"legacy-api", c.joinPath(c.legacyAPIURL, "/health")},
 		{"mmogbrain", c.joinPath(c.mmogURL, "/health")},
 		{"master-server", c.joinPath(c.masterURL, "/health")},
 		{"game-manager", c.joinPath(c.gmURL, "/health")},
@@ -289,6 +314,9 @@ func (c *client) stopInstance(id string) {
 }
 
 func (c *client) ban(username, reason string) {
+	if !usernamePattern.MatchString(username) {
+		die(fmt.Sprintf("invalid username %q: expected 1-64 characters of letters, digits, underscore, hyphen, or dot", username))
+	}
 	r := c.post(c.joinPath(c.authURL, "/admin/ban"), map[string]string{
 		"username": username,
 		"reason":   reason,
@@ -297,6 +325,9 @@ func (c *client) ban(username, reason string) {
 }
 
 func (c *client) unban(username string) {
+	if !usernamePattern.MatchString(username) {
+		die(fmt.Sprintf("invalid username %q: expected 1-64 characters of letters, digits, underscore, hyphen, or dot", username))
+	}
 	r := c.post(c.joinPath(c.authURL, "/admin/unban"), map[string]string{
 		"username": username,
 	})
@@ -334,6 +365,27 @@ func (c *client) chat(channel string) {
 func printJSON(v interface{}) {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(b))
+}
+
+// stripYesFlag removes a leading -y/--yes flag from args, returning the
+// remaining args and whether the flag was present.
+func stripYesFlag(args []string) ([]string, bool) {
+	if len(args) > 0 && (args[0] == "-y" || args[0] == "--yes") {
+		return args[1:], true
+	}
+	return args, false
+}
+
+// confirm prompts on stdin and returns true only for an explicit y/yes.
+func confirm(prompt string) bool {
+	fmt.Fprintf(os.Stderr, "%s [y/N] ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes"
 }
 
 func getenv(key, fallback string) string {

@@ -11,7 +11,7 @@ import (
 var targetSizes = map[string]int{
 	"YA_UserLogin":                 174,
 	"YA_UserOnline":                81,
-	"YA_RequestStaticFleetData":    5214,
+	"YA_RequestStaticFleetData":    5250,
 	"YA_GetFeatureToggle":          111,
 	"YA_GetGameConfigData":         534,
 	"YA_GetStaticCareerData":       3531,
@@ -34,7 +34,7 @@ var targetSizes = map[string]int{
 	"YA_PlayerGet":                 5961,
 	"YA_PlayerFleets":              2198,
 	"YA_GetSeasonProgress":         146,
-	"YA_GetPlayersInformation":     324,
+	"YA_GetPlayersInformation":     326,
 	"YA_CheckReturn":               115,
 	"YA_AnalyticsBeginTransaction": 124,
 	"YA_AnalyticsEvent":            85,

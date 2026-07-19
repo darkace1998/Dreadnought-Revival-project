@@ -198,6 +198,13 @@ var migrations = []string{
 		updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	`CREATE TABLE IF NOT EXISTS player_membership (
+		user_id     TEXT PRIMARY KEY,
+		expires_at  INTEGER NOT NULL DEFAULT 0,  -- unix epoch seconds; 0 = never purchased / not active
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

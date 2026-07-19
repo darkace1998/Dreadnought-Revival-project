@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -62,6 +63,48 @@ func normalizedPlayerStatePID(playerPID string) string {
 		return normalized
 	}
 	return defaultMmogPlayerPID
+}
+
+// membershipExpiresAt returns the persisted elite-membership expiry (unix
+// seconds), or 0 if the player has never purchased one / no DB is
+// configured. 0 means "not active" — buildMmogPlayerDataPayload must not
+// substitute a hardcoded always-active value for this.
+func membershipExpiresAt(playerPID string) int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return 0
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	var expiresAt int32
+	if err := database.QueryRow(`SELECT expires_at FROM player_membership WHERE user_id=?`, pid).Scan(&expiresAt); err != nil {
+		return 0
+	}
+	return expiresAt
+}
+
+// extendMembershipTx adds durationDays to the player's current membership
+// expiry (or to now, if the current expiry has already passed / never
+// existed), persists it within the given transaction, and returns the new
+// expiry. Callers must run this in the same transaction as any currency
+// deduction for the purchase, so a failure here rolls back the deduction
+// too instead of taking the player's currency for nothing.
+func extendMembershipTx(tx *sql.Tx, playerPID string, durationDays int32, now int32) (int32, error) {
+	pid := normalizedPlayerStatePID(playerPID)
+
+	var currentExpiry int32
+	_ = tx.QueryRow(`SELECT expires_at FROM player_membership WHERE user_id=?`, pid).Scan(&currentExpiry)
+
+	base := now
+	if currentExpiry > base {
+		base = currentExpiry
+	}
+	newExpiry := base + durationDays*86400
+
+	if _, err := tx.Exec(`INSERT INTO player_membership(user_id, expires_at, updated_at) VALUES(?,?,datetime('now'))
+		ON CONFLICT(user_id) DO UPDATE SET expires_at=excluded.expires_at, updated_at=datetime('now')`, pid, newExpiry); err != nil {
+		return 0, fmt.Errorf("extend membership: %w", err)
+	}
+	return newExpiry, nil
 }
 
 func normalizedCaptainDisplayInfo(displayInfo string) string {
@@ -611,10 +654,26 @@ func persistRemoveFromFleet(database *sql.DB, playerPID string, payload []byte) 
 	return nil
 }
 
+// firstMmogInt32Field reads a request field as int32, tolerating both the
+// int32 wire tag (0x56) and a numeric-string tag (0x09) for the same field
+// name. Response-side payloads in this codebase were confirmed (decompile
+// evidence) to need numeric-string encoding for several array-entry fields
+// the client's restrictive scalar parser otherwise silently zeros; it's
+// plausible outgoing client requests re-serialize the same reflected
+// UStruct fields as strings too, which the int32-only ExtractInt32Field
+// cannot see. Trying both is strictly more permissive than int32-only and
+// costs nothing when the client does send int32.
 func firstMmogInt32Field(payload []byte, names ...string) int32 {
 	for _, name := range names {
 		if value, ok := protocol.ExtractInt32Field(payload, name); ok {
 			return value
+		}
+	}
+	for _, name := range names {
+		if raw := protocol.ExtractStringField(payload, name); raw != "" {
+			if value, err := strconv.Atoi(raw); err == nil {
+				return int32(value)
+			}
 		}
 	}
 	return 0

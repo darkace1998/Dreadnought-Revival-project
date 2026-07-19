@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 	"unicode"
 
@@ -469,14 +468,18 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 
 func appendMmogStaticFleetTypeEntry(b []byte, stack []int, eligibility dreadconfig.FleetEligibility) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendInt32Field(b, "ID", eligibility.FleetType)
-	b = protocol.AppendInt32Field(b, "ShipsToUnlock", eligibility.NumShipsToUnlockFleet)
-	b = protocol.AppendInt32Field(b, "BaseMaintenanceCost", eligibility.BaseMaintenanceCost)
+	// Scalar int32 fields on this array entry hit the same restrictive
+	// double/int64/string-only tagged union documented elsewhere in this
+	// file (Fleets, ShipLoadouts, Ribbons, TechTree rows) — convert to
+	// numeric strings. FleetRatingMin (below) was already converted.
+	b = protocol.AppendStringField(b, "ID", strconv.Itoa(int(eligibility.FleetType)))
+	b = protocol.AppendStringField(b, "ShipsToUnlock", strconv.Itoa(int(eligibility.NumShipsToUnlockFleet)))
+	b = protocol.AppendStringField(b, "BaseMaintenanceCost", strconv.Itoa(int(eligibility.BaseMaintenanceCost)))
 	b = protocol.AppendStringField(b, "FleetRatingMin", strconv.FormatFloat(eligibility.FleetRatingMin, 'f', 1, 64))
-	b = protocol.AppendInt32Field(b, "FleetRatingCost", eligibility.FleetRatingCost)
-	b = protocol.AppendInt32Field(b, "ChargeTime", eligibility.MaintenanceTime)
-	b = protocol.AppendInt32Field(b, "ChargeCost", 0)
-	b = protocol.AppendInt32Field(b, "AvailableCharges", 1)
+	b = protocol.AppendStringField(b, "FleetRatingCost", strconv.Itoa(int(eligibility.FleetRatingCost)))
+	b = protocol.AppendStringField(b, "ChargeTime", strconv.Itoa(int(eligibility.MaintenanceTime)))
+	b = protocol.AppendStringField(b, "ChargeCost", strconv.Itoa(0))
+	b = protocol.AppendStringField(b, "AvailableCharges", strconv.Itoa(1))
 	b, stack = protocol.AppendArrayStart(b, stack, "Tiers")
 	for _, tier := range eligibility.AllowedTiers {
 		b = protocol.AppendUnnamedInt32Field(b, tier)
@@ -693,7 +696,6 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	var b []byte
 	var stack []int
 	now := int32(time.Now().Unix())
-	membershipExpiresAt := now + 31536000
 	state := mmogPlayerStateForPID(playerPID)
 	starterFleet := state.activeFleet()
 
@@ -727,7 +729,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "SCtA", "")
 	b = protocol.AppendStringField(b, "LGVersion", "0")
 	b, stack = protocol.AppendObjectStart(b, stack, "Membership")
-	b = protocol.AppendInt32Field(b, "ExpireTime", membershipExpiresAt)
+	// 0 (unset/expired) is correct for players who never bought elite —
+	// previously this always reported "active for one more year" regardless
+	// of purchase history.
+	b = protocol.AppendInt32Field(b, "ExpireTime", membershipExpiresAt(playerPID))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
 	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(now))
@@ -1246,7 +1251,7 @@ func buildMmogProjectileDataPayload() []byte {
 			fieldName := typeOf.Field(i).Name
 			
 			// Convert field name to the format expected by the client
-			clientFieldName := "m_" + toSnakeCase(fieldName)
+			clientFieldName := "m_" + toLowerCamelCase(fieldName)
 			
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
@@ -1293,7 +1298,7 @@ func BuildYAGetShipFeatsPayload() []byte {
 			fieldName := typeOf.Field(i).Name
 			
 			// Convert field name to the format expected by the client
-			clientFieldName := "m_" + toSnakeCase(fieldName)
+			clientFieldName := "m_" + toLowerCamelCase(fieldName)
 			
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
@@ -1340,7 +1345,7 @@ func BuildYAGetAbilitiesPayload() []byte {
 			fieldName := typeOf.Field(i).Name
 			
 			// Convert field name to the format expected by the client
-			clientFieldName := "m_" + toSnakeCase(fieldName)
+			clientFieldName := "m_" + toLowerCamelCase(fieldName)
 			
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
@@ -1364,19 +1369,19 @@ func BuildYAGetAbilitiesPayload() []byte {
 	return b
 }
 
-func toSnakeCase(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				result.WriteRune('_')
-			}
-			result.WriteRune(unicode.ToLower(r))
-		} else {
-			result.WriteRune(r)
-		}
+// toLowerCamelCase lowercases the leading run of capitals in a Go exported
+// field name (e.g. "DamageHigh" -> "damageHigh"), matching the client's
+// real m_<camelCase> DataTable field convention — confirmed via the
+// decompiled projectile-row parser (YTuneManager::FindOrLoadProjectileRow
+// reads m_damageHigh, m_maxTravelDistance, etc., no underscores) and the
+// real extracted DN_Projectile_OTS_DT.json using the same camelCase keys.
+func toLowerCamelCase(s string) string {
+	if s == "" {
+		return s
 	}
-	return result.String()
+	r := []rune(s)
+	r[0] = unicode.ToLower(r[0])
+	return string(r)
 }
 
 func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
@@ -2178,8 +2183,10 @@ func appendMmogShipBonusEntry(b []byte, stack []int, name string, value int32) (
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Name", name)
 	b = protocol.AppendStringField(b, "name", name)
-	b = protocol.AppendInt32Field(b, "Value", value)
-	b = protocol.AppendInt32Field(b, "value", value)
+	// Same restrictive tagged-union bug class documented elsewhere in this
+	// file — send numeric strings, not int32.
+	b = protocol.AppendStringField(b, "Value", strconv.Itoa(int(value)))
+	b = protocol.AppendStringField(b, "value", strconv.Itoa(int(value)))
 	b = protocol.AppendBoolField(b, "IsPercent", false)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -2228,8 +2235,10 @@ func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, s
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "ID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "DisplayInfo", state.displayInfo)
-	b = protocol.AppendInt32Field(b, "Rank", state.currentRank)
-	b = protocol.AppendInt32Field(b, "UnlockedFleetType", 1)
+	// Same restrictive tagged-union bug class documented elsewhere in this
+	// file — send numeric strings, not int32.
+	b = protocol.AppendStringField(b, "Rank", strconv.Itoa(int(state.currentRank)))
+	b = protocol.AppendStringField(b, "UnlockedFleetType", strconv.Itoa(1))
 	b = protocol.AppendBoolField(b, "Elite", false)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -2252,16 +2261,46 @@ var catalogPrices = map[int32]int32{
 	100598570: 3000, // Howitzer
 	100597870: 3500, // Missile Launcher
 	100598573: 3500, // Torpedo Launcher
-	// Abilities
-	100597788: 1500, // Repair Beam
-	100598590: 1500, // Shield Boost
-	100597790: 2000, // EMP Blast
-	100598592: 2000, // Turbo Boost
-	// Perks
-	100597776: 1000, // Armor Plating
-	100598567: 1000, // Energy Shield
-	100597778: 1200, // Targeting Computer
-	100598569: 1200, // Engine Upgrade
+	// These 4 were previously labeled "Abilities"/"Perks" — cross-referenced
+	// against the authoritative data/assets/ItemIDTable.json CategoryName,
+	// all four are actually YWeapon (higher-tier weapon-turret variants of
+	// the entries above), not abilities or perks.
+	100597788: 1500, // Dreadnought Heavy Primary weapon turret
+	100598590: 1500, // YWeapon per ItemIDTable.json; not found in ItemIDRegister for an asset path
+	100597790: 2000, // Dreadnought Heavy Primary weapon turret, T5
+	100597776: 1000, // Assault Medium Primary weapon turret, T5
+	100598567: 1000, // Support Secondary-Short weapon turret, T2
+	100597778: 1200, // Assault Secondary-Long weapon turret, T4
+	100598569: 1200, // Dreadnought Secondary-Mid weapon turret, T1
+	// Classified YWeapon in ItemIDTable.json, but its asset path lives under
+	// an Abilities/ folder with an AB_ prefix — lower-confidence than the
+	// others above, flagged in issue #36 rather than independently resolved.
+	100598592: 2000, // /Game/Generic/Abilities/Dreadnought/Pri_BS_Plasma/T0/AB_DN_Pri_BS_Plasma_Weapon_T0_BP
+}
+
+// purchasedItemType derives the item_type recorded for a purchase from the
+// authoritative ItemIDTable.json category (via dreadconfig.GetCategoryForItemID,
+// which covers the full ~6600-item table, not just the small hardcoded
+// catalogItems slice). Previously this was unconditionally "ship" for every
+// purchase regardless of what was actually bought — see issue #36's finding
+// that several catalogPrices entries were also mislabeled by category.
+func purchasedItemType(itemID int32) string {
+	category, ok := dreadconfig.GetCategoryForItemID(itemID)
+	if !ok {
+		return dreadconfig.ItemTypeShip
+	}
+	switch category {
+	case "YWeapon":
+		return dreadconfig.ItemTypeWeapon
+	case "YAbility":
+		return dreadconfig.ItemTypeAbility
+	case "YPerk":
+		return dreadconfig.ItemTypePerk
+	case "YShipLoadoutPrecast", "YShipLoadoutHero":
+		return dreadconfig.ItemTypeLoadout
+	default:
+		return dreadconfig.ItemTypeShip
+	}
 }
 
 // Daily contract seeds
@@ -2300,7 +2339,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		price = 1000
 	}
 	price *= quantity
-	itemType := "ship"
+	itemType := purchasedItemType(itemID)
 	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
 	if currency == "" {
 		currency = "gp"
@@ -2402,15 +2441,35 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 	var premiumCurrency int32
 	_ = database.QueryRow(`SELECT premium_currency FROM player_state WHERE user_id=?`, pid).Scan(&premiumCurrency)
 
+	// Currency deduction and membership extension must commit or fail
+	// together — otherwise a currency deduction that "succeeds" but is
+	// followed by a failed membership write would take the player's
+	// currency for nothing.
+	tx, err := database.Begin()
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "database unavailable")
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	// Atomic conditional deduction — see buildMmogPurchasePayload's comment
 	// for why a separate check-then-update is unsafe under concurrent
 	// requests.
-	result, err := database.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`, price, pid, price)
+	result, err := tx.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`, price, pid, price)
 	if err != nil {
 		return buildMmogErrorPayload(requestName, "currency deduction failed")
 	}
 	if rows, _ := result.RowsAffected(); rows == 0 {
 		return buildMmogErrorPayload(requestName, "insufficient elite currency")
+	}
+
+	newExpiry, err := extendMembershipTx(tx, pid, durationDays, int32(time.Now().Unix()))
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "membership persistence failed")
+	}
+	if err := tx.Commit(); err != nil {
+		return buildMmogErrorPayload(requestName, "commit failed")
 	}
 
 	var b []byte
@@ -2420,6 +2479,7 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "eliteDays", durationDays)
 	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency-price)
+	b = protocol.AppendInt32Field(b, "ExpireTime", newExpiry)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

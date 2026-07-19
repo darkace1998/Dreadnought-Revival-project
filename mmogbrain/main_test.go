@@ -498,10 +498,10 @@ func TestPlayersInformationPayloadUsesDisplayInfoShape(t *testing.T) {
 	if !bytes.Contains(infos, protocol.AppendStringField(nil, "DisplayInfo", defaultCaptainDisplayInfo)) {
 		t.Fatal("YA_GetPlayersInformation missing DisplayInfo")
 	}
-	if !bytes.Contains(infos, protocol.AppendInt32Field(nil, "Rank", 1)) {
+	if !bytes.Contains(infos, protocol.AppendStringField(nil, "Rank", "1")) {
 		t.Fatal("YA_GetPlayersInformation missing Rank")
 	}
-	if !bytes.Contains(infos, protocol.AppendInt32Field(nil, "UnlockedFleetType", 1)) {
+	if !bytes.Contains(infos, protocol.AppendStringField(nil, "UnlockedFleetType", "1")) {
 		t.Fatal("YA_GetPlayersInformation missing UnlockedFleetType")
 	}
 	if !bytes.Contains(infos, protocol.AppendBoolField(nil, "Elite", false)) {
@@ -1352,28 +1352,28 @@ func TestFleetMetadataUsesConfigBackedEligibility(t *testing.T) {
 	}
 	tierCounts := map[int32]int{}
 	for _, eligibility := range wantEligibilities {
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "ID", eligibility.FleetType)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "ID", strconv.Itoa(int(eligibility.FleetType)))) {
 			t.Fatalf("YA_RequestStaticFleetData missing config-backed FleetType id %d", eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "ShipsToUnlock", eligibility.NumShipsToUnlockFleet)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "ShipsToUnlock", strconv.Itoa(int(eligibility.NumShipsToUnlockFleet)))) {
 			t.Fatalf("YA_RequestStaticFleetData missing ShipsToUnlock=%d for fleet type %d", eligibility.NumShipsToUnlockFleet, eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "BaseMaintenanceCost", eligibility.BaseMaintenanceCost)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "BaseMaintenanceCost", strconv.Itoa(int(eligibility.BaseMaintenanceCost)))) {
 			t.Fatalf("YA_RequestStaticFleetData missing BaseMaintenanceCost=%d for fleet type %d", eligibility.BaseMaintenanceCost, eligibility.FleetType)
 		}
 		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "FleetRatingMin", strconv.FormatFloat(eligibility.FleetRatingMin, 'f', 1, 64))) {
 			t.Fatalf("YA_RequestStaticFleetData missing FleetRatingMin for fleet type %d", eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "FleetRatingCost", eligibility.FleetRatingCost)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "FleetRatingCost", strconv.Itoa(int(eligibility.FleetRatingCost)))) {
 			t.Fatalf("YA_RequestStaticFleetData missing FleetRatingCost=%d for fleet type %d", eligibility.FleetRatingCost, eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "ChargeTime", eligibility.MaintenanceTime)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "ChargeTime", strconv.Itoa(int(eligibility.MaintenanceTime)))) {
 			t.Fatalf("YA_RequestStaticFleetData missing ChargeTime=%d for fleet type %d", eligibility.MaintenanceTime, eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "ChargeCost", 0)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "ChargeCost", strconv.Itoa(0))) {
 			t.Fatalf("YA_RequestStaticFleetData missing neutral ChargeCost for fleet type %d", eligibility.FleetType)
 		}
-		if !bytes.Contains(fleetTypes, protocol.AppendInt32Field(nil, "AvailableCharges", 1)) {
+		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "AvailableCharges", strconv.Itoa(1))) {
 			t.Fatalf("YA_RequestStaticFleetData missing AvailableCharges=1 for fleet type %d", eligibility.FleetType)
 		}
 		if !bytes.Contains(fleetEligibility, protocol.AppendInt32Field(nil, "FleetType", eligibility.FleetType)) {
@@ -1948,7 +1948,7 @@ func TestBootstrapPayloadsExposeFullFleetWithoutHeavyBattleReadyData(t *testing.
 		}
 	}
 	for _, field := range []string{"BaseMaintenanceCost", "ChargeTime", "ChargeCost", "AvailableCharges", "ShipsToUnlock"} {
-		if !bytes.Contains(staticFleetData, appendFieldMarker(field, 0x56)) {
+		if !bytes.Contains(staticFleetData, appendFieldMarker(field, 0x09)) {
 			t.Fatalf("YA_RequestStaticFleetData missing FleetTypes field %s", field)
 		}
 	}
@@ -2862,5 +2862,88 @@ func TestCompleteContractRejectsImmediateCompletion(t *testing.T) {
 	// must not succeed again (state is no longer 'active').
 	if _, _, success := completeContract(database, playerPID, contractID); success {
 		t.Fatal("completeContract succeeded a second time for an already-completed contract")
+	}
+}
+
+func TestFirstMmogInt32FieldAcceptsNumericStringFallback(t *testing.T) {
+	int32Payload := protocol.AppendInt32Field(nil, "LoadoutID", 42)
+	if got := firstMmogInt32Field(int32Payload, "LoadoutID"); got != 42 {
+		t.Fatalf("firstMmogInt32Field with int32-tagged field = %d, want 42", got)
+	}
+
+	stringPayload := protocol.AppendStringField(nil, "LoadoutID", "42")
+	if got := firstMmogInt32Field(stringPayload, "LoadoutID"); got != 42 {
+		t.Fatalf("firstMmogInt32Field with string-tagged numeric field = %d, want 42", got)
+	}
+
+	// int32-tagged match must win over a later numeric-string candidate name.
+	mixedPayload := protocol.AppendInt32Field(nil, "loadoutID", 7)
+	mixedPayload = protocol.AppendStringField(mixedPayload, "LoadoutID", "99")
+	if got := firstMmogInt32Field(mixedPayload, "loadoutID", "LoadoutID"); got != 7 {
+		t.Fatalf("firstMmogInt32Field with mixed tags = %d, want 7 (int32 match preferred)", got)
+	}
+
+	if got := firstMmogInt32Field(nil, "LoadoutID"); got != 0 {
+		t.Fatalf("firstMmogInt32Field with no match = %d, want 0", got)
+	}
+}
+
+func TestElitePurchasePersistsMembershipExpiry(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "efefefefefefefefefefefefefefefe"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET premium_currency=10000 WHERE user_id=?`, normalizedPlayerStatePID(playerPID)); err != nil {
+		t.Fatalf("seed premium currency: %v", err)
+	}
+
+	before := buildMmogPlayerGetPayload(playerPID)
+	beforeMembership := extractNamedMmogObject(t, before, "Membership")
+	if expire, ok := protocol.ExtractInt32Field(beforeMembership, "ExpireTime"); !ok || expire != 0 {
+		t.Fatalf("YA_PlayerGet ExpireTime before any purchase = %d (ok=%v), want 0", expire, ok)
+	}
+
+	purchaseRequest := protocol.AppendInt32Field(nil, "Duration", 30)
+	purchase := buildMmogElitePurchasePayload("YA_BuyEliteStatus", playerPID, purchaseRequest)
+	purchaseResult := extractNamedMmogObject(t, purchase, "result")
+	if status := protocol.ExtractStringField(purchaseResult, fieldStatus); status != "ok" {
+		t.Fatalf("elite purchase status = %q, want ok (payload=%x)", status, purchase)
+	}
+	purchaseExpiry, ok := protocol.ExtractInt32Field(purchaseResult, "ExpireTime")
+	if !ok || purchaseExpiry <= 0 {
+		t.Fatalf("elite purchase response ExpireTime = %d (ok=%v), want positive", purchaseExpiry, ok)
+	}
+
+	after := buildMmogPlayerGetPayload(playerPID)
+	afterMembership := extractNamedMmogObject(t, after, "Membership")
+	if expire, ok := protocol.ExtractInt32Field(afterMembership, "ExpireTime"); !ok || expire != purchaseExpiry {
+		t.Fatalf("YA_PlayerGet ExpireTime after purchase = %d (ok=%v), want %d (persisted mismatch)", expire, ok, purchaseExpiry)
+	}
+}
+
+func TestPurchasedItemTypeMatchesRealItemCategory(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "fefefefefefefefefefefefefefefef"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, normalizedPlayerStatePID(playerPID)); err != nil {
+		t.Fatalf("seed currency: %v", err)
+	}
+
+	const weaponItemID int32 = 100597772 // Repeater Turrets, confirmed YWeapon in ItemIDTable.json
+	request := protocol.AppendInt32Field(nil, "ItemID", weaponItemID)
+	purchase := buildMmogPurchasePayload("YA_PurchaseItem", playerPID, request)
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+		t.Fatalf("weapon purchase did not succeed: %x", purchase)
+	}
+
+	var itemType string
+	if err := database.QueryRow(`SELECT item_type FROM player_purchases WHERE user_id=? AND item_id=?`, normalizedPlayerStatePID(playerPID), weaponItemID).Scan(&itemType); err != nil {
+		t.Fatalf("query persisted item_type: %v", err)
+	}
+	if itemType != "weapon" {
+		t.Fatalf("persisted item_type = %q, want %q (purchasedItemType must not default every purchase to ship)", itemType, "weapon")
 	}
 }
