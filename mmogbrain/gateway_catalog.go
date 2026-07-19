@@ -100,9 +100,12 @@ func gatewayCurrencyCatalogCollection(entities []any) map[string]any {
 }
 
 func gatewayShipClassDisplayName(shipClass int32) string {
+	// Ordinals match the decompiled ship-baseclass enum (FUN_140303fb0):
+	// 0=Dreadnought, 1=Corvette, 2=ArtilleryCruiser, 3=TacticalCruiser,
+	// 4=Destroyer — see response_types.go's starterShipArchetypes comment.
 	switch shipClass {
 	case 0:
-		return "Destroyer"
+		return "Dreadnought"
 	case 1:
 		return "Corvette"
 	case 2:
@@ -110,7 +113,7 @@ func gatewayShipClassDisplayName(shipClass int32) string {
 	case 3:
 		return "Tactical"
 	case 4:
-		return "Dreadnought"
+		return "Destroyer"
 	default:
 		return ""
 	}
@@ -284,6 +287,15 @@ func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 		owned:           true,
 		quantity:        1,
 		gateIdentity:    true,
+		// NOTE (issue #58): deliberately left empty. The client's bundle
+		// loader (FUN_142a59b30/FUN_142a61790) cross-references each items[]
+		// entry by external_id, but gatewayMarketEntity() builds a FULL
+		// entity per bundle item — populating this with the same items
+		// already sent via gatewayItemCatalogSeeds (the item/currency
+		// catalog) causes duplicate FYItemData loads for the same IDs, per
+		// TestGatewayBootstrapPayloadsStayStructurallyComplete/bundles and
+		// TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities/bundles,
+		// which assert this stays empty for exactly that reason.
 	}}
 }
 

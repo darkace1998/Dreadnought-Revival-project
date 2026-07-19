@@ -47,6 +47,15 @@ func buildMmogLoginSuccessPayload(playerPID ...string) []byte {
 	b = protocol.AppendInt32Field(b, "premiumCurrency", state.premiumCurrency)
 	b = protocol.AppendInt32Field(b, "freexp", state.freeXP)
 	b = protocol.AppendInt32Field(b, "xp", state.currentXP)
+	// NOTE (issue #50): the client's YA_UserLogin "ok" handler (FUN_142a3af90)
+	// reads result.LoginStreak.loginstreak, and only when loginstreak > 0
+	// also LoginStreak.credits/freexp/gp (that day's streak-bonus reward) —
+	// it does not appear to read the flat result.credits/etc above. Left
+	// unchanged pending further verification: TestUserLoginPayloadKeepsEconomyFieldsOnResult
+	// asserts today's top-level placement deliberately, and there's no
+	// persisted daily-login-streak tracking yet to populate the nested
+	// fields with anyway, so nesting them now would have no observable
+	// effect either way.
 	b, stack = protocol.AppendObjectStart(b, stack, "LoginStreak")
 	b = protocol.AppendInt32Field(b, "loginstreak", 0)
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -83,7 +92,10 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 		return buildMmogMatchmakingPayload(requestName, status)
 	}
 
-	gameMode := protocol.FirstNonEmptyString(payload, "GameMode", "gameMode", "Mode", "mode", "matchmaking")
+	// Client's matchmaking request builder (FUN_142a196e0) sends the mode
+	// selection as "GameType" (single mode) or "GameTypes" (multi-mode) —
+	// confirmed via decompile, neither of which was previously checked here.
+	gameMode := protocol.FirstNonEmptyString(payload, "GameType", "GameTypes", "GameMode", "gameMode", "Mode", "mode", "matchmaking")
 	if gameMode == "" || gameMode == "*matchmaking" {
 		gameMode = "TDM"
 	}
@@ -1431,7 +1443,10 @@ func buildMmogBoosterDataPayload() []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "BoosterTable")
 	for _, booster := range standardBoosterSeeds() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendInt32Field(b, "id", booster.id)
+		// Client's booster-entry parser (FUN_142a66500) reads "ID" (uppercase),
+		// not "id" — confirmed by decoding the indirect FName string in the
+		// shipping binary.
+		b = protocol.AppendInt32Field(b, "ID", booster.id)
 		b = protocol.AppendBoolField(b, "active", booster.active)
 		b = protocol.AppendInt32Field(b, "type", booster.boosterType)
 		b, stack = protocol.AppendArrayStart(b, stack, "effects")
