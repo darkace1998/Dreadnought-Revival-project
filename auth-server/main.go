@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -54,9 +55,13 @@ func main() {
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
 
+	// Login/register are unauthenticated by nature, so they're the
+	// brute-force-relevant surface — rate-limit per IP.
+	loginLimiter := middleware.NewRateLimiter(10, time.Minute)
+
 	// Dreadnought profile-api compatible endpoints
-	r.HandleFunc("/auth/", h.Login).Methods(http.MethodPost)
-	r.HandleFunc("/auth/register", h.Register).Methods(http.MethodPost)
+	r.Handle("/auth/", loginLimiter.Middleware(http.HandlerFunc(h.Login))).Methods(http.MethodPost)
+	r.Handle("/auth/register", loginLimiter.Middleware(http.HandlerFunc(h.Register))).Methods(http.MethodPost)
 	r.HandleFunc("/auth/me", jwtMiddleware(secret, database, h.Me)).Methods(http.MethodGet)
 	r.HandleFunc("/auth/logout", h.Logout).Methods(http.MethodPost)
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
@@ -67,6 +72,12 @@ func main() {
 	admin.Use(adminKeyMiddleware(requireAdminKey(log)))
 	admin.HandleFunc("/ban", h.AdminBan).Methods(http.MethodPost)
 	admin.HandleFunc("/unban", h.AdminUnban).Methods(http.MethodPost)
+
+	// Internal endpoints (protected by X-Internal-Key header middleware) —
+	// for other services to check session revocation state, not for players.
+	internalRoutes := r.PathPrefix("/internal").Subrouter()
+	internalRoutes.Use(internalKeyMiddleware(requireInternalKey(log)))
+	internalRoutes.HandleFunc("/session/valid", h.ValidateSession).Methods(http.MethodPost)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -111,6 +122,33 @@ func requireAdminKey(log *logrus.Logger) string {
 		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
+}
+
+// requireInternalKey refuses to start without a real shared secret for
+// service-to-service endpoints (currently just session validation). Falls
+// back to ADMIN_KEY, matching the pattern used elsewhere in this codebase.
+func requireInternalKey(log *logrus.Logger) string {
+	key := os.Getenv("INTERNAL_API_KEY")
+	if key == "" {
+		key = os.Getenv("ADMIN_KEY")
+	}
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
+}
+
+func internalKeyMiddleware(key string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("X-Internal-Key")
+			if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {

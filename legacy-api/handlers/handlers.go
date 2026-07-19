@@ -148,6 +148,10 @@ func (h *Handler) AgeConsent(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["id"]
+	if userID != r.Header.Get("X-User-ID") {
+		writeError(w, http.StatusForbidden, "cannot access another player's profile")
+		return
+	}
 
 	profile, _, err := h.ensurePlayerProfile(userID)
 	if err != nil {
@@ -198,6 +202,10 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["id"]
+	if userID != r.Header.Get("X-User-ID") {
+		writeError(w, http.StatusForbidden, "cannot access another player's inventory")
+		return
+	}
 
 	_, starterReady, err := h.ensurePlayerProfile(userID)
 	if err != nil {

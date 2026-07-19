@@ -129,6 +129,7 @@ func TestGetInventoryPinsStarterIdentityListsToSharedConfig(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-identity/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-identity"})
+	req.Header.Set("X-User-ID", "user-identity")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -199,6 +200,7 @@ func TestGetInventoryCreatesProfileBeforeStarterSeeding(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-gated/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-gated"})
+	req.Header.Set("X-User-ID", "user-gated")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -287,6 +289,7 @@ func TestGetProfileEnsuresMissingProfileAndStats(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-profile/profile", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-profile"})
+	req.Header.Set("X-User-ID", "user-profile")
 	rec := httptest.NewRecorder()
 
 	handler.GetProfile(rec, req)
@@ -356,6 +359,7 @@ func TestGetInventorySeedsCoherentStarterInventory(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-1/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-1"})
+	req.Header.Set("X-User-ID", "user-1")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -440,6 +444,7 @@ func TestGetInventoryNormalizesLegacyLoadoutItemRows(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-2/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-2"})
+	req.Header.Set("X-User-ID", "user-2")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -520,6 +525,7 @@ func TestGetInventoryNormalizesFabricatedStarterItemIDs(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-3/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-3"})
+	req.Header.Set("X-User-ID", "user-3")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -593,6 +599,7 @@ func TestGetInventoryNormalizesAllFabricatedStarterItemAliases(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-fabricated/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-fabricated"})
+	req.Header.Set("X-User-ID", "user-fabricated")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -656,6 +663,7 @@ func TestGetInventoryNormalizesLegacyStarterShipAliases(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-4/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-4"})
+	req.Header.Set("X-User-ID", "user-4")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -720,6 +728,7 @@ func TestGetInventoryNormalizesAssetLinkedStarterRows(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/v2/dreadnought/player/user-5/inventory", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "user-5"})
+	req.Header.Set("X-User-ID", "user-5")
 	rec := httptest.NewRecorder()
 
 	handler.GetInventory(rec, req)
@@ -774,5 +783,49 @@ func seedLegacyProfile(t *testing.T, database *sql.DB, userID string) {
 	}
 	if err := ensurePlayerStatsExec(database, userID); err != nil {
 		t.Fatalf("insert legacy stats for %s: %v", userID, err)
+	}
+}
+
+// TestGetProfileAndInventoryRejectMismatchedCaller is a regression test for
+// the IDOR where GetProfile/GetInventory trusted the URL path {id} instead
+// of the authenticated caller (X-User-ID, set by jwtMiddleware from the
+// verified JWT) — any logged-in player could previously read any other
+// player's profile/inventory by substituting a different id in the path.
+func TestGetProfileAndInventoryRejectMismatchedCaller(t *testing.T) {
+	database, err := legacydb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			t.Fatalf("close test db: %v", err)
+		}
+	}()
+
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	handler := &Handler{DB: database, Log: logger}
+	seedLegacyProfile(t, database, "victim")
+
+	for _, tc := range []struct {
+		name string
+		call func(http.ResponseWriter, *http.Request)
+		path string
+	}{
+		{"profile", handler.GetProfile, "/v2/dreadnought/player/victim/profile"},
+		{"inventory", handler.GetInventory, "/v2/dreadnought/player/victim/inventory"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req = mux.SetURLVars(req, map[string]string{"id": "victim"})
+			req.Header.Set("X-User-ID", "attacker")
+			rec := httptest.NewRecorder()
+
+			tc.call(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d (attacker requesting victim's %s should be forbidden)", rec.Code, http.StatusForbidden, tc.name)
+			}
+		})
 	}
 }

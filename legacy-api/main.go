@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -48,12 +52,28 @@ func main() {
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
 	r.Handle("/metrics", promhttp.Handler())
 
+	internalKey := requireInternalKey(log)
+
+	sessionChecker := &sessionChecker{
+		authServerURL: getenv("AUTH_SERVER_URL", "http://127.0.0.1:8081"),
+		internalKey:   internalKey,
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
+	}
+
 	// Authenticated endpoints
 	auth := r.PathPrefix("/v2/dreadnought").Subrouter()
-	auth.Use(jwtMiddleware(secret, log))
+	auth.Use(jwtMiddleware(secret, log, sessionChecker))
 	auth.HandleFunc("/player/{id}/profile", h.GetProfile).Methods(http.MethodGet)
 	auth.HandleFunc("/player/{id}/inventory", h.GetInventory).Methods(http.MethodGet)
-	auth.HandleFunc("/match/result", h.PostMatchResult).Methods(http.MethodPost)
+
+	// Match-result reporting mutates player stats/XP on behalf of an entire
+	// match roster and was previously reachable with any ordinary player's
+	// JWT (same aud=dreadnought issued at login) — nothing distinguished a
+	// trusted match-reporting caller from any logged-in player. Require the
+	// same internal service credential used elsewhere, not a player token.
+	internalRoutes := r.PathPrefix("/v2/dreadnought").Subrouter()
+	internalRoutes.Use(internalKeyMiddleware(internalKey))
+	internalRoutes.HandleFunc("/match/result", h.PostMatchResult).Methods(http.MethodPost)
 
 	// Phase 7 — completeness endpoints
 	r.HandleFunc("/v2/dreadnought/server/status", h.ServerStatus).Methods(http.MethodGet)
@@ -99,7 +119,35 @@ func getenv(key, fallback string) string {
 	return fallback
 }
 
-func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
+// requireInternalKey refuses to start without a real shared secret for
+// service-to-service endpoints (currently just match-result reporting).
+// Falls back to ADMIN_KEY, matching the pattern used by mmogbrain/
+// master-server/game-manager's own internal endpoints.
+func requireInternalKey(log *logrus.Logger) string {
+	key := os.Getenv("INTERNAL_API_KEY")
+	if key == "" {
+		key = os.Getenv("ADMIN_KEY")
+	}
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
+}
+
+func internalKeyMiddleware(key string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("X-Internal-Key")
+			if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func jwtMiddleware(secret []byte, log *logrus.Logger, sessionChecker *sessionChecker) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
@@ -120,6 +168,9 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 			}
 			c := &claims{}
 			token, err := jwt.ParseWithClaims(tokenStr, c, func(t *jwt.Token) (interface{}, error) {
+				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+				}
 				return secret, nil
 			})
 			if err != nil || !token.Valid {
@@ -137,6 +188,21 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
 			return
 		}
+		// A signature/expiry-valid JWT doesn't mean the session is still
+		// live — auth-server tracks logout/ban revocation via its own
+		// sessions table, which legacy-api has no visibility into. Ask
+		// auth-server directly rather than silently accepting any
+		// not-yet-expired token for its full lifetime after logout/ban.
+		valid, err := sessionChecker.isValid(tokenStr)
+		if err != nil {
+			log.WithError(err).Warn("session validation check failed")
+			http.Error(w, `{"error":"session validation unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		if !valid {
+			http.Error(w, `{"error":"session revoked"}`, http.StatusUnauthorized)
+			return
+		}
 		ctx := context.WithValue(r.Context(), middleware.UserIDKey, c.UserID)
 		ctx = context.WithValue(ctx, middleware.UsernameKey, c.Username)
 		r = r.WithContext(ctx)
@@ -145,6 +211,42 @@ func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
 		next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// sessionChecker calls auth-server's internal session-validation endpoint
+// so legacy-api can honor logout/ban revocation, not just signature/expiry.
+type sessionChecker struct {
+	authServerURL string
+	internalKey   string
+	httpClient    *http.Client
+}
+
+func (sc *sessionChecker) isValid(token string) (bool, error) {
+	body, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		return false, err
+	}
+	req, err := http.NewRequest(http.MethodPost, sc.authServerURL+"/internal/session/valid", bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", sc.internalKey)
+	resp, err := sc.httpClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("auth-server returned HTTP %d", resp.StatusCode)
+	}
+	var result struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
+	return result.Valid, nil
 }
 
 func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {

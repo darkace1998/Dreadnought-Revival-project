@@ -145,7 +145,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 // loginSteam accepts any Steam auth ticket and auto-creates a user on first login.
 // We hash the ticket bytes to get a stable "steam_id" without needing Steamworks validation.
+//
+// KNOWN TRUST-BOUNDARY LIMITATION (tracked issue #13): this does not call
+// Steam's ISteamUserAuth/AuthenticateUserTicket API, so it cannot actually
+// verify the caller possesses a genuine Steam session — it grants a fully
+// signed JWT for whatever identity results from hashing the caller-supplied
+// bytes. Real validation would require a Steamworks Web API key (and this
+// game's App ID) that isn't available in this project; fixing it properly
+// is out of reach without an operator supplying those credentials. Left
+// as-is with this warning rather than a partial/untested mitigation.
 func (h *Handler) loginSteam(w http.ResponseWriter, ticket string, rpcID interface{}) {
+	h.Log.Warn("steam login: accepting ticket without Steamworks validation (see tracked issue #13) — identity is not cryptographically verified")
 	// SHA256 of ticket bytes → stable 16-char hex ID for this Steam session
 	sum := sha256.Sum256([]byte(ticket))
 	steamID := fmt.Sprintf("%x", sum[:8]) // 16 hex chars
@@ -367,6 +377,33 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "logged out"})
 }
 
+// ValidateSession handles POST /internal/session/valid — checks whether a
+// token's session is still live (not logged out, not banned — both delete
+// the matching sessions row) and not expired. Intended for other services
+// (e.g. legacy-api) that verify a JWT's signature/expiry themselves but
+// have no way to observe auth-server's own revocation state; gated by the
+// internal-key middleware, not exposed to players directly.
+func (h *Handler) ValidateSession(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]bool{"valid": false})
+		return
+	}
+	sum := sha256.Sum256([]byte(req.Token))
+	tokenHash := fmt.Sprintf("%x", sum[:])
+	var found int
+	if err := h.DB.QueryRow(
+		`SELECT COUNT(*) FROM sessions WHERE token_hash=? AND datetime(expires_at) > datetime('now')`,
+		tokenHash,
+	).Scan(&found); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]bool{"valid": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"valid": found > 0})
+}
+
 // Health handles GET /health
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	dbOK := "ok"
@@ -442,6 +479,10 @@ func (h *Handler) AdminUnban(w http.ResponseWriter, r *http.Request) {
 	err := h.DB.QueryRow(`SELECT id FROM users WHERE username=?`, req.Username).Scan(&userID)
 	if err == sql.ErrNoRows {
 		writeGreyboxError(w, http.StatusNotFound, -32001, "user not found")
+		return
+	}
+	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
 		return
 	}
 	if _, err := h.DB.Exec(`UPDATE users SET banned_at=NULL WHERE id=?`, userID); err != nil {
