@@ -233,8 +233,6 @@ func buildMmogQueryRoomsPayload() []byte {
 	b = protocol.AppendInt32Field(b, "Code", 0)
 	b, stack = protocol.AppendArrayStart(b, stack, "Rooms")
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "rooms")
-	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -290,7 +288,7 @@ func buildMmogSquadPayload(requestName string, playerPID string) []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "Code", 0)
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b, stack = protocol.AppendArrayStart(b, stack, "Squad")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Members")
@@ -337,24 +335,49 @@ func persistMmogChatMessage(playerPID string, channel string, message string) {
 
 // --- Fleet serialization ---
 
+// int32SliceToStrings converts each value to its decimal string form. The
+// client's "Fleets" array entry parser (FUN_142a77910 in the decompile) only
+// recognizes wire types double/int64/string for its numeric fields — plain
+// int32 (wire tag 0x56) silently falls through to a default of 0 for every
+// such field, per commit 731a3f3 (which fixed this for Type/Name only). The
+// client converts numeric strings back to an integer via _wtoi, so this is
+// the correct wire representation for every affected field, not just those
+// two.
+func int32SliceToStrings(values []int32) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = strconv.Itoa(int(v))
+	}
+	return out
+}
+
 func appendMmogFleetRawFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
 	b = protocol.AppendInt32Field(b, "fleet id", fleet.fleetID)
-	b = protocol.AppendInt32Field(b, "FleetType", fleet.fleetType)
-	b, stack = protocol.AppendInt32ArrayField(b, stack, "shipIds", fleet.shipIDs())
+	// FleetType, shipIds, FlagShipID, FlagShipLoadoutID/Index: see
+	// int32SliceToStrings doc comment — these are read by the same
+	// int32-blind parser as Type/Name and must be sent as numeric strings.
+	b = protocol.AppendStringField(b, "FleetType", strconv.Itoa(int(fleet.fleetType)))
+	b, stack = protocol.AppendStringArrayField(b, stack, "shipIds", int32SliceToStrings(fleet.shipIDs()))
 	b, stack = protocol.AppendBoolArrayField(b, stack, "ShipTechTreeComplete", fleet.shipTechTreeComplete())
-	b = protocol.AppendInt32Field(b, "FlagShipID", fleet.flagshipShipID)
-	b = protocol.AppendInt32Field(b, "FlagShipLoadoutID", fleet.flagshipLoadoutID)
-	b = protocol.AppendInt32Field(b, "FlagShipLoadoutIndex", fleet.flagshipLoadoutIndex)
+	b = protocol.AppendStringField(b, "FlagShipID", strconv.Itoa(int(fleet.flagshipShipID)))
+	b = protocol.AppendStringField(b, "FlagShipLoadoutID", strconv.Itoa(int(fleet.flagshipLoadoutID)))
+	b = protocol.AppendStringField(b, "FlagShipLoadoutIndex", strconv.Itoa(int(fleet.flagshipLoadoutIndex)))
 	return b, stack
 }
 
 func appendMmogFleetRuntimeFields(b []byte, fleet mmogFleetSeed) []byte {
+	// AutoRepair is a genuine bool UPROPERTY client-side and parses
+	// correctly as-is. Maintenance is NOT — despite the semantically
+	// boolean value, the client reads it through the same int32-blind
+	// numeric union as LastWinTime/ChargingBeginTime/ChargingCharges/Rating
+	// (see int32SliceToStrings doc comment), so it must go out as a numeric
+	// string too, not a bool field.
 	b = protocol.AppendBoolField(b, "AutoRepair", false)
-	b = protocol.AppendBoolField(b, "Maintenance", false)
-	b = protocol.AppendInt32Field(b, "LastWinTime", 0)
-	b = protocol.AppendInt32Field(b, "ChargingBeginTime", 0)
-	b = protocol.AppendInt32Field(b, "ChargingCharges", 1)
-	b = protocol.AppendInt32Field(b, "Rating", 0)
+	b = protocol.AppendStringField(b, "Maintenance", "0")
+	b = protocol.AppendStringField(b, "LastWinTime", "0")
+	b = protocol.AppendStringField(b, "ChargingBeginTime", "0")
+	b = protocol.AppendStringField(b, "ChargingCharges", "1")
+	b = protocol.AppendStringField(b, "Rating", "0")
 	return b
 }
 
@@ -380,15 +403,15 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "FID", fleet.token)
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
 	b = protocol.AppendStringField(b, "Name", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "DisplayName", fleet.displayName)
 	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
-	b = protocol.AppendInt32Field(b, "shipCount", int32(len(fleet.shipLoadouts)))
+	b = protocol.AppendStringField(b, "shipCount", strconv.Itoa(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
-	b = protocol.AppendInt32Field(b, "flagshipShipId", fleet.flagshipShipID)
+	b = protocol.AppendStringField(b, "flagshipShipId", strconv.Itoa(int(fleet.flagshipShipID)))
 	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
 	b = protocol.AppendBoolField(b, "bIsActive", fleet.active)
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -416,7 +439,7 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
 	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
@@ -469,11 +492,15 @@ func appendMmogStaticFleetSlotEntry(b []byte, stack []int, loadout mmogShipLoado
 	fleetShipID := loadout.effectiveFleetShipID()
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// UE4 FName lookup is case-insensitive, so emit each canonical name once.
-	b = protocol.AppendInt32Field(b, "ShipID", fleetShipID)
-	b = protocol.AppendInt32Field(b, "LoadoutID", loadoutID)
-	b = protocol.AppendInt32Field(b, "Position", loadout.position)
+	// Scalar fields here are suspected (not decompile-confirmed — see tracking
+	// issue #3) to hit the same int32-blind tagged union as every other
+	// array-entry struct fixed this session (Fleets/ShipLoadouts/Ribbons/
+	// TechTree) — send numeric strings.
+	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(fleetShipID)))
+	b = protocol.AppendStringField(b, "LoadoutID", strconv.Itoa(int(loadoutID)))
+	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(loadout.position)))
 	b = protocol.AppendBoolField(b, "bIsFlagship", fleetShipID == flagshipShipID)
-	b = protocol.AppendInt32Field(b, "Status", 0)
+	b = protocol.AppendStringField(b, "Status", strconv.Itoa(0))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -625,8 +652,11 @@ func appendMmogEventScoreEntry(b []byte, stack []int, progress playerSeasonProgr
 func appendMmogSeasonProgressEntry(b []byte, stack []int, progress playerSeasonProgress) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "SeasonID", progress.seasonID)
-	b = protocol.AppendInt32Field(b, "XP", progress.xp)
-	b = protocol.AppendInt32Field(b, "Level", progress.level)
+	// This entry lives inside YA_PlayerGet's SeasonProgress array, parsed by
+	// the same restrictive int32-blind tagged union confirmed for the rest
+	// of that payload (Officers, FactionReputation) — send numeric strings.
+	b = protocol.AppendStringField(b, "XP", strconv.Itoa(int(progress.xp)))
+	b = protocol.AppendStringField(b, "Level", strconv.Itoa(int(progress.level)))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -648,7 +678,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	starterFleet := state.activeFleet()
 
 	b = protocol.AppendStringField(b, "RT", rt)
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
 	b = protocol.AppendInt32Field(b, "tll", 1)
 	b = protocol.AppendInt32Field(b, "tpl", 1)
@@ -782,35 +812,47 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "ID", loadout.entryID())
 	if includePID {
-		b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+		b = protocol.AppendStringField(b, "PID", playerPID)
 	}
 	b = protocol.AppendInt32Field(b, "LoadoutID", loadoutID)
 	b = protocol.AppendInt32Field(b, "m_loadoutID", loadoutID)
+	// precastLoadout is left as int32 (unread/defaults to 0) deliberately:
+	// the client's ShipLoadouts entry parser (FUN_142a6f9f0 in the
+	// decompile) treats it as a fallback key onto the SAME struct offset as
+	// shipID. Fixing its wire type here too would let a stale loadout id
+	// leak into the ship-id slot if it were ever read before shipID; since
+	// shipID below is now fixed and always sent after this field, leaving
+	// this one broken is the safe choice, not an oversight.
 	b = protocol.AppendInt32Field(b, "precastLoadout", loadout.precastLoadoutID)
 	b = protocol.AppendInt32Field(b, "precastLoadoutID", loadout.precastLoadoutID)
 	b = protocol.AppendInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
 	b = protocol.AppendBoolField(b, "m_isActiveLoadout", loadout.active)
 	b = protocol.AppendStringField(b, "name", loadout.loadoutName)
 	b = protocol.AppendStringField(b, "m_loadoutName", loadout.loadoutName)
-	b = protocol.AppendInt32Field(b, "shipID", loadout.effectiveFleetShipID())
+	// shipID, class, weaponPrimary/Secondary, abilityPrimary/Secondary/
+	// Perimeter/Internal, perkCom/Weapon/Navigation/Engineer: read by
+	// FUN_142a6f9f0 through the same restrictive double/int64/string-only
+	// tagged union as the Fleets-array parser (see int32SliceToStrings' doc
+	// comment) — plain int32 silently defaults every one of these to 0.
+	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
-	b = protocol.AppendInt32Field(b, "class", loadout.ship.shipClass)
+	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(loadout.ship.shipClass)))
 	b = protocol.AppendStringField(b, "m_name", loadout.loadoutName)
 	b = protocol.AppendInt32Field(b, "m_shipClass", loadout.ship.shipClass)
 	b = protocol.AppendStringField(b, "displayInfo", loadout.displayInfo())
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
 	b = protocol.AppendInt32Field(b, "m_loadoutTier", 1)
 	b = protocol.AppendBoolField(b, "m_loadoutComplete", loadout.complete())
-	b = protocol.AppendInt32Field(b, "weaponPrimary", loadout.weaponPrimaryItemID())
-	b = protocol.AppendInt32Field(b, "weaponSecondary", loadout.weaponSecondaryItemID())
-	b = protocol.AppendInt32Field(b, "abilityPrimary", loadout.abilityItemID(0))
-	b = protocol.AppendInt32Field(b, "abilitySecondary", loadout.abilityItemID(1))
-	b = protocol.AppendInt32Field(b, "abilityPerimeter", loadout.abilityItemID(2))
-	b = protocol.AppendInt32Field(b, "abilityInternal", loadout.abilityItemID(3))
-	b = protocol.AppendInt32Field(b, "perkCom", loadout.perkItemID(0))
-	b = protocol.AppendInt32Field(b, "perkWeapon", loadout.perkItemID(1))
-	b = protocol.AppendInt32Field(b, "perkNavigation", loadout.perkItemID(2))
-	b = protocol.AppendInt32Field(b, "perkEngineer", loadout.perkItemID(3))
+	b = protocol.AppendStringField(b, "weaponPrimary", strconv.Itoa(int(loadout.weaponPrimaryItemID())))
+	b = protocol.AppendStringField(b, "weaponSecondary", strconv.Itoa(int(loadout.weaponSecondaryItemID())))
+	b = protocol.AppendStringField(b, "abilityPrimary", strconv.Itoa(int(loadout.abilityItemID(0))))
+	b = protocol.AppendStringField(b, "abilitySecondary", strconv.Itoa(int(loadout.abilityItemID(1))))
+	b = protocol.AppendStringField(b, "abilityPerimeter", strconv.Itoa(int(loadout.abilityItemID(2))))
+	b = protocol.AppendStringField(b, "abilityInternal", strconv.Itoa(int(loadout.abilityItemID(3))))
+	b = protocol.AppendStringField(b, "perkCom", strconv.Itoa(int(loadout.perkItemID(0))))
+	b = protocol.AppendStringField(b, "perkWeapon", strconv.Itoa(int(loadout.perkItemID(1))))
+	b = protocol.AppendStringField(b, "perkNavigation", strconv.Itoa(int(loadout.perkItemID(2))))
+	b = protocol.AppendStringField(b, "perkEngineer", strconv.Itoa(int(loadout.perkItemID(3))))
 	b = protocol.AppendInt32Field(b, "m_primaryWeaponItemId", loadout.weaponPrimaryItemID())
 	b = protocol.AppendInt32Field(b, "m_secondaryWeaponItemId", loadout.weaponSecondaryItemID())
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_weaponIDs", loadout.weaponIDs())
@@ -836,19 +878,24 @@ func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoad
 	b = protocol.AppendStringField(b, "m_loadoutName", loadout.loadoutName)
 	// LoadoutID/loadoutID and shipID/ShipID collide under FName comparison; keep
 	// the canonical Pascal-case form and a distinct m_-prefixed alias.
-	b = protocol.AppendInt32Field(b, "LoadoutID", loadout.loadoutID())
-	b = protocol.AppendInt32Field(b, "m_loadoutID", loadout.loadoutID())
-	b = protocol.AppendInt32Field(b, "precastLoadoutID", loadout.precastLoadoutID)
-	b = protocol.AppendInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
-	b = protocol.AppendInt32Field(b, "ShipID", loadout.effectiveFleetShipID())
-	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
-	b = protocol.AppendInt32Field(b, "loadoutIndex", loadout.loadoutIndex)
-	b = protocol.AppendInt32Field(b, "m_shipClass", loadout.ship.shipClass)
+	// This nested object (embedded in each YA_GetTechTree row) has no
+	// alternate plain-cased field to fall back on the way
+	// appendMmogShipLoadoutEntry does, so every scalar here must itself use
+	// the numeric-string form to survive the same restrictive tagged union
+	// (see int32SliceToStrings' doc comment).
+	b = protocol.AppendStringField(b, "LoadoutID", strconv.Itoa(int(loadout.loadoutID())))
+	b = protocol.AppendStringField(b, "m_loadoutID", strconv.Itoa(int(loadout.loadoutID())))
+	b = protocol.AppendStringField(b, "precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))
+	b = protocol.AppendStringField(b, "m_precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))
+	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
+	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(loadout.effectiveFleetShipID())))
+	b = protocol.AppendStringField(b, "loadoutIndex", strconv.Itoa(int(loadout.loadoutIndex)))
+	b = protocol.AppendStringField(b, "m_shipClass", strconv.Itoa(int(loadout.ship.shipClass)))
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
-	b = protocol.AppendInt32Field(b, "m_loadoutTier", 1)
+	b = protocol.AppendStringField(b, "m_loadoutTier", strconv.Itoa(1))
 	b = protocol.AppendBoolField(b, "m_loadoutComplete", loadout.complete())
-	b = protocol.AppendInt32Field(b, "m_primaryWeaponItemId", loadout.weaponPrimaryItemID())
-	b = protocol.AppendInt32Field(b, "m_secondaryWeaponItemId", loadout.weaponSecondaryItemID())
+	b = protocol.AppendStringField(b, "m_primaryWeaponItemId", strconv.Itoa(int(loadout.weaponPrimaryItemID())))
+	b = protocol.AppendStringField(b, "m_secondaryWeaponItemId", strconv.Itoa(int(loadout.weaponSecondaryItemID())))
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityItemIds", loadout.abilityItemIDs())
 	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_perkIds", loadout.perkItemIDs())
 	b, stack = protocol.AppendStringArrayField(b, stack, "m_perkNames", loadout.perkNames())
@@ -893,11 +940,11 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int
 	state := mmogPlayerStateForPID(playerPID)
-	ships := playerOwnedTechTreeShips(playerPID)
+	ships := realShipsOnly(playerOwnedTechTreeShips(playerPID))
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerProgression")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendInt32Field(b, "CurrentXP", state.currentXP)
 	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
 	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
@@ -965,30 +1012,36 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendInt32Field(b, "NodeID", ship.nodeID)
-	b = protocol.AppendInt32Field(b, "ShipID", ship.id)
-	b = protocol.AppendInt32Field(b, "shipID", ship.id)
-	b = protocol.AppendInt32Field(b, "m_shipID", ship.id)
-	b = protocol.AppendInt32Field(b, "m_shipId", ship.id)
-	b = protocol.AppendInt32Field(b, "ParentID", ship.parentID)
+	// NodeID, ShipID/m_shipId, ParentID, NodeType, Tier, UnlockCost,
+	// PrereqID1/2, ShipClass, Weight, m_currentBaseClass/m_currentShipClass,
+	// m_shipTier, m_weight: same restrictive double/int64/string-only tagged
+	// union as the Fleets/ShipLoadouts/Ribbons array-entry parsers (see
+	// int32SliceToStrings' doc comment) — plain int32 silently defaults each
+	// of these to 0, which is why entries never resolve to unlocked ships.
+	b = protocol.AppendStringField(b, "NodeID", strconv.Itoa(int(ship.nodeID)))
+	// ShipID/shipID and m_shipID/m_shipId each collide case-insensitively as
+	// UE4 FNames (see commit 8f72937) — keep one canonical form of each.
+	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(ship.id)))
+	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
+	b = protocol.AppendStringField(b, "ParentID", strconv.Itoa(int(ship.parentID)))
 	b = protocol.AppendStringField(b, "Name", ship.name)
 	b = protocol.AppendStringField(b, "m_name", ship.name)
-	b = protocol.AppendInt32Field(b, "NodeType", ship.nodeType)
-	b = protocol.AppendInt32Field(b, "Tier", 1)
-	b = protocol.AppendInt32Field(b, "UnlockCost", ship.unlockCost)
-	b = protocol.AppendInt32Field(b, "PrereqID1", ship.prereqID1)
-	b = protocol.AppendInt32Field(b, "PrereqID2", ship.prereqID2)
+	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(1))
+	b = protocol.AppendStringField(b, "UnlockCost", strconv.Itoa(int(ship.unlockCost)))
+	b = protocol.AppendStringField(b, "PrereqID1", strconv.Itoa(int(ship.prereqID1)))
+	b = protocol.AppendStringField(b, "PrereqID2", strconv.Itoa(int(ship.prereqID2)))
 	b = protocol.AppendBoolField(b, "bIsUnlocked", ship.owned)
 	b = protocol.AppendBoolField(b, "bIsPurchased", ship.owned)
 	b = protocol.AppendBoolField(b, "bIsNew", ship.bIsNew)
-	b = protocol.AppendInt32Field(b, "ShipClass", ship.shipClass)
-	b = protocol.AppendInt32Field(b, "Weight", ship.weight)
-	b = protocol.AppendInt32Field(b, "m_currentBaseClass", ship.shipClass)
-	b = protocol.AppendInt32Field(b, "m_currentShipClass", ship.shipClass)
-	b = protocol.AppendInt32Field(b, "m_shipTier", 1)
-	b = protocol.AppendInt32Field(b, "m_weight", ship.weight)
+	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(ship.shipClass)))
+	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
+	b = protocol.AppendStringField(b, "m_currentBaseClass", strconv.Itoa(int(ship.shipClass)))
+	b = protocol.AppendStringField(b, "m_currentShipClass", strconv.Itoa(int(ship.shipClass)))
+	b = protocol.AppendStringField(b, "m_shipTier", strconv.Itoa(1))
+	b = protocol.AppendStringField(b, "m_weight", strconv.Itoa(int(ship.weight)))
 	if loadout, ok := starterLoadoutByShipID(ship.id); ok {
-		b = protocol.AppendInt32Field(b, "m_precastLoadoutID", loadout.precastLoadoutID)
+		b = protocol.AppendStringField(b, "m_precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))
 		b, stack = protocol.AppendObjectStart(b, stack, "m_shipLoadoutInfo")
 		b, stack = appendMmogShipLoadoutInfoFields(b, stack, loadout)
 		b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1016,30 +1069,34 @@ func appendMmogModuleUIDataEntry(b []byte, stack []int, module mmogModuleUIDataS
 	b, stack = protocol.AppendObjectStart(b, stack, "m_techTreeResearchPrice")
 	b = appendMmogItemPriceDataFields(b)
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendInt32Field(b, "m_techTreeItemState", 4)
-	b = protocol.AppendInt32Field(b, "m_index", module.index)
-	b = protocol.AppendInt32Field(b, "m_priceCurrency", 0)
-	b = protocol.AppendInt32Field(b, "m_priceAmount", 0)
-	b = protocol.AppendInt32Field(b, "m_originalPriceCurrency", 0)
-	b = protocol.AppendInt32Field(b, "m_originalPriceAmount", 0)
+	// Scalar int32 fields on this array entry hit the same restrictive
+	// double/int64/string-only tagged union documented on int32SliceToStrings
+	// — convert to numeric strings, matching the fix already applied to the
+	// sibling YA_GetTechTree row fields this entry is nested under.
+	b = protocol.AppendStringField(b, "m_techTreeItemState", strconv.Itoa(4))
+	b = protocol.AppendStringField(b, "m_index", strconv.Itoa(int(module.index)))
+	b = protocol.AppendStringField(b, "m_priceCurrency", strconv.Itoa(0))
+	b = protocol.AppendStringField(b, "m_priceAmount", strconv.Itoa(0))
+	b = protocol.AppendStringField(b, "m_originalPriceCurrency", strconv.Itoa(0))
+	b = protocol.AppendStringField(b, "m_originalPriceAmount", strconv.Itoa(0))
 	b = protocol.AppendStringField(b, "m_moduleTexturePath", "")
 	b = protocol.AppendStringField(b, "m_iconTexturePath", "")
-	b = protocol.AppendInt32Field(b, "m_tier", 1)
+	b = protocol.AppendStringField(b, "m_tier", strconv.Itoa(1))
 	b = protocol.AppendBoolField(b, "m_shouldShowTierIcon", true)
 	b = protocol.AppendBoolField(b, "m_isOwned", module.owned)
 	b = protocol.AppendBoolField(b, "m_isOnSale", false)
 	b = protocol.AppendBoolField(b, "m_isNew", false)
 	b = protocol.AppendBoolField(b, "m_isEquipped", module.equipped)
-	b = protocol.AppendInt32Field(b, "m_itemId", module.itemID)
+	b = protocol.AppendStringField(b, "m_itemId", strconv.Itoa(int(module.itemID)))
 	if weapon, ok := dreadconfig.WeaponByID(module.itemID); ok {
-		b = protocol.AppendInt32Field(b, "m_damageHigh", weapon.DamageHigh)
-		b = protocol.AppendInt32Field(b, "m_damageMedium", weapon.DamageMedium)
-		b = protocol.AppendInt32Field(b, "m_damageLow", weapon.DamageLow)
+		b = protocol.AppendStringField(b, "m_damageHigh", strconv.Itoa(int(weapon.DamageHigh)))
+		b = protocol.AppendStringField(b, "m_damageMedium", strconv.Itoa(int(weapon.DamageMedium)))
+		b = protocol.AppendStringField(b, "m_damageLow", strconv.Itoa(int(weapon.DamageLow)))
 		b = protocol.AppendStringField(b, "m_weaponCooldownTime", strconv.FormatFloat(weapon.WeaponCooldownTime, 'f', 3, 64))
-		b = protocol.AppendInt32Field(b, "m_ammoMagazinSize", weapon.AmmoMagazinSize)
+		b = protocol.AppendStringField(b, "m_ammoMagazinSize", strconv.Itoa(int(weapon.AmmoMagazinSize)))
 		b = protocol.AppendStringField(b, "m_spreadBaseValue", strconv.FormatFloat(weapon.SpreadBaseValue, 'f', 2, 64))
 		b = protocol.AppendStringField(b, "m_spreadMaxValue", strconv.FormatFloat(weapon.SpreadMaxValue, 'f', 2, 64))
-		b = protocol.AppendInt32Field(b, "m_maxRange", weapon.MaxRange)
+		b = protocol.AppendStringField(b, "m_maxRange", strconv.Itoa(int(weapon.MaxRange)))
 		b = protocol.AppendStringField(b, "m_slotType", weapon.SlotType)
 		b = protocol.AppendStringField(b, "m_class", weapon.Class)
 	}
@@ -1971,15 +2028,23 @@ func buildMmogTunePayload() []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_Tune")
 	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
+	// YTuneManager::Set() reads Returning.MetaData.Version (nested), not a
+	// flat Returning.Version — confirmed by decompiling FUN_1403d5160 and
+	// decoding the "MetaData" FName it looks up before fetching Version. A
+	// flat Version here means the client's cached-version comparison never
+	// changes, so the whole WeaponsTune/AbilitiesTune/etc. block below is
+	// never actually applied client-side.
+	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
 	b = protocol.AppendStringField(b, "Version", "1.0.0")
-	b = protocol.AppendStringField(b, "WeaponsTune", `[]`)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b = protocol.AppendStringField(b, "WeaponsTune", dreadconfig.WeaponsTuneJSON())
 	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
-	b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
-	b = protocol.AppendStringField(b, "AbilitiesTune", `[]`)
-	b = protocol.AppendStringField(b, "OfficersTune", `[]`)
-	b = protocol.AppendStringField(b, "FeatsTune", `[]`)
+	b = protocol.AppendStringField(b, "ProjectilesTune", dreadconfig.ProjectilesTuneJSON())
+	b = protocol.AppendStringField(b, "AbilitiesTune", dreadconfig.AbilitiesTuneJSON())
+	b = protocol.AppendStringField(b, "OfficersTune", dreadconfig.OfficersTuneJSON())
+	b = protocol.AppendStringField(b, "FeatsTune", dreadconfig.FeatsTuneJSON())
 	b = protocol.AppendStringField(b, "HavocTune", `[]`)
-	b = protocol.AppendStringField(b, "GameModifiersTune", `[]`)
+	b = protocol.AppendStringField(b, "GameModifiersTune", dreadconfig.GameModifiersTuneJSON())
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
@@ -2017,7 +2082,7 @@ func buildMmogConnectPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_Connect")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendStringField(b, "PID", protocol.DenormalizePlayerPID(playerPID))
+	b = protocol.AppendStringField(b, "PID", playerPID)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -2040,7 +2105,6 @@ func buildMmogCheckReturnPayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "status", "ok")
 	b = protocol.AppendBoolField(b, "CanReturnToMatch", false)
-	b = protocol.AppendBoolField(b, "canReturnToMatch", false)
 	b = protocol.AppendBoolField(b, "ReturnValue", false)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -2577,6 +2641,16 @@ func loadPlayerRibbons(playerPID string) []playerRibbon {
 
 func appendMmogRibbonEntry(b []byte, stack []int, ribbon playerRibbon) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	// The client's actual Ribbons-array entry parser (FUN_142a73070 in the
+	// decompile) reads fields named "ID" and "amt" — confirmed against the
+	// literal UTF-16 strings in the shipping binary's .rdata — not "Type"/
+	// "Count". It reads them through the same restrictive double/int64/
+	// string-only tagged union as the Fleets/ShipLoadouts array parsers
+	// (see int32SliceToStrings' doc comment), so amt must be a numeric
+	// string too. Keep Type/Count/Name as well in case anything else still
+	// keys off them; ID/amt are the ones that actually make it client-side.
+	b = protocol.AppendStringField(b, "ID", ribbon.ribbonType)
+	b = protocol.AppendStringField(b, "amt", strconv.Itoa(int(ribbon.count)))
 	b = protocol.AppendStringField(b, "Type", ribbon.ribbonType)
 	b = protocol.AppendInt32Field(b, "Count", ribbon.count)
 	if info, ok := ribbonThresholds[ribbon.ribbonType]; ok {

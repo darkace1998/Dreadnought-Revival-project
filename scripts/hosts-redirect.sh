@@ -23,6 +23,7 @@ $MARKER — added by hosts-redirect.sh
 $SERVER_IP profile-api.prod.greybox.sixfoot.live
 $SERVER_IP legacyapi.prod.greybox.sixfoot.live
 $SERVER_IP mmog.greybox.sixfoot.live
+$SERVER_IP firmament.prod.greybox.sixfoot.live
 $SERVER_IP bugreports.greybox.com
 $SERVER_IP masterserver.local
 $SERVER_IP gamemanager.local

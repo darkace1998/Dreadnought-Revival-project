@@ -11,7 +11,7 @@ import (
 var targetSizes = map[string]int{
 	"YA_UserLogin":                 174,
 	"YA_UserOnline":                81,
-	"YA_RequestStaticFleetData":    4840,
+	"YA_RequestStaticFleetData":    5214,
 	"YA_GetFeatureToggle":          111,
 	"YA_GetGameConfigData":         534,
 	"YA_GetStaticCareerData":       3531,
@@ -21,17 +21,17 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":            1856,
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           233,
-	"YA_GetTechTree":               33717,
-	"YA_GetPlayerProgression":      1039,
+	"YA_GetTechTree":               39062,
+	"YA_GetPlayerProgression":      1035,
 	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,
-	"YA_Tune":                      279,
+	"YA_Tune":                      368116,
 	"YA_GetSeasonData":             1080,
-	"YA_PlayerGet":                 11407,
-	"YA_PlayerFleets":              2117,
+	"YA_PlayerGet":                 11639,
+	"YA_PlayerFleets":              2198,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,
-	"YA_CheckReturn":               134,
+	"YA_CheckReturn":               115,
 	"YA_AnalyticsBeginTransaction": 124,
 	"YA_AnalyticsEvent":            85,
 	"YA_SaveCtAData":               82,
@@ -122,7 +122,7 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 	}
 	minReductions := map[string]int{
 		"YA_RequestStaticFleetData": 30000,
-		"YA_PlayerGet":              44600,
+		"YA_PlayerGet":              44376,
 		"YA_PlayerFleets":           900,
 	}
 

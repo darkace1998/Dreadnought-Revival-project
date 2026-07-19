@@ -138,16 +138,16 @@ func TestAppendMmogSeasonProgressEntry(t *testing.T) {
 		t.Errorf("expected SeasonID=season_2, got %s", seasonID)
 	}
 
-	// Verify XP field is present
-	xpMarker := appendFieldMarker("XP", 0x56)
+	// Verify XP field is present (numeric string — see appendMmogSeasonProgressEntry)
+	xpMarker := appendFieldMarker("XP", 0x09)
 	if !bytesContains(b, xpMarker) {
-		t.Error("expected XP field (int32) to be present in payload")
+		t.Error("expected XP field (string) to be present in payload")
 	}
 
-	// Verify level field is present
-	levelMarker := appendFieldMarker("Level", 0x56)
+	// Verify level field is present (numeric string — see appendMmogSeasonProgressEntry)
+	levelMarker := appendFieldMarker("Level", 0x09)
 	if !bytesContains(b, levelMarker) {
-		t.Error("expected Level field (int32) to be present in payload")
+		t.Error("expected Level field (string) to be present in payload")
 	}
 }
 

@@ -23,6 +23,11 @@ type mmogShipSeed struct {
 	prereqID1    int32
 	prereqID2    int32
 	bIsNew       bool
+	// isLoadoutAlias marks a synthetic tech-tree entry keyed by a loadout id
+	// rather than a real ship id (see techTreeShips). It should appear in the
+	// tech tree lookup array but be excluded from ship-count/progression
+	// listings, which must reflect real ships only.
+	isLoadoutAlias bool
 }
 
 type mmogShipLoadoutSeed struct {
@@ -390,24 +395,28 @@ type starterShipArchetype struct {
 	manufacturer string
 }
 
+// shipClass ordinals verified against decompiled enum-to-string function FUN_140303fb0
+// (0=Dreadnought, 1=Corvette, 2=ArtilleryCruiser, 3=TacticalCruiser, 4=Destroyer/Assault)
+// and cross-checked against asset paths in dynamic_item_catalog.go (Assault ships live
+// under /Ships/Assault/, Dreadnought ships under /Ships/Dreadnought/).
 var starterShipArchetypes = map[string]starterShipArchetype{
-	"assault":     {classKey: "assault", classID: 14, shipClass: 0, manufacturer: "JupiterArms"},
-	"dreadnought": {classKey: "dreadnought", classID: 6, shipClass: 4, manufacturer: "AkulaVektor"},
+	"assault":     {classKey: "assault", classID: 14, shipClass: 4, manufacturer: "JupiterArms"},
+	"dreadnought": {classKey: "dreadnought", classID: 6, shipClass: 0, manufacturer: "AkulaVektor"},
 	"sniper":      {classKey: "sniper", classID: 10, shipClass: 2, manufacturer: "AkulaVektor"},
 	"support":     {classKey: "support", classID: 12, shipClass: 3, manufacturer: "Oberon"},
 }
 
 var starterShips = []mmogShipSeed{
-	{id: extractedShipIDAthos, name: "Athos", classID: 14, shipClass: 0, weight: 1, manufacturer: "JupiterArms", owned: true, nodeID: extractedShipIDAthos, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Jupiter Arms Destroyer
-	{id: extractedShipIDZmey, name: "Zmey", classID: 6, shipClass: 4, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDZmey, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Akula Vektor Dreadnought
+	{id: extractedShipIDAthos, name: "Athos", classID: 14, shipClass: 4, weight: 1, manufacturer: "JupiterArms", owned: true, nodeID: extractedShipIDAthos, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Jupiter Arms Destroyer
+	{id: extractedShipIDZmey, name: "Zmey", classID: 6, shipClass: 0, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDZmey, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Akula Vektor Dreadnought
 	{id: extractedShipIDSvarog, name: "Svarog", classID: 10, shipClass: 2, weight: 1, manufacturer: "AkulaVektor", owned: true, nodeID: extractedShipIDSvarog, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Akula Vektor Artillery
 	{id: extractedShipIDAion, name: "Aion", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: true, nodeID: extractedShipIDAion, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Oberon Tactical
 }
 
 var lockedT1Ships = []mmogShipSeed{
-	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 0, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                        // Jupiter Arms Corvette
-	{id: extractedShipIDLeipzig, name: "Leipzig", classID: 14, shipClass: 0, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDLeipzig, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
-	{id: extractedShipIDTrieste, name: "Trieste", classID: 6, shipClass: 4, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDTrieste, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},    // Akula Vektor Dreadnought T2
+	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                        // Jupiter Arms Corvette
+	{id: extractedShipIDLeipzig, name: "Leipzig", classID: 14, shipClass: 4, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDLeipzig, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
+	{id: extractedShipIDTrieste, name: "Trieste", classID: 6, shipClass: 0, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDTrieste, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},    // Akula Vektor Dreadnought T2
 	{id: extractedShipIDCeres, name: "Ceres", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: false, nodeID: extractedShipIDCeres, parentID: extractedShipIDAion, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAion, prereqID2: 0, bIsNew: false},              // Oberon Tactical follow-up
 }
 
@@ -427,28 +436,62 @@ func allT1Ships() []mmogShipSeed {
 	return ships
 }
 
+// realShipsOnly drops synthetic loadout-alias entries (see techTreeShips),
+// for consumers like ship-progression listings that must count/display real
+// ships only, not the extra tech-tree lookup nodes.
+func realShipsOnly(ships []mmogShipSeed) []mmogShipSeed {
+	out := make([]mmogShipSeed, 0, len(ships))
+	for _, ship := range ships {
+		if !ship.isLoadoutAlias {
+			out = append(out, ship)
+		}
+	}
+	return out
+}
+
 func techTreeShips() []mmogShipSeed {
 	ships := allT1Ships()
-	seen := make(map[int32]struct{}, len(ships)+len(starterShipLoadouts()))
+	seen := make(map[int32]struct{}, len(ships)+2*len(starterShipLoadouts()))
 	for _, ship := range ships {
 		seen[ship.id] = struct{}{}
 	}
 	for _, loadout := range starterShipLoadouts() {
 		fleetShipID := loadout.effectiveFleetShipID()
-		if _, ok := seen[fleetShipID]; ok {
-			continue
+		if _, ok := seen[fleetShipID]; !ok {
+			seen[fleetShipID] = struct{}{}
+			ships = append(ships, mmogShipSeed{
+				id:        fleetShipID,
+				name:      loadout.ship.name + " fleet entry",
+				classID:   loadout.ship.classID,
+				shipClass: loadout.ship.shipClass,
+				weight:    loadout.ship.weight,
+				owned:     true,
+				nodeID:    fleetShipID,
+				nodeType:  0,
+			})
 		}
-		seen[fleetShipID] = struct{}{}
-		ships = append(ships, mmogShipSeed{
-			id:        fleetShipID,
-			name:      loadout.ship.name + " fleet entry",
-			classID:   loadout.ship.classID,
-			shipClass: loadout.ship.shipClass,
-			weight:    loadout.ship.weight,
-			owned:     true,
-			nodeID:    fleetShipID,
-			nodeType:  0,
-		})
+		// The client's hangar fleet loader (YUIHangarFleetData::Load) looks
+		// up each fleet entry in the tech tree by its LOADOUT id, not its
+		// ship id ("Fleet Loadout not found in Techtree [%d]" on miss) —
+		// entries that fail this lookup are silently dropped from the
+		// hangar's fleet array. Add a node keyed by the loadout id too, so
+		// that lookup succeeds regardless of which id the client actually
+		// uses.
+		loadoutID := loadout.loadoutID()
+		if _, ok := seen[loadoutID]; !ok {
+			seen[loadoutID] = struct{}{}
+			ships = append(ships, mmogShipSeed{
+				id:             loadoutID,
+				name:           loadout.ship.name + " " + loadout.loadoutName,
+				classID:        loadout.ship.classID,
+				shipClass:      loadout.ship.shipClass,
+				weight:         loadout.ship.weight,
+				owned:          true,
+				nodeID:         loadoutID,
+				nodeType:       0,
+				isLoadoutAlias: true,
+			})
+		}
 	}
 	return ships
 }
@@ -787,7 +830,11 @@ func starterLoadoutByPrecastID(precastLoadoutID int32) (mmogShipLoadoutSeed, boo
 
 func starterLoadoutByShipID(shipID int32) (mmogShipLoadoutSeed, bool) {
 	for _, loadout := range starterShipLoadouts() {
-		if loadout.ship.id == shipID || loadout.effectiveFleetShipID() == shipID {
+		// Also match on the loadout's own id: techTreeShips() emits a tech
+		// tree node keyed by loadout id (see the comment there), and that
+		// node's ship.id is set to the loadout id too, so this lookup must
+		// resolve it back to the same loadout to attach m_shipLoadoutInfo.
+		if loadout.ship.id == shipID || loadout.effectiveFleetShipID() == shipID || loadout.loadoutID() == shipID {
 			return loadout, true
 		}
 	}

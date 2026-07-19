@@ -268,16 +268,21 @@ func TestExtractMmogPlayerPIDRejectsUnsignedJWT(t *testing.T) {
 
 func TestPlayerDataResponsesUseHexPlayerPID(t *testing.T) {
 	const pid = "b7c42c0f3ac648a182ccfd35eb24f128"
-	const denormalizedPID = "b7c42c0f-3ac6-48a1-82cc-fd35eb24f128"
 
 	for name, payload := range map[string][]byte{
 		"YA_PlayerGet":    buildMmogRequestResponsePayload("YA_PlayerGet", pid, buildMmogPlayerDataPayload("YA_PlayerGet", pid)),
 		"YA_PlayerFleets": buildMmogRequestResponsePayload("YA_PlayerFleets", pid, buildMmogPlayerFleetsPayload(pid)),
 	} {
-		validPIDField := protocol.AppendStringField(nil, "PID", denormalizedPID)
+		// The client resolves "PID" via a find-only FName lookup against the
+		// same hyphen-stripped hex form it already interned locally (see
+		// AGENTS.md's mmogbrain gotcha on PID format) — sending a hyphenated
+		// GUID here makes that lookup fail silently and the client never
+		// completes its post-login bootstrap. Confirmed via a live memory
+		// dump of a hung client session (2026-07-18).
+		validPIDField := protocol.AppendStringField(nil, "PID", pid)
 		invalidPIDField := protocol.AppendStringField(nil, "PID", "local")
 		if !bytes.Contains(payload, validPIDField) {
-			t.Fatalf("%s response does not include player PID %q", name, denormalizedPID)
+			t.Fatalf("%s response does not include player PID %q", name, pid)
 		}
 		if bytes.Contains(payload, invalidPIDField) {
 			t.Fatalf("%s response still contains invalid local PID", name)
@@ -379,40 +384,40 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_name", ship.name)) {
 			t.Fatalf("tech tree row for %q does not include m_name", ship.name)
 		}
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "Weight", expectedWeight)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "Weight", strconv.Itoa(int(expectedWeight)))) {
 			t.Fatalf("tech tree row for %q does not include Weight=%d", ship.name, expectedWeight)
 		}
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_weight", expectedWeight)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_weight", strconv.Itoa(int(expectedWeight)))) {
 			t.Fatalf("tech tree row for %q does not include m_weight=%d", ship.name, expectedWeight)
 		}
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_currentBaseClass", ship.shipClass)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_currentBaseClass", strconv.Itoa(int(ship.shipClass)))) {
 			t.Fatalf("tech tree row for %q does not include m_currentBaseClass=%d", ship.name, ship.shipClass)
 		}
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_currentShipClass", ship.shipClass)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_currentShipClass", strconv.Itoa(int(ship.shipClass)))) {
 			t.Fatalf("tech tree row for %q does not include m_currentShipClass=%d", ship.name, ship.shipClass)
 		}
 
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_shipTier", 1)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_shipTier", "1")) {
 			t.Fatalf("tech tree row for %q does not include m_shipTier=1", ship.name)
 		}
 
 		if loadout, ok := starterLoadoutByShipID(ship.id); ok {
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_precastLoadoutID", loadout.precastLoadoutID)) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))) {
 				t.Fatalf("tech tree row for %q does not include m_precastLoadoutID=%d", ship.name, loadout.precastLoadoutID)
 			}
 			if !bytes.Contains(row, appendFieldMarker("m_shipLoadoutInfo", 0x0c)) {
 				t.Fatalf("tech tree row for %q does not include m_shipLoadoutInfo object", ship.name)
 			}
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_loadoutTier", 1)) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_loadoutTier", "1")) {
 				t.Fatalf("tech tree row for %q does not include m_loadoutTier=1", ship.name)
 			}
 			if !bytes.Contains(row, protocol.AppendBoolField(nil, "m_loadoutComplete", loadout.complete())) {
 				t.Fatalf("tech tree row for %q does not include m_loadoutComplete", ship.name)
 			}
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_loadoutID", loadout.loadoutID())) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_loadoutID", strconv.Itoa(int(loadout.loadoutID())))) {
 				t.Fatalf("tech tree row for %q does not include m_loadoutID=%d", ship.name, loadout.loadoutID())
 			}
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_shipClass", ship.shipClass)) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_shipClass", strconv.Itoa(int(ship.shipClass)))) {
 				t.Fatalf("tech tree row for %q does not include m_shipClass=%d", ship.name, ship.shipClass)
 			}
 			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_loadoutName", loadout.loadoutName)) {
@@ -421,10 +426,10 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_displayInfo", loadout.displayInfo())) {
 				t.Fatalf("tech tree row for %q does not include m_displayInfo", ship.name)
 			}
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_primaryWeaponItemId", loadout.weaponPrimaryItemID())) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_primaryWeaponItemId", strconv.Itoa(int(loadout.weaponPrimaryItemID())))) {
 				t.Fatalf("tech tree row for %q does not include m_primaryWeaponItemId=%d", ship.name, loadout.weaponPrimaryItemID())
 			}
-			if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_secondaryWeaponItemId", loadout.weaponSecondaryItemID())) {
+			if !bytes.Contains(row, protocol.AppendStringField(nil, "m_secondaryWeaponItemId", strconv.Itoa(int(loadout.weaponSecondaryItemID())))) {
 				t.Fatalf("tech tree row for %q does not include m_secondaryWeaponItemId=%d", ship.name, loadout.weaponSecondaryItemID())
 			}
 			if !bytes.Contains(row, appendFieldMarker("m_abilityItemIds", 0x0d)) {
@@ -449,10 +454,10 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 			nodeID:    loadout.effectiveFleetShipID(),
 		}
 		row, _ := appendMmogTechTreeRow(nil, nil, fleetShip)
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_loadoutID", loadout.loadoutID())) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_loadoutID", strconv.Itoa(int(loadout.loadoutID())))) {
 			t.Fatalf("tech tree row for fleet ship %d does not include m_loadoutID=%d", fleetShip.id, loadout.loadoutID())
 		}
-		if !bytes.Contains(row, protocol.AppendInt32Field(nil, "m_precastLoadoutID", loadout.precastLoadoutID)) {
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "m_precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))) {
 			t.Fatalf("tech tree row for fleet ship %d does not include m_precastLoadoutID=%d", fleetShip.id, loadout.precastLoadoutID)
 		}
 	}
@@ -461,12 +466,12 @@ func TestTechTreeRowsExposeWeight(t *testing.T) {
 func TestTechTreeIncludesInstallerStarterShips(t *testing.T) {
 	payload := buildMmogTechTreePayload()
 	for _, shipID := range dreadconfig.StarterInventoryShipIDs() {
-		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "ShipID", shipID)) {
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(shipID)))) {
 			t.Fatalf("YA_GetTechTree missing installer starter ship id %d", shipID)
 		}
 	}
 	for _, shipID := range starterFleetShipIDsFromShared(t) {
-		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "ShipID", shipID)) {
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(shipID)))) {
 			t.Fatalf("YA_GetTechTree missing fleet/development starter ship id %d", shipID)
 		}
 	}
@@ -540,10 +545,10 @@ func TestTechTreeModuleUIDataIncludesStarterItems(t *testing.T) {
 		t.Fatal("starterModuleUIDataSeeds returned no starter module rows")
 	}
 	for _, seed := range seeds {
-		if !bytes.Contains(modulePayload, protocol.AppendInt32Field(nil, "m_itemId", seed.itemID)) {
+		if !bytes.Contains(modulePayload, protocol.AppendStringField(nil, "m_itemId", strconv.Itoa(int(seed.itemID)))) {
 			t.Fatalf("moduleUiData missing m_itemId=%d", seed.itemID)
 		}
-		if !bytes.Contains(modulePayload, protocol.AppendInt32Field(nil, "m_techTreeItemState", 4)) {
+		if !bytes.Contains(modulePayload, protocol.AppendStringField(nil, "m_techTreeItemState", strconv.Itoa(4))) {
 			t.Fatal("moduleUiData missing owned m_techTreeItemState")
 		}
 		if !bytes.Contains(modulePayload, protocol.AppendStringField(nil, "m_iconTexturePath", "")) {
@@ -620,19 +625,24 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	playerGet := buildMmogPlayerGetPayload(pid)
 	refreshProfile := buildMmogPlayerDataPayload("YA_RefreshPlayerProfile", pid)
 
-	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "FlagShipID", starterFleet.flagshipShipID)) {
+	// FlagShipID/FlagShipLoadoutID/FlagShipLoadoutIndex inside a Fleets array
+	// entry (YA_PlayerFleets, YA_RequestStaticFleetData) go through the
+	// client's int32-blind fleet-array parser (FUN_142a77910 in the
+	// decompile — see int32SliceToStrings' doc comment in
+	// response_builders.go) and must be numeric strings, not int32.
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
 		t.Fatalf("YA_PlayerFleets does not expose starter flagship ship %d", starterFleet.flagshipShipID)
 	}
-	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "FlagShipLoadoutID", starterFleet.flagshipLoadoutID)) {
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipLoadoutID", strconv.Itoa(int(starterFleet.flagshipLoadoutID)))) {
 		t.Fatalf("YA_PlayerFleets does not expose starter flagship loadout %d", starterFleet.flagshipLoadoutID)
 	}
 	if !bytes.Contains(staticFleetData, appendFieldMarker("Fleets", 0x0d)) {
 		t.Fatal("YA_RequestStaticFleetData does not expose Fleets array")
 	}
-	if !bytes.Contains(staticFleetData, protocol.AppendInt32Field(nil, "FlagShipID", starterFleet.flagshipShipID)) {
+	if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
 		t.Fatalf("YA_RequestStaticFleetData does not expose starter flagship ship %d", starterFleet.flagshipShipID)
 	}
-	if !bytes.Contains(staticFleetData, protocol.AppendInt32Field(nil, "FlagShipLoadoutID", starterFleet.flagshipLoadoutID)) {
+	if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "FlagShipLoadoutID", strconv.Itoa(int(starterFleet.flagshipLoadoutID)))) {
 		t.Fatalf("YA_RequestStaticFleetData does not expose starter flagship loadout %d", starterFleet.flagshipLoadoutID)
 	}
 	if !bytes.Contains(playerGet, protocol.AppendInt32Field(nil, "shipId", starterFleet.flagshipShipID)) {
@@ -675,7 +685,15 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 		if got := bytes.Count(completion, protocol.AppendUnnamedBoolField(nil, true)); got != len(starterFleet.shipLoadouts) {
 			t.Fatalf("%s ShipTechTreeComplete true count = %d, want %d", payloadName, got, len(starterFleet.shipLoadouts))
 		}
-		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "FlagShipLoadoutIndex", starterFleet.flagshipLoadoutIndex)) {
+		// Only the Fleets-array entry (YA_PlayerFleets) goes through the
+		// client's int32-blind parser and needs the string form; the
+		// top-level YA_PlayerGet/YA_RefreshPlayerProfile field is a
+		// separate, unaffected assignment still sent as int32.
+		wantFlagShipLoadoutIndex := protocol.AppendInt32Field(nil, "FlagShipLoadoutIndex", starterFleet.flagshipLoadoutIndex)
+		if payloadName == "YA_PlayerFleets" {
+			wantFlagShipLoadoutIndex = protocol.AppendStringField(nil, "FlagShipLoadoutIndex", strconv.Itoa(int(starterFleet.flagshipLoadoutIndex)))
+		}
+		if !bytes.Contains(payload, wantFlagShipLoadoutIndex) {
 			t.Fatalf("%s missing flagship loadout index %d", payloadName, starterFleet.flagshipLoadoutIndex)
 		}
 	}
@@ -693,10 +711,10 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 			!bytes.Contains(playerGet, protocol.AppendInt32Field(nil, "LoadoutID", loadout.loadoutID())) {
 			t.Fatalf("YA_PlayerGet missing starter loadout reference %d", loadout.loadoutID())
 		}
-		if !bytes.Contains(staticFleetData, protocol.AppendInt32Field(nil, "ShipID", loadout.effectiveFleetShipID())) {
+		if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))) {
 			t.Fatalf("YA_RequestStaticFleetData missing starter fleet ship %d", loadout.effectiveFleetShipID())
 		}
-		if !bytes.Contains(staticFleetData, protocol.AppendInt32Field(nil, "LoadoutID", loadout.loadoutID())) {
+		if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "LoadoutID", strconv.Itoa(int(loadout.loadoutID())))) {
 			t.Fatalf("YA_RequestStaticFleetData missing starter loadout id %d", loadout.loadoutID())
 		}
 		if !bytes.Contains(playerGet, protocol.AppendUnnamedInt32Field(nil, loadout.effectiveFleetShipID())) {
@@ -822,7 +840,11 @@ func TestMmogLoadoutMutationsPersistPerPlayer(t *testing.T) {
 	}
 
 	playerAGet := buildMmogPlayerGetPayload(playerA)
-	if !bytes.Contains(playerAGet, protocol.AppendInt32Field(nil, "weaponPrimary", 123456789)) {
+	// weaponPrimary goes out to the client as a numeric string (see
+	// int32SliceToStrings' doc comment in response_builders.go); this only
+	// affects our outgoing wire format, not the incoming mutation parser
+	// above, which still accepts int32 from the client.
+	if !bytes.Contains(playerAGet, protocol.AppendStringField(nil, "weaponPrimary", "123456789")) {
 		t.Fatal("player A loadout mutation was not persisted")
 	}
 	if !bytes.Contains(playerAGet, protocol.AppendStringField(nil, "name", "Persisted Test Loadout")) {
@@ -1098,7 +1120,7 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 	}
 
 	techTree := buildMmogTechTreePayload(playerPID)
-	marker := bytes.Index(techTree, protocol.AppendInt32Field(nil, "ShipID", extractedShipIDValcour))
+	marker := bytes.Index(techTree, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(extractedShipIDValcour))))
 	if marker < 0 {
 		t.Fatal("YA_GetTechTree missing purchased Valcour row")
 	}
@@ -1144,8 +1166,11 @@ func TestMmogCheckReturnUsesCanReturnToMatchFields(t *testing.T) {
 	if !bytes.Contains(result, protocol.AppendBoolField(nil, "CanReturnToMatch", false)) {
 		t.Fatal("YA_CheckReturn missing CanReturnToMatch=false")
 	}
-	if !bytes.Contains(result, protocol.AppendBoolField(nil, "canReturnToMatch", false)) {
-		t.Fatal("YA_CheckReturn missing canReturnToMatch=false")
+	// canReturnToMatch (lowercase) collides case-insensitively with
+	// CanReturnToMatch as a UE4 FName (see commit 8f72937) and must NOT be
+	// emitted alongside it.
+	if bytes.Contains(result, protocol.AppendBoolField(nil, "canReturnToMatch", false)) {
+		t.Fatal("YA_CheckReturn must not emit canReturnToMatch, a case-insensitive FName duplicate of CanReturnToMatch")
 	}
 	if !bytes.Contains(result, protocol.AppendBoolField(nil, "ReturnValue", false)) {
 		t.Fatal("YA_CheckReturn missing ReturnValue=false")
@@ -1646,7 +1671,9 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 		if !bytes.Contains(payload, appendFieldMarker("name", 0x09)) {
 			t.Fatalf("%s missing native loadout name field", payloadName)
 		}
-		if !bytes.Contains(payload, appendFieldMarker("class", 0x56)) {
+		// class is sent as a numeric string now (see int32SliceToStrings' doc
+		// comment in response_builders.go), not int32.
+		if !bytes.Contains(payload, appendFieldMarker("class", 0x09)) {
 			t.Fatalf("%s missing native loadout class field", payloadName)
 		}
 		if !bytes.Contains(payload, appendFieldMarker("displayInfo", 0x09)) {
@@ -1664,7 +1691,9 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 			"perkNavigation",
 			"perkEngineer",
 		} {
-			if !bytes.Contains(payload, appendFieldMarker(field, 0x56)) {
+			// Sent as numeric strings now (see int32SliceToStrings' doc
+			// comment in response_builders.go), not int32.
+			if !bytes.Contains(payload, appendFieldMarker(field, 0x09)) {
 				t.Fatalf("%s missing native loadout slot field %s", payloadName, field)
 			}
 		}
@@ -1706,13 +1735,15 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	// drop every fleet entry with "Invalid fleet data, fleet array is empty". The
 	// canonical FlagShipID must always carry the ship ID, and no case-insensitive
 	// duplicate may carry a different value.
-	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "FlagShipID", starterFleet.flagshipShipID)) {
+	// FlagShipID in a Fleets array entry is sent as a numeric string, not
+	// int32 (see int32SliceToStrings' doc comment in response_builders.go).
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
 		t.Fatalf("YA_PlayerFleets missing FlagShipID=%d", starterFleet.flagshipShipID)
 	}
 	if bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "flagshipID", starterFleet.flagshipLoadoutID)) {
 		t.Fatal("YA_PlayerFleets must not emit flagshipID (case-insensitive duplicate of FlagShipID) with a non-ship value")
 	}
-	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "shipCount", int32(len(starterFleet.shipLoadouts)))) {
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "shipCount", strconv.Itoa(len(starterFleet.shipLoadouts)))) {
 		t.Fatalf("YA_PlayerFleets missing shipCount=%d", len(starterFleet.shipLoadouts))
 	}
 	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "m_flagshipIndex", starterFleet.flagshipIndex())) {
@@ -1722,12 +1753,16 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 		name  string
 		value []byte
 	}{
+		// AutoRepair is a genuine bool client-side and stays as a bool field.
+		// The rest are read through the client's int32-blind fleet-array
+		// parser (see int32SliceToStrings' doc comment in
+		// response_builders.go) and must be numeric strings.
 		{name: "AutoRepair", value: protocol.AppendBoolField(nil, "AutoRepair", false)},
-		{name: "Maintenance", value: protocol.AppendBoolField(nil, "Maintenance", false)},
-		{name: "LastWinTime", value: protocol.AppendInt32Field(nil, "LastWinTime", 0)},
-		{name: "ChargingBeginTime", value: protocol.AppendInt32Field(nil, "ChargingBeginTime", 0)},
-		{name: "ChargingCharges", value: protocol.AppendInt32Field(nil, "ChargingCharges", 1)},
-		{name: "Rating", value: protocol.AppendInt32Field(nil, "Rating", 0)},
+		{name: "Maintenance", value: protocol.AppendStringField(nil, "Maintenance", "0")},
+		{name: "LastWinTime", value: protocol.AppendStringField(nil, "LastWinTime", "0")},
+		{name: "ChargingBeginTime", value: protocol.AppendStringField(nil, "ChargingBeginTime", "0")},
+		{name: "ChargingCharges", value: protocol.AppendStringField(nil, "ChargingCharges", "1")},
+		{name: "Rating", value: protocol.AppendStringField(nil, "Rating", "0")},
 	} {
 		if !bytes.Contains(playerFleets, field.value) {
 			t.Fatalf("YA_PlayerFleets missing %s default state", field.name)

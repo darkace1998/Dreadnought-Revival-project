@@ -281,12 +281,13 @@ func writeAuthToken(jwtToken string) error {
 // ---- Config ----------------------------------------------------------
 
 type Config struct {
-	AuthURL       string `json:"auth_url"`
-	GatewayIP     string `json:"gateway_ip"`
-	GatewayPort   string `json:"gateway_port"`
-	FirmamentHost string `json:"firmament_host"`
-	FirmamentPort string `json:"firmament_port"`
-	GamePath      string `json:"game_path"`
+	AuthURL        string `json:"auth_url"`
+	GatewayIP      string `json:"gateway_ip"`
+	GatewayPort    string `json:"gateway_port"`
+	FirmamentHost  string `json:"firmament_host"`
+	FirmamentPort  string `json:"firmament_port"`
+	GamePath       string `json:"game_path"`
+	VerboseLogging bool   `json:"verbose_logging"`
 }
 
 func defaultConfig() Config {
@@ -307,6 +308,11 @@ func loadConfig(exeDir string) Config {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return cfg
 		}
+	}
+	// DN_VERBOSE_LOG lets verbose logging be toggled per-launch (e.g. for a
+	// one-off debugging session) without editing dn-launcher.json.
+	if v := strings.TrimSpace(os.Getenv("DN_VERBOSE_LOG")); v != "" && v != "0" {
+		cfg.VerboseLogging = true
 	}
 	return cfg
 }
@@ -422,6 +428,25 @@ func main() {
 		"-YFirmamentAddress=" + firmamentHost,
 		"-YFirmamentPort=" + cfg.FirmamentPort,
 		"-noeac",
+		// DreadGame/Config/DefaultEngine.ini sets NativePlatformService=Steam,
+		// so the client still initializes the real Steam online subsystem for
+		// achievements/presence alongside our Mmogbrain subsystem even though
+		// matchmaking doesn't need it. Against a private server, real Steam
+		// calls (e.g. GetAchievementAndUnlockTime) can't succeed and appear to
+		// block on a long timeout rather than failing fast — -NoSteam skips
+		// Steam subsystem init entirely, matching the flag the project's own
+		// dedicated-server launch command already uses (see README.md).
+		"-NoSteam",
+	}
+
+	if cfg.VerboseLogging {
+		// Bumps every UE4 log category (LogNet, LogHTTP, LogOnline,
+		// LogYMmogbrain, LogWebServicesPlugin, etc.) to Verbose, and forces
+		// the log file to flush after every line so nothing is lost if the
+		// client crashes mid-session. Substantially larger log files —
+		// intended for one-off debugging, not routine play.
+		args = append(args, `-LogCmds=global verbose`, "-forcelogflush")
+		fmt.Println("[*] Verbose logging enabled (DN_VERBOSE_LOG / verbose_logging) — expect much larger client log files.")
 	}
 
 	fmt.Printf("[*] Launching: %s\n", gamePath)
