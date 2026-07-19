@@ -29,10 +29,30 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// route maps a Host header to an upstream URL.
+// route maps a Host header to an upstream URL. internalOnly routes (the
+// master-server registry and game-manager instance API — never meant to be
+// reachable from the public internet, only from operator-controlled
+// machines on the same private network per hosts-redirect.sh) additionally
+// require the connecting client's remote address to be loopback or private.
 type route struct {
-	host     string
-	upstream *url.URL
+	host         string
+	upstream     *url.URL
+	internalOnly bool
+}
+
+// isPrivateOrLoopbackAddr reports whether addr (a "host:port" or bare host
+// string, as found in http.Request.RemoteAddr) resolves to a loopback or
+// RFC1918/RFC4193 private IP.
+func isPrivateOrLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate()
 }
 
 // rateLimiter is a simple per-IP in-memory rate limiter.
@@ -112,16 +132,20 @@ func main() {
 		{host: "profile-api.prod.greybox.sixfoot.live", upstream: mustParseURL("http://127.0.0.1:8081")},
 		{host: "legacyapi.prod.greybox.sixfoot.live", upstream: mustParseURL("http://127.0.0.1:8082")},
 		{host: "mmog.greybox.sixfoot.live", upstream: mustParseURL("http://127.0.0.1:8083")},
-		{host: "masterserver.local", upstream: mustParseURL("http://127.0.0.1:8084")},
-		{host: "gamemanager.local", upstream: mustParseURL("http://127.0.0.1:8085")},
+		{host: "masterserver.local", upstream: mustParseURL("http://127.0.0.1:8084"), internalOnly: true},
+		{host: "gamemanager.local", upstream: mustParseURL("http://127.0.0.1:8085"), internalOnly: true},
 	}
 
 	rl := newRateLimiter(100, time.Minute)
 
 	// Build route map for O(1) lookup
 	routeMap := make(map[string]*httputil.ReverseProxy)
+	internalOnlyHosts := make(map[string]bool)
 	redirectHosts := make(map[string]string)
 	for _, r := range routes {
+		if r.internalOnly {
+			internalOnlyHosts[r.host] = true
+		}
 		proxy := httputil.NewSingleHostReverseProxy(r.upstream)
 		proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
 			log.WithError(err).WithField("host", req.Host).Warn("upstream error")
@@ -171,6 +195,12 @@ func main() {
 		if !ok {
 			http.Error(w, `{"error":"unknown host"}`, http.StatusNotFound)
 			log.WithField("host", host).Warn("no route for host")
+			return
+		}
+
+		if internalOnlyHosts[host] && !isPrivateOrLoopbackAddr(r.RemoteAddr) {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			log.WithFields(logrus.Fields{"host": host, "remote": r.RemoteAddr}).Warn("blocked internal-only host from public address")
 			return
 		}
 

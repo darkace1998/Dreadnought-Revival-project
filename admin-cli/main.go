@@ -34,7 +34,7 @@ Environment variables:
   MASTER_URL  Master server base URL (default: http://127.0.0.1:8084)
   MMOG_URL    Mmogbrain base URL     (default: http://127.0.0.1:8083)
   GM_URL      Game manager base URL  (default: http://127.0.0.1:8085)
-  ADMIN_KEY   Shared admin secret    (default: changeme-admin-key)
+  ADMIN_KEY   Shared admin secret    (required — must match the target services' own ADMIN_KEY)
 
 Commands:
   status                    Show all services health
@@ -54,11 +54,21 @@ func main() {
 		os.Exit(0)
 	}
 
+	cmd := os.Args[1]
+	args := os.Args[2:]
+
 	authURL := getenv("AUTH_URL", "http://127.0.0.1:8081")
 	masterURL := getenv("MASTER_URL", "http://127.0.0.1:8084")
 	mmogURL := getenv("MMOG_URL", "http://127.0.0.1:8083")
 	gmURL := getenv("GM_URL", "http://127.0.0.1:8085")
-	adminKey := getenv("ADMIN_KEY", "changeme-admin-key")
+
+	var adminKey string
+	if cmd != "help" && cmd != "--help" && cmd != "-h" {
+		adminKey = os.Getenv("ADMIN_KEY")
+		if adminKey == "" || adminKey == "changeme-admin-key" {
+			die("ADMIN_KEY must be set to a real secret (not empty or the placeholder \"changeme-admin-key\") — every command here sends it as X-Admin-Key")
+		}
+	}
 
 	c := &client{
 		http:      &http.Client{Timeout: 10 * time.Second},
@@ -68,9 +78,6 @@ func main() {
 		gmURL:     gmURL,
 		adminKey:  adminKey,
 	}
-
-	cmd := os.Args[1]
-	args := os.Args[2:]
 
 	switch cmd {
 	case commandStatus:

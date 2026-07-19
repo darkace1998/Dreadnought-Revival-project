@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -22,12 +21,16 @@ func ExtractPlayerPID(payload []byte, defaultPID string, secret []byte) string {
 	if pid, err := ExtractVerifiedPlayerPIDFromJWT(ticket, secret, "launcher", "dreadnought"); err == nil && pid != "" {
 		return pid
 	}
-	if looksLikeJWT(ticket) {
-		return defaultPID
-	}
 
-	sum := md5.Sum([]byte(ticket))
-	return hex.EncodeToString(sum[:])
+	// Any ticket that doesn't verify as a signed JWT — whether or not it
+	// superficially looks like one — falls back to the same shared default
+	// identity as an empty ticket. Previously a non-JWT-shaped ticket was
+	// hashed with unsalted MD5 and used directly as the player's identity,
+	// letting anyone who could reach this port choose an arbitrary,
+	// persistent player PID (and therefore read/write that PID's saved
+	// currency, fleets, loadouts, purchases) without ever going through
+	// auth-server's JWT issuance. See tracking issue: full auth bypass.
+	return defaultPID
 }
 
 func ExtractVerifiedPlayerPIDFromJWT(token string, secret []byte, audiences ...string) (string, error) {
@@ -95,10 +98,6 @@ func claimsHasString(claims jwt.MapClaims, key string, want string) bool {
 		return value == want
 	}
 	return false
-}
-
-func looksLikeJWT(value string) bool {
-	return strings.Count(value, ".") == 2
 }
 
 func claimsHasAudience(claims jwt.MapClaims, audiences ...string) bool {

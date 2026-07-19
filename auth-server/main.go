@@ -64,7 +64,7 @@ func main() {
 
 	// Admin endpoints (protected by X-Admin-Key header middleware)
 	admin := r.PathPrefix("/admin").Subrouter()
-	admin.Use(adminKeyMiddleware(getenv("ADMIN_KEY", "changeme-admin-key")))
+	admin.Use(adminKeyMiddleware(requireAdminKey(log)))
 	admin.HandleFunc("/ban", h.AdminBan).Methods(http.MethodPost)
 	admin.HandleFunc("/unban", h.AdminUnban).Methods(http.MethodPost)
 
@@ -100,6 +100,17 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// requireAdminKey refuses to start with the well-known placeholder admin
+// key committed in this repo's source — silently falling back to it would
+// let anyone who has read the source authenticate to every /admin endpoint.
+func requireAdminKey(log *logrus.Logger) string {
+	key := os.Getenv("ADMIN_KEY")
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
 }
 
 func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {

@@ -72,8 +72,9 @@ func main() {
 	r.HandleFunc("/mmog/chat", h.ChatHistory).Methods(http.MethodGet)
 
 	// Admin endpoints
+	adminKey := requireAdminKey(log)
 	adminSub := r.PathPrefix("/admin").Subrouter()
-	adminSub.Use(adminKeyMiddleware(getenv("ADMIN_KEY", "changeme-admin-key")))
+	adminSub.Use(adminKeyMiddleware(adminKey))
 	adminSub.HandleFunc("/queue", h.AdminQueue).Methods(http.MethodGet)
 
 	// Authenticated
@@ -86,7 +87,7 @@ func main() {
 	auth.HandleFunc("/chat", h.ChatSend).Methods(http.MethodPost)
 	auth.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
 	internal := r.PathPrefix("/internal").Subrouter()
-	internal.Use(internalKeyMiddleware(getenv("INTERNAL_API_KEY", getenv("ADMIN_KEY", "changeme-admin-key"))))
+	internal.Use(internalKeyMiddleware(getenv("INTERNAL_API_KEY", adminKey)))
 	internal.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
 
 	srv := &http.Server{
@@ -146,6 +147,18 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// requireAdminKey refuses to start with the well-known placeholder admin
+// key committed in this repo's source — silently falling back to it would
+// let anyone who has read the source authenticate to every /admin and
+// /internal endpoint.
+func requireAdminKey(log *logrus.Logger) string {
+	key := os.Getenv("ADMIN_KEY")
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
 }
 
 func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {
