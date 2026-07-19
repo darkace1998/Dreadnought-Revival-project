@@ -2947,3 +2947,29 @@ func TestPurchasedItemTypeMatchesRealItemCategory(t *testing.T) {
 		t.Fatalf("persisted item_type = %q, want %q (purchasedItemType must not default every purchase to ship)", itemType, "weapon")
 	}
 }
+
+func TestChatPayloadDeliversPersistedMessages(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "abababababababababababababababab"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+
+	sendRequest := protocol.AppendStringField(nil, "channelName", "global")
+	sendRequest = protocol.AppendStringField(sendRequest, "message", "hello world")
+	send := buildMmogChatPayload("YA_Chat", playerPID, sendRequest)
+	if !bytes.Contains(send, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+		t.Fatalf("chat send did not report ok: %x", send)
+	}
+
+	readRequest := protocol.AppendStringField(nil, "channelName", "global")
+	read := buildMmogChatPayload("YA_Chat", "other-player-id", readRequest)
+	result := extractNamedMmogObject(t, read, "result")
+	messages := extractNamedMmogArray(t, result, "messages")
+	if !bytes.Contains(messages, protocol.AppendStringField(nil, "sender", normalizedPlayerStatePID(playerPID))) {
+		t.Fatalf("messages array missing sender for persisted chat message: %x", messages)
+	}
+	if !bytes.Contains(messages, protocol.AppendStringField(nil, "text", "hello world")) {
+		t.Fatalf("messages array missing text for persisted chat message: %x", messages)
+	}
+}

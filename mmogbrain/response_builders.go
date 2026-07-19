@@ -327,9 +327,32 @@ func buildMmogChatPayload(requestName string, playerPID string, payload []byte) 
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendInt32Field(b, "Code", 0)
 	b = protocol.AppendStringField(b, "channelName", channel)
+	// Capitalized "Messages" is unread by the real client parser (confirmed
+	// via decompile) but kept as a harmless empty array rather than removed,
+	// since removing it isn't required for the fix below and other code may
+	// depend on its presence.
 	b, stack = protocol.AppendArrayStart(b, stack, "Messages")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// Real client parser (YMmogChat.cpp / FUN_142a21cf0) reads the lowercase
+	// "messages" array with per-entry sender/recpt/type/subtype/text/duration
+	// — confirmed field names via decompile, so this is a pure data gap, not
+	// a wire-format bug. type/subtype/duration go through the same
+	// int32-blind scalar union documented elsewhere in this file, so send
+	// them as numeric strings. recpt has no per-message recipient concept in
+	// this schema (channel/broadcast chat only) — sent empty. type/subtype/
+	// duration default to "0" (best-effort "normal message" values; not
+	// independently confirmed against any real client-sent example).
 	b, stack = protocol.AppendArrayStart(b, stack, "messages")
+	for _, msg := range recentMmogChatMessages(channel, 50) {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "sender", msg.senderID)
+		b = protocol.AppendStringField(b, "recpt", "")
+		b = protocol.AppendStringField(b, "type", "0")
+		b = protocol.AppendStringField(b, "subtype", "0")
+		b = protocol.AppendStringField(b, "text", msg.content)
+		b = protocol.AppendStringField(b, "duration", "0")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -342,6 +365,38 @@ func persistMmogChatMessage(playerPID string, channel string, message string) {
 	}
 	_, _ = database.Exec(`INSERT INTO chat_messages(id,channel,sender_id,content) VALUES(?,?,?,?)`,
 		uuid.New().String(), channel, playerPID, message)
+}
+
+type mmogChatMessage struct {
+	senderID string
+	content  string
+}
+
+// recentMmogChatMessages returns up to limit most-recent messages for a
+// channel, oldest first (chronological display order).
+func recentMmogChatMessages(channel string, limit int) []mmogChatMessage {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(`SELECT sender_id, content FROM chat_messages WHERE channel=? ORDER BY sent_at DESC, id DESC LIMIT ?`, channel, limit)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var messages []mmogChatMessage
+	for rows.Next() {
+		var msg mmogChatMessage
+		if err := rows.Scan(&msg.senderID, &msg.content); err != nil {
+			continue
+		}
+		messages = append(messages, msg)
+	}
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	return messages
 }
 
 // --- Fleet serialization ---
