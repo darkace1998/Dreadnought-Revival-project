@@ -38,6 +38,7 @@ type Spawner struct {
 	gameBinary  string
 	wineExe     string
 	masterURL   string
+	internalKey string
 	serverIP    string
 	releasePort func(int)
 	log         *logrus.Logger
@@ -46,16 +47,19 @@ type Spawner struct {
 
 // New creates a Spawner.
 //
-//	gameBinary: path to DreadGame-Win64-Shipping.exe
-//	wineExe:    path to wine executable (e.g. "wine")
-//	masterURL:  base URL of master-server (e.g. "http://127.0.0.1:8084")
-//	serverIP:   public IP that clients will connect to
-func New(gameBinary, wineExe, masterURL, serverIP string, log *logrus.Logger, releasePort func(int)) *Spawner {
+//	gameBinary:  path to DreadGame-Win64-Shipping.exe
+//	wineExe:     path to wine executable (e.g. "wine")
+//	masterURL:   base URL of master-server (e.g. "http://127.0.0.1:8084")
+//	serverIP:    public IP that clients will connect to
+//	internalKey: shared secret sent as X-Internal-Key on register/deregister
+//	             calls to master-server's now-authenticated write endpoints
+func New(gameBinary, wineExe, masterURL, serverIP, internalKey string, log *logrus.Logger, releasePort func(int)) *Spawner {
 	return &Spawner{
 		instances:   make(map[string]*Instance),
 		gameBinary:  gameBinary,
 		wineExe:     wineExe,
 		masterURL:   masterURL,
+		internalKey: internalKey,
 		serverIP:    serverIP,
 		releasePort: releasePort,
 		log:         log,
@@ -167,6 +171,7 @@ func (s *Spawner) monitor(inst *Instance) {
 		if err != nil {
 			s.log.WithError(err).WithField("instance_id", inst.ID).Warn("build deregister request")
 		} else {
+			req.Header.Set("X-Internal-Key", s.internalKey)
 			resp, err := s.httpClient.Do(req)
 			if err != nil {
 				s.log.WithError(err).WithField("instance_id", inst.ID).Warn("deregister instance")
@@ -269,11 +274,13 @@ func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 		return "", fmt.Errorf("marshal register request: %w", err)
 	}
 
-	resp, err := s.httpClient.Post(
-		fmt.Sprintf("%s/servers/register", s.masterURL),
-		"application/json",
-		bytes.NewReader(body),
-	)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/servers/register", s.masterURL), bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("build register request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", s.internalKey)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}

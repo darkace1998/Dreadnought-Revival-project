@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -44,15 +45,19 @@ func main() {
 	serverIP := getenv("SERVER_IP", "127.0.0.1")
 	portStart := getenvInt("PORT_RANGE_START", 7777)
 	portEnd := getenvInt("PORT_RANGE_END", 7877)
+	internalKey := requireInternalKey(log)
 
 	pool := portpool.New(portStart, portEnd)
-	sp := spawner.New(gameBinary, wineExe, masterURL, serverIP, log, pool.Release)
+	sp := spawner.New(gameBinary, wineExe, masterURL, serverIP, internalKey, log, pool.Release)
 
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
 
+	write := r.NewRoute().Subrouter()
+	write.Use(internalKeyMiddleware(internalKey))
+
 	// Launch a new match instance
-	r.HandleFunc("/instances", func(w http.ResponseWriter, r *http.Request) {
+	write.HandleFunc("/instances", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<17) // 128KB limit
 		var req struct {
 			GameMode string   `json:"game_mode"`
@@ -152,7 +157,7 @@ func main() {
 	}).Methods(http.MethodGet)
 
 	// Stop a specific instance
-	r.HandleFunc("/instances/{id}", func(w http.ResponseWriter, r *http.Request) {
+	write.HandleFunc("/instances/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		if err := sp.Stop(id); err != nil {
 			if strings.Contains(err.Error(), "not found") {
@@ -217,6 +222,36 @@ func getenvInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// requireInternalKey refuses to start without a real shared secret for the
+// instance-lifecycle write endpoints (POST/DELETE /instances), which
+// previously had no authentication at all — any client that could reach
+// this service could spawn unbounded dedicated-server processes or kill
+// arbitrary running matches. Falls back to ADMIN_KEY, matching the pattern
+// used by mmogbrain's and master-server's own internal endpoints.
+func requireInternalKey(log *logrus.Logger) string {
+	key := os.Getenv("INTERNAL_API_KEY")
+	if key == "" {
+		key = os.Getenv("ADMIN_KEY")
+	}
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
+}
+
+func internalKeyMiddleware(key string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("X-Internal-Key")
+			if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func loggingMiddleware(log *logrus.Logger) mux.MiddlewareFunc {
