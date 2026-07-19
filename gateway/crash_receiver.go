@@ -18,6 +18,7 @@ import (
 )
 
 const maxCrashReportUploadBytes int64 = 128 << 20
+const maxCrashReportDirBytes int64 = 10 << 30 // 10GB aggregate quota for reportDir
 
 func newCrashReceiverHandler(log *logrus.Logger, reportDir string, rl *rateLimiter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,12 @@ func newCrashReceiverHandler(log *logrus.Logger, reportDir string, rl *rateLimit
 		if strings.Contains(pathLower, "ping") {
 			writeCrashReceiverResult(w, http.StatusOK, reportID)
 			logCrashReceiverRequest(log, r, reportID, 0, time.Since(start), nil)
+			return
+		}
+
+		if used, err := dirSize(reportDir); err == nil && used >= maxCrashReportDirBytes {
+			writeCrashReceiverResult(w, http.StatusInsufficientStorage, reportID)
+			logCrashReceiverRequest(log, r, reportID, 0, time.Since(start), fmt.Errorf("crash report storage quota exceeded (%d bytes used)", used))
 			return
 		}
 
@@ -247,6 +254,23 @@ func uniqueCrashFilePath(dir string, fileName string) string {
 			return candidate
 		}
 	}
+}
+
+func dirSize(dir string) (int64, error) {
+	var total int64
+	err := filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, err
 }
 
 func randomCrashSuffix() string {
