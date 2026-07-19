@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -2810,5 +2811,53 @@ func TestGatewayParsesSessionHeaderWithUsernameSuffix(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("gateway handler was not called")
+	}
+}
+
+// TestCompleteContractRejectsImmediateCompletion is a regression test for
+// the exploit where a contract could be completed (and its reward paid out)
+// instantly after being assigned, with no gameplay and no progress
+// validation, since seedDailyContractsForPlayer re-seeds a fresh contract
+// on every completion — allowing unlimited free XP/credit farming via a
+// tight complete-and-reseed loop. completeContract now requires a contract
+// to have existed for at least minContractCompletionAge before it can be
+// completed.
+func TestCompleteContractRejectsImmediateCompletion(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+	if err := seedMmogPlayerState(database, playerPID); err != nil {
+		t.Fatalf("seed player state: %v", err)
+	}
+
+	seedDailyContractsForPlayer(database, playerPID)
+	if len(dailyContractSeeds) == 0 {
+		t.Fatal("dailyContractSeeds is empty, cannot exercise this test")
+	}
+	contractID := dailyContractSeeds[0].id
+
+	if _, _, success := completeContract(database, playerPID, contractID); success {
+		t.Fatal("completeContract succeeded immediately after seeding — age gate did not apply")
+	}
+
+	// Backdate the contract past the minimum completion age and retry.
+	if _, err := database.Exec(
+		`UPDATE player_contracts SET created_at=datetime('now', ?) WHERE user_id=? AND contract_id=?`,
+		fmt.Sprintf("-%d seconds", minContractCompletionAge+1), playerPID, contractID,
+	); err != nil {
+		t.Fatalf("backdate contract: %v", err)
+	}
+
+	rewardXP, rewardGP, success := completeContract(database, playerPID, contractID)
+	if !success {
+		t.Fatal("completeContract failed after contract aged past the minimum — age gate too strict or broken")
+	}
+	if rewardXP <= 0 && rewardGP <= 0 {
+		t.Fatalf("completeContract reported no reward: xp=%d gp=%d", rewardXP, rewardGP)
+	}
+
+	// A second completion attempt for the same (now-completed) contract
+	// must not succeed again (state is no longer 'active').
+	if _, _, success := completeContract(database, playerPID, contractID); success {
+		t.Fatal("completeContract succeeded a second time for an already-completed contract")
 	}
 }

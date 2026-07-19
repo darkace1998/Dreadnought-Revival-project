@@ -171,8 +171,17 @@ type mmogConnState struct {
 	playerPID                string
 }
 
+// mmogJWTSecretValue is set once at startup by setMmogJWTSecret, after
+// main() has validated it's a real secret (see requireJWTSecret) — avoids
+// re-reading and re-validating the environment on every login attempt.
+var mmogJWTSecretValue []byte
+
+func setMmogJWTSecret(secret []byte) {
+	mmogJWTSecretValue = secret
+}
+
 func mmogJWTSecret() []byte {
-	return []byte(getenv("JWT_SECRET", "changeme-dreadnought-jwt-secret"))
+	return mmogJWTSecretValue
 }
 
 func syntheticRequestID(tag byte) [16]byte {

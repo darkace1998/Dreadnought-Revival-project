@@ -28,7 +28,7 @@ func main() {
 
 	dbPath := getenv("DB_PATH", "legacy.db")
 	addr := getenv("ADDR", ":8082")
-	secret := []byte(getenv("JWT_SECRET", "changeme-dreadnought-jwt-secret"))
+	secret := requireJWTSecret(log)
 
 	database, err := db.Open(dbPath)
 	if err != nil {
@@ -117,6 +117,17 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// requireJWTSecret refuses to start with the well-known placeholder JWT
+// signing secret committed in this repo's source — silently falling back to
+// it would let anyone who has read the source mint arbitrary valid JWTs.
+func requireJWTSecret(log *logrus.Logger) []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" || secret == "changeme-dreadnought-jwt-secret" {
+		log.Fatal(`JWT_SECRET must be set to a real secret (not empty or the placeholder "changeme-dreadnought-jwt-secret")`)
+	}
+	return []byte(secret)
 }
 
 // requireInternalKey refuses to start without a real shared secret for

@@ -39,7 +39,8 @@ func main() {
 
 	dbPath := getenv("DB_PATH", "mmog.db")
 	addr := getenv("ADDR", ":8083")
-	secret := []byte(getenv("JWT_SECRET", "changeme-dreadnought-jwt-secret"))
+	secret := requireJWTSecret(log)
+	setMmogJWTSecret(secret)
 	gameMgrURL := getenv("GAME_MGR_URL", "http://127.0.0.1:8085")
 	playersPerMatch := 2 // default; override with PLAYERS_PER_MATCH env
 	if v, err := strconv.Atoi(os.Getenv("PLAYERS_PER_MATCH")); err == nil && v > 0 {
@@ -159,6 +160,18 @@ func requireAdminKey(log *logrus.Logger) string {
 		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
+}
+
+// requireJWTSecret refuses to start with the well-known placeholder JWT
+// signing secret committed in this repo's source — silently falling back to
+// it would let anyone who has read the source mint arbitrary valid JWTs and
+// bypass authentication on both the HTTP gateway and the Firmament server.
+func requireJWTSecret(log *logrus.Logger) []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" || secret == "changeme-dreadnought-jwt-secret" {
+		log.Fatal(`JWT_SECRET must be set to a real secret (not empty or the placeholder "changeme-dreadnought-jwt-secret")`)
+	}
+	return []byte(secret)
 }
 
 func jwtMiddleware(secret []byte, log *logrus.Logger) mux.MiddlewareFunc {

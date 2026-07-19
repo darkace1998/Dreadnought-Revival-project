@@ -2277,32 +2277,59 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		price = 1000
 	}
 	price *= quantity
-
-	var owned int
-	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`, pid, itemID).Scan(&owned)
-	if owned > 0 {
-		return buildMmogErrorPayload(requestName, "item already owned")
-	}
-
-	var softCurrency, premiumCurrency int32
-	_ = database.QueryRow(`SELECT soft_currency, premium_currency FROM player_state WHERE user_id=?`, pid).
-		Scan(&softCurrency, &premiumCurrency)
-
-	if softCurrency < price {
-		return buildMmogErrorPayload(requestName, "insufficient credits")
-	}
-
-	if _, err := database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid); err != nil {
-		return buildMmogErrorPayload(requestName, "currency deduction failed")
-	}
 	itemType := "ship"
 	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
 	if currency == "" {
 		currency = "gp"
 	}
-	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`, pid, itemID, itemType, price, currency); err != nil {
+
+	// Check-then-update was a TOCTOU race: two concurrent purchase requests
+	// could both read a sufficient balance before either committed its
+	// deduction, allowing double-spend / negative balance. Make the whole
+	// sequence atomic instead: a transaction with a conditional UPDATE
+	// (guarded by the same balance check in the WHERE clause, so the read
+	// and the write can't be interleaved by another request) and an
+	// INSERT OR IGNORE whose affected-row-count reports "already owned"
+	// atomically via the table's (user_id,item_id) primary key, instead of
+	// a separate racy pre-check.
+	tx, err := database.Begin()
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "database unavailable")
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var softCurrency, premiumCurrency int32
+	if err := tx.QueryRow(`SELECT soft_currency, premium_currency FROM player_state WHERE user_id=?`, pid).
+		Scan(&softCurrency, &premiumCurrency); err != nil {
+		return buildMmogErrorPayload(requestName, "player state unavailable")
+	}
+
+	deductResult, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`, price, pid, price)
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "currency deduction failed")
+	}
+	if rows, _ := deductResult.RowsAffected(); rows == 0 {
+		return buildMmogErrorPayload(requestName, "insufficient credits")
+	}
+
+	insertResult, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`, pid, itemID, itemType, price, currency)
+	if err != nil {
 		return buildMmogErrorPayload(requestName, "purchase record failed")
 	}
+	if rows, _ := insertResult.RowsAffected(); rows == 0 {
+		// Already owned — rollback (via defer) undoes the currency deduction above.
+		return buildMmogErrorPayload(requestName, "item already owned")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return buildMmogErrorPayload(requestName, "purchase commit failed")
+	}
+	committed = true
 
 	var b []byte
 	var stack []int
@@ -2351,11 +2378,17 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 
 	var premiumCurrency int32
 	_ = database.QueryRow(`SELECT premium_currency FROM player_state WHERE user_id=?`, pid).Scan(&premiumCurrency)
-	if premiumCurrency < price {
+
+	// Atomic conditional deduction — see buildMmogPurchasePayload's comment
+	// for why a separate check-then-update is unsafe under concurrent
+	// requests.
+	result, err := database.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`, price, pid, price)
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "currency deduction failed")
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return buildMmogErrorPayload(requestName, "insufficient elite currency")
 	}
-
-	_, _ = database.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=?`, price, pid)
 
 	var b []byte
 	var stack []int
@@ -2453,16 +2486,19 @@ func buildMmogContractRerollPayload(requestName string, playerPID string, payloa
 		return buildMmogErrorPayload(requestName, "database unavailable")
 	}
 
-	// Reroll costs 100 credits
+	// Reroll costs 100 credits. Atomic conditional deduction — see
+	// buildMmogPurchasePayload's comment for why check-then-update is
+	// unsafe under concurrent requests.
 	rerollCost := int32(100)
-	var softCurrency int32
-	_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&softCurrency)
-	if softCurrency < rerollCost {
-		return buildMmogErrorPayload(requestName, "insufficient credits for reroll")
-	}
 
 	// Deduct reroll cost
-	_, _ = database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=?`, rerollCost, pid)
+	result, err := database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`, rerollCost, pid, rerollCost)
+	if err != nil {
+		return buildMmogErrorPayload(requestName, "currency deduction failed")
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return buildMmogErrorPayload(requestName, "insufficient credits for reroll")
+	}
 
 	// Mark old contract as rerolled
 	_, _ = database.Exec(`UPDATE player_contracts SET state='rerolled', updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
@@ -2504,6 +2540,15 @@ func seedDailyContractsForPlayer(db *sql.DB, pid string) {
 	}
 }
 
+// minContractCompletionAge is a rough anti-farming heuristic: the server
+// has no real progress tracking tying "kills"/"score" objectives to actual
+// match events (see tracked issue — contracts can be claimed with zero
+// gameplay), so completion currently can't be validated against genuine
+// progress. This isn't a real fix — it only stops literal zero-delay
+// complete-and-reseed scripting loops — but it's cheap and honest about
+// its limits pending real per-objective progress tracking.
+const minContractCompletionAge = 120 // seconds
+
 func completeContract(db *sql.DB, pid, contractID string) (rewardXP, rewardGP int32, success bool) {
 	// Get contract details
 	var payload string
@@ -2521,9 +2566,17 @@ func completeContract(db *sql.DB, pid, contractID string) (rewardXP, rewardGP in
 		return 0, 0, false
 	}
 
-	// Mark contract as completed
-	_, err = db.Exec(`UPDATE player_contracts SET state='completed', progress=100, completed_at=datetime('now'), updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
+	// Mark contract as completed — the age check and state='active' guard
+	// are both in this single atomic UPDATE so a duplicate/concurrent
+	// completion request for the same contract can't double-pay (mirrors
+	// the atomic-conditional-UPDATE pattern used for currency deductions).
+	result, err := db.Exec(`UPDATE player_contracts SET state='completed', progress=100, completed_at=datetime('now'), updated_at=datetime('now')
+		WHERE user_id=? AND contract_id=? AND state='active' AND datetime(created_at,?) <= datetime('now')`,
+		pid, contractID, fmt.Sprintf("+%d seconds", minContractCompletionAge))
 	if err != nil {
+		return 0, 0, false
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return 0, 0, false
 	}
 
@@ -2546,22 +2599,20 @@ func convertXPToCredits(db *sql.DB, pid string, xpAmount int32) (creditsGained i
 		return 0, false
 	}
 
-	// Check if player has enough free XP
-	var freeXP int32
-	err := db.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP)
-	if err != nil || freeXP < xpAmount {
-		return 0, false
-	}
-
 	// Calculate credits (10 XP = 1 credit)
 	creditsGained = xpAmount / 10
 	if creditsGained <= 0 {
 		return 0, false
 	}
 
-	// Deduct XP and add credits
-	_, err = db.Exec(`UPDATE player_state SET free_xp=free_xp-?, soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, xpAmount, creditsGained, pid)
+	// Atomic conditional deduction, guarded on free_xp>=xpAmount in the same
+	// UPDATE — see buildMmogPurchasePayload's comment for why a separate
+	// check-then-update is unsafe under concurrent requests.
+	result, err := db.Exec(`UPDATE player_state SET free_xp=free_xp-?, soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=? AND free_xp>=?`, xpAmount, creditsGained, pid, xpAmount)
 	if err != nil {
+		return 0, false
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return 0, false
 	}
 
@@ -2573,22 +2624,20 @@ func convertXPToPremiumCredits(db *sql.DB, pid string, xpAmount int32) (premiumC
 		return 0, false
 	}
 
-	// Check if player has enough free XP
-	var freeXP int32
-	err := db.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP)
-	if err != nil || freeXP < xpAmount {
-		return 0, false
-	}
-
 	// Calculate premium credits (100 XP = 1 premium credit)
 	premiumCreditsGained = xpAmount / 100
 	if premiumCreditsGained <= 0 {
 		return 0, false
 	}
 
-	// Deduct XP and add premium credits
-	_, err = db.Exec(`UPDATE player_state SET free_xp=free_xp-?, premium_currency=premium_currency+?, updated_at=datetime('now') WHERE user_id=?`, xpAmount, premiumCreditsGained, pid)
+	// Atomic conditional deduction, guarded on free_xp>=xpAmount in the same
+	// UPDATE — see buildMmogPurchasePayload's comment for why a separate
+	// check-then-update is unsafe under concurrent requests.
+	result, err := db.Exec(`UPDATE player_state SET free_xp=free_xp-?, premium_currency=premium_currency+?, updated_at=datetime('now') WHERE user_id=? AND free_xp>=?`, xpAmount, premiumCreditsGained, pid, xpAmount)
 	if err != nil {
+		return 0, false
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return 0, false
 	}
 
