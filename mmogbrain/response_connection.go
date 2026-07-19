@@ -12,6 +12,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// maxHandshakeBufferBytes bounds how much unconsumed data a connection may
+// accumulate before completing the initial handshake. The real handshake
+// (seed + digest packets) fits comfortably within a few hundred bytes; this
+// is deliberately generous headroom, not a tight fit.
+const maxHandshakeBufferBytes = 16 * 1024
+
+// maxMmogConnIdleDuration bounds how long a connection may go without
+// sending any data before it's closed. Generous relative to the client's
+// normal ping cadence (observed ~5s) so legitimate idle players aren't
+// disconnected, while still bounding the number of long-lived,
+// mostly-idle goroutines/sockets one client can accumulate.
+const maxMmogConnIdleDuration = 15 * time.Minute
+
 func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	defer func() {
 		_ = conn.Close()
@@ -28,11 +41,13 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	var appPlainBuf []byte
 	var handshakeBuf []byte
 	state := &mmogConnState{playerPID: defaultMmogPlayerPID}
+	lastActivity := time.Now()
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 		n, err := conn.Read(buf)
 		_ = conn.SetReadDeadline(time.Time{})
 		if n > 0 {
+			lastActivity = time.Now()
 			data := append([]byte(nil), buf[:n]...)
 			log.WithFields(logrus.Fields{
 				"remote": remote,
@@ -42,6 +57,19 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 			}).Info("mmog: raw bytes received")
 
 			handshakeBuf = append(handshakeBuf, data...)
+
+			// A real handshake completes within a couple of small packets.
+			// nextBufferedMmogPacket only ever consumes bytes once it finds
+			// valid magic (0x67 0x50) at the front of the buffer — a
+			// connection that never sends a matching prefix would otherwise
+			// grow handshakeBuf without bound for as long as it stays open
+			// (memory-exhaustion DoS). Cap it and drop the connection if a
+			// real handshake hasn't completed within a generous size.
+			if handshakeStage < 2 && len(handshakeBuf) > maxHandshakeBufferBytes {
+				log.WithFields(logrus.Fields{"remote": remote, "bytes": len(handshakeBuf)}).
+					Warn("mmog: handshake buffer exceeded size limit without completing handshake, dropping connection")
+				return
+			}
 
 			if handshakeStage < 2 {
 				for handshakeStage < 2 {
@@ -135,6 +163,15 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 		}
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// The 30s read deadline re-arms on every timeout with no
+				// upper bound, so a connection that never sends data (or
+				// trickles a byte just often enough) could stay open —
+				// and its goroutine/socket held — indefinitely. Close it
+				// once it's been genuinely idle past a generous ceiling.
+				if time.Since(lastActivity) > maxMmogConnIdleDuration {
+					log.WithField("remote", remote).Info("mmog: closing connection idle past maximum duration")
+					return
+				}
 				continue
 			}
 			if err == io.EOF {

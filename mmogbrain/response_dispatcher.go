@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strings"
-
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 	"github.com/sirupsen/logrus"
 )
@@ -173,10 +171,15 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 
 	// --- Default ---
 	default:
+		// Previously any unrecognized request whose name didn't start with
+		// "YA_Get" was answered with an unconditional fake success — the
+		// client would believe a typo'd/unimplemented mutation (equip,
+		// purchase, claim, etc.) had taken effect when the server did
+		// nothing at all. Every request type this server intentionally
+		// treats as a safe no-op is already handled by an explicit case
+		// above; anything reaching here is genuinely unrecognized, so it
+		// should surface as an error like unknown reads already do.
 		logrus.WithField("request", requestName).Warn("unknown MMOG request")
-		if strings.HasPrefix(requestName, "YA_Get") {
-			return buildMmogErrorPayload(requestName, "Unknown read command: "+requestName)
-		}
-		return buildMmogRequestSuccessPayload(requestName)
+		return buildMmogErrorPayload(requestName, "Unknown command: "+requestName)
 	}
 }

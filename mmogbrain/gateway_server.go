@@ -196,6 +196,15 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 
 	sessionID := uuid.New().String()
 	sessionsMu.Lock()
+	// Replace any existing session(s) for this user instead of always
+	// inserting a new one — previously a single authenticated caller could
+	// grow the session map without bound (up to the 24h TTL cleanup) by
+	// simply calling this endpoint in a loop.
+	for id, sess := range sessions {
+		if sess.UserID == userID {
+			delete(sessions, id)
+		}
+	}
 	sessions[sessionID] = gatewaySession{UserID: userID, Username: username, createdAt: time.Now()}
 	sessionsMu.Unlock()
 
@@ -277,6 +286,14 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 		sessionsMu.Lock()
+		// Same fix as handleGWLogin: replace any existing session(s) for
+		// this user rather than accumulating a new one on every call that
+		// doesn't happen to supply a still-valid Session header.
+		for id, sess := range sessions {
+			if sess.UserID == userID {
+				delete(sessions, id)
+			}
+		}
 		sessions[sessionID] = gatewaySession{UserID: userID, Username: username, createdAt: time.Now()}
 		sessionsMu.Unlock()
 	}

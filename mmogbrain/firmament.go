@@ -317,9 +317,31 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 
 	// Step 4: keep-alive loop — handle ongoing messages (ping/pong, username resolve, etc.).
 	// All game→server messages are raw JSON without '\n' — json.Decoder handles this correctly.
+	//
+	// The deadline was cleared permanently above (step 3) and, until this
+	// fix, was never reinstated — Decode() blocked forever, so a connection
+	// that authenticated and then sent an unterminated/partial message (or
+	// just stopped sending) held its goroutine and socket open indefinitely.
+	// Re-arm a deadline before every Decode call; a timeout just means the
+	// client's been quiet, not that the connection is dead, so only close
+	// once total idle time exceeds maxMmogConnIdleDuration. json.Decoder's
+	// internal buffer is preserved across a timed-out Read, so retrying
+	// Decode() on the same decoder correctly resumes any partially-received
+	// message rather than corrupting/dropping it.
+	lastActivity := time.Now()
 	for {
 		var msgRaw json.RawMessage
-		if err := decoder.Decode(&msgRaw); err != nil {
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		err := decoder.Decode(&msgRaw)
+		_ = conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				if time.Since(lastActivity) > maxMmogConnIdleDuration {
+					log.WithField("remote", remote).Info("firmament: closing connection idle past maximum duration")
+					return
+				}
+				continue
+			}
 			if err == io.EOF {
 				log.WithField("remote", remote).Info("firmament: client disconnected")
 			} else {
@@ -327,6 +349,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 			}
 			return
 		}
+		lastActivity = time.Now()
 		var msg map[string]interface{}
 		if json.Unmarshal(msgRaw, &msg) != nil {
 			log.WithFields(logrus.Fields{"remote": remote, "hex": hex.EncodeToString(msgRaw)}).Info("firmament: non-JSON message")
