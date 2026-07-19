@@ -20,14 +20,18 @@ var targetSizes = map[string]int{
 	"YA_GetDailyContractsData":     227,
 	"YA_GetBoosterData":            1856,
 	"YA_GetCareerProgression":      3437,
-	"YA_GetPlayerScores":           233,
+	"YA_GetPlayerScores":           277,
 	"YA_GetTechTree":               39062,
 	"YA_GetPlayerProgression":      1035,
 	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,
 	"YA_Tune":                      368116,
-	"YA_GetSeasonData":             1080,
-	"YA_PlayerGet":                 11639,
+	"YA_GetSeasonData":             1091,
+	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
+	// type/disp/rep fields the client's per-entry parser actually reads,
+	// replacing the far longer m_enabling/m_triggers/m_effects DSL text
+	// that parser never looked up — legitimately smaller, not a regression.
+	"YA_PlayerGet":                 5961,
 	"YA_PlayerFleets":              2198,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     324,

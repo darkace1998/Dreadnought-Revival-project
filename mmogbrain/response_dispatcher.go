@@ -69,7 +69,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetBoosterData":
 		return buildMmogBoosterDataPayload()
 	case "YA_GetPlayerScores":
-		return buildMmogPlayerScoresPayload()
+		return buildMmogPlayerScoresPayloadForPlayer(playerPID)
 	case "YA_GetPlayerStatistics":
 		return buildMmogPlayerStatisticsPayload()
 	case "YA_FleetEligibility":

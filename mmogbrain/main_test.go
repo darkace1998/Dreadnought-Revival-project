@@ -2189,8 +2189,11 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 			t.Fatalf("YA_GetSeasonData Events missing %s", field)
 		}
 	}
-	if currentSeason := protocol.ExtractStringField(result, "CurrentSeason"); currentSeason != "" {
-		t.Fatalf("YA_GetSeasonData CurrentSeason = %q, want empty", currentSeason)
+	// CurrentSeason must name the season marked m_active in Seasons — an
+	// empty value makes the client clear its active-season state via
+	// SetActiveEventAndSeason's early branch, hiding season UI outright.
+	if currentSeason := protocol.ExtractStringField(result, "CurrentSeason"); currentSeason != mmogCurrentSeasonID {
+		t.Fatalf("YA_GetSeasonData CurrentSeason = %q, want %q", currentSeason, mmogCurrentSeasonID)
 	}
 	if activeEvent := protocol.ExtractStringField(result, "ActiveEvent"); activeEvent != "" {
 		t.Fatalf("YA_GetSeasonData ActiveEvent = %q, want empty", activeEvent)

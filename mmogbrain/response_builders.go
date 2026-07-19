@@ -567,6 +567,10 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 
 // --- Season Data ---
 
+// mmogCurrentSeasonID must match the "Name" of whichever entry in
+// mmogSeasonDataSeasonsJSON has "m_active":true.
+const mmogCurrentSeasonID = "PVE_Season1"
+
 const mmogSeasonDataSeasonsJSON = `[{"Name":"PVE_Season1","m_active":true,"m_name":"Miner Inconvenience","m_descShort":"Season 1 short Description","m_descLong":"Season 1 long Description","m_imageLarge":"None","m_imageSmall":"None","m_rewardLevels":[]}]`
 
 const mmogSeasonDataEventsJSON = `[{"Name":"PVE_S1E1","m_name":"Incident Management","m_descShort":"Miner Inconvenience - Incident Management","m_descLong":"Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics to wear down the corp's spread out defenses. The megacorp is now contacting mercenary captains directly to assist their forces and protect Jupiter Arms assets, hoping to finally put an end to these costly attacks.","m_map":"None","m_mapParameters":"","m_gameMode":"YGMT_HORDE","m_color":{"r":160,"g":144,"b":131,"a":255},"m_imageSmall":"None","m_imageLarge":"None","m_rewardLevels":[],"m_startDate":"2018.05.16-16.00.00","m_endDate":"2018.05.16-16.19.59","m_season":"PVE_Season1"}]`
@@ -579,7 +583,11 @@ func buildMmogSeasonDataPayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "Events", mmogSeasonDataEventsJSON)
 	b = protocol.AppendStringField(b, "Seasons", mmogSeasonDataSeasonsJSON)
-	b = protocol.AppendStringField(b, "CurrentSeason", "")
+	// CurrentSeason must reflect the season marked m_active in Seasons —
+	// SetActiveEventAndSeason takes an early "clear active season" branch
+	// whenever this is empty, overriding the Seasons blob's own m_active
+	// flag and hiding season UI even though a season is actually active.
+	b = protocol.AppendStringField(b, "CurrentSeason", mmogCurrentSeasonID)
 	b = protocol.AppendStringField(b, "ActiveEvent", "")
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -777,14 +785,16 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
-	// F3: Wire officer data into YA_PlayerGet Officers array
+	// The client's per-entry Officers parser (FUN_142a70b10) reads type/disp/rep,
+	// not the m_enabling/m_triggers/m_effects DSL fields — those describe the
+	// officer's ability, not its roster identity. rep has no server-side data
+	// model yet (no per-officer reputation-tier concept exists), so it is sent
+	// as 0 until one is added.
 	for _, officer := range dreadconfig.AllOfficers() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "m_enabling", officer.Enabling)
-		b = protocol.AppendStringField(b, "m_triggers", officer.Triggers)
-		b = protocol.AppendStringField(b, "m_effects", officer.Effects)
-		b = protocol.AppendBoolField(b, "m_stackOnAdding", officer.StackOnAdding)
-		b = protocol.AppendBoolField(b, "m_isPerkFeat", officer.IsPerkFeat)
+		b = protocol.AppendInt32Field(b, "type", officer.OfficerID)
+		b = protocol.AppendStringField(b, "disp", officer.OfficerName)
+		b = protocol.AppendInt32Field(b, "rep", 0)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1996,6 +2006,10 @@ func buildMmogPvERewardTiersPayload() []byte {
 }
 
 func buildMmogPlayerScoresPayload() []byte {
+	return buildMmogPlayerScoresPayloadForPlayer(defaultMmogPlayerPID)
+}
+
+func buildMmogPlayerScoresPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
 
@@ -2008,8 +2022,17 @@ func buildMmogPlayerScoresPayload() []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "leaderboard")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "playerrank")
-	b = protocol.AppendStringField(b, "UserName", "Local")
+	// The client's per-entry parser (FUN_142a6f280) reads PID/Rank/SID/Score,
+	// not UserName (which it never looks up). The decompile suggests PID is
+	// read there as int64, but this protocol has no confirmed int64 wire tag
+	// anywhere (parser.go only decodes string/bool/int32/object/array), and
+	// playerPID is a string identifier elsewhere in this codebase (e.g. the
+	// "PID" field in buildMmogPlayerDataPayload) — sending it as a string
+	// here matches that established, working convention rather than
+	// guessing at an unconfirmed wire type.
+	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendInt32Field(b, "Rank", 0)
+	b = protocol.AppendStringField(b, "SID", "local_session")
 	b = protocol.AppendInt32Field(b, "Score", 0)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
