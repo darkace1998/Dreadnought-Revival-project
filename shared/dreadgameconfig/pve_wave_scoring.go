@@ -23,25 +23,25 @@ var (
 	pveWaveScoring     []PvEWaveScoring
 	pveWaveScoringMu   sync.RWMutex
 	pveWaveScoringOnce sync.Once
+	pveWaveScoringLoadErr error
 	pveWaveScoringLoaded bool
 )
 
 // LoadPvEWaveScoring loads PvE wave scoring data from PvEWaveScoring.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvEWaveScoring() error {
-	var loadErr error
 	pveWaveScoringOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvEWaveScoring.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvEWaveScoring.json: %w", err)
+			pveWaveScoringLoadErr = fmt.Errorf("failed to read PvEWaveScoring.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvEWaveScoring.json: %w", err)
+			pveWaveScoringLoadErr = fmt.Errorf("failed to parse PvEWaveScoring.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadPvEWaveScoring() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE wave scorings found in PvEWaveScoring.json")
+			pveWaveScoringLoadErr = fmt.Errorf("no PvE wave scorings found in PvEWaveScoring.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadPvEWaveScoring() error {
 		log.Printf("Loaded %d PvE wave scorings from PvEWaveScoring.json", len(scorings))
 	})
 
-	return loadErr
+	return pveWaveScoringLoadErr
 }
 
 // AllPvEWaveScorings returns all loaded PvE wave scorings

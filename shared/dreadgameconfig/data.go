@@ -395,6 +395,24 @@ func init() {
 		log.Printf("Using hardcoded item catalog with %d items", len(catalogItems))
 	}
 
+	// Load ship feats data
+	if err := LoadShipFeats(); err != nil {
+		log.Printf("Warning: Failed to load ship feats: %v", err)
+	}
+
+	// Load abilities data and wire ability stats into catalogItems BEFORE
+	// building the lookup maps below (E5). wireAbilityStatsToItems used to
+	// run after the maps were already populated, and mutated the hardcoded
+	// itemCatalog slice regardless of whether catalogItems actually pointed
+	// at it or at the dynamic catalog — the maps hold independent
+	// ItemMetadata *value copies*, so that mutation never reached
+	// ItemByID/ItemByAssetPath/ItemByTypeAndDisplayName's results.
+	if err := LoadAbilities(); err != nil {
+		log.Printf("Warning: Failed to load abilities: %v", err)
+	} else {
+		wireAbilityStatsToItems(catalogItems)
+	}
+
 	itemsByID = make(map[int32]ItemMetadata, len(catalogItems))
 	itemsByAssetPath = make(map[string]ItemMetadata, len(catalogItems))
 	itemsByTypeAndName = make(map[string]ItemMetadata, len(catalogItems))
@@ -415,20 +433,7 @@ func init() {
 		}
 		itemsByTypeAndName[key] = item
 	}
-	
-	// Load ship feats data
-	if err := LoadShipFeats(); err != nil {
-		log.Printf("Warning: Failed to load ship feats: %v", err)
-	}
-	
-	// Load abilities data
-	if err := LoadAbilities(); err != nil {
-		log.Printf("Warning: Failed to load abilities: %v", err)
-	} else {
-		// E5: Wire ability stats into item metadata
-		wireAbilityStatsToItems()
-	}
-	
+
 	// Load officers data (F2)
 	if err := LoadOfficers(); err != nil {
 		log.Printf("Warning: Failed to load officers: %v", err)
@@ -564,9 +569,14 @@ func init() {
 		log.Printf("Warning: Failed to load development loadouts: %v", err)
 	}
 
-	// E5: Wire ability stats into item metadata
-	wireAbilityStatsToItems()
-	
+	// E5: ability stats are already wired into catalogItems (and the
+	// itemsByID/itemsByAssetPath/itemsByTypeAndName maps built from it)
+	// earlier in this function, before those maps were populated. A second
+	// call here was redundant (nothing between the two call sites changes
+	// catalogItems or reloads abilities) and — before that reordering — was
+	// the only place this ran, mutating a slice the maps had already
+	// stopped reading from.
+
 	starterLoadoutsByShip = make(map[string]StarterLoadout, len(starterInventoryLoadouts))
 	for _, loadout := range starterInventoryLoadouts {
 		starterLoadoutsByShip[strings.ToLower(loadout.ShipName)] = cloneStarterLoadout(loadout)
@@ -578,8 +588,14 @@ func init() {
 	}
 }
 
-// wireAbilityStatsToItems wires ability stats into ability items in the catalog (E5)
-func wireAbilityStatsToItems() {
+// wireAbilityStatsToItems wires ability stats into ability items in items
+// (E5). items must be the same slice subsequently used to build
+// itemsByID/itemsByAssetPath/itemsByTypeAndName — mutating a different
+// slice (e.g. the hardcoded itemCatalog fallback, when the dynamic catalog
+// is actually active) would have no effect on ItemByID/ItemByAssetPath/
+// ItemByTypeAndDisplayName's results, since those maps hold independent
+// ItemMetadata value copies, not pointers into itemCatalog.
+func wireAbilityStatsToItems(items []ItemMetadata) {
 	// Get all abilities
 	allAbilities := AllAbilities()
 	if len(allAbilities) == 0 {
@@ -588,8 +604,8 @@ func wireAbilityStatsToItems() {
 	}
 
 	// Wire ability stats to ability items in the catalog
-	for i := range itemCatalog {
-		item := &itemCatalog[i]
+	for i := range items {
+		item := &items[i]
 		if item.ItemType == ItemTypeAbility && item.AssetPath != "" {
 			// Try to find matching ability by asset path
 			for _, ability := range allAbilities {

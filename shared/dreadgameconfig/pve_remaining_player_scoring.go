@@ -23,25 +23,25 @@ var (
 	pveRemainingPlayerScoring     []PvERemainingPlayerScoring
 	pveRemainingPlayerScoringMu   sync.RWMutex
 	pveRemainingPlayerScoringOnce sync.Once
+	pveRemainingPlayerScoringLoadErr error
 	pveRemainingPlayerScoringLoaded bool
 )
 
 // LoadPvERemainingPlayerScoring loads PvE remaining player scoring data from PvERemainingPlayerScoring.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvERemainingPlayerScoring() error {
-	var loadErr error
 	pveRemainingPlayerScoringOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvERemainingPlayerScoring.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvERemainingPlayerScoring.json: %w", err)
+			pveRemainingPlayerScoringLoadErr = fmt.Errorf("failed to read PvERemainingPlayerScoring.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvERemainingPlayerScoring.json: %w", err)
+			pveRemainingPlayerScoringLoadErr = fmt.Errorf("failed to parse PvERemainingPlayerScoring.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadPvERemainingPlayerScoring() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE remaining player scorings found in PvERemainingPlayerScoring.json")
+			pveRemainingPlayerScoringLoadErr = fmt.Errorf("no PvE remaining player scorings found in PvERemainingPlayerScoring.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadPvERemainingPlayerScoring() error {
 		log.Printf("Loaded %d PvE remaining player scorings from PvERemainingPlayerScoring.json", len(scorings))
 	})
 
-	return loadErr
+	return pveRemainingPlayerScoringLoadErr
 }
 
 // AllPvERemainingPlayerScorings returns all loaded PvE remaining player scorings

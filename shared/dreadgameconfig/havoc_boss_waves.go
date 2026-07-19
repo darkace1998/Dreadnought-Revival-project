@@ -23,25 +23,25 @@ var (
 	havocBossWaves     []HavocBossWave
 	havocBossWavesMu   sync.RWMutex
 	havocBossWavesOnce sync.Once
+	havocBossWavesLoadErr error
 	havocBossWavesLoaded bool
 )
 
 // LoadHavocBossWaves loads Havoc boss wave data from DN_HavocBossWaves_DT.json
 // K1: Load Progression/Havoc/ — 7 files (boosts:38, modifiers:26, bossWaves:4, rewards:7, loadouts, enemyModifiers, unlockables)
 func LoadHavocBossWaves() error {
-	var loadErr error
 	havocBossWavesOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocBossWaves_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_HavocBossWaves_DT.json: %w", err)
+			havocBossWavesLoadErr = fmt.Errorf("failed to read DN_HavocBossWaves_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_HavocBossWaves_DT.json: %w", err)
+			havocBossWavesLoadErr = fmt.Errorf("failed to parse DN_HavocBossWaves_DT.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadHavocBossWaves() error {
 		}
 
 		if len(waves) == 0 {
-			loadErr = fmt.Errorf("no Havoc boss waves found in DN_HavocBossWaves_DT.json")
+			havocBossWavesLoadErr = fmt.Errorf("no Havoc boss waves found in DN_HavocBossWaves_DT.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadHavocBossWaves() error {
 		log.Printf("Loaded %d Havoc boss waves from DN_HavocBossWaves_DT.json", len(waves))
 	})
 
-	return loadErr
+	return havocBossWavesLoadErr
 }
 
 // AllHavocBossWaves returns all loaded Havoc boss waves

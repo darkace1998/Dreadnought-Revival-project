@@ -19,11 +19,26 @@ import (
 
 const maxCrashReportUploadBytes int64 = 128 << 20
 
-func newCrashReceiverHandler(log *logrus.Logger, reportDir string) http.Handler {
+func newCrashReceiverHandler(log *logrus.Logger, reportDir string, rl *rateLimiter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		pathLower := strings.ToLower(r.URL.Path)
 		reportID := crashReportID(r)
+
+		// This listener is entirely separate from the main HTTPS handler's
+		// rate limiting (which only covers /auth/), and accepts up to
+		// maxCrashReportUploadBytes (128MB) per request with no ceiling on
+		// how many requests one caller can send — an anonymous client could
+		// otherwise fill disk by repeatedly uploading near-max-size reports.
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
+		}
+		if !rl.allow(ip) {
+			writeCrashReceiverResult(w, http.StatusTooManyRequests, reportID)
+			logCrashReceiverRequest(log, r, reportID, 0, time.Since(start), fmt.Errorf("rate limit exceeded"))
+			return
+		}
 
 		if strings.Contains(pathLower, "ping") {
 			writeCrashReceiverResult(w, http.StatusOK, reportID)

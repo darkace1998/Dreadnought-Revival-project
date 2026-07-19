@@ -23,25 +23,25 @@ var (
 	pveRemainingPlayerScoringHavoc     []PvERemainingPlayerScoringHavoc
 	pveRemainingPlayerScoringHavocMu   sync.RWMutex
 	pveRemainingPlayerScoringHavocOnce sync.Once
+	pveRemainingPlayerScoringHavocLoadErr error
 	pveRemainingPlayerScoringHavocLoaded bool
 )
 
 // LoadPvERemainingPlayerScoringHavoc loads PvE remaining player scoring Havoc data from vERemainingPlayerScoring_Havoc.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvERemainingPlayerScoringHavoc() error {
-	var loadErr error
 	pveRemainingPlayerScoringHavocOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "vERemainingPlayerScoring_Havoc.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read vERemainingPlayerScoring_Havoc.json: %w", err)
+			pveRemainingPlayerScoringHavocLoadErr = fmt.Errorf("failed to read vERemainingPlayerScoring_Havoc.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse vERemainingPlayerScoring_Havoc.json: %w", err)
+			pveRemainingPlayerScoringHavocLoadErr = fmt.Errorf("failed to parse vERemainingPlayerScoring_Havoc.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadPvERemainingPlayerScoringHavoc() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE remaining player scorings Havoc found in vERemainingPlayerScoring_Havoc.json")
+			pveRemainingPlayerScoringHavocLoadErr = fmt.Errorf("no PvE remaining player scorings Havoc found in vERemainingPlayerScoring_Havoc.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadPvERemainingPlayerScoringHavoc() error {
 		log.Printf("Loaded %d PvE remaining player scorings Havoc from vERemainingPlayerScoring_Havoc.json", len(scorings))
 	})
 
-	return loadErr
+	return pveRemainingPlayerScoringHavocLoadErr
 }
 
 // AllPvERemainingPlayerScoringsHavoc returns all loaded PvE remaining player scorings Havoc

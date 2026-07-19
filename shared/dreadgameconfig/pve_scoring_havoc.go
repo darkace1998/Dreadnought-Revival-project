@@ -23,25 +23,25 @@ var (
 	pveKillScoringHavoc     []PvEKillScoringHavoc
 	pveKillScoringHavocMu   sync.RWMutex
 	pveKillScoringHavocOnce sync.Once
+	pveKillScoringHavocLoadErr error
 	pveKillScoringHavocLoaded bool
 )
 
 // LoadPvEKillScoringHavoc loads PvE kill scoring Havoc data from PvEKillScoring_Havoc.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvEKillScoringHavoc() error {
-	var loadErr error
 	pveKillScoringHavocOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvEKillScoring_Havoc.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvEKillScoring_Havoc.json: %w", err)
+			pveKillScoringHavocLoadErr = fmt.Errorf("failed to read PvEKillScoring_Havoc.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvEKillScoring_Havoc.json: %w", err)
+			pveKillScoringHavocLoadErr = fmt.Errorf("failed to parse PvEKillScoring_Havoc.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadPvEKillScoringHavoc() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE kill scorings Havoc found in PvEKillScoring_Havoc.json")
+			pveKillScoringHavocLoadErr = fmt.Errorf("no PvE kill scorings Havoc found in PvEKillScoring_Havoc.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadPvEKillScoringHavoc() error {
 		log.Printf("Loaded %d PvE kill scorings Havoc from PvEKillScoring_Havoc.json", len(scorings))
 	})
 
-	return loadErr
+	return pveKillScoringHavocLoadErr
 }
 
 // AllPvEKillScoringsHavoc returns all loaded PvE kill scorings Havoc
@@ -113,28 +113,28 @@ type PvEWaveScoringHavoc struct {
 
 // pveWaveScoringHavocData holds the loaded PvE wave scoring Havoc data
 var (
-	pveWaveScoringHavoc     []PvEWaveScoringHavoc
-	pveWaveScoringHavocMu   sync.RWMutex
-	pveWaveScoringHavocOnce sync.Once
+	pveWaveScoringHavoc       []PvEWaveScoringHavoc
+	pveWaveScoringHavocMu     sync.RWMutex
+	pveWaveScoringHavocOnce   sync.Once
 	pveWaveScoringHavocLoaded bool
+	pveWaveScoringHavocLoadErr error
 )
 
 // LoadPvEWaveScoringHavoc loads PvE wave scoring Havoc data from PvEWaveScoring_Havoc.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvEWaveScoringHavoc() error {
-	var loadErr error
 	pveWaveScoringHavocOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvEWaveScoring_Havoc.json"))
-		
+
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvEWaveScoring_Havoc.json: %w", err)
+			pveWaveScoringHavocLoadErr = fmt.Errorf("failed to read PvEWaveScoring_Havoc.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvEWaveScoring_Havoc.json: %w", err)
+			pveWaveScoringHavocLoadErr = fmt.Errorf("failed to parse PvEWaveScoring_Havoc.json: %w", err)
 			return
 		}
 
@@ -151,7 +151,7 @@ func LoadPvEWaveScoringHavoc() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE wave scorings Havoc found in PvEWaveScoring_Havoc.json")
+			pveWaveScoringHavocLoadErr = fmt.Errorf("no PvE wave scorings Havoc found in PvEWaveScoring_Havoc.json")
 			return
 		}
 
@@ -160,7 +160,7 @@ func LoadPvEWaveScoringHavoc() error {
 		log.Printf("Loaded %d PvE wave scorings Havoc from PvEWaveScoring_Havoc.json", len(scorings))
 	})
 
-	return loadErr
+	return pveWaveScoringHavocLoadErr
 }
 
 // AllPvEWaveScoringsHavoc returns all loaded PvE wave scorings Havoc

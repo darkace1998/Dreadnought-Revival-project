@@ -27,25 +27,25 @@ var (
 	playerMatchStats     []PlayerMatchStat
 	playerMatchStatsMu   sync.RWMutex
 	playerMatchStatsOnce sync.Once
+	playerMatchStatsLoadErr error
 	playerMatchStatsLoaded bool
 )
 
 // LoadPlayerMatchStatistics loads player match statistics from DN_PlayerMatchStatistics_DT.json
 // J3: Load DN_PlayerMatchStatistics_DT.json — match stat category definitions
 func LoadPlayerMatchStatistics() error {
-	var loadErr error
 	playerMatchStatsOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "DN_PlayerMatchStatistics_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_PlayerMatchStatistics_DT.json: %w", err)
+			playerMatchStatsLoadErr = fmt.Errorf("failed to read DN_PlayerMatchStatistics_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_PlayerMatchStatistics_DT.json: %w", err)
+			playerMatchStatsLoadErr = fmt.Errorf("failed to parse DN_PlayerMatchStatistics_DT.json: %w", err)
 			return
 		}
 
@@ -84,7 +84,7 @@ func LoadPlayerMatchStatistics() error {
 		log.Printf("Loaded %d player match statistics from DN_PlayerMatchStatistics_DT.json", len(playerMatchStats))
 	})
 
-	return loadErr
+	return playerMatchStatsLoadErr
 }
 
 // AllPlayerMatchStatistics returns all loaded player match statistics

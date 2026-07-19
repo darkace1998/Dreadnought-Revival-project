@@ -23,25 +23,25 @@ var (
 	havocRewards     []HavocReward
 	havocRewardsMu   sync.RWMutex
 	havocRewardsOnce sync.Once
+	havocRewardsLoadErr error
 	havocRewardsLoaded bool
 )
 
 // LoadHavocRewards loads Havoc reward data from DN_HavocRewards_DT.json
 // K1: Load Progression/Havoc/ — 7 files (boosts:38, modifiers:26, bossWaves:4, rewards:7, loadouts, enemyModifiers, unlockables)
 func LoadHavocRewards() error {
-	var loadErr error
 	havocRewardsOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocRewards_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_HavocRewards_DT.json: %w", err)
+			havocRewardsLoadErr = fmt.Errorf("failed to read DN_HavocRewards_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_HavocRewards_DT.json: %w", err)
+			havocRewardsLoadErr = fmt.Errorf("failed to parse DN_HavocRewards_DT.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadHavocRewards() error {
 		}
 
 		if len(rewards) == 0 {
-			loadErr = fmt.Errorf("no Havoc rewards found in DN_HavocRewards_DT.json")
+			havocRewardsLoadErr = fmt.Errorf("no Havoc rewards found in DN_HavocRewards_DT.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadHavocRewards() error {
 		log.Printf("Loaded %d Havoc rewards from DN_HavocRewards_DT.json", len(rewards))
 	})
 
-	return loadErr
+	return havocRewardsLoadErr
 }
 
 // AllHavocRewards returns all loaded Havoc rewards

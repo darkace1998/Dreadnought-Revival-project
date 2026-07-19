@@ -177,3 +177,36 @@ func TestItemLookupReturnsSharedMetadata(t *testing.T) {
 		t.Fatalf("Rurik internal ability id = %d, want 83820764", ability.ItemID)
 	}
 }
+
+// TestItemByAssetPathReflectsWiredAbilityStats is a regression test for the
+// bug where wireAbilityStatsToItems mutated the hardcoded itemCatalog
+// fallback slice (or, after a later fix, ran after the lookup maps were
+// already built) instead of the slice actually used to build
+// itemsByID/itemsByAssetPath/itemsByTypeAndName — so ItemByID/
+// ItemByAssetPath/ItemByTypeAndDisplayName always returned AbilityStats:nil
+// for every item, even genuine ability items with a matching loaded
+// AbilityStats entry.
+func TestItemByAssetPathReflectsWiredAbilityStats(t *testing.T) {
+	abilities := AllAbilities()
+	if len(abilities) == 0 {
+		t.Fatal("AllAbilities() returned no entries — cannot exercise this test")
+	}
+
+	foundWired := false
+	for _, ability := range abilities {
+		if ability.AssetPath == "" {
+			continue
+		}
+		item, ok := ItemByAssetPath(ability.AssetPath)
+		if !ok || item.ItemType != ItemTypeAbility {
+			continue
+		}
+		if item.AbilityStats == nil {
+			t.Fatalf("ItemByAssetPath(%q) returned an ability item with nil AbilityStats", ability.AssetPath)
+		}
+		foundWired = true
+	}
+	if !foundWired {
+		t.Fatal("no ability item in the catalog matched any loaded AbilityStats by asset path — cannot confirm wiring reaches ItemByAssetPath's results")
+	}
+}

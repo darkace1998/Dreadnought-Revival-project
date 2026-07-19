@@ -35,17 +35,17 @@ var (
 	devLoadouts     []DevLoadout
 	devLoadoutsMu   sync.RWMutex
 	devLoadoutsOnce sync.Once
+	devLoadoutsLoadErr error
 )
 
 // LoadDevLoadouts loads the LoadoutDevelopmentTable.json file
 func LoadDevLoadouts() error {
-	var loadErr error
 	devLoadoutsOnce.Do(func() {
 		filePath := LoadoutPath(filepath.Join("LoadoutDevelopmentTable.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read LoadoutDevelopmentTable.json: %w", err)
+			devLoadoutsLoadErr = fmt.Errorf("failed to read LoadoutDevelopmentTable.json: %w", err)
 			return
 		}
 
@@ -54,7 +54,7 @@ func LoadDevLoadouts() error {
 		}
 		
 		if err := json.Unmarshal(data, &table); err != nil {
-			loadErr = fmt.Errorf("failed to parse LoadoutDevelopmentTable.json: %w", err)
+			devLoadoutsLoadErr = fmt.Errorf("failed to parse LoadoutDevelopmentTable.json: %w", err)
 			return
 		}
 
@@ -65,7 +65,7 @@ func LoadDevLoadouts() error {
 		log.Printf("Loaded %d development loadouts from LoadoutDevelopmentTable.json", len(devLoadouts))
 	})
 
-	return loadErr
+	return devLoadoutsLoadErr
 }
 
 // GetAllDevLoadouts returns all development loadouts

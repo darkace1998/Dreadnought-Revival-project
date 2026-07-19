@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"syscall"
 	"time"
@@ -21,6 +22,17 @@ import (
 )
 
 const fieldStatus = "status"
+
+// gameModeMapPattern restricts game_mode/map to alphanumeric/underscore
+// before they're interpolated into the Wine-spawned dedicated server's
+// argv (spawner.Launch builds "-GameMode=%s"/"-Map=%s" directly from these
+// values). exec.Command never invokes a shell, so classic shell-metachar
+// injection isn't reachable, but Wine's CreateProcess emulation
+// reconstructs a single Win32 command-line string from the argv slice
+// using Windows quoting rules — an unsanitized value containing a `"` or
+// other quoting-sensitive character could break out of its token and
+// inject additional engine command-line flags into the spawned process.
+var gameModeMapPattern = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 // maxPlayersPerInstance bounds the player list accepted on instance creation.
 // Production match size caps at 10 players (see spawner's "-maxplayers=10"
@@ -92,6 +104,14 @@ func main() {
 		}
 		if len(req.Map) > 100 {
 			http.Error(w, `{"error":"map too long"}`, http.StatusBadRequest)
+			return
+		}
+		if req.GameMode != "" && !gameModeMapPattern.MatchString(req.GameMode) {
+			http.Error(w, `{"error":"game_mode contains invalid characters"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Map != "" && !gameModeMapPattern.MatchString(req.Map) {
+			http.Error(w, `{"error":"map contains invalid characters"}`, http.StatusBadRequest)
 			return
 		}
 		if pool.InUse() >= pool.Capacity() {

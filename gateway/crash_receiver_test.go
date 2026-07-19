@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -16,7 +17,7 @@ func TestCrashReceiverStoresUploadAndReturnsSuccess(t *testing.T) {
 	dir := t.TempDir()
 	log := logrus.New()
 	log.SetOutput(io.Discard)
-	handler := newCrashReceiverHandler(log, dir)
+	handler := newCrashReceiverHandler(log, dir, newRateLimiter(100, time.Minute))
 
 	req := httptest.NewRequest(http.MethodPost, "/CrashReporter/UploadReportFile?CrashGUID=test-crash&Filename=Diagnostics.txt", strings.NewReader("crash details"))
 	rec := httptest.NewRecorder()
@@ -45,7 +46,7 @@ func TestCrashReceiverStoresUploadAndReturnsSuccess(t *testing.T) {
 func TestCrashReceiverPingDoesNotRequireBody(t *testing.T) {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
-	handler := newCrashReceiverHandler(log, t.TempDir())
+	handler := newCrashReceiverHandler(log, t.TempDir(), newRateLimiter(100, time.Minute))
 
 	req := httptest.NewRequest(http.MethodGet, "/CrashReporter/Ping", nil)
 	rec := httptest.NewRecorder()

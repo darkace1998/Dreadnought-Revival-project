@@ -27,16 +27,17 @@ var (
 	itemIDConversionTable     ItemIDConversionTable
 	itemIDConversionTableOnce sync.Once
 	itemIDConversionTableMu   sync.RWMutex
+	itemIDConversionTableLoadErr error
 )
 
 // LoadItemIDConversionTable loads the ItemIDConversionTable.json file and creates bidirectional mappings
 func LoadItemIDConversionTable() error {
 	itemIDConversionTableOnce.Do(func() {
 		filePath := AssetPath("ItemIDConversionTable.json")
-		
+
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			fmt.Printf("Warning: Failed to load ItemIDConversionTable: %v\n", err)
+			itemIDConversionTableLoadErr = fmt.Errorf("failed to load ItemIDConversionTable: %w", err)
 			return
 		}
 
@@ -51,7 +52,7 @@ func LoadItemIDConversionTable() error {
 		}
 
 		if err := json.Unmarshal(data, &rawData); err != nil {
-			fmt.Printf("Warning: Failed to parse ItemIDConversionTable: %v\n", err)
+			itemIDConversionTableLoadErr = fmt.Errorf("failed to parse ItemIDConversionTable: %w", err)
 			return
 		}
 
@@ -85,7 +86,7 @@ func LoadItemIDConversionTable() error {
 			len(entries))
 	})
 
-	return nil
+	return itemIDConversionTableLoadErr
 }
 
 // GetItemIDConversionEntry returns the conversion entry by old item ID

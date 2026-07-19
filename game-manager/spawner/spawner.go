@@ -18,6 +18,11 @@ import (
 )
 
 // Instance represents a running game engine process.
+//
+// Instance is copied by value in places (e.g. List()), so it must not embed
+// a sync primitive directly (go vet correctly flags that as unsafe). stopCh
+// itself is a reference type and safe to copy; idempotent-close is instead
+// guarded by Spawner.mu in signalStop, keyed off stopSignaled.
 type Instance struct {
 	ID        string
 	ServerID  string // ID returned by master-server on registration
@@ -29,6 +34,12 @@ type Instance struct {
 	Cmd       *exec.Cmd
 	ConfigDir string
 	StartedAt time.Time
+
+	// stopCh lets Stop() wake monitor()'s mock-mode wait (no real process
+	// to Wait() on) early instead of blocking it for the full 30-minute
+	// fallback duration.
+	stopCh       chan struct{}
+	stopSignaled bool
 }
 
 // Spawner manages Wine + DreadGame-Win64-Shipping.exe dedicated server instances.
@@ -89,6 +100,7 @@ func (s *Spawner) Launch(gameMode, mapName string, port int, players []string) (
 		Players:   players,
 		ConfigDir: configDir,
 		StartedAt: time.Now(),
+		stopCh:    make(chan struct{}),
 	}
 
 	args := []string{
@@ -158,8 +170,12 @@ func (s *Spawner) monitor(inst *Instance) {
 			s.log.WithError(err).WithField("instance_id", inst.ID).Warn("game instance wait")
 		}
 	} else {
-		// Mock mode: wait a reasonable match duration
-		time.Sleep(30 * time.Minute)
+		// Mock mode (no real process — e.g. game binary not present): wait
+		// a reasonable match duration, but wake immediately if Stop() signals.
+		select {
+		case <-time.After(30 * time.Minute):
+		case <-inst.stopCh:
+		}
 	}
 
 	s.log.WithField("instance_id", inst.ID).Info("game instance exited")
@@ -202,33 +218,52 @@ func (s *Spawner) cleanupInstance(inst *Instance) {
 // Stop terminates a running instance by ID. Returns nil on success.
 //
 // Stop is idempotent with respect to process liveness (M12): if the instance
-// ID is not tracked at all, that's a genuine "not found" error. But if the
-// instance IS tracked and its underlying OS process has already exited (e.g.
-// it crashed moments before the delete request arrived, racing the monitor
-// goroutine's own cleanup), bookkeeping/port-pool cleanup still happens and
-// Stop reports success rather than surfacing the "already finished" kill
-// error to the caller.
+// ID is not tracked at all, that's a genuine "not found" error. If the
+// instance IS tracked but its underlying OS process has already exited
+// (e.g. it crashed moments before the delete request arrived), Kill()
+// returns os.ErrProcessDone, which is treated as success rather than
+// surfacing an "already finished" error to the caller.
+//
+// Stop only signals termination — it deliberately does NOT delete from
+// s.instances, release the port, or run cleanupInstance itself. Those all
+// happen exactly once, in monitor(), which is the only code path that's
+// actually certain the process has exited (Cmd.Wait() returning). Doing
+// them here too was a double-release bug: this method's own release could
+// hand the port to a newly-launched instance while the killed process (or
+// monitor()'s subsequent release of the SAME port) was still in flight,
+// corrupting the pool's in-use accounting and potentially causing two
+// instances to bind the same port.
 func (s *Spawner) Stop(id string) error {
-	s.mu.Lock()
+	s.mu.RLock()
 	inst, ok := s.instances[id]
+	s.mu.RUnlock()
 	if !ok {
-		s.mu.Unlock()
 		return fmt.Errorf("instance %s not found", id)
 	}
-	delete(s.instances, id)
-	s.mu.Unlock()
-
-	if s.releasePort != nil {
-		s.releasePort(inst.Port)
-	}
-	s.cleanupInstance(inst)
 
 	if inst.Cmd != nil && inst.Cmd.Process != nil {
 		if err := inst.Cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			return fmt.Errorf("kill instance %s: %w", id, err)
 		}
+	} else {
+		// Mock mode — no real process to Kill()/Wait() on. Wake monitor()'s
+		// sleep early so it can run cleanup now instead of after 30 minutes.
+		s.signalStop(inst)
 	}
 	return nil
+}
+
+// signalStop closes inst.stopCh exactly once; safe to call multiple times
+// (e.g. concurrent Stop() calls for the same instance). Guarded by s.mu
+// since Instance itself can't safely embed a sync primitive (it's copied
+// by value in List()).
+func (s *Spawner) signalStop(inst *Instance) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !inst.stopSignaled {
+		inst.stopSignaled = true
+		close(inst.stopCh)
+	}
 }
 
 // Shutdown kills all running instances.

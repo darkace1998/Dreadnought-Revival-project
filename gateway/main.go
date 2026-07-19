@@ -273,9 +273,10 @@ func main() {
 		// Log TLS handshake errors (untrusted cert, cipher mismatch, etc.)
 		ErrorLog: stdlog.New(log.WriterLevel(logrus.WarnLevel), "[tls] ", 0),
 	}
+	crashReceiverLimiter := newRateLimiter(5, time.Minute)
 	crashReceiverSrv := &http.Server{
 		Addr:              crashReceiverAddr,
-		Handler:           newCrashReceiverHandler(log, crashReportDir),
+		Handler:           newCrashReceiverHandler(log, crashReportDir, crashReceiverLimiter),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       5 * time.Minute,
 		WriteTimeout:      5 * time.Minute,

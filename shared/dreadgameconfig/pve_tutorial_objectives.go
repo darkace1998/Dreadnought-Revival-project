@@ -28,25 +28,25 @@ var (
 	pveTutorialObjectives     []PvETutorialObjective
 	pveTutorialObjectivesMu   sync.RWMutex
 	pveTutorialObjectivesOnce sync.Once
+	pveTutorialObjectivesLoadErr error
 	pveTutorialObjectivesLoaded bool
 )
 
 // LoadPvETutorialObjectives loads PvE tutorial objectives data from TutorialObjectives_DT.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvETutorialObjectives() error {
-	var loadErr error
 	pveTutorialObjectivesOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "TutorialObjectives_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read TutorialObjectives_DT.json: %w", err)
+			pveTutorialObjectivesLoadErr = fmt.Errorf("failed to read TutorialObjectives_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse TutorialObjectives_DT.json: %w", err)
+			pveTutorialObjectivesLoadErr = fmt.Errorf("failed to parse TutorialObjectives_DT.json: %w", err)
 			return
 		}
 
@@ -68,7 +68,7 @@ func LoadPvETutorialObjectives() error {
 		}
 
 		if len(objectives) == 0 {
-			loadErr = fmt.Errorf("no PvE tutorial objectives found in TutorialObjectives_DT.json")
+			pveTutorialObjectivesLoadErr = fmt.Errorf("no PvE tutorial objectives found in TutorialObjectives_DT.json")
 			return
 		}
 
@@ -77,7 +77,7 @@ func LoadPvETutorialObjectives() error {
 		log.Printf("Loaded %d PvE tutorial objectives from TutorialObjectives_DT.json", len(objectives))
 	})
 
-	return loadErr
+	return pveTutorialObjectivesLoadErr
 }
 
 // AllPvETutorialObjectives returns all loaded PvE tutorial objectives

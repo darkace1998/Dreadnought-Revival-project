@@ -23,25 +23,25 @@ var (
 	pveRemainingPlayerScoringEscort     []PvERemainingPlayerScoringEscort
 	pveRemainingPlayerScoringEscortMu   sync.RWMutex
 	pveRemainingPlayerScoringEscortOnce sync.Once
+	pveRemainingPlayerScoringEscortLoadErr error
 	pveRemainingPlayerScoringEscortLoaded bool
 )
 
 // LoadPvERemainingPlayerScoringEscort loads PvE remaining player scoring Escort data from PvERemainingPlayerScoring_Escort.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvERemainingPlayerScoringEscort() error {
-	var loadErr error
 	pveRemainingPlayerScoringEscortOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvERemainingPlayerScoring_Escort.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvERemainingPlayerScoring_Escort.json: %w", err)
+			pveRemainingPlayerScoringEscortLoadErr = fmt.Errorf("failed to read PvERemainingPlayerScoring_Escort.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvERemainingPlayerScoring_Escort.json: %w", err)
+			pveRemainingPlayerScoringEscortLoadErr = fmt.Errorf("failed to parse PvERemainingPlayerScoring_Escort.json: %w", err)
 			return
 		}
 
@@ -58,7 +58,7 @@ func LoadPvERemainingPlayerScoringEscort() error {
 		}
 
 		if len(scorings) == 0 {
-			loadErr = fmt.Errorf("no PvE remaining player scorings Escort found in PvERemainingPlayerScoring_Escort.json")
+			pveRemainingPlayerScoringEscortLoadErr = fmt.Errorf("no PvE remaining player scorings Escort found in PvERemainingPlayerScoring_Escort.json")
 			return
 		}
 
@@ -67,7 +67,7 @@ func LoadPvERemainingPlayerScoringEscort() error {
 		log.Printf("Loaded %d PvE remaining player scorings Escort from PvERemainingPlayerScoring_Escort.json", len(scorings))
 	})
 
-	return loadErr
+	return pveRemainingPlayerScoringEscortLoadErr
 }
 
 // AllPvERemainingPlayerScoringsEscort returns all loaded PvE remaining player scorings Escort

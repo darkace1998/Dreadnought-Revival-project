@@ -28,25 +28,25 @@ var (
 	gameModifiers     []GameModifier
 	gameModifiersMu   sync.RWMutex
 	gameModifiersOnce sync.Once
+	gameModifiersLoadErr error
 	gameModifiersLoaded bool
 )
 
 // LoadGameModifiers loads game modifier data from DN_GameModifiers_DT.json
 // J2: Load DN_GameModifiers_DT.json — game mode tuning values
 func LoadGameModifiers() error {
-	var loadErr error
 	gameModifiersOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "GameModifiers", "DN_GameModifiers_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_GameModifiers_DT.json: %w", err)
+			gameModifiersLoadErr = fmt.Errorf("failed to read DN_GameModifiers_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_GameModifiers_DT.json: %w", err)
+			gameModifiersLoadErr = fmt.Errorf("failed to parse DN_GameModifiers_DT.json: %w", err)
 			return
 		}
 
@@ -84,7 +84,7 @@ func LoadGameModifiers() error {
 		log.Printf("Loaded %d game modifiers from DN_GameModifiers_DT.json", len(gameModifiers))
 	})
 
-	return loadErr
+	return gameModifiersLoadErr
 }
 
 // AllGameModifiers returns all loaded game modifiers

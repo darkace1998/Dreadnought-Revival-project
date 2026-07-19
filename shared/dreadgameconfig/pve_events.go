@@ -26,25 +26,25 @@ var (
 	pveEvents     []PvEEvent
 	pveEventsMu   sync.RWMutex
 	pveEventsOnce sync.Once
+	pveEventsLoadErr error
 	pveEventsLoaded bool
 )
 
 // LoadPvEEvents loads PvE events data from DN_Events_DT.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvEEvents() error {
-	var loadErr error
 	pveEventsOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "DN_Events_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_Events_DT.json: %w", err)
+			pveEventsLoadErr = fmt.Errorf("failed to read DN_Events_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_Events_DT.json: %w", err)
+			pveEventsLoadErr = fmt.Errorf("failed to parse DN_Events_DT.json: %w", err)
 			return
 		}
 
@@ -64,7 +64,7 @@ func LoadPvEEvents() error {
 		}
 
 		if len(events) == 0 {
-			loadErr = fmt.Errorf("no PvE events found in DN_Events_DT.json")
+			pveEventsLoadErr = fmt.Errorf("no PvE events found in DN_Events_DT.json")
 			return
 		}
 
@@ -73,7 +73,7 @@ func LoadPvEEvents() error {
 		log.Printf("Loaded %d PvE events from DN_Events_DT.json", len(events))
 	})
 
-	return loadErr
+	return pveEventsLoadErr
 }
 
 // AllPvEEvents returns all loaded PvE events

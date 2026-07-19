@@ -28,25 +28,25 @@ var (
 	pveObjectives     []PvEObjective
 	pveObjectivesMu   sync.RWMutex
 	pveObjectivesOnce sync.Once
+	pveObjectivesLoadErr error
 	pveObjectivesLoaded bool
 )
 
 // LoadPvEObjectives loads PvE objectives data from PvEObjectives.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvEObjectives() error {
-	var loadErr error
 	pveObjectivesOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "PvEObjectives.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read PvEObjectives.json: %w", err)
+			pveObjectivesLoadErr = fmt.Errorf("failed to read PvEObjectives.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse PvEObjectives.json: %w", err)
+			pveObjectivesLoadErr = fmt.Errorf("failed to parse PvEObjectives.json: %w", err)
 			return
 		}
 
@@ -68,30 +68,38 @@ func LoadPvEObjectives() error {
 		}
 
 		if len(objectives) == 0 {
-			loadErr = fmt.Errorf("no PvE objectives found in PvEObjectives.json")
+			pveObjectivesLoadErr = fmt.Errorf("no PvE objectives found in PvEObjectives.json")
 			return
 		}
 
+		// Was previously an unsynchronized write racing against readers'
+		// pveObjectivesMu.RLock() below — a genuine data race under
+		// concurrent load+read (go test -race would flag it), which could
+		// hand a reader a torn/partial slice header.
+		pveObjectivesMu.Lock()
 		pveObjectives = objectives
 		pveObjectivesLoaded = true
+		pveObjectivesMu.Unlock()
 		log.Printf("Loaded %d PvE objectives from PvEObjectives.json", len(objectives))
 	})
 
-	return loadErr
+	return pveObjectivesLoadErr
 }
 
 // AllPvEObjectives returns all loaded PvE objectives
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func AllPvEObjectives() []PvEObjective {
 	pveObjectivesMu.RLock()
-	defer pveObjectivesMu.RUnlock()
-	
-	if !pveObjectivesLoaded {
+	loaded := pveObjectivesLoaded
+	pveObjectivesMu.RUnlock()
+	if !loaded {
 		if err := LoadPvEObjectives(); err != nil {
 			log.Printf("Warning: Failed to load PvE objectives: %v", err)
 			return nil
 		}
 	}
+	pveObjectivesMu.RLock()
+	defer pveObjectivesMu.RUnlock()
 
 	return pveObjectives
 }
@@ -100,14 +108,16 @@ func AllPvEObjectives() []PvEObjective {
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func PvEObjectiveByRowName(rowName string) (PvEObjective, bool) {
 	pveObjectivesMu.RLock()
-	defer pveObjectivesMu.RUnlock()
-	
-	if !pveObjectivesLoaded {
+	loaded := pveObjectivesLoaded
+	pveObjectivesMu.RUnlock()
+	if !loaded {
 		if err := LoadPvEObjectives(); err != nil {
 			log.Printf("Warning: Failed to load PvE objectives: %v", err)
 			return PvEObjective{}, false
 		}
 	}
+	pveObjectivesMu.RLock()
+	defer pveObjectivesMu.RUnlock()
 
 	for _, objective := range pveObjectives {
 		if objective.RowName == rowName {
@@ -121,14 +131,16 @@ func PvEObjectiveByRowName(rowName string) (PvEObjective, bool) {
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func PvEObjectiveCount() int {
 	pveObjectivesMu.RLock()
-	defer pveObjectivesMu.RUnlock()
-	
-	if !pveObjectivesLoaded {
+	loaded := pveObjectivesLoaded
+	pveObjectivesMu.RUnlock()
+	if !loaded {
 		if err := LoadPvEObjectives(); err != nil {
 			log.Printf("Warning: Failed to load PvE objectives: %v", err)
 			return 0
 		}
 	}
+	pveObjectivesMu.RLock()
+	defer pveObjectivesMu.RUnlock()
 
 	return len(pveObjectives)
 }
@@ -137,14 +149,16 @@ func PvEObjectiveCount() int {
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func PvEObjectiveByID(id string) (PvEObjective, bool) {
 	pveObjectivesMu.RLock()
-	defer pveObjectivesMu.RUnlock()
-	
-	if !pveObjectivesLoaded {
+	loaded := pveObjectivesLoaded
+	pveObjectivesMu.RUnlock()
+	if !loaded {
 		if err := LoadPvEObjectives(); err != nil {
 			log.Printf("Warning: Failed to load PvE objectives: %v", err)
 			return PvEObjective{}, false
 		}
 	}
+	pveObjectivesMu.RLock()
+	defer pveObjectivesMu.RUnlock()
 
 	for _, objective := range pveObjectives {
 		if objective.ID == id {

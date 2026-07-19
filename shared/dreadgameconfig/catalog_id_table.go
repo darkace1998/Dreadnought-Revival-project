@@ -31,23 +31,24 @@ var (
 	catalogIDTable     CatalogIDTable
 	catalogIDTableOnce sync.Once
 	catalogIDTableMu   sync.RWMutex
+	catalogIDTableLoadErr error
 )
 
 // LoadCatalogIDTable loads the CatalogIDTable.json file and parses it into catalog buckets
 func LoadCatalogIDTable() error {
 	catalogIDTableOnce.Do(func() {
 		filePath := AssetPath("CatalogIDTable.json")
-		
+
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			fmt.Printf("Warning: Failed to load CatalogIDTable: %v\n", err)
+			catalogIDTableLoadErr = fmt.Errorf("failed to load CatalogIDTable: %w", err)
 			return
 		}
 
 		// Parse the raw JSON structure
 		var rawData map[string]map[string]interface{}
 		if err := json.Unmarshal(data, &rawData); err != nil {
-			fmt.Printf("Warning: Failed to parse CatalogIDTable: %v\n", err)
+			catalogIDTableLoadErr = fmt.Errorf("failed to parse CatalogIDTable: %w", err)
 			return
 		}
 
@@ -135,7 +136,7 @@ func LoadCatalogIDTable() error {
 			len(buckets), totalItems)
 	})
 
-	return nil
+	return catalogIDTableLoadErr
 }
 
 // GetCatalogBucket returns the catalog bucket by name

@@ -28,25 +28,25 @@ var (
 	havocEnemyModifiers     []HavocEnemyModifier
 	havocEnemyModifiersMu   sync.RWMutex
 	havocEnemyModifiersOnce sync.Once
+	havocEnemyModifiersLoadErr error
 	havocEnemyModifiersLoaded bool
 )
 
 // LoadHavocEnemyModifiers loads Havoc enemy modifier data from DN_HavocPermanentEnemyModifiers_DT.json
 // K1: Load Progression/Havoc/ — 7 files (boosts:38, modifiers:26, bossWaves:4, rewards:7, loadouts, enemyModifiers, unlockables)
 func LoadHavocEnemyModifiers() error {
-	var loadErr error
 	havocEnemyModifiersOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "Havoc", "DN_HavocPermanentEnemyModifiers_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_HavocPermanentEnemyModifiers_DT.json: %w", err)
+			havocEnemyModifiersLoadErr = fmt.Errorf("failed to read DN_HavocPermanentEnemyModifiers_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_HavocPermanentEnemyModifiers_DT.json: %w", err)
+			havocEnemyModifiersLoadErr = fmt.Errorf("failed to parse DN_HavocPermanentEnemyModifiers_DT.json: %w", err)
 			return
 		}
 
@@ -70,7 +70,7 @@ func LoadHavocEnemyModifiers() error {
 		}
 
 		if len(modifiers) == 0 {
-			loadErr = fmt.Errorf("no Havoc enemy modifiers found in DN_HavocPermanentEnemyModifiers_DT.json")
+			havocEnemyModifiersLoadErr = fmt.Errorf("no Havoc enemy modifiers found in DN_HavocPermanentEnemyModifiers_DT.json")
 			return
 		}
 
@@ -79,7 +79,7 @@ func LoadHavocEnemyModifiers() error {
 		log.Printf("Loaded %d Havoc enemy modifiers from DN_HavocPermanentEnemyModifiers_DT.json", len(modifiers))
 	})
 
-	return loadErr
+	return havocEnemyModifiersLoadErr
 }
 
 // AllHavocEnemyModifiers returns all loaded Havoc enemy modifiers

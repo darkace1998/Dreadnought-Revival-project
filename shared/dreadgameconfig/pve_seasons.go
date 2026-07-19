@@ -26,25 +26,25 @@ var (
 	pveSeasons     []PvESeason
 	pveSeasonsMu   sync.RWMutex
 	pveSeasonsOnce sync.Once
+	pveSeasonsLoadErr error
 	pveSeasonsLoaded bool
 )
 
 // LoadPvESeasons loads PvE seasons data from DN_Seasons_DT.json
 // K2: Load PVE/ — 14 files (kill scoring, wave scoring, defend scoring, medal scoring, objectives, seasons, events, tutorial)
 func LoadPvESeasons() error {
-	var loadErr error
 	pveSeasonsOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("PVE", "DN_Seasons_DT.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_Seasons_DT.json: %w", err)
+			pveSeasonsLoadErr = fmt.Errorf("failed to read DN_Seasons_DT.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_Seasons_DT.json: %w", err)
+			pveSeasonsLoadErr = fmt.Errorf("failed to parse DN_Seasons_DT.json: %w", err)
 			return
 		}
 
@@ -64,7 +64,7 @@ func LoadPvESeasons() error {
 		}
 
 		if len(seasons) == 0 {
-			loadErr = fmt.Errorf("no PvE seasons found in DN_Seasons_DT.json")
+			pveSeasonsLoadErr = fmt.Errorf("no PvE seasons found in DN_Seasons_DT.json")
 			return
 		}
 
@@ -73,7 +73,7 @@ func LoadPvESeasons() error {
 		log.Printf("Loaded %d PvE seasons from DN_Seasons_DT.json", len(seasons))
 	})
 
-	return loadErr
+	return pveSeasonsLoadErr
 }
 
 // AllPvESeasons returns all loaded PvE seasons

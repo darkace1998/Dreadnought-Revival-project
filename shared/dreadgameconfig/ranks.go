@@ -21,25 +21,25 @@ var (
 	ranks     []Rank
 	ranksMu   sync.RWMutex
 	ranksOnce sync.Once
+	ranksLoadErr error
 	ranksLoaded bool
 )
 
 // LoadRanks loads rank data from DN_Ranks_Player.json
 // J1: Load DN_Ranks_Player.json — replace hardcoded 51-rank ladder with extracted data
 func LoadRanks() error {
-	var loadErr error
 	ranksOnce.Do(func() {
 		filePath := DataTablePath(filepath.Join("Progression", "Ranks", "DN_Ranks_Player.json"))
 		
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			loadErr = fmt.Errorf("failed to read DN_Ranks_Player.json: %w", err)
+			ranksLoadErr = fmt.Errorf("failed to read DN_Ranks_Player.json: %w", err)
 			return
 		}
 
 		var dt DataTable
 		if err := json.Unmarshal(data, &dt); err != nil {
-			loadErr = fmt.Errorf("failed to parse DN_Ranks_Player.json: %w", err)
+			ranksLoadErr = fmt.Errorf("failed to parse DN_Ranks_Player.json: %w", err)
 			return
 		}
 
@@ -75,21 +75,23 @@ func LoadRanks() error {
 		log.Printf("Loaded %d ranks from DN_Ranks_Player.json", len(ranks))
 	})
 
-	return loadErr
+	return ranksLoadErr
 }
 
 // AllRanks returns all loaded ranks
 // J1: Load DN_Ranks_Player.json — replace hardcoded 51-rank ladder with extracted data
 func AllRanks() []Rank {
 	ranksMu.RLock()
-	defer ranksMu.RUnlock()
-	
-	if !ranksLoaded {
+	loaded := ranksLoaded
+	ranksMu.RUnlock()
+	if !loaded {
 		if err := LoadRanks(); err != nil {
 			log.Printf("Warning: Failed to load ranks: %v", err)
 			return nil
 		}
 	}
+	ranksMu.RLock()
+	defer ranksMu.RUnlock()
 
 	result := make([]Rank, len(ranks))
 	copy(result, ranks)
@@ -100,14 +102,16 @@ func AllRanks() []Rank {
 // J1: Load DN_Ranks_Player.json — replace hardcoded 51-rank ladder with extracted data
 func RankByID(rankID int32) (Rank, bool) {
 	ranksMu.RLock()
-	defer ranksMu.RUnlock()
-	
-	if !ranksLoaded {
+	loaded := ranksLoaded
+	ranksMu.RUnlock()
+	if !loaded {
 		if err := LoadRanks(); err != nil {
 			log.Printf("Warning: Failed to load ranks: %v", err)
 			return Rank{}, false
 		}
 	}
+	ranksMu.RLock()
+	defer ranksMu.RUnlock()
 
 	for _, rank := range ranks {
 		if rank.RankID == rankID {
@@ -121,14 +125,16 @@ func RankByID(rankID int32) (Rank, bool) {
 // J1: Load DN_Ranks_Player.json — replace hardcoded 51-rank ladder with extracted data
 func RankByName(name string) (Rank, bool) {
 	ranksMu.RLock()
-	defer ranksMu.RUnlock()
-	
-	if !ranksLoaded {
+	loaded := ranksLoaded
+	ranksMu.RUnlock()
+	if !loaded {
 		if err := LoadRanks(); err != nil {
 			log.Printf("Warning: Failed to load ranks: %v", err)
 			return Rank{}, false
 		}
 	}
+	ranksMu.RLock()
+	defer ranksMu.RUnlock()
 
 	for _, rank := range ranks {
 		if rank.RankName == name {
@@ -142,14 +148,16 @@ func RankByName(name string) (Rank, bool) {
 // J1: Load DN_Ranks_Player.json — replace hardcoded 51-rank ladder with extracted data
 func RankCount() int {
 	ranksMu.RLock()
-	defer ranksMu.RUnlock()
-	
-	if !ranksLoaded {
+	loaded := ranksLoaded
+	ranksMu.RUnlock()
+	if !loaded {
 		if err := LoadRanks(); err != nil {
 			log.Printf("Warning: Failed to load ranks: %v", err)
 			return 0
 		}
 	}
+	ranksMu.RLock()
+	defer ranksMu.RUnlock()
 
 	return len(ranks)
 }
