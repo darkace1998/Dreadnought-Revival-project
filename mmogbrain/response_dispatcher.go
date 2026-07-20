@@ -16,6 +16,17 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogSeasonDataPayload()
 	case "YA_GetSeasonProgress":
 		return buildMmogSeasonProgressPayloadForPlayer(playerPID)
+	// issues #44/#56: these 10 request names have ZERO occurrences anywhere
+	// in the real shipping client binary (verified byte-level, both ASCII
+	// and UTF-16LE) — the real client never sends any of them. PvE/Havoc
+	// balance data (waves, boss types, AI difficulty, modifiers, reward
+	// tiers) ships as local cooked DataTable assets parsed client-side, not
+	// fetched over the network; ship-bonus/AI-preference data likely has a
+	// similar local-only or different-real-endpoint source. Kept (not
+	// removed) since they're harmless unreachable code and the payload
+	// logic may be useful reference if a real trigger is ever identified —
+	// but do not spend further effort on these schemas, they have no effect
+	// on real client behavior.
 	case "YA_GetPvEProgress":
 		return buildMmogPvEProgressPayload(playerPID)
 	case "YA_GetBossKills":
@@ -109,6 +120,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		"YA_ChargeFleet", "YA_RepairFleet", "YA_FleetUpdate",
 		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance":
 		return buildMmogRequestSuccessPayload(requestName)
+	// issue #56: same confirmed-dead status as the PvE/Havoc cases above —
+	// "YA_GetShipBonuses" has zero occurrences anywhere in the client binary.
 	case "YA_GetShipBonuses":
 		return buildMmogShipBonusesPayload(requestName, playerPID, payload)
 	case "YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":

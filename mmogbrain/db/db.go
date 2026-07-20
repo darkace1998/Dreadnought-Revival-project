@@ -205,6 +205,8 @@ var migrations = []string{
 		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	`ALTER TABLE player_state ADD COLUMN login_streak INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE player_state ADD COLUMN last_login_date TEXT NOT NULL DEFAULT ''`,
 }
 
 func Open(path string) (*sql.DB, error) {

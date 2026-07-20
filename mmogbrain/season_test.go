@@ -98,22 +98,30 @@ func TestAppendMmogEventScoreEntry(t *testing.T) {
 		t.Fatal("expected non-empty event score entry")
 	}
 
-	// Verify the season ID is in the payload
-	seasonID := protocol.ExtractStringField(b, "SeasonID")
-	if seasonID != "season_1" {
-		t.Errorf("expected SeasonID=season_1, got %s", seasonID)
+	// issue #47: the client's per-entry parser (FUN_142a6bdc0) only reads
+	// EventID/FleetType/Score — never SeasonID/Level, which are rejected
+	// silently. One entry per fleet type (1-3), each carrying the season ID
+	// as EventID since we don't track per-event score separately yet.
+	eventID := protocol.ExtractStringField(b, "EventID")
+	if eventID != "season_1" {
+		t.Errorf("expected EventID=season_1, got %s", eventID)
+	}
+	if protocol.ExtractStringField(b, "SeasonID") != "" {
+		t.Error("SeasonID should not be sent — the client parser never reads it")
 	}
 
-	// Verify score field is present
 	scoreMarker := appendFieldMarker("Score", 0x56)
 	if !bytesContains(b, scoreMarker) {
 		t.Error("expected Score field (int32) to be present in payload")
 	}
 
-	// Verify level field is present
-	levelMarker := appendFieldMarker("Level", 0x56)
-	if !bytesContains(b, levelMarker) {
-		t.Error("expected Level field (int32) to be present in payload")
+	fleetTypeMarker := appendFieldMarker("FleetType", 0x56)
+	if !bytesContains(b, fleetTypeMarker) {
+		t.Error("expected FleetType field (int32) to be present in payload")
+	}
+
+	if bytesContains(b, appendFieldMarker("Level", 0x56)) {
+		t.Error("Level should not be sent — the client parser never reads it")
 	}
 }
 

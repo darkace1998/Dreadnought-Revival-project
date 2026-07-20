@@ -9,7 +9,10 @@ import (
 )
 
 var targetSizes = map[string]int{
-	"YA_UserLogin":                 174,
+	// Was 174 — issue #50 fix: removed dead flat credits/premiumCurrency/
+	// freexp/xp fields (the client's YA_UserLogin handler never reads them),
+	// added real credits/freexp/gp fields nested under LoginStreak instead.
+	"YA_UserLogin":                 153,
 	"YA_UserOnline":                81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
@@ -32,7 +35,9 @@ var targetSizes = map[string]int{
 	// numeric strings, matching the rest of this payload family).
 	"YA_GetPlayerProgression":      1220,
 	"YA_GetPlayerPurchases":        100,
-	"YA_FleetEligibility":          305,
+	// Was 305, -72 after removing fabricated Eligible/isEligible bool
+	// fields (issue #51 — zero footprint in the client binary).
+	"YA_FleetEligibility":          233,
 	// Was 368116 (full tuning tables) — that overflowed the 16-bit mmog frame
 	// size field and desynced the client stream, blocking hangar entry. Now sends
 	// empty override tables (client uses its backup asset tuning); see
@@ -50,11 +55,15 @@ var targetSizes = map[string]int{
 	// silently read as 0) and adding the previously-missing "tc" field.
 	// Was 6033, +42 after fixing Officers entries' int32-blindness (type/rep
 	// now numeric strings, matching FUN_142a70b10's restrictive parser).
-	"YA_PlayerGet":                 6075,
+	// Was 6075, +18 after adding the previously-missing "Quests" array
+	// (issue #43 — empty here since the sizecheck's default player has no
+	// active contracts in this DB-less context).
+	"YA_PlayerGet":                 6093,
 	"YA_PlayerFleets":              2198,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,
-	"YA_CheckReturn":               115,
+	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).
+	"YA_CheckReturn":               101,
 	"YA_AnalyticsBeginTransaction": 124,
 	"YA_AnalyticsEvent":            85,
 	"YA_SaveCtAData":               82,

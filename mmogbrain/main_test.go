@@ -334,6 +334,11 @@ func TestPlayerGetPayloadUsesTopLevelPlayerData(t *testing.T) {
 }
 
 func TestUserLoginPayloadKeepsEconomyFieldsOnResult(t *testing.T) {
+	// issue #50: the client's YA_UserLogin "ok" handler (FUN_142a3af90) never
+	// reads flat result.credits/premiumCurrency/freexp/xp — only nested
+	// result.LoginStreak.{loginstreak,credits,freexp,gp}. Those flat fields
+	// are dead for this RT (the real balance goes out via YA_PlayerGet), so
+	// this payload must NOT send them, only the nested LoginStreak object.
 	payload := buildMmogLoginSuccessPayload()
 	result := extractNamedMmogObject(t, payload, "result")
 	loginStreak := extractNamedMmogObject(t, result, "LoginStreak")
@@ -341,23 +346,18 @@ func TestUserLoginPayloadKeepsEconomyFieldsOnResult(t *testing.T) {
 	if !bytes.Contains(result, protocol.AppendStringField(nil, fieldStatus, "ok")) {
 		t.Fatal("YA_UserLogin result missing status=ok")
 	}
-	for _, field := range []struct {
-		name  string
-		value int32
-	}{
-		{name: "credits", value: 10000},
-		{name: "premiumCurrency", value: 0},
-		{name: "freexp", value: 0},
-		// A brand-new player starts at 100 XP, not 0 (verified against the
-		// real game) — see defaultMmogPlayerState/seedMmogPlayerState.
-		{name: "xp", value: 100},
-	} {
-		fieldBytes := protocol.AppendInt32Field(nil, field.name, field.value)
-		if !bytes.Contains(result, fieldBytes) {
-			t.Fatalf("YA_UserLogin result missing %s", field.name)
+	// credits/freexp legitimately appear nested inside LoginStreak — only
+	// check they (and premiumCurrency/xp, gone entirely) aren't ALSO sent
+	// flat, outside that nested object.
+	outerResult := bytes.Replace(result, loginStreak, nil, 1)
+	for _, name := range []string{"credits", "premiumCurrency", "freexp", "xp"} {
+		if bytes.Contains(outerResult, appendFieldMarker(name, 0x56)) {
+			t.Fatalf("YA_UserLogin result should not send dead flat field %s", name)
 		}
-		if bytes.Contains(loginStreak, fieldBytes) {
-			t.Fatalf("YA_UserLogin LoginStreak should not contain %s", field.name)
+	}
+	for _, name := range []string{"loginstreak", "credits", "freexp", "gp"} {
+		if !bytes.Contains(loginStreak, appendFieldMarker(name, 0x56)) {
+			t.Fatalf("YA_UserLogin LoginStreak missing %s", name)
 		}
 	}
 	if !bytes.Contains(loginStreak, protocol.AppendInt32Field(nil, "loginstreak", 0)) {
@@ -807,29 +807,49 @@ func TestMmogPlayerStatePersistsCurrencyPerPlayer(t *testing.T) {
 	}
 }
 
-func TestUserLoginPayloadUsesPersistedEconomyState(t *testing.T) {
+func TestUserLoginPayloadGrantsStreakBonusOncePerDay(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const playerPID = "cccccccccccccccccccccccccccccccc"
+	_ = buildMmogPlayerGetPayload(playerPID) // seeds player_state row
+	pid := normalizedPlayerStatePID(playerPID)
 
-	_ = buildMmogPlayerGetPayload(playerPID)
-	if _, err := database.Exec(`UPDATE player_state SET soft_currency=?,premium_currency=?,free_xp=?,current_xp=? WHERE user_id=?`,
-		54321, 987, 654, 321, playerPID); err != nil {
-		t.Fatalf("update login economy state: %v", err)
+	var startingCredits, startingFreeXP int32
+	if err := database.QueryRow(`SELECT soft_currency, free_xp FROM player_state WHERE user_id=?`, pid).Scan(&startingCredits, &startingFreeXP); err != nil {
+		t.Fatalf("read starting economy: %v", err)
 	}
 
-	result := extractNamedMmogObject(t, buildMmogLoginSuccessPayload(playerPID), "result")
-	for _, field := range []struct {
-		name  string
-		value int32
-	}{
-		{name: "credits", value: 54321},
-		{name: "premiumCurrency", value: 987},
-		{name: "freexp", value: 654},
-		{name: "xp", value: 321},
-	} {
-		if !bytes.Contains(result, protocol.AppendInt32Field(nil, field.name, field.value)) {
-			t.Fatalf("YA_UserLogin result missing persisted %s=%d", field.name, field.value)
-		}
+	first := extractNamedMmogObject(t, buildMmogLoginSuccessPayload(playerPID), "result")
+	firstStreak := extractNamedMmogObject(t, first, "LoginStreak")
+	if !bytes.Contains(firstStreak, protocol.AppendInt32Field(nil, "loginstreak", 1)) {
+		t.Fatal("first login of the day should set loginstreak=1")
+	}
+	if !bytes.Contains(firstStreak, protocol.AppendInt32Field(nil, "credits", 100)) {
+		t.Fatal("first login of the day should grant a nonzero credits bonus")
+	}
+
+	var afterFirstCredits, afterFirstFreeXP int32
+	if err := database.QueryRow(`SELECT soft_currency, free_xp FROM player_state WHERE user_id=?`, pid).Scan(&afterFirstCredits, &afterFirstFreeXP); err != nil {
+		t.Fatalf("read economy after first login: %v", err)
+	}
+	if afterFirstCredits != startingCredits+100 || afterFirstFreeXP != startingFreeXP+50 {
+		t.Fatalf("streak bonus not persisted: credits %d->%d, freeXP %d->%d", startingCredits, afterFirstCredits, startingFreeXP, afterFirstFreeXP)
+	}
+
+	second := extractNamedMmogObject(t, buildMmogLoginSuccessPayload(playerPID), "result")
+	secondStreak := extractNamedMmogObject(t, second, "LoginStreak")
+	if !bytes.Contains(secondStreak, protocol.AppendInt32Field(nil, "loginstreak", 1)) {
+		t.Fatal("second login same day should keep loginstreak=1")
+	}
+	if !bytes.Contains(secondStreak, protocol.AppendInt32Field(nil, "credits", 0)) {
+		t.Fatal("second login same day should not grant another credits bonus")
+	}
+
+	var afterSecondCredits int32
+	if err := database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&afterSecondCredits); err != nil {
+		t.Fatalf("read economy after second login: %v", err)
+	}
+	if afterSecondCredits != afterFirstCredits {
+		t.Fatalf("second login same day should not grant additional currency: %d -> %d", afterFirstCredits, afterSecondCredits)
 	}
 }
 
@@ -1204,8 +1224,10 @@ func TestMmogCheckReturnUsesCanReturnToMatchFields(t *testing.T) {
 	if bytes.Contains(result, protocol.AppendBoolField(nil, "canReturnToMatch", false)) {
 		t.Fatal("YA_CheckReturn must not emit canReturnToMatch, a case-insensitive FName duplicate of CanReturnToMatch")
 	}
-	if !bytes.Contains(result, protocol.AppendBoolField(nil, "ReturnValue", false)) {
-		t.Fatal("YA_CheckReturn missing ReturnValue=false")
+	// issue #52: "ReturnValue" has no genuine footprint in the client binary
+	// (only generic UFUNCTION reflection boilerplate) — removed.
+	if bytes.Contains(result, appendFieldMarker("ReturnValue", 0x05)) {
+		t.Fatal("YA_CheckReturn should not send fabricated ReturnValue field")
 	}
 	if bytes.Contains(result, appendFieldMarker("CanReturn", 0x01)) ||
 		bytes.Contains(result, appendFieldMarker("canReturn", 0x01)) {
@@ -2072,8 +2094,12 @@ func TestPlayerGetPayloadUsesSquadObjectShape(t *testing.T) {
 			t.Fatalf("YA_PlayerGet missing %s=%s", field.name, field.value)
 		}
 	}
-	if bytes.Contains(payload, appendFieldMarker("Quests", 0x0d)) {
-		t.Fatal("YA_PlayerGet should not mark player quest state ready")
+	// issue #43: the client's top-level parser (FUN_142a70da0 ->
+	// FUN_142a69310) reads Quests from the same object as DailyContractStateID
+	// etc — it must be present (this replaces the old, incorrect assertion
+	// that it should be absent).
+	if !bytes.Contains(payload, appendFieldMarker("Quests", 0x0d)) {
+		t.Fatal("YA_PlayerGet missing Quests array")
 	}
 	if bytes.Contains(payload, appendFieldMarker("QuestID", 0x56)) {
 		t.Fatal("YA_PlayerGet should not fabricate daily contract entries")

@@ -30,6 +30,46 @@ func buildMmogRequestResponseFrame(requestID [16]byte, requestType uint16, reque
 
 // --- Login payloads ---
 
+// dailyLoginStreakCap bounds how many consecutive days count toward the
+// streak bonus, so the reward doesn't grow unbounded.
+const dailyLoginStreakCap = 7
+
+// applyDailyLoginStreak advances a player's login-streak counter at most
+// once per calendar day (UTC) and returns that day's streak count plus the
+// bonus reward to grant on the FIRST login of the day. On any subsequent
+// login the same day, the streak count is still returned (so the client's
+// popup can show it) but the reward fields are 0 — the bonus is granted
+// once per day, not once per connection.
+func applyDailyLoginStreak(db *sql.DB, pid string) (streak, creditsBonus, freeXPBonus, gpBonus int32) {
+	if db == nil {
+		return 0, 0, 0, 0
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	var lastLogin string
+	var lastStreak int32
+	if err := db.QueryRow(`SELECT last_login_date, login_streak FROM player_state WHERE user_id=?`, pid).Scan(&lastLogin, &lastStreak); err != nil {
+		return 0, 0, 0, 0
+	}
+	if lastLogin == today {
+		return lastStreak, 0, 0, 0
+	}
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	newStreak := int32(1)
+	if lastLogin == yesterday {
+		newStreak = lastStreak + 1
+	}
+	bonusStreak := newStreak
+	if bonusStreak > dailyLoginStreakCap {
+		bonusStreak = dailyLoginStreakCap
+	}
+	creditsBonus = 100 * bonusStreak
+	freeXPBonus = 50 * bonusStreak
+	gpBonus = 0
+	_, _ = db.Exec(`UPDATE player_state SET login_streak=?, last_login_date=?, soft_currency=soft_currency+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`,
+		newStreak, today, creditsBonus, freeXPBonus, pid)
+	return newStreak, creditsBonus, freeXPBonus, gpBonus
+}
+
 func buildMmogLoginSuccessPayload(playerPID ...string) []byte {
 	var b []byte
 	var stack []int
@@ -37,26 +77,23 @@ func buildMmogLoginSuccessPayload(playerPID ...string) []byte {
 	if len(playerPID) > 0 {
 		pid = playerPID[0]
 	}
-	state := mmogPlayerStateForPID(pid)
+
+	streak, creditsBonus, freeXPBonus, gpBonus := applyDailyLoginStreak(currentMmogPlayerStateDB(), normalizedPlayerStatePID(pid))
 
 	b = protocol.AppendStringField(b, "RT", "YA_UserLogin")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendInt32Field(b, "credits", state.softCurrency)
-	b = protocol.AppendInt32Field(b, "premiumCurrency", state.premiumCurrency)
-	b = protocol.AppendInt32Field(b, "freexp", state.freeXP)
-	b = protocol.AppendInt32Field(b, "xp", state.currentXP)
-	// NOTE (issue #50): the client's YA_UserLogin "ok" handler (FUN_142a3af90)
-	// reads result.LoginStreak.loginstreak, and only when loginstreak > 0
-	// also LoginStreak.credits/freexp/gp (that day's streak-bonus reward) —
-	// it does not appear to read the flat result.credits/etc above. Left
-	// unchanged pending further verification: TestUserLoginPayloadKeepsEconomyFieldsOnResult
-	// asserts today's top-level placement deliberately, and there's no
-	// persisted daily-login-streak tracking yet to populate the nested
-	// fields with anyway, so nesting them now would have no observable
-	// effect either way.
+	// issue #50: the client's YA_UserLogin "ok" handler (FUN_142a3af90) reads
+	// result.LoginStreak.loginstreak, and only when loginstreak > 0 also
+	// LoginStreak.credits/freexp/gp (that day's streak-bonus reward) — it
+	// does not read flat result.credits/premiumCurrency/freexp/xp (those are
+	// dead fields for this RT; the player's real currency balance is
+	// delivered correctly via YA_PlayerGet's gl/ob/FreeXp fields instead).
 	b, stack = protocol.AppendObjectStart(b, stack, "LoginStreak")
-	b = protocol.AppendInt32Field(b, "loginstreak", 0)
+	b = protocol.AppendInt32Field(b, "loginstreak", streak)
+	b = protocol.AppendInt32Field(b, "credits", creditsBonus)
+	b = protocol.AppendInt32Field(b, "freexp", freeXPBonus)
+	b = protocol.AppendInt32Field(b, "gp", gpBonus)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -770,12 +807,29 @@ func loadPlayerSeasonProgress(playerPID string) []playerSeasonProgress {
 	return progress
 }
 
+// appendMmogEventScoreEntry emits one EventScores entry per fleet type.
+//
+// issue #47: the client's per-entry parser (FUN_142a6bdc0) only reads
+// EventID (string, must be non-empty), FleetType (int, must be in [1,3]),
+// and Score (int, must be positive) — it never looks up SeasonID/Level at
+// all, so every entry sent with those field names was silently rejected.
+// We don't yet track per-event, per-fleet-type score server-side (only a
+// per-season aggregate), so this reuses the season ID as the EventID and
+// reports the same aggregate score once per fleet type (1=Recruit,
+// 2=Veteran, 3=Legendary) — an honest approximation, not real granular
+// event tracking, but it satisfies the client's validation gate instead of
+// having every entry rejected outright.
 func appendMmogEventScoreEntry(b []byte, stack []int, progress playerSeasonProgress) ([]byte, []int) {
-	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "SeasonID", progress.seasonID)
-	b = protocol.AppendInt32Field(b, "Score", progress.xp)
-	b = protocol.AppendInt32Field(b, "Level", progress.level)
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	if progress.seasonID == "" || progress.xp <= 0 {
+		return b, stack
+	}
+	for _, fleetType := range []int32{1, 2, 3} {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "EventID", progress.seasonID)
+		b = protocol.AppendInt32Field(b, "FleetType", fleetType)
+		b = protocol.AppendInt32Field(b, "Score", progress.xp)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	return b, stack
 }
 
@@ -857,6 +911,13 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "DailyContractStateID", strconv.Itoa(dailyContractState(playerPID)))
 	b = protocol.AppendStringField(b, "LastContractsAssignment", strconv.Itoa(int(now)))
 	b = protocol.AppendStringField(b, "DailyContractLastReplaceTime", strconv.Itoa(int(now)))
+	// issue #43: the client's top-level parser (FUN_142a70da0) reads Quests
+	// from the same object as the three DailyContract* fields above (via
+	// FUN_142a69310), but this payload never sent it — every entry silently
+	// missing. Reuses the same active-contract data as YA_GetDailyContractsData
+	// (different RT, different per-entry field names) rather than a separate
+	// quest system, since no other quest data model exists server-side.
+	b, stack = appendMmogQuestsArray(b, stack, playerPID)
 	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1556,6 +1617,53 @@ func toLowerCamelCase(s string) string {
 	return string(r)
 }
 
+// appendMmogQuestsArray builds the "Quests" array read by YA_PlayerGet's
+// top-level parser (FUN_142a70da0 -> FUN_142a69310, per-entry parser
+// FUN_142a706f0). Per-entry fields are eid/id/act/cpl/prg/dif/ran — a
+// different schema than YA_GetDailyContractsData's ContractID/Progress/
+// State/etc, but backed by the same underlying active-contract data (no
+// separate quest system exists server-side).
+func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []int) {
+	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		return b, stack
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+	if err != nil {
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		return b, stack
+	}
+	defer func() { _ = rows.Close() }()
+	for idx := 0; rows.Next(); idx++ {
+		var contractID, state string
+		var progress int32
+		if err := rows.Scan(&contractID, &progress, &state); err != nil {
+			continue
+		}
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "eid", contractID)
+		b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
+		b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
+		b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
+		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
+		b = protocol.AppendStringField(b, "dif", "1")
+		b = protocol.AppendStringField(b, "ran", "0")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+func boolToOneZero(v bool) string {
+	if v {
+		return "1"
+	}
+	return "0"
+}
+
 func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
@@ -2227,8 +2335,10 @@ func buildMmogFleetEligibilityPayload() []byte {
 	for _, eligibility := range configBackedFleetEligibilities() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendInt32Field(b, "FleetType", eligibility.FleetType)
-		b = protocol.AppendBoolField(b, "Eligible", true)
-		b = protocol.AppendBoolField(b, "isEligible", true)
+		// issue #51: "Eligible"/"isEligible" have zero footprint anywhere in
+		// the client binary (verified byte-level, ASCII and UTF-16LE) — not
+		// real field names, removed. "FleetType" and "Reason" are confirmed
+		// real tokens in the client string pool; left as-is.
 		b = protocol.AppendStringField(b, "Reason", "")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -2333,7 +2443,10 @@ func buildMmogCheckReturnPayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "status", "ok")
 	b = protocol.AppendBoolField(b, "CanReturnToMatch", false)
-	b = protocol.AppendBoolField(b, "ReturnValue", false)
+	// issue #52: "ReturnValue" only matches generic UFUNCTION reflection
+	// boilerplate (present for every reflected function with a return type
+	// in the binary) — no occurrence tied to YA_CheckReturn or MMOG-response
+	// parsing specifically. Removed as a likely-fabricated field.
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

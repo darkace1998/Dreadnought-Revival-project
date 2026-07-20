@@ -656,7 +656,16 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 		WHERE user_id=? AND mode=?`, wave, bossKills, kills, bonusXP, pid, gameMode)
 }
 
-// RecordBossKill records a boss kill for a player
+// RecordBossKill records a boss kill for a player.
+//
+// issue #7 / #44: not called by any request handler — same root cause as
+// the confirmed-dead YA_GetPvEProgress/YA_GetBossKills/etc. endpoints (zero
+// occurrences of those RT names anywhere in the real client binary). PvE
+// progress in the real game is very likely tracked/reported through a
+// different, already-real channel (or purely client-local, since Havoc/PvE
+// balance data itself ships as local cooked DataTables, not server-fetched)
+// rather than needing a dedicated wave/boss-kill report RT wired up here.
+// Left in place as reference in case a real trigger is ever identified.
 func RecordBossKill(db *sql.DB, pid, bossID string) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, _ = db.Exec(`INSERT OR IGNORE INTO player_boss_kills(user_id, boss_id, kill_count, first_kill, last_kill) 
