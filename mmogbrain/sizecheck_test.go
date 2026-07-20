@@ -11,7 +11,9 @@ import (
 var targetSizes = map[string]int{
 	"YA_UserLogin":                 174,
 	"YA_UserOnline":                81,
-	"YA_RequestStaticFleetData":    5250,
+	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
+	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
+	"YA_RequestStaticFleetData":    5256,
 	"YA_GetFeatureToggle":          111,
 	"YA_GetGameConfigData":         534,
 	"YA_GetStaticCareerData":       3531,
@@ -21,17 +23,34 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":            1856,
 	"YA_GetCareerProgression":      3437,
 	"YA_GetPlayerScores":           277,
-	"YA_GetTechTree":               39062,
-	"YA_GetPlayerProgression":      1035,
+	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
+	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
+	// numeric strings, matching the rest of this payload's m_-prefixed fields).
+	"YA_GetTechTree":               39422,
+	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
+	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
+	// numeric strings, matching the rest of this payload family).
+	"YA_GetPlayerProgression":      1220,
 	"YA_GetPlayerPurchases":        100,
 	"YA_FleetEligibility":          305,
-	"YA_Tune":                      368116,
+	// Was 368116 (full tuning tables) — that overflowed the 16-bit mmog frame
+	// size field and desynced the client stream, blocking hangar entry. Now sends
+	// empty override tables (client uses its backup asset tuning); see
+	// buildMmogTunePayload. Must stay well under 65535.
+	"YA_Tune":                      299,
 	"YA_GetSeasonData":             1091,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
 	// replacing the far longer m_enabling/m_triggers/m_effects DSL text
 	// that parser never looked up — legitimately smaller, not a regression.
-	"YA_PlayerGet":                 5961,
+	// Was 5961 — grew by 72 bytes after fixing the int32-blindness bug for
+	// tll/tpl/tc/rep/repXX_X/ReputationGoalID/Membership.ExpireTime/
+	// DailyContract*/FreeXp/ServerTime/ClientTime/tslm (all now sent as
+	// numeric strings instead of raw int32, which the client's parser
+	// silently read as 0) and adding the previously-missing "tc" field.
+	// Was 6033, +42 after fixing Officers entries' int32-blindness (type/rep
+	// now numeric strings, matching FUN_142a70b10's restrictive parser).
+	"YA_PlayerGet":                 6075,
 	"YA_PlayerFleets":              2198,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,

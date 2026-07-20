@@ -51,9 +51,13 @@ func defaultMmogPlayerState(playerPID string) mmogPlayerState {
 		softCurrency:    10000,
 		premiumCurrency: 0,
 		freeXP:          0,
-		currentXP:       0,
-		currentRank:     1,
-		rankXP:          5000,
+		// A brand-new player starts at rank 1 with 100 XP (verified against
+		// the real game). rankXP tracks progress toward the next rank
+		// (RankXPThreshold(2)=1000), so it starts equal to currentXP too —
+		// they diverge once a player actually ranks up.
+		currentXP:   100,
+		currentRank: 1,
+		rankXP:      100,
 		fleets:          mmogFleetSeeds(),
 	}
 }
@@ -163,8 +167,11 @@ func seedMmogPlayerState(database *sql.DB, playerPID string) error {
 		_ = tx.Rollback()
 	}()
 
+	// A brand-new player starts at rank 1 with 100 XP (verified against the
+	// real game) — was previously seeded at 0/0, and inconsistent with
+	// defaultMmogPlayerState's fallback values besides.
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_state(user_id,soft_currency,premium_currency,free_xp,current_xp,current_rank,rank_xp) VALUES(?,?,?,?,?,?,?)`,
-		pid, 10000, 0, 0, 0, 1, 0); err != nil {
+		pid, 10000, 0, 0, 100, 1, 100); err != nil {
 		return fmt.Errorf("seed player_state: %w", err)
 	}
 

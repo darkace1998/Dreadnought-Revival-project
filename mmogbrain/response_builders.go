@@ -448,6 +448,15 @@ func appendMmogFleetRuntimeFields(b []byte, fleet mmogFleetSeed) []byte {
 }
 
 func appendMmogFleetBackendFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
+	// This helper is shared by both the YA_PlayerFleets/Fleets-array entry
+	// path and the top-level YA_PlayerGet fleet-summary section. Now
+	// decompile-confirmed (FUN_14071d4f0): m_fleetId/m_flagshipIndex/
+	// m_fleetType/m_loadoutList are native FIntProperty/FArrayProperty
+	// UPROPERTYs reflected on a completely separate native class
+	// ("YLocalServerPlayerDataInformation"), not fields read by the
+	// Fleets-array JSON parser (FUN_142a77910, which doesn't reference any
+	// of these names at all) — so they're inert there either way. Genuinely
+	// native int32 properties, correctly left as int32.
 	b = protocol.AppendInt32Field(b, "m_fleetId", fleet.fleetID)
 	b = protocol.AppendInt32Field(b, "m_flagshipIndex", fleet.flagshipIndex())
 	b = protocol.AppendInt32Field(b, "m_fleetType", fleet.fleetType)
@@ -521,6 +530,44 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	return b
 }
 
+// buildMmogFleetUpdatePush builds a YA_FleetUpdate push carrying the same
+// Fleets array shape as YA_PlayerFleets.
+//
+// Live debugging (x64dbg, hardware breakpoint on the readiness byte) proved
+// UYFleetManager's internal readiness bitmask (this+0x110) is written exactly
+// once — during FleetManager::Initialize, right at "Mmog Connection
+// Established" — and never written again for the rest of the session, no
+// matter how long the client runs. A software breakpoint on
+// HandleMmogbrainFleetUpdated (the delegate that's supposed to complete the
+// remaining bits) recorded zero hits across an entire session that included a
+// full YA_PlayerFleets round trip. That delegate's own "data not ready"
+// fallback (FUN_14035a1a0) explicitly re-sends a YA_PlayerFleets *request* —
+// strong evidence it's normally satisfied by a server-pushed fleet-update
+// notification, not by data embedded in the request/response the client
+// already receives. "YA_FleetUpdate" is a distinct RT name (present in the
+// client's own string table, and already recognized as an inbound ack case
+// in this dispatcher) that is a near-exact name match for
+// HandleMmogbrainFleetUpdated. This mirrors the confirmed YA_UpdateGameModes
+// fix: push a dedicated message under the RT the client's delegate listens
+// for, rather than assuming embedded response data is enough.
+func buildMmogFleetUpdatePush(playerPID string) []byte {
+	var b []byte
+	var stack []int
+	state := mmogPlayerStateForPID(playerPID)
+	fleets := state.fleets
+	if len(fleets) == 0 {
+		fleets = []mmogFleetSeed{starterFleetState()}
+	}
+
+	b = protocol.AppendStringField(b, "RT", "YA_FleetUpdate")
+	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
+	for _, fleet := range fleets {
+		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
+	}
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
 func appendMmogStaticFleetTypeEntry(b []byte, stack []int, eligibility dreadconfig.FleetEligibility) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// Scalar int32 fields on this array entry hit the same restrictive
@@ -535,9 +582,14 @@ func appendMmogStaticFleetTypeEntry(b []byte, stack []int, eligibility dreadconf
 	b = protocol.AppendStringField(b, "ChargeTime", strconv.Itoa(int(eligibility.MaintenanceTime)))
 	b = protocol.AppendStringField(b, "ChargeCost", strconv.Itoa(0))
 	b = protocol.AppendStringField(b, "AvailableCharges", strconv.Itoa(1))
+	// Confirmed via decompile (FUN_142a78790): Tiers entries are read through
+	// the same restrictive type-1/2/3/4-only union as every sibling scalar in
+	// this FleetTypes entry (ID/ShipsToUnlock/etc, already sent as numeric
+	// strings above) — AppendUnnamedInt32Field's wire tag 0x56 falls through
+	// to the union's default and is silently read as 0.
 	b, stack = protocol.AppendArrayStart(b, stack, "Tiers")
 	for _, tier := range eligibility.AllowedTiers {
-		b = protocol.AppendUnnamedInt32Field(b, tier)
+		b = protocol.AppendUnnamedStringField(b, strconv.Itoa(int(tier)))
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -757,27 +809,40 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "RT", rt)
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
-	b = protocol.AppendInt32Field(b, "tll", 1)
-	b = protocol.AppendInt32Field(b, "tpl", 1)
+	// tll/tpl/tc/rep/repXX_X/ReputationGoalID/Membership.ExpireTime/
+	// DailyContract*/FreeXp: the client's YA_PlayerGet parser (FUN_142a70da0)
+	// reads every one of these through FUN_1402380b0 or FUN_140238000, which
+	// only recognize tagged-union type 1/2 (double), 3 (int64), or 4
+	// (string-then-_wtoi) — any other tag, including our int32 wire tag
+	// (0x56), returns 0 silently. This is the same int32-blindness already
+	// confirmed and fixed for fleet/loadout array entries and SeasonProgress;
+	// it had never been audited for these top-level PlayerGet scalars before.
+	// Send numeric strings so the client's _wtoi path actually parses them.
+	// "tc" (account/character creation time) was previously missing entirely
+	// — the client reads it unconditionally, so send it even though we don't
+	// track real account-creation time yet.
+	b = protocol.AppendStringField(b, "tll", "1")
+	b = protocol.AppendStringField(b, "tpl", "1")
+	b = protocol.AppendStringField(b, "tc", "1")
 	b = protocol.AppendInt32Field(b, "gl", state.softCurrency)
 	b = protocol.AppendInt32Field(b, "ob", state.premiumCurrency)
-	b = protocol.AppendInt32Field(b, "rep", 0)
-	b = protocol.AppendInt32Field(b, "repDN_L", 0)
-	b = protocol.AppendInt32Field(b, "repDN_M", 0)
-	b = protocol.AppendInt32Field(b, "repDN_H", 0)
-	b = protocol.AppendInt32Field(b, "repAS_L", 0)
-	b = protocol.AppendInt32Field(b, "repAS_M", 0)
-	b = protocol.AppendInt32Field(b, "repAS_H", 0)
-	b = protocol.AppendInt32Field(b, "repSC_L", 0)
-	b = protocol.AppendInt32Field(b, "repSC_M", 0)
-	b = protocol.AppendInt32Field(b, "repSC_H", 0)
-	b = protocol.AppendInt32Field(b, "repSN_L", 0)
-	b = protocol.AppendInt32Field(b, "repSN_M", 0)
-	b = protocol.AppendInt32Field(b, "repSN_H", 0)
-	b = protocol.AppendInt32Field(b, "repSU_L", 0)
-	b = protocol.AppendInt32Field(b, "repSU_M", 0)
-	b = protocol.AppendInt32Field(b, "repSU_H", 0)
-	b = protocol.AppendInt32Field(b, "ReputationGoalID", 0)
+	b = protocol.AppendStringField(b, "rep", "0")
+	b = protocol.AppendStringField(b, "repDN_L", "0")
+	b = protocol.AppendStringField(b, "repDN_M", "0")
+	b = protocol.AppendStringField(b, "repDN_H", "0")
+	b = protocol.AppendStringField(b, "repAS_L", "0")
+	b = protocol.AppendStringField(b, "repAS_M", "0")
+	b = protocol.AppendStringField(b, "repAS_H", "0")
+	b = protocol.AppendStringField(b, "repSC_L", "0")
+	b = protocol.AppendStringField(b, "repSC_M", "0")
+	b = protocol.AppendStringField(b, "repSC_H", "0")
+	b = protocol.AppendStringField(b, "repSN_L", "0")
+	b = protocol.AppendStringField(b, "repSN_M", "0")
+	b = protocol.AppendStringField(b, "repSN_H", "0")
+	b = protocol.AppendStringField(b, "repSU_L", "0")
+	b = protocol.AppendStringField(b, "repSU_M", "0")
+	b = protocol.AppendStringField(b, "repSU_H", "0")
+	b = protocol.AppendStringField(b, "ReputationGoalID", "0")
 	b = protocol.AppendStringField(b, "disp", "")
 	b = protocol.AppendStringField(b, "motto", "")
 	b = protocol.AppendStringField(b, "SGD", "")
@@ -787,12 +852,12 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// 0 (unset/expired) is correct for players who never bought elite —
 	// previously this always reported "active for one more year" regardless
 	// of purchase history.
-	b = protocol.AppendInt32Field(b, "ExpireTime", membershipExpiresAt(playerPID))
+	b = protocol.AppendStringField(b, "ExpireTime", strconv.Itoa(int(membershipExpiresAt(playerPID))))
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
-	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(now))
-	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(now))
-	b = protocol.AppendInt32Field(b, "FreeXp", state.freeXP)
+	b = protocol.AppendStringField(b, "DailyContractStateID", strconv.Itoa(dailyContractState(playerPID)))
+	b = protocol.AppendStringField(b, "LastContractsAssignment", strconv.Itoa(int(now)))
+	b = protocol.AppendStringField(b, "DailyContractLastReplaceTime", strconv.Itoa(int(now)))
+	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
@@ -804,8 +869,9 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
-	b = protocol.AppendInt32Field(b, "ServerTime", now)
-	b = protocol.AppendInt32Field(b, "ClientTime", now)
+	// ServerTime/ClientTime: same int32-blind parser as tll/tpl/tc above.
+	b = protocol.AppendStringField(b, "ServerTime", strconv.Itoa(int(now)))
+	b = protocol.AppendStringField(b, "ClientTime", strconv.Itoa(int(now)))
 	b = protocol.AppendStringField(b, "PublicIP", "")
 	b = protocol.AppendStringField(b, "Country", "")
 	b = protocol.AppendStringField(b, "Platform", "steam")
@@ -824,6 +890,17 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b = protocol.AppendStringField(b, "chatRoomId", "")
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// NOTE: unlike appendMmogFleetRawFields/appendMmogPlayerFleetEntry (the
+	// YA_PlayerFleets/Fleets-array entry versions, which the client parses
+	// through FUN_142a77910's restrictive int32-blind union and therefore
+	// need numeric strings), this top-level "current fleet summary" section
+	// embedded directly in YA_PlayerGet's result object is a separate
+	// assignment — per existing, deliberate test coverage
+	// (TestFleetStateIsConsistentAcrossResponses) confirming at least
+	// FlagShipLoadoutIndex here is read correctly as int32. Do not convert
+	// these to strings without decompiled confirmation that this top-level
+	// section goes through the same restrictive parser as the array entries
+	// — it may not.
 	b = protocol.AppendStringField(b, "FleetID", starterFleet.token)
 	b = protocol.AppendInt32Field(b, "fleet id", starterFleet.fleetID)
 	b = protocol.AppendInt32Field(b, "FleetType", starterFleet.fleetType)
@@ -852,9 +929,11 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// as 0 until one is added.
 	for _, officer := range dreadconfig.AllOfficers() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendInt32Field(b, "type", officer.OfficerID)
+		// type/rep go through the client's int32-blind parser (FUN_142a70b10,
+		// same restriction as tll/tpl/tc/etc) — numeric strings, not int32.
+		b = protocol.AppendStringField(b, "type", strconv.Itoa(int(officer.OfficerID)))
 		b = protocol.AppendStringField(b, "disp", officer.OfficerName)
-		b = protocol.AppendInt32Field(b, "rep", 0)
+		b = protocol.AppendStringField(b, "rep", "0")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
@@ -882,7 +961,8 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "FleetType", 0)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b = protocol.AppendStringField(b, "PPF", "")
-	b = protocol.AppendInt32Field(b, "tslm", 0)
+	// tslm: same int32-blind parser as tll/tpl/tc/ServerTime/ClientTime above.
+	b = protocol.AppendStringField(b, "tslm", "0")
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -1027,11 +1107,16 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerProgression")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "PID", playerPID)
-	b = protocol.AppendInt32Field(b, "CurrentXP", state.currentXP)
-	b = protocol.AppendInt32Field(b, "CurrentRank", state.currentRank)
-	b = protocol.AppendInt32Field(b, "RankXP", state.rankXP)
-	b = protocol.AppendInt32Field(b, "XPToNextRank", handlers.RankXPThreshold(state.currentRank+1))
-	b = protocol.AppendInt32Field(b, "NumUnlockedShips", int32(countOwnedShips(ships)))
+	// Every numeric scalar in this family of responses (PlayerGet, Officers,
+	// Fleets, TechTree rows) has been independently confirmed to go through
+	// the client's int32-blind parser (double/int64/string recognized, int32
+	// silently reads as 0) — applying the same fix here on the strength of
+	// that established, repeatedly-confirmed pattern.
+	b = protocol.AppendStringField(b, "CurrentXP", strconv.Itoa(int(state.currentXP)))
+	b = protocol.AppendStringField(b, "CurrentRank", strconv.Itoa(int(state.currentRank)))
+	b = protocol.AppendStringField(b, "RankXP", strconv.Itoa(int(state.rankXP)))
+	b = protocol.AppendStringField(b, "XPToNextRank", strconv.Itoa(int(handlers.RankXPThreshold(state.currentRank+1))))
+	b = protocol.AppendStringField(b, "NumUnlockedShips", strconv.Itoa(countOwnedShips(ships)))
 	b, stack = protocol.AppendArrayStart(b, stack, "shipProgressionUiData")
 	for _, ship := range ships {
 		b, stack = appendMmogShipProgression(b, stack, ship)
@@ -1043,9 +1128,10 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 
 func appendMmogShipProgression(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendInt32Field(b, "shipID", ship.id)
-	b = protocol.AppendInt32Field(b, "xp", 0)
-	b = protocol.AppendInt32Field(b, "tier", 1)
+	// Same int32-blind parser as the rest of this payload family.
+	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(ship.id)))
+	b = protocol.AppendStringField(b, "xp", "0")
+	b = protocol.AppendStringField(b, "tier", "1")
 	b = protocol.AppendBoolField(b, "owned", ship.owned)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -1135,11 +1221,13 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 func appendMmogItemPriceDataFields(b []byte) []byte {
 	b = protocol.AppendBoolField(b, "m_hasPriceChanged", false)
 	b = protocol.AppendStringField(b, "m_currencyCode", "")
-	b = protocol.AppendInt32Field(b, "m_realCurrency", 0)
-	b = protocol.AppendInt32Field(b, "m_hardCurrency", 0)
-	b = protocol.AppendInt32Field(b, "m_softCurrency", 0)
-	b = protocol.AppendInt32Field(b, "m_freeXP", 0)
-	b = protocol.AppendInt32Field(b, "m_shipXP", 0)
+	// Same int32-blind parser as the rest of the m_-prefixed fields in this
+	// TechTree/moduleUiData family (see appendMmogShipLoadoutInfoFields).
+	b = protocol.AppendStringField(b, "m_realCurrency", "0")
+	b = protocol.AppendStringField(b, "m_hardCurrency", "0")
+	b = protocol.AppendStringField(b, "m_softCurrency", "0")
+	b = protocol.AppendStringField(b, "m_freeXP", "0")
+	b = protocol.AppendStringField(b, "m_shipXP", "0")
 	return b
 }
 
@@ -1215,6 +1303,35 @@ func buildMmogGameConfigDataPayload() []byte {
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// buildMmogUpdateGameModesPayload builds the YA_UpdateGameModes message the
+// client's MatchmakingInterpreter uses to populate its playable-mode list.
+//
+// The client registers the game-modes handler (FUN_142a4ca40, logs
+// "GetGameModesData: Game modes list contains <N> items") under response type
+// "YA_UpdateGameModes" when it sends YA_GetGameConfigData — it does NOT read the
+// GameModes array nested inside the YA_GetGameConfigData "result" object.
+// FUN_142a4ca40 reads a *top-level* "GameModes" array (sibling of "RT") whose
+// entries carry "Name"/"TeamSize"; the interpreter then walks m_gameModes to
+// build the hangar Play UI. Without this frame m_gameModes stays empty, which is
+// what DreadGame.log shows ("Received possible game modes from mmogbrain:" with
+// no entries). GameModes therefore lives at the message root here, not under
+// "result".
+func buildMmogUpdateGameModesPayload() []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_UpdateGameModes")
+	b, stack = protocol.AppendArrayStart(b, stack, "GameModes")
+	for _, mode := range matchmaker.GameModeConfigs() {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "Name", mode.Name)
+		b = protocol.AppendInt32Field(b, "TeamSize", mode.TeamSize)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
@@ -2135,14 +2252,27 @@ func buildMmogTunePayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
 	b = protocol.AppendStringField(b, "Version", "1.0.0")
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendStringField(b, "WeaponsTune", dreadconfig.WeaponsTuneJSON())
+	// CRITICAL frame-size constraint: mmog frames are delimited by a 16-bit size
+	// field (protocol.BuildResponseFrame / ParseAppFrames), so a single response
+	// MUST stay under 65535 bytes. Previously these fields embedded the full
+	// tuning tables (~368KB total), which overflowed that field — the client
+	// (and our own ParseAppFrames) then read a truncated/mis-delimited frame and
+	// desynced the entire mmog stream, so every frame after YA_Tune (including
+	// YA_PlayerGet) became garbage and player data never arrived, stalling the
+	// hangar (DreadGame.log: tune requested, never applied; fell back to backup
+	// asset tables). The client already sync-loads its shipped tuning via
+	// YTuneManager::LoadBackupDataTablesFromAssets(), so sending empty override
+	// tables here is functionally correct for the frontend and keeps the frame
+	// small. If server-authored tuning is ever needed, it must be chunked across
+	// multiple <64KB frames, not stuffed into one.
+	b = protocol.AppendStringField(b, "WeaponsTune", `[]`)
 	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
-	b = protocol.AppendStringField(b, "ProjectilesTune", dreadconfig.ProjectilesTuneJSON())
-	b = protocol.AppendStringField(b, "AbilitiesTune", dreadconfig.AbilitiesTuneJSON())
-	b = protocol.AppendStringField(b, "OfficersTune", dreadconfig.OfficersTuneJSON())
-	b = protocol.AppendStringField(b, "FeatsTune", dreadconfig.FeatsTuneJSON())
+	b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
+	b = protocol.AppendStringField(b, "AbilitiesTune", `[]`)
+	b = protocol.AppendStringField(b, "OfficersTune", `[]`)
+	b = protocol.AppendStringField(b, "FeatsTune", `[]`)
 	b = protocol.AppendStringField(b, "HavocTune", `[]`)
-	b = protocol.AppendStringField(b, "GameModifiersTune", dreadconfig.GameModifiersTuneJSON())
+	b = protocol.AppendStringField(b, "GameModifiersTune", `[]`)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendObjectStart(b, stack, "result")

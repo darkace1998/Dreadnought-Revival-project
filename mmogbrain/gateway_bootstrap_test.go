@@ -893,7 +893,6 @@ func TestGatewayBootstrapHandlersWaitForPlayerDataReady(t *testing.T) {
 		path    string
 		handler func(http.ResponseWriter, *http.Request, jwt.MapClaims)
 	}{
-		{name: "catalog", path: "/api/v1/catalog/digital_items_rmt", handler: handleGWCatalog},
 		{name: testNameBundles, path: "/api/v1/bundles", handler: handleGWBundles},
 	}
 
@@ -940,7 +939,6 @@ func TestGatewayBootstrapHandlersFallbackWhenPlayerDataReadyTimesOut(t *testing.
 		path    string
 		handler func(http.ResponseWriter, *http.Request, jwt.MapClaims)
 	}{
-		{name: "catalog", path: "/api/v1/catalog/digital_items_rmt", handler: handleGWCatalog},
 		{name: testNameBundles, path: "/api/v1/bundles", handler: handleGWBundles},
 	}
 

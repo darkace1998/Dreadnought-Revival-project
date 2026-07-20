@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net"
 	"time"
@@ -323,31 +325,19 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if requestName == "YA_RequestStaticFleetData" {
 				state.staticFleetDataReceived = true
 			}
-			if requestName == "YA_GetPlayerPurchases" && !state.playerGetResponded {
-				state.pendingPlayerPurchases = append(state.pendingPlayerPurchases, frame)
-				log.WithField("remote", remote).Info("mmog: delaying YA_GetPlayerPurchases response until YA_PlayerGet is answered")
-				continue
-			}
-			if requestName == "YA_PlayerFleets" && !state.playerGetResponded && (!state.staticFleetDataReceived || !state.fleetEligibilityReceived) {
-				state.pendingPlayerFleets = append(state.pendingPlayerFleets, frame)
-				log.WithField("remote", remote).Info("mmog: delaying YA_PlayerFleets response until YA_PlayerGet is answered")
-				continue
-			}
-			if requestName == "YA_RequestStaticFleetData" && !state.playerGetResponded {
-				state.pendingStaticFleetData = append(state.pendingStaticFleetData, frame)
-				log.WithField("remote", remote).Info("mmog: delaying YA_RequestStaticFleetData response until YA_PlayerGet is answered")
-				continue
-			}
 			if requestName == "YA_PlayerFleets" {
 				state.playerFleetsReceived = true
 			}
-			if requestName == "YA_GetDailyContractsData" && !state.playerGetResponded {
-				// The quest cycle needs this response eventually, but answering it
-				// before YA_PlayerGet can recurse through OnBackendDataAvailable.
-				state.pendingDailyContracts = append(state.pendingDailyContracts, frame)
-				log.WithField("remote", remote).Info("mmog: delaying YA_GetDailyContractsData response until YA_PlayerGet is answered")
-				continue
-			}
+			// These bootstrap reads (YA_RequestStaticFleetData, YA_PlayerFleets,
+			// YA_GetPlayerPurchases, YA_GetDailyContractsData) were previously
+			// deferred until YA_PlayerGet was answered. But DreadGame.log shows the
+			// client sends this batch and then blocks waiting for these exact
+			// responses *before* it will send YA_PlayerGet — a mutual wait that only
+			// broke via the client's ~44s request timeout, stalling hangar entry.
+			// Every response here is built purely from state.playerPID, which is
+			// already selected at YA_UserLogin, so there is no data dependency on
+			// YA_PlayerGet: answer them immediately. handlePlayerGetSatisfied still
+			// runs on YA_PlayerGet to flip the gateway inventory-ready gate.
 			if isMmogPlayerMutationRequest(requestName) {
 				if err := persistMmogPlayerMutation(state.playerPID, requestName, frame.Payload); err != nil {
 					log.WithError(err).WithFields(logrus.Fields{
@@ -358,6 +348,18 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 
+			if requestName == "YA_PlayerGet" {
+				// Testing the theory that the client only accepts player data
+				// once it already has the market catalog in hand. Gateway
+				// catalog endpoints no longer wait on player-data-ready (see
+				// handleGWCatalog); instead this blocks (briefly, with a
+				// timeout fallback so a client that never hits the gateway
+				// still gets answered) until the client has fetched at least
+				// one catalog endpoint.
+				if !waitForGatewayCatalogFetched(state.playerPID, gatewayCatalogFetchedTimeout) {
+					log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: answering YA_PlayerGet without observed catalog fetch (timeout)")
+				}
+			}
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)
 			if requestName == "YA_PlayerFleets" || requestName == "YA_RequestStaticFleetData" {
 				log.WithFields(logrus.Fields{
@@ -370,8 +372,51 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
 			}
+			if requestName == "YA_PlayerFleets" {
+				// UYFleetManager's readiness bitmask (this+0x110) is written exactly
+				// once at connection setup and never again — confirmed live via a
+				// hardware write breakpoint through an entire session. The delegate
+				// meant to complete it, HandleMmogbrainFleetUpdated, recorded zero
+				// hits across that same session despite a full YA_PlayerFleets round
+				// trip, and its own "not ready" fallback explicitly re-requests
+				// YA_PlayerFleets — evidence it expects a distinct server-pushed
+				// update, not data embedded in this response.
+				//
+				// First attempt correlated this push to the same request ID as
+				// YA_PlayerFleets (mirroring YA_UpdateGameModes, which worked). It had
+				// no effect: fleet-init stayed at 4 and LogYShipLoadout stayed silent.
+				// The per-request callback map is almost certainly one-shot — the
+				// first frame for a request ID resolves and discards that pending
+				// callback, so a second frame reusing the same ID is likely dropped
+				// before any RT-name dispatch even sees it. Use a fresh, uncorrelated
+				// ID instead so this arrives as a genuinely unsolicited push, the way
+				// a real server-initiated fleet-update notification would.
+				fleetUpdateID, err := uuid.NewRandom()
+				if err != nil {
+					log.WithError(err).Warn("mmog: failed to generate fleet update push id")
+				} else {
+					fleetUpdate := buildMmogFleetUpdatePush(state.playerPID)
+					fleetUpdateFrame := protocol.BuildResponseFrame(fleetUpdateID, frame.MsgType, fleetUpdate)
+					if err := writeMmogAppResponse(log, conn, remote, fleetUpdateID, "YA_FleetUpdate", fleetUpdateFrame, appEncoder, encryptResponses, "fleet update push failed", "sent YA_FleetUpdate push"); err != nil {
+						return err
+					}
+				}
+			}
 			if requestName == "YA_PlayerGet" {
 				if err := handlePlayerGetSatisfied(log, conn, remote, appEncoder, encryptResponses, state, "client-request"); err != nil {
+					return err
+				}
+			}
+			if requestName == "YA_GetGameConfigData" {
+				// The client's MatchmakingInterpreter populates its playable-mode
+				// list from a separate YA_UpdateGameModes message (top-level
+				// GameModes array), not from the GameModes nested in the
+				// YA_GetGameConfigData result. Push it right after the config
+				// response so m_gameModes is non-empty and the hangar Play UI can
+				// build. Correlate to the same request so ordering is preserved.
+				gameModes := buildMmogUpdateGameModesPayload()
+				gameModesFrame := protocol.BuildResponseFrame(frame.RequestID, frame.MsgType, gameModes)
+				if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, "YA_UpdateGameModes", gameModesFrame, appEncoder, encryptResponses, "game modes update failed", "sent YA_UpdateGameModes push"); err != nil {
 					return err
 				}
 			}
@@ -388,6 +433,37 @@ func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requ
 			return fmt.Errorf("encrypt requested but encoder is nil")
 		}
 		wire = appEncoder.Encrypt(response)
+	}
+	// Frame-header correlation diagnostics: decode the outgoing frame header so we
+	// can confirm the client can actually match this response to its request.
+	// response is the full built frame: magic(2) size(2) type(2) reqID(16) payload.
+	// Key things this surfaces: (1) the 16-bit `size` header field overflows for
+	// payloads >~65513 bytes (e.g. YA_Tune), which would desync the client's frame
+	// reader for every following frame; (2) whether the embedded request ID matches
+	// the request we're answering.
+	if len(response) > 0xffff {
+		// The 16-bit frame size field cannot represent this length; sending it
+		// would desync the client's frame stream and corrupt every following
+		// response (this is exactly what an oversized YA_Tune did). Refuse rather
+		// than silently corrupt the connection.
+		log.WithFields(logrus.Fields{
+			"remote":     remote,
+			"name":       requestName,
+			"frame_size": len(response),
+			"max":        0xffff,
+		}).Error("mmog: response frame exceeds 16-bit size limit; not sending (would desync stream)")
+		return fmt.Errorf("mmog response %q too large for frame: %d bytes", requestName, len(response))
+	}
+	if len(response) >= 22 {
+		embeddedID := response[6:22]
+		if !bytes.Equal(embeddedID, requestID[:]) {
+			log.WithFields(logrus.Fields{
+				"remote":          remote,
+				"name":            requestName,
+				"req_id_param":    hex.EncodeToString(requestID[:]),
+				"req_id_in_frame": hex.EncodeToString(embeddedID),
+			}).Warn("mmog: response frame request-id mismatch (client cannot correlate)")
+		}
 	}
 	if _, err := conn.Write(wire); err != nil {
 		log.WithError(err).WithField("remote", remote).Warn("mmog: " + warnMsg)

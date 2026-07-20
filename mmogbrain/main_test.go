@@ -320,8 +320,12 @@ func TestPlayerGetPayloadUsesTopLevelPlayerData(t *testing.T) {
 	}{
 		{name: "PID", fieldType: 0x09},
 		{name: "ShipLoadouts", fieldType: 0x0d},
-		{name: "ServerTime", fieldType: 0x56},
-		{name: "ClientTime", fieldType: 0x56},
+		// ServerTime/ClientTime: the client's YA_PlayerGet parser reads these
+		// through the same int32-blind tagged union confirmed for
+		// tll/tpl/tc/rep/FreeXp/etc — only double/int64/string are recognized,
+		// so these must be numeric strings (0x09), not int32 (0x56).
+		{name: "ServerTime", fieldType: 0x09},
+		{name: "ClientTime", fieldType: 0x09},
 	} {
 		if !bytes.Contains(payload, appendFieldMarker(field.name, field.fieldType)) {
 			t.Fatalf("YA_PlayerGet missing top-level field %s", field.name)
@@ -344,7 +348,9 @@ func TestUserLoginPayloadKeepsEconomyFieldsOnResult(t *testing.T) {
 		{name: "credits", value: 10000},
 		{name: "premiumCurrency", value: 0},
 		{name: "freexp", value: 0},
-		{name: "xp", value: 0},
+		// A brand-new player starts at 100 XP, not 0 (verified against the
+		// real game) — see defaultMmogPlayerState/seedMmogPlayerState.
+		{name: "xp", value: 100},
 	} {
 		fieldBytes := protocol.AppendInt32Field(nil, field.name, field.value)
 		if !bytes.Contains(result, fieldBytes) {
@@ -773,18 +779,22 @@ func TestMmogPlayerStatePersistsCurrencyPerPlayer(t *testing.T) {
 	if !bytes.Contains(playerAGet, protocol.AppendInt32Field(nil, "ob", 678)) {
 		t.Fatal("YA_PlayerGet missing persisted premium currency")
 	}
-	if !bytes.Contains(playerAGet, protocol.AppendInt32Field(nil, "FreeXp", 90)) {
+	// FreeXp goes through the same int32-blind parser as tll/tpl/tc/etc — sent
+	// as a numeric string.
+	if !bytes.Contains(playerAGet, protocol.AppendStringField(nil, "FreeXp", "90")) {
 		t.Fatal("YA_PlayerGet missing persisted free XP")
 	}
 
+	// CurrentXP/CurrentRank/RankXP go through the same int32-blind parser
+	// family — numeric strings, not int32.
 	playerAProgression := buildMmogPlayerProgressionPayload(playerA)
-	if !bytes.Contains(playerAProgression, protocol.AppendInt32Field(nil, "CurrentXP", 111)) {
+	if !bytes.Contains(playerAProgression, protocol.AppendStringField(nil, "CurrentXP", "111")) {
 		t.Fatal("YA_GetPlayerProgression missing persisted current XP")
 	}
-	if !bytes.Contains(playerAProgression, protocol.AppendInt32Field(nil, "CurrentRank", 7)) {
+	if !bytes.Contains(playerAProgression, protocol.AppendStringField(nil, "CurrentRank", "7")) {
 		t.Fatal("YA_GetPlayerProgression missing persisted rank")
 	}
-	if !bytes.Contains(playerAProgression, protocol.AppendInt32Field(nil, "RankXP", 222)) {
+	if !bytes.Contains(playerAProgression, protocol.AppendStringField(nil, "RankXP", "222")) {
 		t.Fatal("YA_GetPlayerProgression missing persisted rank XP")
 	}
 
@@ -1017,6 +1027,25 @@ func TestGameConfigDataUsesClientGameModeRows(t *testing.T) {
 	}
 }
 
+func TestUpdateGameModesIsTopLevelAndRTNamed(t *testing.T) {
+	payload := buildMmogUpdateGameModesPayload()
+
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", "YA_UpdateGameModes")) {
+		t.Fatal("YA_UpdateGameModes payload missing RT=YA_UpdateGameModes")
+	}
+	// The client reads GameModes at the message root (sibling of RT), not under
+	// a "result" object; a nested placement leaves m_gameModes empty.
+	if bytes.Contains(payload, appendFieldMarker("result", 0x0c)) {
+		t.Fatal("YA_UpdateGameModes must not nest GameModes under a result object")
+	}
+	gameModes := extractNamedMmogArray(t, payload, "GameModes")
+	for _, mode := range matchmaker.GameModeConfigs() {
+		if !bytes.Contains(gameModes, protocol.AppendStringField(nil, "Name", mode.Name)) {
+			t.Fatalf("YA_UpdateGameModes missing game mode name %q", mode.Name)
+		}
+	}
+}
+
 func TestChatPayloadIncludesLowercaseMessagesAlias(t *testing.T) {
 	payload := buildMmogChatPayload("YA_GlobalChat", defaultMmogPlayerPID, nil)
 	if !bytes.Contains(payload, appendFieldMarker("Messages", 0x0d)) {
@@ -1133,8 +1162,10 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 		t.Fatal("YA_GetTechTree does not mark purchased Valcour as purchased")
 	}
 
+	// shipID in shipProgressionUiData entries goes through the same
+	// int32-blind parser family — numeric string, not int32.
 	progression := buildMmogPlayerProgressionPayload(playerPID)
-	progressionMarker := bytes.Index(progression, protocol.AppendInt32Field(nil, "shipID", extractedShipIDValcour))
+	progressionMarker := bytes.Index(progression, protocol.AppendStringField(nil, "shipID", strconv.Itoa(int(extractedShipIDValcour))))
 	if progressionMarker < 0 {
 		t.Fatal("YA_GetPlayerProgression missing purchased Valcour row")
 	}
@@ -1384,7 +1415,7 @@ func TestFleetMetadataUsesConfigBackedEligibility(t *testing.T) {
 		}
 	}
 	for tier, wantCount := range tierCounts {
-		if got := bytes.Count(fleetTypes, protocol.AppendUnnamedInt32Field(nil, tier)); got != wantCount {
+		if got := bytes.Count(fleetTypes, protocol.AppendUnnamedStringField(nil, strconv.Itoa(int(tier)))); got != wantCount {
 			t.Fatalf("YA_RequestStaticFleetData tier %d count = %d, want %d", tier, got, wantCount)
 		}
 	}
@@ -1721,6 +1752,8 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	if !bytes.Contains(playerGet, appendFieldMarker("m_loadoutList", 0x0d)) {
 		t.Fatal("YA_PlayerGet missing m_loadoutList array")
 	}
+	// Scalar m_-prefixed fields go through the same int32-blind parser family
+	// as the rest of this payload — numeric strings (0x09), not int32 (0x56).
 	if !bytes.Contains(playerGet, appendFieldMarker("m_fleetId", 0x56)) {
 		t.Fatal("YA_PlayerGet missing m_fleetId field")
 	}
@@ -2028,13 +2061,15 @@ func TestPlayerGetPayloadUsesSquadObjectShape(t *testing.T) {
 	}
 	for _, field := range []struct {
 		name  string
-		value int32
+		value string
 	}{
-		{name: "DailyContractStateID", value: 0},
-		{name: "tslm", value: 0},
+		// Both go through the int32-blind parser confirmed for tll/tpl/tc/etc
+		// — sent as numeric strings, not int32.
+		{name: "DailyContractStateID", value: "0"},
+		{name: "tslm", value: "0"},
 	} {
-		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, field.name, field.value)) {
-			t.Fatalf("YA_PlayerGet missing %s=%d", field.name, field.value)
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, field.name, field.value)) {
+			t.Fatalf("YA_PlayerGet missing %s=%s", field.name, field.value)
 		}
 	}
 	if bytes.Contains(payload, appendFieldMarker("Quests", 0x0d)) {
@@ -2305,14 +2340,23 @@ func TestPlayerFleetsRespondsBeforePlayerGet(t *testing.T) {
 	if len(remaining) != 0 {
 		t.Fatalf("unexpected remaining bytes after parsing fleet response")
 	}
-	if len(frames) != 1 {
-		t.Fatalf("YA_PlayerFleets wrote %d frames, want 1", len(frames))
+	// YA_PlayerFleets is followed by a YA_FleetUpdate push — see
+	// buildMmogFleetUpdatePush's doc comment for why (live-debugging evidence
+	// that HandleMmogbrainFleetUpdated never fires from the response alone).
+	if len(frames) != 2 {
+		t.Fatalf("YA_PlayerFleets wrote %d frames, want 2 (response + YA_FleetUpdate push)", len(frames))
 	}
 	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerFleets" {
-		t.Fatalf("frame = %q, want YA_PlayerFleets", got)
+		t.Fatalf("frame 0 = %q, want YA_PlayerFleets", got)
 	}
 	if frames[0].RequestID != fleetRequestID {
 		t.Fatalf("YA_PlayerFleets response id = %x, want original %x", frames[0].RequestID, fleetRequestID)
+	}
+	if got := protocol.ExtractRequestName(frames[1].Payload); got != "YA_FleetUpdate" {
+		t.Fatalf("frame 1 = %q, want YA_FleetUpdate", got)
+	}
+	if frames[1].RequestID == fleetRequestID {
+		t.Fatal("YA_FleetUpdate push must use a fresh request id, not the exhausted YA_PlayerFleets one (a second frame reusing that id is likely dropped before any RT dispatch)")
 	}
 	if state.playerGetResponded {
 		t.Fatal("YA_PlayerFleets should not mark playerGetResponded")
@@ -2322,14 +2366,28 @@ func TestPlayerFleetsRespondsBeforePlayerGet(t *testing.T) {
 	}
 }
 
-func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
+func TestFleetUpdatePushIsTopLevelWithFleetsArray(t *testing.T) {
+	payload := buildMmogFleetUpdatePush(defaultMmogPlayerPID)
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", "YA_FleetUpdate")) {
+		t.Fatal("YA_FleetUpdate push missing RT=YA_FleetUpdate")
+	}
+	fleets := extractNamedMmogArray(t, payload, "Fleets")
+	if len(fleets) == 0 {
+		t.Fatal("YA_FleetUpdate push has an empty Fleets array")
+	}
+}
+
+// The client sends its bootstrap reads (purchases, fleet, contracts) and blocks
+// waiting for the responses *before* it will send YA_PlayerGet. Deferring these
+// until YA_PlayerGet therefore deadlocked the client into a ~44s stall (see
+// DreadGame.log). They carry no dependency on YA_PlayerGet — every response is
+// built from state.playerPID, already selected at YA_UserLogin — so they must be
+// answered immediately.
+func TestPlayerPurchasesAnsweredImmediately(t *testing.T) {
 	conn := &captureConn{}
 	purchasesRequestID := syntheticRequestID(0xb1)
-	playerGetRequestID := syntheticRequestID(0xb2)
 	purchasesRequest := protocol.AppendStringField(nil, "RT", "YA_GetPlayerPurchases")
 	purchasesRequest = protocol.AppendRootEnd(purchasesRequest)
-	playerGetRequest := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
-	playerGetRequest = protocol.AppendRootEnd(playerGetRequest)
 	state := &mmogConnState{
 		playerPID:         defaultMmogPlayerPID,
 		loginResponseSent: true,
@@ -2346,48 +2404,21 @@ func TestPlayerPurchasesWaitForPlayerGet(t *testing.T) {
 	}}, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames purchases: %v", err)
 	}
-	if conn.Len() != 0 {
-		t.Fatalf("delayed purchases wrote %d bytes before YA_PlayerGet, want 0", conn.Len())
+	if len(state.pendingPlayerPurchases) != 0 {
+		t.Fatal("YA_GetPlayerPurchases must not be deferred; the client blocks on it before YA_PlayerGet")
 	}
-	if len(state.pendingPlayerPurchases) == 0 {
-		t.Fatal("YA_GetPlayerPurchases was not delayed before YA_PlayerGet")
-	}
-	if state.playerGetResponded {
-		t.Fatal("delayed purchases should not mark playerGetResponded")
-	}
-
-	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
-		MsgType:   0x0320,
-		RequestID: playerGetRequestID,
-		Payload:   playerGetRequest,
-	}}, nil, false, state); err != nil {
-		t.Fatalf("processMmogAppFrames PlayerGet: %v", err)
-	}
-
 	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
 	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after delayed purchases flush")
+		t.Fatalf("purchases response left %d trailing bytes", len(remaining))
 	}
-	if len(frames) != 2 {
-		t.Fatalf("PlayerGet with delayed purchases wrote %d frames, want 2", len(frames))
+	if len(frames) != 1 {
+		t.Fatalf("YA_GetPlayerPurchases wrote %d frames, want 1 (answered immediately)", len(frames))
 	}
-	wantNames := []string{"YA_PlayerGet", "YA_GetPlayerPurchases"}
-	for i, wantName := range wantNames {
-		if got := protocol.ExtractRequestName(frames[i].Payload); got != wantName {
-			t.Fatalf("frame %d = %q, want %q", i, got, wantName)
-		}
+	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_GetPlayerPurchases" {
+		t.Fatalf("frame = %q, want YA_GetPlayerPurchases", got)
 	}
-	if frames[0].RequestID != playerGetRequestID {
-		t.Fatalf("YA_PlayerGet response id = %x, want %x", frames[0].RequestID, playerGetRequestID)
-	}
-	if frames[1].RequestID != purchasesRequestID {
-		t.Fatalf("YA_GetPlayerPurchases response id = %x, want %x", frames[1].RequestID, purchasesRequestID)
-	}
-	if len(state.pendingPlayerPurchases) != 0 {
-		t.Fatal("PlayerGet did not clear pendingPlayerPurchases")
-	}
-	if !state.playerGetResponded {
-		t.Fatal("PlayerGet should mark playerGetResponded after delayed purchases flush")
+	if frames[0].RequestID != purchasesRequestID {
+		t.Fatalf("YA_GetPlayerPurchases response id = %x, want %x", frames[0].RequestID, purchasesRequestID)
 	}
 }
 
@@ -2397,7 +2428,7 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 		wantFrames  int
 		wantDelayed bool
 	}{
-		{requestName: "YA_GetDailyContractsData", wantFrames: 0, wantDelayed: true},
+		{requestName: "YA_GetDailyContractsData", wantFrames: 1},
 		{requestName: "YA_GetSeasonProgress", wantFrames: 1},
 	} {
 		requestName := tc.requestName
@@ -2440,20 +2471,14 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 	}
 }
 
-func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
+func TestDailyContractsAnsweredImmediately(t *testing.T) {
 	conn := &captureConn{}
 	dailyContractsRequestID := syntheticRequestID(0xd1)
-	playerGetRequestID := syntheticRequestID(0xd2)
 	dailyContractsRequest := protocol.AppendStringField(nil, "RT", "YA_GetDailyContractsData")
 	dailyContractsRequest = protocol.AppendRootEnd(dailyContractsRequest)
-	playerGetRequest := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
-	playerGetRequest = protocol.AppendRootEnd(playerGetRequest)
 	state := &mmogConnState{
-		playerPID:                defaultMmogPlayerPID,
-		loginResponseSent:        true,
-		staticFleetDataReceived:  true,
-		fleetEligibilityReceived: true,
-		playerFleetsReceived:     true,
+		playerPID:         defaultMmogPlayerPID,
+		loginResponseSent: true,
 	}
 
 	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
@@ -2463,39 +2488,21 @@ func TestDailyContractsFlushAfterPlayerGet(t *testing.T) {
 	}}, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames daily contracts: %v", err)
 	}
-	if conn.Len() != 0 {
-		t.Fatalf("delayed daily contracts wrote %d bytes before YA_PlayerGet, want 0", conn.Len())
+	if len(state.pendingDailyContracts) != 0 {
+		t.Fatal("YA_GetDailyContractsData must not be deferred; the client blocks on it before YA_PlayerGet")
 	}
-	if len(state.pendingDailyContracts) == 0 {
-		t.Fatal("YA_GetDailyContractsData was not delayed before YA_PlayerGet")
-	}
-
-	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
-		MsgType:   0x0320,
-		RequestID: playerGetRequestID,
-		Payload:   playerGetRequest,
-	}}, nil, false, state); err != nil {
-		t.Fatalf("processMmogAppFrames PlayerGet: %v", err)
-	}
-
 	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
 	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after delayed daily contracts flush")
+		t.Fatalf("daily contracts response left %d trailing bytes", len(remaining))
 	}
-	if len(frames) != 2 {
-		t.Fatalf("PlayerGet with delayed daily contracts wrote %d frames, want 2", len(frames))
+	if len(frames) != 1 {
+		t.Fatalf("YA_GetDailyContractsData wrote %d frames, want 1 (answered immediately)", len(frames))
 	}
-	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerGet" {
-		t.Fatalf("first frame = %q, want YA_PlayerGet", got)
+	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_GetDailyContractsData" {
+		t.Fatalf("frame = %q, want YA_GetDailyContractsData", got)
 	}
-	if got := protocol.ExtractRequestName(frames[1].Payload); got != "YA_GetDailyContractsData" {
-		t.Fatalf("second frame = %q, want YA_GetDailyContractsData", got)
-	}
-	if frames[1].RequestID != dailyContractsRequestID {
-		t.Fatalf("YA_GetDailyContractsData response id = %x, want original %x", frames[1].RequestID, dailyContractsRequestID)
-	}
-	if len(state.pendingDailyContracts) != 0 {
-		t.Fatal("PlayerGet did not clear pendingDailyContracts")
+	if frames[0].RequestID != dailyContractsRequestID {
+		t.Fatalf("YA_GetDailyContractsData response id = %x, want %x", frames[0].RequestID, dailyContractsRequestID)
 	}
 }
 
@@ -2514,8 +2521,11 @@ func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", frames, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames purchases: %v", err)
 	}
-	if got := len(state.pendingPlayerPurchases); got != 2 {
-		t.Fatalf("pending purchases = %d, want 2", got)
+	if got := len(state.pendingPlayerPurchases); got != 0 {
+		t.Fatalf("pending purchases = %d, want 0 (answered immediately, not deferred)", got)
+	}
+	if immediate, _ := protocol.ParseAppFrames(conn.Bytes()); len(immediate) != 2 {
+		t.Fatalf("expected 2 immediate purchase responses, got %d", len(immediate))
 	}
 
 	playerGet := protocol.AppendStringField(nil, "RT", "YA_PlayerGet")
@@ -2529,13 +2539,18 @@ func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	}
 	parsed, remaining := protocol.ParseAppFrames(conn.Bytes())
 	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after pending flush")
+		t.Fatalf("unexpected remaining bytes after responses")
 	}
 	if len(parsed) != 3 {
-		t.Fatalf("flushed frame count = %d, want 3", len(parsed))
+		t.Fatalf("frame count = %d, want 3 (2 purchases answered immediately + YA_PlayerGet)", len(parsed))
 	}
-	if parsed[1].RequestID != frames[0].RequestID || parsed[2].RequestID != frames[1].RequestID {
-		t.Fatal("pending purchases did not flush all original request IDs in order")
+	// Both purchase responses are answered immediately in request order, ahead of
+	// the later YA_PlayerGet frame.
+	if parsed[0].RequestID != frames[0].RequestID || parsed[1].RequestID != frames[1].RequestID {
+		t.Fatal("immediate purchase responses did not preserve original request IDs in order")
+	}
+	if got := protocol.ExtractRequestName(parsed[2].Payload); got != "YA_PlayerGet" {
+		t.Fatalf("last frame = %q, want YA_PlayerGet", got)
 	}
 }
 
@@ -2898,10 +2913,12 @@ func TestElitePurchasePersistsMembershipExpiry(t *testing.T) {
 		t.Fatalf("seed premium currency: %v", err)
 	}
 
+	// YA_PlayerGet's Membership.ExpireTime goes through the client's
+	// int32-blind parser (same as tll/tpl/tc/etc) — sent as a numeric string.
 	before := buildMmogPlayerGetPayload(playerPID)
 	beforeMembership := extractNamedMmogObject(t, before, "Membership")
-	if expire, ok := protocol.ExtractInt32Field(beforeMembership, "ExpireTime"); !ok || expire != 0 {
-		t.Fatalf("YA_PlayerGet ExpireTime before any purchase = %d (ok=%v), want 0", expire, ok)
+	if expire := protocol.ExtractStringField(beforeMembership, "ExpireTime"); expire != "0" {
+		t.Fatalf("YA_PlayerGet ExpireTime before any purchase = %q, want \"0\"", expire)
 	}
 
 	purchaseRequest := protocol.AppendInt32Field(nil, "Duration", 30)
@@ -2917,8 +2934,9 @@ func TestElitePurchasePersistsMembershipExpiry(t *testing.T) {
 
 	after := buildMmogPlayerGetPayload(playerPID)
 	afterMembership := extractNamedMmogObject(t, after, "Membership")
-	if expire, ok := protocol.ExtractInt32Field(afterMembership, "ExpireTime"); !ok || expire != purchaseExpiry {
-		t.Fatalf("YA_PlayerGet ExpireTime after purchase = %d (ok=%v), want %d (persisted mismatch)", expire, ok, purchaseExpiry)
+	wantExpire := strconv.Itoa(int(purchaseExpiry))
+	if expire := protocol.ExtractStringField(afterMembership, "ExpireTime"); expire != wantExpire {
+		t.Fatalf("YA_PlayerGet ExpireTime after purchase = %q, want %q (persisted mismatch)", expire, wantExpire)
 	}
 }
 
