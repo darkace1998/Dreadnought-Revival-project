@@ -761,6 +761,62 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	}
 }
 
+func TestTechTreeIncludesRealHeroShips(t *testing.T) {
+	// issue #40: real named Hero-variant ships extracted from
+	// data/assets/ItemIDTable.json's YShipLoadoutHero category must appear
+	// in the tech tree, distinct from the 8 starter/T2 ships.
+	ships := techTreeShips()
+	if len(heroShips) == 0 {
+		t.Fatal("heroShips should not be empty")
+	}
+	byID := make(map[int32]mmogShipSeed, len(ships))
+	for _, ship := range ships {
+		byID[ship.id] = ship
+	}
+	for _, hero := range heroShips {
+		got, ok := byID[hero.id]
+		if !ok {
+			t.Fatalf("tech tree missing hero ship %s (id %d)", hero.name, hero.id)
+		}
+		if got.name != hero.name {
+			t.Fatalf("hero ship id %d name = %q, want %q", hero.id, got.name, hero.name)
+		}
+	}
+
+	techTree := buildMmogTechTreePayload()
+	if !bytes.Contains(techTree, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(heroShips[0].id)))) {
+		t.Fatalf("YA_GetTechTree missing hero ship ShipID=%d", heroShips[0].id)
+	}
+}
+
+func TestPlayerGetPayloadPopulatesFactionReputation(t *testing.T) {
+	// issue #42: FactionReputation was always empty — now seeded with the two
+	// real named factions confirmed in extracted client assets and persisted
+	// per player.
+	database := useTempMmogPlayerStateDB(t)
+	const playerPID = "dddddddddddddddddddddddddddddddd"
+	pid := normalizedPlayerStatePID(playerPID)
+	_ = buildMmogPlayerGetPayload(playerPID) // seeds player_state + factions
+
+	entries := loadPlayerFactionReputation(pid)
+	if len(entries) != len(knownFactionNames) {
+		t.Fatalf("faction reputation rows = %d, want %d", len(entries), len(knownFactionNames))
+	}
+
+	if _, err := database.Exec(`UPDATE player_faction_reputation SET reputation=? WHERE user_id=? AND faction_id=?`, 500, pid, int32(1)); err != nil {
+		t.Fatalf("update faction reputation: %v", err)
+	}
+
+	payload := buildMmogPlayerGetPayload(playerPID)
+	factionRep := extractNamedMmogArray(t, payload, "FactionReputation")
+	if !bytes.Contains(factionRep, protocol.AppendInt32Field(nil, "FactionID", 1)) {
+		t.Fatal("FactionReputation missing FactionID=1")
+	}
+	if !bytes.Contains(factionRep, protocol.AppendInt32Field(nil, "Reputation", 500)) {
+		t.Fatal("FactionReputation missing persisted Reputation=500")
+	}
+}
+
 func TestMmogPlayerStatePersistsCurrencyPerPlayer(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const playerA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

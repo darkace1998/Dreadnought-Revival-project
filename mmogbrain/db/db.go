@@ -207,6 +207,15 @@ var migrations = []string{
 	)`,
 	`ALTER TABLE player_state ADD COLUMN login_streak INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE player_state ADD COLUMN last_login_date TEXT NOT NULL DEFAULT ''`,
+	`CREATE TABLE IF NOT EXISTS player_faction_reputation (
+		user_id     TEXT NOT NULL,
+		faction_id  INTEGER NOT NULL,
+		reputation  INTEGER NOT NULL DEFAULT 0,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, faction_id),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

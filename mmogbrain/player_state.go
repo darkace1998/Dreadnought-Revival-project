@@ -175,6 +175,12 @@ func seedMmogPlayerState(database *sql.DB, playerPID string) error {
 		return fmt.Errorf("seed player_state: %w", err)
 	}
 
+	for factionID := range knownFactionNames {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_faction_reputation(user_id,faction_id,reputation) VALUES(?,?,0)`, pid, factionID); err != nil {
+			return fmt.Errorf("seed player_faction_reputation: %w", err)
+		}
+	}
+
 	for _, fleet := range mmogFleetSeeds() {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_fleets(user_id,fleet_id,token,display_name,fleet_type,active,flagship_ship_id,flagship_loadout_id,flagship_loadout_index) VALUES(?,?,?,?,?,?,?,?,?)`,
 			pid, fleet.fleetID, fleet.token, fleet.displayName, fleet.fleetType, boolToInt(fleet.active), fleet.flagshipShipID, fleet.flagshipLoadoutID, fleet.flagshipIndex()); err != nil {

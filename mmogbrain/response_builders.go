@@ -778,6 +778,44 @@ func buildMmogSeasonProgressPayloadForPlayer(playerPID string) []byte {
 	return b
 }
 
+// knownFactionNames maps real faction IDs (assigned here — the extracted
+// client assets have no numeric faction registry, only named texture/vanity
+// assets) to the two real named factions confirmed in extracted client
+// content (issue #42): DevGroup/Meta/Factions/Texture/VAN_DCL_Takemikazuchi
+// and VAN_DCL_Maestrom, both also referenced by VAN_CLR_Faction_*/VAN_PN_
+// Faction_* vanity-item color/paint assets.
+var knownFactionNames = map[int32]string{
+	1: "Takemikazuchi",
+	2: "Maelstrom",
+}
+
+type playerFactionReputation struct {
+	factionID  int32
+	reputation int32
+}
+
+func loadPlayerFactionReputation(playerPID string) []playerFactionReputation {
+	db := currentMmogPlayerStateDB()
+	if db == nil {
+		return nil
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	rows, err := db.Query(`SELECT faction_id, reputation FROM player_faction_reputation WHERE user_id=? ORDER BY faction_id`, pid)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var out []playerFactionReputation
+	for rows.Next() {
+		var entry playerFactionReputation
+		if err := rows.Scan(&entry.factionID, &entry.reputation); err != nil {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 type playerSeasonProgress struct {
 	seasonID string
 	xp       int32
@@ -981,6 +1019,12 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipLoadoutIndex)
 	b, stack = appendMmogFleetBackendFields(b, stack, starterFleet)
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
+	for _, entry := range loadPlayerFactionReputation(playerPID) {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendInt32Field(b, "FactionID", entry.factionID)
+		b = protocol.AppendInt32Field(b, "Reputation", entry.reputation)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Officers")
 	// The client's per-entry Officers parser (FUN_142a70b10) reads type/disp/rep,

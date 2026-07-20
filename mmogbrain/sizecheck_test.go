@@ -29,11 +29,14 @@ var targetSizes = map[string]int{
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).
-	"YA_GetTechTree":               39422,
+	// Was 39422, +16677 after adding the 47 real Hero-variant ships (issue #40).
+	"YA_GetTechTree":               56099,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
-	"YA_GetPlayerProgression":      1220,
+	// Was 1220, +2820 after adding the 47 real Hero-variant ships' per-ship
+	// progression entries (issue #40).
+	"YA_GetPlayerProgression":      4040,
 	"YA_GetPlayerPurchases":        100,
 	// Was 305, -72 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary).
