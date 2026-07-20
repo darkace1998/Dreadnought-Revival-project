@@ -223,6 +223,76 @@ func gatewayOwnedInventorySnapshot() []any {
 	return result
 }
 
+// realCatalogBucketSeeds sources purchasable catalog entries from the real
+// extracted client catalog (data/assets/CatalogIDTable.json) instead of a
+// small hand-authored set (issue #37 — the real store catalog has 6630 SKUs
+// across 12 buckets; the previous implementation covered 0 of them).
+//
+// The real SKU numbers (9-12 digits, e.g. 99984017220) don't fit in
+// gatewayCatalogEntitySeed.itemID (int32) — but itemID is only used as an
+// internal identity value (gatewayMarketIdentity derives "id"/"entity_id"
+// from it as a string), while the client actually keys per-item attribution
+// on the separate "Sku"/"external_id" field (confirmed in the companion
+// bundle-attribution issue, #58). So each entry gets a small synthetic
+// sequential itemID, while externalID carries the real SKU number/code
+// faithfully as a string.
+//
+// No real price data exists anywhere in the extracted assets for these SKUs
+// (confirmed in the issue) — defaultPrice is a placeholder per bucket type,
+// not real pricing.
+func realCatalogBucketSeeds(bucketName, itemType, entityType, priceCurrencyID string, defaultPrice int32, idBase int32) []gatewayCatalogEntitySeed {
+	_ = dreadconfig.LoadCatalogIDTable()
+	bucket, ok := dreadconfig.GetCatalogBucket(bucketName)
+	if !ok {
+		return nil
+	}
+	seeds := make([]gatewayCatalogEntitySeed, 0, len(bucket.ItemIDs))
+	for i, id := range bucket.ItemIDs {
+		var sku string
+		switch v := id.Value.(type) {
+		case int64:
+			sku = strconv.FormatInt(v, 10)
+		case string:
+			sku = v
+		default:
+			continue
+		}
+		if sku == "" {
+			continue
+		}
+		seeds = append(seeds, gatewayCatalogEntitySeed{
+			itemID:          idBase + int32(i),
+			externalID:      sku,
+			displayName:     bucketName + " " + sku,
+			description:     bucketName + " catalog item",
+			entityType:      entityType,
+			itemType:        itemType,
+			priceCurrencyID: priceCurrencyID,
+			priceAmount:     defaultPrice,
+			owned:           false,
+			quantity:        1,
+		})
+	}
+	return seeds
+}
+
+// realCatalogBucketIDBase gives each real-catalog bucket a distinct,
+// non-overlapping range of synthetic itemIDs (see realCatalogBucketSeeds).
+var realCatalogBucketIDBase = map[string]int32{
+	"Bundles":             19000000,
+	"Weapons":             20000000,
+	"Modules":             21000000,
+	"Captain Vanity":      22000000,
+	"Coatings Collection": 24000000,
+	"Decals Collection":   25000000,
+	"Emblems Collection":  26000000,
+	"Patterns Collection": 27000000,
+	"Code Redemptions":    28000000,
+	"Heroships":           29000000,
+	"GP to CR":            30000000,
+	"un_typed":            31000000,
+}
+
 func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed {
 	seeds := make([]gatewayCatalogEntitySeed, 0, len(starterOwnedInventorySeeds()))
 	for _, item := range starterOwnedInventorySeeds() {
@@ -251,6 +321,25 @@ func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed 
 			gateIdentity:    true,
 		})
 	}
+	// issue #37: real purchasable catalog SKUs, not just the owned starter
+	// set above.
+	for bucketName, itemType := range map[string]string{
+		"Weapons":             "weapon",
+		"Modules":             "module",
+		"Captain Vanity":      "vanity",
+		"Coatings Collection": "vanity",
+		"Decals Collection":   "vanity",
+		"Emblems Collection":  "vanity",
+		"Patterns Collection": "vanity",
+		"Code Redemptions":    "code_redemption",
+		// "loadout" not "ship" — item_catalog_real never exposes item_type
+		// "ship" rows (the client treats those as a different entitlement
+		// class, per TestGatewayCatalogEntitiesExposeMarketUICompatibilityFields);
+		// Hero ships are sold as loadouts here, same as starter ship loadouts.
+		"Heroships": "loadout",
+	} {
+		seeds = append(seeds, realCatalogBucketSeeds(bucketName, itemType, "item", priceCurrencyID, 500, realCatalogBucketIDBase[bucketName])...)
+	}
 	return seeds
 }
 
@@ -259,7 +348,7 @@ func gatewayCurrencyCatalogSeeds(priceCurrencyID string, grantedCurrency string)
 	if grantedCurrency == "CR" {
 		grantedAmount = 10000
 	}
-	return []gatewayCatalogEntitySeed{{
+	seeds := []gatewayCatalogEntitySeed{{
 		itemID:          9000001,
 		externalID:      "currency_pack_" + strings.ToLower(grantedCurrency),
 		displayName:     strings.ToUpper(grantedCurrency) + " Starter Pack",
@@ -272,10 +361,15 @@ func gatewayCurrencyCatalogSeeds(priceCurrencyID string, grantedCurrency string)
 		grantedAmount:   grantedAmount,
 		quantity:        1,
 	}}
+	// issue #37: real currency-conversion/offer SKUs ("GP to CR" bucket, plus
+	// un_typed which holds readable offer names like "offer4_1200GP_VC").
+	seeds = append(seeds, realCatalogBucketSeeds("GP to CR", "currency_pack", "forex_offer", priceCurrencyID, 100, realCatalogBucketIDBase["GP to CR"])...)
+	seeds = append(seeds, realCatalogBucketSeeds("un_typed", "offer", "forex_offer", priceCurrencyID, 100, realCatalogBucketIDBase["un_typed"])...)
+	return seeds
 }
 
 func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
-	return []gatewayCatalogEntitySeed{{
+	seeds := []gatewayCatalogEntitySeed{{
 		itemID:          9100001,
 		externalID:      "starter_bundle",
 		displayName:     "Starter Bundle",
@@ -297,6 +391,13 @@ func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 		// TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities/bundles,
 		// which assert this stays empty for exactly that reason.
 	}}
+	// issue #37: real bundle SKUs from the extracted catalog, in addition to
+	// the synthetic Starter Bundle above. Real bundle SKUs also get an empty
+	// items[] array for the same duplicate-FYItemData-load reason as the
+	// Starter Bundle (see NOTE above) — we don't have real bundle contents
+	// data to populate them with anyway.
+	seeds = append(seeds, realCatalogBucketSeeds("Bundles", "bundle", "bundle", "CR", 1000, realCatalogBucketIDBase["Bundles"])...)
+	return seeds
 }
 
 func gatewayMarketIdentity(seed gatewayCatalogEntitySeed, _ bool) (int32, int32, int32, string) {
@@ -424,5 +525,3 @@ func gatewayWeaponStatsArray(itemID int32) []any {
 		map[string]any{"stat_name": "Class", "stat_value": weapon.Class},
 	}
 }
-
-

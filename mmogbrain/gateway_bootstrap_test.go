@@ -478,10 +478,49 @@ func TestStarterInventorySeedsUseExtractedStarterIDs(t *testing.T) {
 	}
 }
 
+func TestGatewayCatalogCoversRealCatalogSKUs(t *testing.T) {
+	// issue #37: store/market catalog previously covered 0 of 6630 real
+	// catalog SKUs from data/assets/CatalogIDTable.json. This locks in that
+	// real coverage now exists across items/currency/bundles.
+	skus := make(map[string]struct{})
+	for _, seed := range gatewayItemCatalogSeeds("CR") {
+		if !seed.gateIdentity {
+			skus[seed.externalID] = struct{}{}
+		}
+	}
+	for _, seed := range gatewayCurrencyCatalogSeeds("CR", "CR") {
+		if seed.itemID != 9000001 { // exclude the synthetic starter currency pack
+			skus[seed.externalID] = struct{}{}
+		}
+	}
+	for _, seed := range gatewayBundleCatalogSeeds() {
+		if seed.itemID != 9100001 { // exclude the synthetic Starter Bundle
+			skus[seed.externalID] = struct{}{}
+		}
+	}
+	// Real total is 6630 across all 12 buckets; some (Modules, Captain
+	// Vanity, etc.) aren't wired into item/currency/bundle catalogs above
+	// individually here beyond what realCatalogBucketSeeds pulls per bucket,
+	// so just assert a large, real fraction is covered rather than the
+	// literal 6630 (which would also double-count across catalog variants
+	// if not deduplicated by SKU as done here).
+	if len(skus) < 5000 {
+		t.Fatalf("real catalog SKU coverage = %d, want at least 5000 of 6630", len(skus))
+	}
+}
+
 func TestGatewayItemCatalogSeedsUseExtractedIdentityMappings(t *testing.T) {
 	seeds := gatewayItemCatalogSeeds("CR")
 
 	for _, seed := range seeds {
+		// issue #37: seeds sourced from the real CatalogIDTable.json buckets
+		// (realCatalogBucketSeeds) aren't in the curated ItemIDRegister-based
+		// identity mapping this test checks — they're a different, much
+		// larger real registry entirely. Only the original curated starter
+		// set (gateIdentity: true) is expected to resolve here.
+		if !seed.gateIdentity {
+			continue
+		}
 		meta, ok := extractedMarketItemMetadataForID(seed.itemID)
 		if !ok {
 			t.Fatalf("catalog seed %q item_id %d missing extracted identity metadata", seed.displayName, seed.itemID)
