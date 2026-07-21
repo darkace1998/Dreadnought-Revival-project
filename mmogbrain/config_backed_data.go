@@ -82,11 +82,17 @@ func configBackedProgressionTaxonomies() []dreadconfig.ProgressionTaxonomy {
 }
 
 func configBackedProgressionCategoryDataTablePath() string {
-	for _, surface := range dreadconfig.UnlockContainerExportSurfaces() {
-		if strings.TrimSpace(surface.ExportPath) != "" {
-			return surface.ExportPath
-		}
-	}
+	// m_categoryDTPath must be a client-loadable /Game/ asset path (or empty),
+	// NOT a server-side file path. Previously this returned
+	// UnlockContainerExportSurfaces()[0].ExportPath =
+	// "Source/Programs/mmogbrain/instances/dreadnought/UnlockContainerTables.cfg"
+	// — a server config path the client cannot resolve, which made
+	// YA_GetStaticCareerData's category DataTable load fail so the client
+	// treated the whole progression category set as empty ("Career progression
+	// static Data empty"). The client already holds the progression taxonomy in
+	// its own DefaultProgression.ini [ProgressionItemListAssetPaths] and drives
+	// categories from the per-category AssetRoots we send, so no server DataTable
+	// path is needed — send empty.
 	return ""
 }
 

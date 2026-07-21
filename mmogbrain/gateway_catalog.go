@@ -321,25 +321,15 @@ func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed 
 			gateIdentity:    true,
 		})
 	}
-	// issue #37: real purchasable catalog SKUs, not just the owned starter
-	// set above.
-	for bucketName, itemType := range map[string]string{
-		"Weapons":             "weapon",
-		"Modules":             "module",
-		"Captain Vanity":      "vanity",
-		"Coatings Collection": "vanity",
-		"Decals Collection":   "vanity",
-		"Emblems Collection":  "vanity",
-		"Patterns Collection": "vanity",
-		"Code Redemptions":    "code_redemption",
-		// "loadout" not "ship" — item_catalog_real never exposes item_type
-		// "ship" rows (the client treats those as a different entitlement
-		// class, per TestGatewayCatalogEntitiesExposeMarketUICompatibilityFields);
-		// Hero ships are sold as loadouts here, same as starter ship loadouts.
-		"Heroships": "loadout",
-	} {
-		seeds = append(seeds, realCatalogBucketSeeds(bucketName, itemType, "item", priceCurrencyID, 500, realCatalogBucketIDBase[bucketName])...)
-	}
+	// issue #37 REVERTED for bootstrap: the full purchasable store (Weapons,
+	// Modules, 5x Vanity, Code Redemptions, Heroships — hundreds of synthetic
+	// SKUs) is NOT needed for hangar entry and destabilised the client's item
+	// cache (crash while caching the Heroships bucket, itemIDs 29000xxx). The
+	// bootstrap catalog now carries only the player's OWNED items (the loop
+	// above). The purchasable store, if wanted, should be served on demand when
+	// the player opens the store, not in the bootstrap batch. realCatalogBucketSeeds
+	// / realCatalogBucketIDBase remain for that future on-demand path.
+	_ = realCatalogBucketSeeds
 	return seeds
 }
 
@@ -361,10 +351,14 @@ func gatewayCurrencyCatalogSeeds(priceCurrencyID string, grantedCurrency string)
 		grantedAmount:   grantedAmount,
 		quantity:        1,
 	}}
-	// issue #37: real currency-conversion/offer SKUs ("GP to CR" bucket, plus
-	// un_typed which holds readable offer names like "offer4_1200GP_VC").
-	seeds = append(seeds, realCatalogBucketSeeds("GP to CR", "currency_pack", "forex_offer", priceCurrencyID, 100, realCatalogBucketIDBase["GP to CR"])...)
-	seeds = append(seeds, realCatalogBucketSeeds("un_typed", "offer", "forex_offer", priceCurrencyID, 100, realCatalogBucketIDBase["un_typed"])...)
+	// issue #37 REVERTED for bootstrap: the "GP to CR" and "un_typed" forex
+	// buckets are dozens of synthetic currency-conversion offers with junk
+	// names ("un_typed 999352…", itemIDs 31001xxx). The client's shop iterates
+	// every ForexOffer at bootstrap and CRASHED processing this un_typed bucket
+	// (DreadGame.log truncates mid "ForexOffer Id: 99931001032 … itemId:
+	// 31001033"). None of it is needed for hangar entry — only the starter
+	// currency pack above is. If a real currency store is wanted later, serve
+	// it on demand when the player opens the store, not in the bootstrap batch.
 	return seeds
 }
 
@@ -418,7 +412,16 @@ func gatewayMarketEntities(seeds []gatewayCatalogEntitySeed, playerDataReady boo
 
 func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) map[string]any {
 	categoryIcon, categoryName, parentCategoryName, categoryDescription := gatewayMarketCategoryMetadata(seed)
-	priceValue := strconv.Itoa(int(seed.priceAmount))
+	// Do NOT send server-side prices. The client already holds every item's
+	// price/campaign definition in its own Content, and when our synthetic
+	// price (e.g. the 500 placeholder on purchasable buckets) differs from the
+	// client's local "original price" it logs a flood of
+	// "UpdateOfferCampaignData | Original Price is lower than the offer price"
+	// warnings and destabilises the shop (client crash observed while caching
+	// the Heroships bucket, itemIDs 29000xxx). We only convey identity +
+	// ownership; the client fills price/campaign from its own data. Price is
+	// reported as free (0) uniformly so no campaign discount is ever computed.
+	priceValue := "0"
 	owned := playerDataReady && seed.owned
 	itemID, shipID, loadoutID, entityID := gatewayMarketIdentity(seed, playerDataReady)
 	price := map[string]any{

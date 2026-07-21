@@ -519,55 +519,78 @@ func realShipsOnly(ships []mmogShipSeed) []mmogShipSeed {
 	return out
 }
 
+// t1t2TechTreeShips is the authoritative T1+T2 tech-tree ship roster, validated
+// directly against the client Content (DreadGame/Content/Generic):
+//   - ship IDs are the real ship-pawn item IDs from data/assets/ItemIDRegister.json
+//     (/Game/Generic/Ships/<Class>/<Weight>/T<n>/VH_..._Pawn_T<n>_BP). The four
+//     T1 IDs exactly match the client's own starter_ship_ids
+//     [184483982,184484170,184483950,184484202].
+//   - each has a real precast loadout under /Game/Generic/Loadouts/Precast/T<n>/;
+//     Support/Light T2 (pawn 184484238) is intentionally excluded — it has a
+//     pawn but no precast loadout, so it is not a real playable node.
+//   - classID/shipClass per archetype: Assault 14/4, Dreadnought 6/0, Sniper
+//     10/2, Support 12/3, Scout 2/1; weight Light=0 Medium=1 Heavy=2.
+//
+// The client already ships every static ship/loadout/weapon definition in its
+// own Content assets, so YA_GetTechTree only needs to convey per-node identity
+// + the player's unlock/ownership state (see buildMmogTechTreePayload). T1 is
+// owned by default; T2 is researchable (owned iff the player has purchased it).
+var t1t2TechTreeShips = []mmogShipSeed{
+	// T1 (owned by default)
+	{id: 184483982, name: "Assault Medium T1", classID: 14, shipClass: 4, weight: 1, owned: true, nodeID: 184483982, nodeType: 0, unlockCost: 0},
+	{id: 184484170, name: "Dreadnought Medium T1", classID: 6, shipClass: 0, weight: 1, owned: true, nodeID: 184484170, nodeType: 0, unlockCost: 0},
+	{id: 184483950, name: "Sniper Medium T1", classID: 10, shipClass: 2, weight: 1, owned: true, nodeID: 184483950, nodeType: 0, unlockCost: 0},
+	{id: 184484202, name: "Support Medium T1", classID: 12, shipClass: 3, weight: 1, owned: true, nodeID: 184484202, nodeType: 0, unlockCost: 0},
+	// T2 (researchable; parentID links to the corresponding T1 node)
+	{id: 184483981, name: "Assault Medium T2", classID: 14, shipClass: 4, weight: 1, owned: false, nodeID: 184483981, parentID: 184483982, prereqID1: 184483982, nodeType: 0, unlockCost: 5000},
+	{id: 184483972, name: "Dreadnought Medium T2", classID: 6, shipClass: 0, weight: 1, owned: false, nodeID: 184483972, parentID: 184484170, prereqID1: 184484170, nodeType: 0, unlockCost: 5000},
+	{id: 184483949, name: "Sniper Medium T2", classID: 10, shipClass: 2, weight: 1, owned: false, nodeID: 184483949, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000},
+	{id: 184483954, name: "Sniper Light T2", classID: 10, shipClass: 2, weight: 0, owned: false, nodeID: 184483954, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000},
+	{id: 184483964, name: "Scout Light T2", classID: 2, shipClass: 1, weight: 0, owned: false, nodeID: 184483964, parentID: 0, nodeType: 0, unlockCost: 5000},
+	{id: 184484205, name: "Support Medium T2", classID: 12, shipClass: 3, weight: 1, owned: false, nodeID: 184484205, parentID: 184484202, prereqID1: 184484202, nodeType: 0, unlockCost: 5000},
+}
+
 func techTreeShips() []mmogShipSeed {
-	ships := allT1Ships()
-	seen := make(map[int32]struct{}, len(ships)+2*len(starterShipLoadouts())+len(heroShips))
-	for _, ship := range ships {
-		seen[ship.id] = struct{}{}
-	}
-	// issue #40: real named Hero-variant ships, extracted from client asset
-	// data — see heroShips' doc comment.
-	for _, ship := range heroShips {
-		if _, ok := seen[ship.id]; ok {
-			continue
-		}
-		seen[ship.id] = struct{}{}
-		ships = append(ships, ship)
+	// Emptied to only the validated T1+T2 ships. The client holds all static
+	// ship/loadout/weapon data in its own Content; the server only conveys
+	// unlock/ownership state. heroShips (premium/store) and the old
+	// bootstrap/fleet-alias nodes are no longer injected here. If a fleet
+	// references a node the client can't find locally we can add just that
+	// node back, but default fleets use these T1 ships.
+	_ = heroShips
+	ships := make([]mmogShipSeed, len(t1t2TechTreeShips))
+	copy(ships, t1t2TechTreeShips)
+
+	// Fleet-alias nodes are REQUIRED even in the minimal tech tree: the
+	// client's hangar fleet loader (YUIHangarFleetData::Load) resolves each
+	// fleet entry's ships by looking them up IN the tech tree by their
+	// fleet-ship id / loadout id (33489xxx range), NOT by the T1/T2 pawn ids
+	// (184xxxxx) above. Without these nodes the lookup fails, the fleet's ship
+	// array comes back empty, and the client logs "Invalid fleet data, fleet
+	// array is empty" -> HandleMmogbrainError(8) -> fleet-manager bit 2 never
+	// completes (fleet stuck at [12], never [15]). These are cheap identity-only
+	// rows. (Regression from the T1+T2 minimization, which dropped this loop.)
+	seen := make(map[int32]struct{}, len(ships)+2*len(starterShipLoadouts()))
+	for _, s := range ships {
+		seen[s.id] = struct{}{}
 	}
 	for _, loadout := range starterShipLoadouts() {
 		fleetShipID := loadout.effectiveFleetShipID()
 		if _, ok := seen[fleetShipID]; !ok {
 			seen[fleetShipID] = struct{}{}
 			ships = append(ships, mmogShipSeed{
-				id:        fleetShipID,
-				name:      loadout.ship.name + " fleet entry",
-				classID:   loadout.ship.classID,
-				shipClass: loadout.ship.shipClass,
-				weight:    loadout.ship.weight,
-				owned:     true,
-				nodeID:    fleetShipID,
-				nodeType:  0,
+				id: fleetShipID, name: loadout.ship.name + " fleet entry",
+				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
+				weight: loadout.ship.weight, owned: true, nodeID: fleetShipID, nodeType: 0,
 			})
 		}
-		// The client's hangar fleet loader (YUIHangarFleetData::Load) looks
-		// up each fleet entry in the tech tree by its LOADOUT id, not its
-		// ship id ("Fleet Loadout not found in Techtree [%d]" on miss) —
-		// entries that fail this lookup are silently dropped from the
-		// hangar's fleet array. Add a node keyed by the loadout id too, so
-		// that lookup succeeds regardless of which id the client actually
-		// uses.
 		loadoutID := loadout.loadoutID()
 		if _, ok := seen[loadoutID]; !ok {
 			seen[loadoutID] = struct{}{}
 			ships = append(ships, mmogShipSeed{
-				id:             loadoutID,
-				name:           loadout.ship.name + " " + loadout.loadoutName,
-				classID:        loadout.ship.classID,
-				shipClass:      loadout.ship.shipClass,
-				weight:         loadout.ship.weight,
-				owned:          true,
-				nodeID:         loadoutID,
-				nodeType:       0,
+				id: loadoutID, name: loadout.ship.name + " " + loadout.loadoutName,
+				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
+				weight: loadout.ship.weight, owned: true, nodeID: loadoutID, nodeType: 0,
 				isLoadoutAlias: true,
 			})
 		}

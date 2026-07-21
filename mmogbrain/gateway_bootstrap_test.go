@@ -478,34 +478,21 @@ func TestStarterInventorySeedsUseExtractedStarterIDs(t *testing.T) {
 	}
 }
 
-func TestGatewayCatalogCoversRealCatalogSKUs(t *testing.T) {
-	// issue #37: store/market catalog previously covered 0 of 6630 real
-	// catalog SKUs from data/assets/CatalogIDTable.json. This locks in that
-	// real coverage now exists across items/currency/bundles.
-	skus := make(map[string]struct{})
+func TestGatewayBootstrapCatalogIsOwnedItemsOnly(t *testing.T) {
+	// issue #37 REVERTED for bootstrap: the full ~6630-SKU purchasable store
+	// (Weapons/Modules/Vanity/Heroships/currency-conversion offers) is no
+	// longer sent at bootstrap — it destabilised the client's item/offer cache
+	// (crashes caching the Heroships bucket and iterating the un_typed forex
+	// offers). The bootstrap catalog now carries only the player's owned items
+	// plus the two synthetic starter entries (currency pack, starter bundle).
 	for _, seed := range gatewayItemCatalogSeeds("CR") {
 		if !seed.gateIdentity {
-			skus[seed.externalID] = struct{}{}
+			t.Fatalf("bootstrap item catalog should only contain owned/gateIdentity items, found purchasable SKU %q (item_id %d)", seed.externalID, seed.itemID)
 		}
 	}
-	for _, seed := range gatewayCurrencyCatalogSeeds("CR", "CR") {
-		if seed.itemID != 9000001 { // exclude the synthetic starter currency pack
-			skus[seed.externalID] = struct{}{}
-		}
-	}
-	for _, seed := range gatewayBundleCatalogSeeds() {
-		if seed.itemID != 9100001 { // exclude the synthetic Starter Bundle
-			skus[seed.externalID] = struct{}{}
-		}
-	}
-	// Real total is 6630 across all 12 buckets; some (Modules, Captain
-	// Vanity, etc.) aren't wired into item/currency/bundle catalogs above
-	// individually here beyond what realCatalogBucketSeeds pulls per bucket,
-	// so just assert a large, real fraction is covered rather than the
-	// literal 6630 (which would also double-count across catalog variants
-	// if not deduplicated by SKU as done here).
-	if len(skus) < 5000 {
-		t.Fatalf("real catalog SKU coverage = %d, want at least 5000 of 6630", len(skus))
+	currency := gatewayCurrencyCatalogSeeds("CR", "CR")
+	if len(currency) != 1 || currency[0].itemID != 9000001 {
+		t.Fatalf("bootstrap currency catalog should only contain the starter currency pack, got %d seeds", len(currency))
 	}
 }
 

@@ -540,6 +540,26 @@ func appendMmogFleetUnlockEntry(b []byte, stack []int, fleet mmogFleetSeed) ([]b
 	return b, stack
 }
 
+// unlockedFleetsOnly filters a fleet list to the fleets the player actually
+// owns/has unlocked — i.e. fleets that are active or contain at least one ship.
+// A new player owns only the Recruit fleet; the locked Veteran/Legendary
+// fleets (0 ships, not active) must NOT be sent. Sending those empty locked
+// fleets made the client's fleet validator reject the whole set ("Invalid
+// fleet data, fleet array is empty"). Falls back to the raw list if that would
+// leave nothing to send.
+func unlockedFleetsOnly(fleets []mmogFleetSeed) []mmogFleetSeed {
+	out := make([]mmogFleetSeed, 0, len(fleets))
+	for _, fleet := range fleets {
+		if fleet.active || len(fleet.shipLoadouts) > 0 {
+			out = append(out, fleet)
+		}
+	}
+	if len(out) == 0 {
+		return fleets
+	}
+	return out
+}
+
 func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int
@@ -548,6 +568,7 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	if len(fleets) == 0 {
 		fleets = []mmogFleetSeed{starterFleetState()}
 	}
+	fleets = unlockedFleetsOnly(fleets)
 
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
 	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
@@ -595,11 +616,29 @@ func buildMmogFleetUpdatePush(playerPID string) []byte {
 	if len(fleets) == 0 {
 		fleets = []mmogFleetSeed{starterFleetState()}
 	}
+	fleets = unlockedFleetsOnly(fleets)
 
+	// The client parses YA_FleetUpdate with the SAME parser as YA_PlayerFleets,
+	// which gates on the top-level FID/PID wrapper before it will read the
+	// Fleets array (the Fleets-array parser FUN_142a77910 keys off FID). A bare
+	// { RT, Fleets:[...] } push (no FID/PID/Name/PlayedMatches/Items) makes the
+	// client log "Invalid fleet data, fleet array is empty" and fire
+	// HandleMmogbrainError (code 8, "Failed to receive fleet updated data"),
+	// so fleet-manager bit 2 never completes. Mirror the full YA_PlayerFleets
+	// shape here, only the RT differs.
 	b = protocol.AppendStringField(b, "RT", "YA_FleetUpdate")
+	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
+	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
+	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
+	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
 	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
 	for _, fleet := range fleets {
 		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "Items")
+	for _, fleet := range fleets {
+		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
 	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -730,11 +769,17 @@ func buildMmogSeasonDataPayload() []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "Events", mmogSeasonDataEventsJSON)
 	b = protocol.AppendStringField(b, "Seasons", mmogSeasonDataSeasonsJSON)
-	// CurrentSeason must reflect the season marked m_active in Seasons —
-	// SetActiveEventAndSeason takes an early "clear active season" branch
-	// whenever this is empty, overriding the Seasons blob's own m_active
-	// flag and hiding season UI even though a season is actually active.
-	b = protocol.AppendStringField(b, "CurrentSeason", mmogCurrentSeasonID)
+	// CurrentSeason intentionally EMPTY to declare NO active season.
+	// SetActiveEventAndSeason takes an early "clear active season" branch when
+	// this is empty. An active season activates the client's
+	// UYPlayerMPQuestCycle, which async-loads MP season quests
+	// (UYMPQuestsCollection::OnQuestsAsyncLoaded, YMPQuestsCollection.cpp) and
+	// enters INFINITE delegate recursion -> stack-overflow crash in the
+	// private-server context (confirmed via crash minidump: the
+	// FUN_1403fe800/FUN_140404440/FUN_140402db0 quest-load cycle). No active
+	// season means the quest cycle never starts. It also (harmlessly) hides
+	// season UI. Re-enable only with real, loadable MP season-quest assets.
+	b = protocol.AppendStringField(b, "CurrentSeason", "")
 	b = protocol.AppendStringField(b, "ActiveEvent", "")
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -1266,6 +1311,14 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	}
 	ships := playerOwnedTechTreeShips(pid)
 
+	// MINIMAL "dynamic" tech tree: the client already holds every static
+	// ship/loadout/weapon/module definition in its own Content assets, so
+	// YA_GetTechTree only conveys per-node identity + the player's
+	// unlock/ownership state. Sending the full static dataset (ship stats,
+	// names, per-ship loadout info, per-module weapon stats/prices/textures)
+	// bloated this frame to ~39-56KB and overflowed the client's 32KB mmog
+	// receive ring buffer. Rows are now ~identity+flags only, and moduleUiData
+	// carries ownership state only. See t1t2TechTree Ships / appendMmogModuleOwnershipEntry.
 	b = protocol.AppendStringField(b, "RT", "YA_GetTechTree")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
@@ -1276,49 +1329,75 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "moduleUiData")
 	for _, module := range starterModuleUIDataSeeds() {
-		b, stack = appendMmogModuleUIDataEntry(b, stack, module)
+		b, stack = appendMmogModuleOwnershipEntry(b, stack, module)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
 
+// techTreeRowTier returns 1 for T1 nodes (free/default-owned starters) and 2
+// for T2 nodes (researchable, unlockCost > 0), matching the validated
+// t1t2TechTreeShips roster.
+func techTreeRowTier(ship mmogShipSeed) int {
+	if ship.unlockCost > 0 {
+		return 2
+	}
+	return 1
+}
+
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	// NodeID, ShipID/m_shipId, ParentID, NodeType, Tier, UnlockCost,
-	// PrereqID1/2, ShipClass, Weight, m_currentBaseClass/m_currentShipClass,
-	// m_shipTier, m_weight: same restrictive double/int64/string-only tagged
-	// union as the Fleets/ShipLoadouts/Ribbons array-entry parsers (see
-	// int32SliceToStrings' doc comment) — plain int32 silently defaults each
-	// of these to 0, which is why entries never resolve to unlocked ships.
+	// Identity + structure the client uses to match this node against its
+	// local static tech-tree definition, plus the dynamic unlock/ownership
+	// state. All numeric scalars are numeric strings (the client's row parser
+	// uses the restrictive double/int64/string-only tagged union — plain int32
+	// silently reads as 0). Static presentation data (Name, weapon stats,
+	// per-ship loadout info) is intentionally omitted — the client fills it
+	// from its own Content assets keyed by ShipID/NodeID.
 	b = protocol.AppendStringField(b, "NodeID", strconv.Itoa(int(ship.nodeID)))
-	// ShipID/shipID and m_shipID/m_shipId each collide case-insensitively as
-	// UE4 FNames (see commit 8f72937) — keep one canonical form of each.
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "ParentID", strconv.Itoa(int(ship.parentID)))
-	b = protocol.AppendStringField(b, "Name", ship.name)
-	b = protocol.AppendStringField(b, "m_name", ship.name)
 	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(1))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
 	b = protocol.AppendStringField(b, "UnlockCost", strconv.Itoa(int(ship.unlockCost)))
 	b = protocol.AppendStringField(b, "PrereqID1", strconv.Itoa(int(ship.prereqID1)))
 	b = protocol.AppendStringField(b, "PrereqID2", strconv.Itoa(int(ship.prereqID2)))
+	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(ship.shipClass)))
+	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
 	b = protocol.AppendBoolField(b, "bIsUnlocked", ship.owned)
 	b = protocol.AppendBoolField(b, "bIsPurchased", ship.owned)
 	b = protocol.AppendBoolField(b, "bIsNew", ship.bIsNew)
-	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(ship.shipClass)))
-	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
-	b = protocol.AppendStringField(b, "m_currentBaseClass", strconv.Itoa(int(ship.shipClass)))
-	b = protocol.AppendStringField(b, "m_currentShipClass", strconv.Itoa(int(ship.shipClass)))
-	b = protocol.AppendStringField(b, "m_shipTier", strconv.Itoa(1))
-	b = protocol.AppendStringField(b, "m_weight", strconv.Itoa(int(ship.weight)))
+	// REGRESSION FIX: for ships that have a starter loadout, emit
+	// m_precastLoadoutID + m_shipLoadoutInfo. The client's hangar fleet loader
+	// (YUIHangarFleetData::Load) builds each fleet ship from the loadout info
+	// attached to its tech-tree node — stripping this (in the minimal-row pass)
+	// made the fleet's ship array come back empty ("Invalid fleet data, fleet
+	// array is empty" -> HandleMmogbrainError(8) -> fleet-manager bit 2 never
+	// completes). Only nodes that actually have a loadout carry this, so the
+	// frame stays small.
 	if loadout, ok := starterLoadoutByShipID(ship.id); ok {
 		b = protocol.AppendStringField(b, "m_precastLoadoutID", strconv.Itoa(int(loadout.precastLoadoutID)))
 		b, stack = protocol.AppendObjectStart(b, stack, "m_shipLoadoutInfo")
 		b, stack = appendMmogShipLoadoutInfoFields(b, stack, loadout)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+// appendMmogModuleOwnershipEntry emits only the dynamic ownership state for a
+// module. The client holds each module's static definition (weapon stats,
+// prices, textures, tier) in its own Content, so only identity + owned/equipped
+// need to come from the server.
+func appendMmogModuleOwnershipEntry(b []byte, stack []int, module mmogModuleUIDataSeed) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "m_itemId", strconv.Itoa(int(module.itemID)))
+	b = protocol.AppendStringField(b, "m_index", strconv.Itoa(int(module.index)))
+	b = protocol.AppendStringField(b, "m_techTreeItemState", strconv.Itoa(4))
+	b = protocol.AppendBoolField(b, "m_isOwned", module.owned)
+	b = protocol.AppendBoolField(b, "m_isEquipped", module.equipped)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -1668,35 +1747,19 @@ func toLowerCamelCase(s string) string {
 // State/etc, but backed by the same underlying active-contract data (no
 // separate quest system exists server-side).
 func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []int) {
+	// Quests/daily contracts intentionally sent EMPTY. The client's
+	// UYPlayerMPQuestCycle::OnBackendDataAvailable (FUN_1403fe800/FUN_140404440)
+	// enters an INFINITE mutual-recursion delegate broadcast when it is given
+	// contract/quest backend data it can't drive to completion — confirmed via
+	// crash minidump: a 6-function cycle (FUN_140404440->FUN_1403fe800->
+	// FUN_1403feb30->FUN_140d18710->FUN_140d5b180->FUN_1402322a0) repeated
+	// ~833x until stack overflow. Our seeded daily contracts (progress 0,
+	// int32-typed Progress/Target fields the client reads as 0) triggered it.
+	// Contracts aren't needed for hangar entry; an empty Quests array lets the
+	// cycle terminate. Re-enable only with real, client-valid contract data +
+	// progress tracking. See seedDailyContractsForPlayer (now a no-op).
+	_ = playerPID
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
-	database := currentMmogPlayerStateDB()
-	if database == nil {
-		b, stack = protocol.AppendObjectEnd(b, stack)
-		return b, stack
-	}
-	pid := normalizedPlayerStatePID(playerPID)
-	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
-	if err != nil {
-		b, stack = protocol.AppendObjectEnd(b, stack)
-		return b, stack
-	}
-	defer func() { _ = rows.Close() }()
-	for idx := 0; rows.Next(); idx++ {
-		var contractID, state string
-		var progress int32
-		if err := rows.Scan(&contractID, &progress, &state); err != nil {
-			continue
-		}
-		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "eid", contractID)
-		b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
-		b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
-		b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
-		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
-		b = protocol.AppendStringField(b, "dif", "1")
-		b = protocol.AppendStringField(b, "ran", "0")
-		b, stack = protocol.AppendObjectEnd(b, stack)
-	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -1717,51 +1780,12 @@ func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(time.Now().Unix()))
 	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(time.Now().Unix()))
 
-	// Load contracts from database
-	pid := normalizedPlayerStatePID(playerPID)
-	database := currentMmogPlayerStateDB()
-	
+	// Quests intentionally EMPTY — see appendMmogQuestsArray: seeded contract
+	// data drives the client's UYPlayerMPQuestCycle into infinite delegate
+	// recursion (stack-overflow crash). Contracts aren't needed for hangar
+	// entry.
+	_ = playerPID
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
-	if database != nil {
-		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
-		if err == nil {
-			defer func() { _ = rows.Close() }()
-			for rows.Next() {
-				var contractID, payloadJSON, state string
-				var progress int32
-				if err := rows.Scan(&contractID, &payloadJSON, &progress, &state); err == nil {
-					b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-					b = protocol.AppendStringField(b, "ContractID", contractID)
-					b = protocol.AppendInt32Field(b, "Progress", progress)
-					b = protocol.AppendStringField(b, "State", state)
-					
-					// Parse payload to include contract details
-					var contractData map[string]interface{}
-					if json.Unmarshal([]byte(payloadJSON), &contractData) == nil {
-						if name, ok := contractData["name"].(string); ok {
-							b = protocol.AppendStringField(b, "Name", name)
-						}
-						if desc, ok := contractData["description"].(string); ok {
-							b = protocol.AppendStringField(b, "Description", desc)
-						}
-						if targetKills, ok := contractData["targetKills"].(float64); ok {
-							b = protocol.AppendInt32Field(b, "TargetKills", int32(targetKills))
-						}
-						if targetScore, ok := contractData["targetScore"].(float64); ok {
-							b = protocol.AppendInt32Field(b, "TargetScore", int32(targetScore))
-						}
-						if rewardXP, ok := contractData["rewardXP"].(float64); ok {
-							b = protocol.AppendInt32Field(b, "RewardXP", int32(rewardXP))
-						}
-						if rewardGP, ok := contractData["rewardGP"].(float64); ok {
-							b = protocol.AppendInt32Field(b, "RewardGP", int32(rewardGP))
-						}
-					}
-					b, stack = protocol.AppendObjectEnd(b, stack)
-				}
-			}
-		}
-	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
@@ -2945,24 +2969,13 @@ func buildMmogContractRerollPayload(requestName string, playerPID string, payloa
 // Contract and XP conversion functions (moved from handlers package)
 
 func seedDailyContractsForPlayer(db *sql.DB, pid string) {
-	var count int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
-	if count >= 3 {
-		return
-	}
-	for i := 0; i < 3 && i < len(dailyContractSeeds); i++ {
-		seed := dailyContractSeeds[i]
-		payload, _ := json.Marshal(map[string]interface{}{
-			"id":          seed.id,
-			"name":        seed.name,
-			"description": seed.description,
-			"targetKills": seed.targetKills,
-			"targetScore": seed.targetScore,
-			"rewardXP":    seed.rewardXP,
-			"rewardGP":    seed.rewardGP,
-		})
-		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
-	}
+	// DISABLED: seeded daily contracts (progress 0, int32 target/progress
+	// fields the client reads as 0) drive the client's UYPlayerMPQuestCycle
+	// into infinite delegate recursion / stack-overflow crash (confirmed via
+	// crash minidump). Contracts aren't needed for hangar entry and are no
+	// longer sent (see appendMmogQuestsArray). Re-enable only alongside real
+	// client-valid contract data + progress tracking.
+	_, _ = db, pid
 }
 
 // minContractCompletionAge is a rough anti-farming heuristic: the server

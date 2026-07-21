@@ -19,7 +19,7 @@ var targetSizes = map[string]int{
 	"YA_RequestStaticFleetData":    5256,
 	"YA_GetFeatureToggle":          111,
 	"YA_GetGameConfigData":         534,
-	"YA_GetStaticCareerData":       3531,
+	"YA_GetStaticCareerData":       3458,
 	"YA_GetProgressionData":        126,
 	"YA_GetScoringData":            5753,
 	"YA_GetDailyContractsData":     227,
@@ -29,14 +29,17 @@ var targetSizes = map[string]int{
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).
-	// Was 39422, +16677 after adding the 47 real Hero-variant ships (issue #40).
-	"YA_GetTechTree":               56099,
+	// Was 39422 then 56099. Now MINIMAL: only the 10 validated T1+T2 nodes
+	// with identity + unlock/ownership state; static ship/loadout/module
+	// definitions come from the client's own Content. This keeps the frame far
+	// under the client's 32KB (0x8000) mmog receive ring buffer.
+	"YA_GetTechTree":               14747,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
-	// Was 1220, +2820 after adding the 47 real Hero-variant ships' per-ship
-	// progression entries (issue #40).
-	"YA_GetPlayerProgression":      4040,
+	// Was 1220/4040. Now 857: progression tracks only the 10 validated T1+T2
+	// tech-tree ships (see techTreeShips).
+	"YA_GetPlayerProgression":      1097,
 	"YA_GetPlayerPurchases":        100,
 	// Was 305, -72 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary).
@@ -46,7 +49,7 @@ var targetSizes = map[string]int{
 	// empty override tables (client uses its backup asset tuning); see
 	// buildMmogTunePayload. Must stay well under 65535.
 	"YA_Tune":                      299,
-	"YA_GetSeasonData":             1091,
+	"YA_GetSeasonData":             1080,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
 	// replacing the far longer m_enabling/m_triggers/m_effects DSL text
@@ -62,7 +65,7 @@ var targetSizes = map[string]int{
 	// (issue #43 — empty here since the sizecheck's default player has no
 	// active contracts in this DB-less context).
 	"YA_PlayerGet":                 6093,
-	"YA_PlayerFleets":              2198,
+	"YA_PlayerFleets":              930,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).
