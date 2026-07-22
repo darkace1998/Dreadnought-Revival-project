@@ -757,9 +757,9 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 // mmogSeasonDataSeasonsJSON has "m_active":true.
 const mmogCurrentSeasonID = "PVE_Season1"
 
-const mmogSeasonDataSeasonsJSON = `[{"Name":"PVE_Season1","m_active":true,"m_name":"Miner Inconvenience","m_descShort":"Season 1 short Description","m_descLong":"Season 1 long Description","m_imageLarge":"None","m_imageSmall":"None","m_rewardLevels":[]}]`
+const mmogSeasonDataSeasonsJSON = `[]` // emptied: any season/event makes the client's UYPlayerMPQuestCycle build an empty-but-non-null quest provider that infinite-recurses (dump-confirmed: cycle obj +0x90=0 entries, never marks done)
 
-const mmogSeasonDataEventsJSON = `[{"Name":"PVE_S1E1","m_name":"Incident Management","m_descShort":"Miner Inconvenience - Incident Management","m_descLong":"Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics to wear down the corp's spread out defenses. The megacorp is now contacting mercenary captains directly to assist their forces and protect Jupiter Arms assets, hoping to finally put an end to these costly attacks.","m_map":"None","m_mapParameters":"","m_gameMode":"YGMT_HORDE","m_color":{"r":160,"g":144,"b":131,"a":255},"m_imageSmall":"None","m_imageLarge":"None","m_rewardLevels":[],"m_startDate":"2018.05.16-16.00.00","m_endDate":"2018.05.16-16.19.59","m_season":"PVE_Season1"}]`
+const mmogSeasonDataEventsJSON = `[]` // emptied with Seasons (see above)
 
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte

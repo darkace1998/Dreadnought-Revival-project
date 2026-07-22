@@ -49,7 +49,7 @@ var targetSizes = map[string]int{
 	// empty override tables (client uses its backup asset tuning); see
 	// buildMmogTunePayload. Must stay well under 65535.
 	"YA_Tune":                      299,
-	"YA_GetSeasonData":             1080,
+	"YA_GetSeasonData":             135,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
 	// replacing the far longer m_enabling/m_triggers/m_effects DSL text

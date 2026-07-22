@@ -2217,29 +2217,17 @@ func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
+	// Seasons/Events intentionally EMPTY ("[]"): any season/event makes the
+	// client's UYPlayerMPQuestCycle build an empty-but-non-null MP-quest
+	// provider that infinite-recurses (dump-confirmed). No season => no
+	// provider => the cycle terminates. See buildMmogSeasonDataPayload.
 	seasonsRaw := protocol.ExtractStringField(result, "Seasons")
-	if !json.Valid([]byte(seasonsRaw)) {
-		t.Fatalf("YA_GetSeasonData Seasons is not valid JSON: %q", seasonsRaw)
-	}
-	if seasonsRaw == "[]" || !bytes.Contains([]byte(seasonsRaw), []byte(`"Name":"PVE_Season1"`)) {
-		t.Fatalf("YA_GetSeasonData Seasons should include a non-empty PVE_Season1 row: %q", seasonsRaw)
-	}
-	for _, field := range []string{"m_active", "m_name", "m_descShort", "m_descLong", "m_imageLarge", "m_imageSmall", "m_rewardLevels"} {
-		if !bytes.Contains([]byte(seasonsRaw), []byte(`"`+field+`"`)) {
-			t.Fatalf("YA_GetSeasonData Seasons missing %s", field)
-		}
+	if seasonsRaw != "[]" {
+		t.Fatalf("YA_GetSeasonData Seasons must be empty to avoid the MP-quest recursion, got %q", seasonsRaw)
 	}
 	eventsRaw := protocol.ExtractStringField(result, "Events")
-	if !json.Valid([]byte(eventsRaw)) {
-		t.Fatalf("YA_GetSeasonData Events is not valid JSON: %q", eventsRaw)
-	}
-	if eventsRaw == "[]" || !bytes.Contains([]byte(eventsRaw), []byte(`"Name":"PVE_S1E1"`)) {
-		t.Fatalf("YA_GetSeasonData Events should include a non-empty PVE_S1E1 row: %q", eventsRaw)
-	}
-	for _, field := range []string{"m_name", "m_descShort", "m_descLong", "m_map", "m_mapParameters", "m_gameMode", "m_color", "m_imageSmall", "m_imageLarge", "m_rewardLevels", "m_startDate", "m_endDate", "m_season"} {
-		if !bytes.Contains([]byte(eventsRaw), []byte(`"`+field+`"`)) {
-			t.Fatalf("YA_GetSeasonData Events missing %s", field)
-		}
+	if eventsRaw != "[]" {
+		t.Fatalf("YA_GetSeasonData Events must be empty to avoid the MP-quest recursion, got %q", eventsRaw)
 	}
 	// CurrentSeason intentionally EMPTY: an active season activates the
 	// client's UYPlayerMPQuestCycle, which infinite-recurses loading MP season
