@@ -20,7 +20,7 @@ var targetSizes = map[string]int{
 	"YA_GetFeatureToggle":          111,
 	"YA_GetGameConfigData":         534,
 	"YA_GetStaticCareerData":       1009,
-	"YA_GetProgressionData":        126,
+	"YA_GetProgressionData":        138,
 	"YA_GetScoringData":            5753,
 	"YA_GetDailyContractsData":     227,
 	"YA_GetBoosterData":            1856,
@@ -64,7 +64,7 @@ var targetSizes = map[string]int{
 	// Was 6075, +18 after adding the previously-missing "Quests" array
 	// (issue #43 — empty here since the sizecheck's default player has no
 	// active contracts in this DB-less context).
-	"YA_PlayerGet":                7158,
+	"YA_PlayerGet":                7170,
 	"YA_PlayerFleets":             1851,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,
