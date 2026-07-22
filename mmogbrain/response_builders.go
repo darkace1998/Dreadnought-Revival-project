@@ -973,14 +973,6 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "RT", rt)
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
-	// EXPERIMENT: the client's player-data handler (FUN_142a21cf0) sets the
-	// player-data "ready" flag (playerdata+0x161) from an "isEnabled" field on a
-	// response matching a pending request slot. Inventory init gates on that
-	// flag ("Inventory of player data not yet initialized"), which currently
-	// never clears — blocking loadout/fleet init. We only sent isEnabled in
-	// YA_GetFeatureToggle; try it on the player-data response too. Harmless if
-	// this isn't the request the flag keys on (unread field).
-	b = protocol.AppendBoolField(b, "isEnabled", true)
 	// tll/tpl/tc/rep/repXX_X/ReputationGoalID/Membership.ExpireTime/
 	// DailyContract*/FreeXp: the client's YA_PlayerGet parser (FUN_142a70da0)
 	// reads every one of these through FUN_1402380b0 or FUN_140238000, which
@@ -1327,9 +1319,6 @@ func buildMmogProgressionDataPayload() []byte {
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetProgressionData")
-	// EXPERIMENT (see buildMmogPlayerDataPayload): second candidate for the
-	// "isEnabled"-driven player-data ready flag.
-	b = protocol.AppendBoolField(b, "isEnabled", true)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "ProgressionData")
 	for _, shipID := range starterShipIDs() {
