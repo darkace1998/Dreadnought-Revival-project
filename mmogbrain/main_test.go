@@ -2181,10 +2181,10 @@ func TestCareerPayloadsUseConfigBackedProgressionMetadata(t *testing.T) {
 		if !bytes.Contains(careerCategories, protocol.AppendStringField(nil, "TableCategory", taxonomy.TableCategory)) {
 			t.Fatalf("YA_GetCareerProgression missing progression category %q", taxonomy.TableCategory)
 		}
-		if !bytes.Contains(staticCategories, protocol.AppendInt32Field(nil, "CategoryID", taxonomy.CategoryID)) {
+		if !bytes.Contains(staticCategories, protocol.AppendStringField(nil, "CategoryID", strconv.Itoa(int(taxonomy.CategoryID)))) {
 			t.Fatalf("YA_GetStaticCareerData missing category id %d", taxonomy.CategoryID)
 		}
-		if !bytes.Contains(careerCategories, protocol.AppendInt32Field(nil, "CategoryID", taxonomy.CategoryID)) {
+		if !bytes.Contains(careerCategories, protocol.AppendStringField(nil, "CategoryID", strconv.Itoa(int(taxonomy.CategoryID)))) {
 			t.Fatalf("YA_GetCareerProgression missing category id %d", taxonomy.CategoryID)
 		}
 		for _, assetRoot := range taxonomy.AssetRoots {

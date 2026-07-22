@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
@@ -123,7 +124,13 @@ func configBackedProgressionCategoryDataTablePath() string {
 func appendMmogProgressionCategoryEntry(b []byte, stack []int, taxonomy dreadconfig.ProgressionTaxonomy) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "TableCategory", taxonomy.TableCategory)
-	b = protocol.AppendInt32Field(b, "CategoryID", taxonomy.CategoryID)
+	// CategoryID MUST be a numeric string, not int32 (wire tag 0x56): the
+	// client's restrictive value parser only reads tagged-union types 1-4
+	// (double/int64/string) and silently reads int32 as 0. A 0 CategoryID makes
+	// the client reject the category, so the whole set parses as empty
+	// ("Career progression static Data empty. Not initialized"). Same
+	// int32-blindness fix applied everywhere else in this codebase.
+	b = protocol.AppendStringField(b, "CategoryID", strconv.Itoa(int(taxonomy.CategoryID)))
 	b, stack = protocol.AppendArrayStart(b, stack, "AssetRoots")
 	for _, assetRoot := range taxonomy.AssetRoots {
 		b = protocol.AppendUnnamedStringField(b, assetRoot)
