@@ -1765,7 +1765,10 @@ func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []i
 		return b, stack
 	}
 	pid := normalizedPlayerStatePID(playerPID)
-	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+	// LIMIT 4 = 3 base slots + 1 elite slot. The client fills base slots first,
+	// then the elite slot, in the order contracts arrive; sending only 3 leaves
+	// the elite slot empty and UYPlayerMPQuestCycle loops resolving it.
+	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 4`, pid)
 	if err != nil {
 		b, stack = protocol.AppendObjectEnd(b, stack)
 		return b, stack
@@ -1779,13 +1782,14 @@ func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []i
 		}
 		// eid = the client's real YMPQ_ contract id (resolves against its loaded
 		// MPQuestCollection). All numeric fields as strings (restrictive parser).
+		// idx 3 = the elite slot -> harder difficulty.
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "eid", contractID)
 		b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
 		b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
 		b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
 		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
-		b = protocol.AppendStringField(b, "dif", "1")
+		b = protocol.AppendStringField(b, "dif", contractDifficulty(idx))
 		b = protocol.AppendStringField(b, "ran", "0")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -1798,6 +1802,15 @@ func boolToOneZero(v bool) string {
 		return "1"
 	}
 	return "0"
+}
+
+// contractDifficulty maps a contract's slot index to its wire "dif" value. The
+// first 3 (idx 0-2) are base slots (dif 1); idx 3 is the elite slot (dif 2).
+func contractDifficulty(idx int) string {
+	if idx >= 3 {
+		return "2"
+	}
+	return "1"
 }
 
 func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
@@ -1815,7 +1828,8 @@ func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	database := currentMmogPlayerStateDB()
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
 	if database != nil {
-		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+		// LIMIT 4 = 3 base + 1 elite slot (see buildMmogQuestsArray comment).
+		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 4`, pid)
 		if err == nil {
 			defer func() { _ = rows.Close() }()
 			for idx := 0; rows.Next(); idx++ {
@@ -1830,7 +1844,7 @@ func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 				b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
 				b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
 				b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
-				b = protocol.AppendStringField(b, "dif", "1")
+				b = protocol.AppendStringField(b, "dif", contractDifficulty(idx))
 				b = protocol.AppendStringField(b, "ran", "0")
 				b, stack = protocol.AppendObjectEnd(b, stack)
 			}
@@ -2726,9 +2740,17 @@ func purchasedItemType(itemID int32) string {
 // "eid" against its locally-loaded MPQuestCollection quest assets. Fabricated
 // ids ("contract_kills_5" etc.) never match any loaded YMPQ_ quest, so the
 // contract slots never fill, the cycle keeps re-generating/reloading, and it
-// spams EYA_MenuNewQuest until the stack overflows. The config gives a new
-// (non-elite) player 3 base contract slots (elite slot requires membership),
-// so seed exactly 3 real base contracts.
+// spams EYA_MenuNewQuest until the stack overflows.
+//
+// The config (MPQuestCollection.m_dailyContractsConfig) declares 4 slots:
+// m_numBaseContractSlots=3 + m_numEliteContractSlots=1. The elite slot is NOT
+// gated on membership at fill time — the client fills base slots first, then the
+// elite slot, from the contracts it receives in order. The daily-contract wire
+// struct (FUN_142a706f0: eid/id/act/cpl/prg/dif/ran) carries NO per-contract
+// elite flag; elite is decided purely by slot position. So if we send only 3
+// contracts, the elite slot stays empty and UYPlayerMPQuestCycle loops trying to
+// resolve/fill it. Seed all 4 slots: 3 base + 1 elite (the 4th entry fills the
+// elite slot). dif=2 on the elite one for a harder target.
 var dailyContractSeeds = []struct {
 	id, name, description    string
 	targetKills, targetScore int32
@@ -2737,6 +2759,7 @@ var dailyContractSeeds = []struct {
 	{"YMPQ_Kills", "Kills", "Eliminate enemy ships", 10, 0, 500, 1000},
 	{"YMPQ_CompleteMatches", "Complete Matches", "Complete matches", 3, 0, 300, 600},
 	{"YMPQ_WinMatches", "Win Matches", "Win matches", 1, 0, 400, 800},
+	{"YMPQ_ModuleKills", "Module Kills", "Destroy enemy modules", 15, 0, 800, 1600},
 }
 
 func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
@@ -3027,7 +3050,7 @@ func buildMmogContractRerollPayload(requestName string, playerPID string, payloa
 // Contract and XP conversion functions (moved from handlers package)
 
 func seedDailyContractsForPlayer(db *sql.DB, pid string) {
-	// Seed the 3 base daily contracts using the client's real YMPQ_ contract
+	// Seed the 4 daily contracts (3 base + 1 elite) using the client's real YMPQ_ contract
 	// ids so the client's daily-contract slots resolve against its loaded
 	// MPQuestCollection quests (see dailyContractSeeds). Sending valid ids (vs
 	// the old fabricated "contract_*" ids) is what stops the quest-cycle
