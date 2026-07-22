@@ -77,8 +77,31 @@ func buildConfigBackedFleetSeeds(starterLoadouts []mmogShipLoadoutSeed) []mmogFl
 	return fleets
 }
 
+// essentialProgressionCategoryIDs are the only progression categories a new
+// player's hangar actually needs: ship loadouts (1), weapons (2), officer perks
+// (3), abilities (4), ships (5), and trader/hero loadouts (6/7). For EACH
+// category we send in YA_GetStaticCareerData/YA_GetCareerProgression, the client
+// synchronously scans that category's configured asset paths
+// (DefaultProgression.ini [ProgressionItemListAssetPaths], via
+// ScanPathsSynchronous/GetAssetsByPath) to build the category. Sending all 24
+// categories — including the huge vanity (20-24), booster/membership (30-31),
+// unlock-container (32-34), character-customization (50-52) and menu (80-83)
+// trees — made the client freeze the game thread for ~39s inside static-career
+// processing (proven: frame counter advances by 1 across the 39s gap that ends
+// exactly at "Career progression static Data empty"). None of those extra
+// categories are needed to enter the hangar with owned ships. Trim to the
+// essentials so the synchronous scan stays small.
+var essentialProgressionCategoryIDs = map[int32]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true}
+
 func configBackedProgressionTaxonomies() []dreadconfig.ProgressionTaxonomy {
-	return dreadconfig.ProgressionTaxonomies()
+	all := dreadconfig.ProgressionTaxonomies()
+	out := make([]dreadconfig.ProgressionTaxonomy, 0, len(essentialProgressionCategoryIDs))
+	for _, taxonomy := range all {
+		if essentialProgressionCategoryIDs[taxonomy.CategoryID] {
+			out = append(out, taxonomy)
+		}
+	}
+	return out
 }
 
 func configBackedProgressionCategoryDataTablePath() string {
