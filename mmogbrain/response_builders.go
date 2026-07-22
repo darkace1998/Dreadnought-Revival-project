@@ -484,20 +484,43 @@ func appendMmogFleetRuntimeFields(b []byte, fleet mmogFleetSeed) []byte {
 	return b
 }
 
-func appendMmogFleetBackendFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
-	// This helper is shared by both the YA_PlayerFleets/Fleets-array entry
-	// path and the top-level YA_PlayerGet fleet-summary section. Now
-	// decompile-confirmed (FUN_14071d4f0): m_fleetId/m_flagshipIndex/
-	// m_fleetType/m_loadoutList are native FIntProperty/FArrayProperty
-	// UPROPERTYs reflected on a completely separate native class
-	// ("YLocalServerPlayerDataInformation"), not fields read by the
-	// Fleets-array JSON parser (FUN_142a77910, which doesn't reference any
-	// of these names at all) — so they're inert there either way. Genuinely
-	// native int32 properties, correctly left as int32.
+func appendMmogFleetBackendFields(b []byte, stack []int, playerPID string, fleet mmogFleetSeed) ([]byte, []int) {
+	// These fields are reflected (FUN_14071d4f0) onto the native struct
+	// FYLocalServerPlayerDataInformation, which the YA_PlayerGet handler parses
+	// and the loadout manager reads via InitializeFromPlayerData. The SDK
+	// (FYLocalServerPlayerDataInformation) shows the real shapes:
+	//   m_displayInformation : FString
+	//   m_loadoutList        : TArray<FYShipImportLoadoutInfo>   <-- STRUCT array
+	//   m_fleetId            : FName
+	//   m_fleetType          : int32
+	//   m_flagshipIndex      : int8
+	// m_loadoutList was previously sent as a bare int32[] of loadout ids, which
+	// cannot populate an array-of-struct property — so the loadout list came up
+	// empty, InitializeFromPlayerData never completed, and the fleet manager's
+	// OnLoadoutDataInitialized (readiness bit 1) never fired (stuck at 12/15).
+	// Emit each loadout as a full FYShipImportLoadoutInfo object instead.
+	// Reflection reads these int32 props correctly (unlike the int32-blind JSON
+	// union parser), so numeric fields stay int32; FName/FString fields go as
+	// strings.
+	b = protocol.AppendStringField(b, "m_displayInformation", fleet.displayName)
 	b = protocol.AppendInt32Field(b, "m_fleetId", fleet.fleetID)
 	b = protocol.AppendInt32Field(b, "m_flagshipIndex", fleet.flagshipIndex())
 	b = protocol.AppendInt32Field(b, "m_fleetType", fleet.fleetType)
-	b, stack = protocol.AppendInt32ArrayField(b, stack, "m_loadoutList", fleet.loadoutIDs())
+	b, stack = protocol.AppendArrayStart(b, stack, "m_loadoutList")
+	for _, lo := range fleet.shipLoadouts {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "m_loadoutID", strconv.Itoa(int(lo.loadoutID())))
+		b = protocol.AppendStringField(b, "m_pid", playerPID)
+		b = protocol.AppendInt32Field(b, "m_precastLoadoutID", lo.precastLoadoutID)
+		b = protocol.AppendStringField(b, "m_name", lo.loadoutName)
+		b = protocol.AppendInt32Field(b, "m_shipClass", lo.ship.shipClass)
+		b = protocol.AppendStringField(b, "m_displayInfo", lo.displayInfo())
+		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_weaponIDs", lo.weaponIDs())
+		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityIDs", lo.abilityItemIDs())
+		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_perkIds", lo.perkItemIDs())
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
 
@@ -527,7 +550,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
-	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
+	b, stack = appendMmogFleetBackendFields(b, stack, playerPID, fleet)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -712,7 +735,9 @@ func appendMmogStaticFleetEntry(b []byte, stack []int, fleet mmogFleetSeed) ([]b
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
 	b = protocol.AppendBoolField(b, "bIsActive", fleet.active)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
-	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
+	// Static fleet-type definitions carry no per-player loadout ownership, so
+	// there is no player PID to stamp on the FYShipImportLoadoutInfo entries.
+	b, stack = appendMmogFleetBackendFields(b, stack, "", fleet)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipSlots")
 	for _, loadout := range fleet.shipLoadouts {
 		b, stack = appendMmogStaticFleetSlotEntry(b, stack, loadout, fleet.flagshipShipID)
@@ -1064,7 +1089,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "FlagShipLoadoutIndex", starterFleet.flagshipLoadoutIndex)
 	b = protocol.AppendInt32Field(b, "selectedLoadoutID", starterFleet.flagshipLoadoutID)
 	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipLoadoutIndex)
-	b, stack = appendMmogFleetBackendFields(b, stack, starterFleet)
+	b, stack = appendMmogFleetBackendFields(b, stack, playerPID, starterFleet)
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	for _, entry := range loadPlayerFactionReputation(playerPID) {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)

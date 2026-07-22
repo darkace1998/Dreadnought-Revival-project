@@ -631,12 +631,17 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	}
 
 	for _, loadout := range starterFleet.shipLoadouts {
+		// The loadout is now referenced as a string m_loadoutID inside the
+		// FYShipImportLoadoutInfo entries of m_loadoutList (was a bare int32).
+		loadoutIDStr := protocol.AppendStringField(nil, "m_loadoutID", strconv.Itoa(int(loadout.loadoutID())))
 		if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "LoadoutID", loadout.loadoutID())) &&
-			!bytes.Contains(playerFleets, protocol.AppendUnnamedInt32Field(nil, loadout.loadoutID())) {
+			!bytes.Contains(playerFleets, protocol.AppendUnnamedInt32Field(nil, loadout.loadoutID())) &&
+			!bytes.Contains(playerFleets, loadoutIDStr) {
 			t.Fatalf("YA_PlayerFleets missing starter loadout reference %d", loadout.loadoutID())
 		}
 		if !bytes.Contains(playerGet, protocol.AppendUnnamedInt32Field(nil, loadout.loadoutID())) &&
-			!bytes.Contains(playerGet, protocol.AppendInt32Field(nil, "LoadoutID", loadout.loadoutID())) {
+			!bytes.Contains(playerGet, protocol.AppendInt32Field(nil, "LoadoutID", loadout.loadoutID())) &&
+			!bytes.Contains(playerGet, loadoutIDStr) {
 			t.Fatalf("YA_PlayerGet missing starter loadout reference %d", loadout.loadoutID())
 		}
 		if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))) {
