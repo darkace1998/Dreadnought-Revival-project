@@ -1758,8 +1758,37 @@ func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []i
 	// Contracts aren't needed for hangar entry; an empty Quests array lets the
 	// cycle terminate. Re-enable only with real, client-valid contract data +
 	// progress tracking. See seedDailyContractsForPlayer (now a no-op).
-	_ = playerPID
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		return b, stack
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+	if err != nil {
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		return b, stack
+	}
+	defer func() { _ = rows.Close() }()
+	for idx := 0; rows.Next(); idx++ {
+		var contractID, state string
+		var progress int32
+		if err := rows.Scan(&contractID, &progress, &state); err != nil {
+			continue
+		}
+		// eid = the client's real YMPQ_ contract id (resolves against its loaded
+		// MPQuestCollection). All numeric fields as strings (restrictive parser).
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "eid", contractID)
+		b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
+		b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
+		b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
+		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
+		b = protocol.AppendStringField(b, "dif", "1")
+		b = protocol.AppendStringField(b, "ran", "0")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -1780,12 +1809,33 @@ func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(time.Now().Unix()))
 	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(time.Now().Unix()))
 
-	// Quests intentionally EMPTY — see appendMmogQuestsArray: seeded contract
-	// data drives the client's UYPlayerMPQuestCycle into infinite delegate
-	// recursion (stack-overflow crash). Contracts aren't needed for hangar
-	// entry.
-	_ = playerPID
+	// Quests = the player's active daily contracts, using real YMPQ_ eids so
+	// the client's daily-contract slots resolve (see dailyContractSeeds).
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
 	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
+	if database != nil {
+		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 3`, pid)
+		if err == nil {
+			defer func() { _ = rows.Close() }()
+			for idx := 0; rows.Next(); idx++ {
+				var contractID, payloadJSON, state string
+				var progress int32
+				if err := rows.Scan(&contractID, &payloadJSON, &progress, &state); err != nil {
+					continue
+				}
+				b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+				b = protocol.AppendStringField(b, "eid", contractID)
+				b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
+				b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
+				b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
+				b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
+				b = protocol.AppendStringField(b, "dif", "1")
+				b = protocol.AppendStringField(b, "ran", "0")
+				b, stack = protocol.AppendObjectEnd(b, stack)
+			}
+		}
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
@@ -2670,15 +2720,23 @@ func purchasedItemType(itemID int32) string {
 }
 
 // Daily contract seeds
+// dailyContractSeeds MUST use the client's real YMPQ_ contract IDs (from
+// MPQuestCollection.m_dailyContractsConfig.m_initialContracts). The client's
+// daily-contract system (UYPlayerMPQuestCycle) resolves each active contract's
+// "eid" against its locally-loaded MPQuestCollection quest assets. Fabricated
+// ids ("contract_kills_5" etc.) never match any loaded YMPQ_ quest, so the
+// contract slots never fill, the cycle keeps re-generating/reloading, and it
+// spams EYA_MenuNewQuest until the stack overflows. The config gives a new
+// (non-elite) player 3 base contract slots (elite slot requires membership),
+// so seed exactly 3 real base contracts.
 var dailyContractSeeds = []struct {
 	id, name, description    string
 	targetKills, targetScore int32
 	rewardXP, rewardGP       int32
 }{
-	{"contract_kills_5", "Get 5 Kills", "Eliminate 5 enemy ships", 5, 0, 200, 400},
-	{"contract_kills_10", "Get 10 Kills", "Eliminate 10 enemy ships", 10, 0, 500, 1000},
-	{"contract_wins_1", "Win a Match", "Win 1 match", 0, 0, 300, 600},
-	{"contract_score_500", "Score 500 Points", "Earn 500 score in matches", 0, 500, 250, 500},
+	{"YMPQ_Kills", "Kills", "Eliminate enemy ships", 10, 0, 500, 1000},
+	{"YMPQ_CompleteMatches", "Complete Matches", "Complete matches", 3, 0, 300, 600},
+	{"YMPQ_WinMatches", "Win Matches", "Win matches", 1, 0, 400, 800},
 }
 
 func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
@@ -2969,13 +3027,25 @@ func buildMmogContractRerollPayload(requestName string, playerPID string, payloa
 // Contract and XP conversion functions (moved from handlers package)
 
 func seedDailyContractsForPlayer(db *sql.DB, pid string) {
-	// DISABLED: seeded daily contracts (progress 0, int32 target/progress
-	// fields the client reads as 0) drive the client's UYPlayerMPQuestCycle
-	// into infinite delegate recursion / stack-overflow crash (confirmed via
-	// crash minidump). Contracts aren't needed for hangar entry and are no
-	// longer sent (see appendMmogQuestsArray). Re-enable only alongside real
-	// client-valid contract data + progress tracking.
-	_, _ = db, pid
+	// Seed the 3 base daily contracts using the client's real YMPQ_ contract
+	// ids so the client's daily-contract slots resolve against its loaded
+	// MPQuestCollection quests (see dailyContractSeeds). Sending valid ids (vs
+	// the old fabricated "contract_*" ids) is what stops the quest-cycle
+	// recursion / EYA_MenuNewQuest notification flood.
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
+	if count >= len(dailyContractSeeds) {
+		return
+	}
+	for i := 0; i < len(dailyContractSeeds); i++ {
+		seed := dailyContractSeeds[i]
+		payload, _ := json.Marshal(map[string]interface{}{
+			"id": seed.id, "name": seed.name, "description": seed.description,
+			"targetKills": seed.targetKills, "targetScore": seed.targetScore,
+			"rewardXP": seed.rewardXP, "rewardGP": seed.rewardGP,
+		})
+		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
+	}
 }
 
 // minContractCompletionAge is a rough anti-farming heuristic: the server
