@@ -65,7 +65,7 @@ var targetSizes = map[string]int{
 	// (issue #43 — empty here since the sizecheck's default player has no
 	// active contracts in this DB-less context).
 	"YA_PlayerGet":                 6093,
-	"YA_PlayerFleets":              930,
+	"YA_PlayerFleets":              786,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).

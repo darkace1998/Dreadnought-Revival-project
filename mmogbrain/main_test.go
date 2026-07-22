@@ -1783,8 +1783,12 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	if bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "flagshipID", starterFleet.flagshipLoadoutID)) {
 		t.Fatal("YA_PlayerFleets must not emit flagshipID (case-insensitive duplicate of FlagShipID) with a non-ship value")
 	}
-	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "shipCount", strconv.Itoa(len(starterFleet.shipLoadouts)))) {
-		t.Fatalf("YA_PlayerFleets missing shipCount=%d", len(starterFleet.shipLoadouts))
+	// shipCount/DisplayName/Unlocked/Type/Name/FleetID/flagshipShipId/bIsActive
+	// were intentionally dropped from the Fleets entry — the client's parser
+	// (FUN_142a77910) never reads them and the hangar UI sources unlock/display
+	// state from the tech tree. Assert the entry no longer carries shipCount.
+	if bytes.Contains(playerFleets, protocol.AppendStringField(nil, "shipCount", strconv.Itoa(len(starterFleet.shipLoadouts)))) {
+		t.Fatal("YA_PlayerFleets should no longer emit the unread shipCount field")
 	}
 	if !bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "m_flagshipIndex", starterFleet.flagshipIndex())) {
 		t.Fatalf("YA_PlayerFleets missing m_flagshipIndex=%d", starterFleet.flagshipIndex())

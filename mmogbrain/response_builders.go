@@ -512,20 +512,22 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// IMPORTANT: The client parser only handles field types 1-4 (double, double, int64, string).
 	// int32 fields (protocol type 0x56) fall through to default=0, causing fleet type
 	// validation to fail with 'Invalid fleet data received'. Use string fields for Type/Name.
+	// MINIMAL fleet entry. The client's Fleets-array parser (FUN_142a77910)
+	// reads exactly these fields: FID (gate — must not be GUID-shaped), PID,
+	// FleetType, AutoRepair, Maintenance, LastWinTime, ChargingBeginTime,
+	// ChargingCharges, Rating, shipIds, ShipTechTreeComplete, FlagShipID,
+	// FlagShipLoadoutIndex. Everything the parser ignores was dropped
+	// (Type/FleetID/Name/DisplayName/Unlocked/shipCount/flagshipShipId/
+	// bIsActive) — the hangar UI reads unlock/display state from the tech tree,
+	// not from here. The m_* fields (appendMmogFleetBackendFields) are kept:
+	// they feed a separate native reflection class (YLocalServerPlayerDataInformation),
+	// not the parser, and are shared with the YA_PlayerGet fleet summary.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
 	b = protocol.AppendStringField(b, "FID", fleet.token)
 	b = protocol.AppendStringField(b, "PID", playerPID)
-	b = protocol.AppendStringField(b, "FleetID", fleet.token)
-	b = protocol.AppendStringField(b, "Name", strconv.Itoa(int(fleet.fleetType)))
-	b = protocol.AppendStringField(b, "DisplayName", fleet.displayName)
-	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
-	b = protocol.AppendStringField(b, "shipCount", strconv.Itoa(len(fleet.shipLoadouts)))
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
-	b = protocol.AppendStringField(b, "flagshipShipId", strconv.Itoa(int(fleet.flagshipShipID)))
 	b, stack = appendMmogFleetBackendFields(b, stack, fleet)
-	b = protocol.AppendBoolField(b, "bIsActive", fleet.active)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
