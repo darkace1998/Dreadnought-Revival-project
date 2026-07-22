@@ -82,18 +82,19 @@ func configBackedProgressionTaxonomies() []dreadconfig.ProgressionTaxonomy {
 }
 
 func configBackedProgressionCategoryDataTablePath() string {
-	// m_categoryDTPath must be a client-loadable /Game/ asset path (or empty),
-	// NOT a server-side file path. Previously this returned
-	// UnlockContainerExportSurfaces()[0].ExportPath =
-	// "Source/Programs/mmogbrain/instances/dreadnought/UnlockContainerTables.cfg"
-	// — a server config path the client cannot resolve, which made
-	// YA_GetStaticCareerData's category DataTable load fail so the client
-	// treated the whole progression category set as empty ("Career progression
-	// static Data empty"). The client already holds the progression taxonomy in
-	// its own DefaultProgression.ini [ProgressionItemListAssetPaths] and drives
-	// categories from the per-category AssetRoots we send, so no server DataTable
-	// path is needed — send empty.
-	return ""
+	// m_categoryDTPath must be a client-loadable /Game/ asset path pointing at a
+	// real UDataTable in the cooked content. The client's career/progression
+	// handler LOADS this DataTable to populate the category rows; if the path is
+	// unloadable (a server .cfg path) OR empty, the load fails and the client
+	// treats the whole progression category set as empty and never initializes
+	// ("Career progression static Data empty. Not initialized", then
+	// "...must receive Static data out of order" for the dynamic response). Both
+	// the old server-.cfg path AND a later empty-string attempt reproduced that.
+	// The correct value is the client's own configured DataTable
+	// (DefaultProgression.ini [/Script/DreadGame.YPlayerMatchStatisticsManager]
+	// m_categoryDTPath), which exists in the cooked content at
+	// Content/Generic/DataTables/Progression/DN_PlayerMatchStatistics_DT.uasset.
+	return "/Game/Generic/DataTables/Progression/DN_PlayerMatchStatistics_DT"
 }
 
 func appendMmogProgressionCategoryEntry(b []byte, stack []int, taxonomy dreadconfig.ProgressionTaxonomy) ([]byte, []int) {

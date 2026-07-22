@@ -20,12 +20,6 @@ import (
 // is deliberately generous headroom, not a tight fit.
 const maxHandshakeBufferBytes = 16 * 1024
 
-// mmogAppFrameMsgType is the message type for application (request/response and
-// server-push) mmog frames. All YA_* traffic uses this type; unsolicited pushes
-// that aren't tied to an inbound frame (e.g. the bootstrap YA_FleetUpdate) use
-// it directly since there is no request frame to copy MsgType from.
-const mmogAppFrameMsgType uint16 = 0x0320
-
 // maxMmogConnIdleDuration bounds how long a connection may go without
 // sending any data before it's closed. Generous relative to the client's
 // normal ping cadence (observed ~5s) so legitimate idle players aren't
@@ -280,22 +274,6 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 			if err := writeMmogAppResponse(log, conn, remote, dc.RequestID, "YA_GetDailyContractsData", dcResp, appEncoder, encryptResponses, "pending daily contracts response failed", "sent pending YA_GetDailyContractsData response"); err != nil {
 				return err
 			}
-		}
-	}
-	// Push an unsolicited YA_FleetUpdate so UYFleetManager completes its
-	// readiness bitmask on this connection. The reconnect/bootstrap flow drives
-	// fleet init via YA_PlayerGet (not YA_PlayerFleets), so the push wired to the
-	// YA_PlayerFleets request never fires here — without this the fresh fleet
-	// manager reaches bit 12 and then logs "Invalid fleet data, fleet array is
-	// empty" waiting on a fleet-update notification that never arrives. Use a
-	// fresh uncorrelated ID so it arrives as a genuine server-initiated push.
-	if fleetUpdateID, err := uuid.NewRandom(); err != nil {
-		log.WithError(err).Warn("mmog: failed to generate bootstrap fleet update push id")
-	} else {
-		fleetUpdate := buildMmogFleetUpdatePush(state.playerPID)
-		fleetUpdateFrame := protocol.BuildResponseFrame(fleetUpdateID, mmogAppFrameMsgType, fleetUpdate)
-		if err := writeMmogAppResponse(log, conn, remote, fleetUpdateID, "YA_FleetUpdate", fleetUpdateFrame, appEncoder, encryptResponses, "bootstrap fleet update push failed", "sent YA_FleetUpdate push"); err != nil {
-			return err
 		}
 	}
 	log.WithFields(logrus.Fields{
