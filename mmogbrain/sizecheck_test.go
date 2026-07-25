@@ -64,7 +64,14 @@ var targetSizes = map[string]int{
 	// Was 6075, +18 after adding the previously-missing "Quests" array
 	// (issue #43 — empty here since the sizecheck's default player has no
 	// active contracts in this DB-less context).
-	"YA_PlayerGet":                7158,
+	// Was 7158, -39 after omitting the Membership object entirely for
+	// never-purchased players instead of sending it with ExpireTime="0":
+	// the client's parser (FUN_142a85120) drives a present-but-zero object
+	// through its value-present branch, computing a 1970-01-01 epoch
+	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
+	// crash during hangar entry. Sending no object at all uses the client's
+	// own dedicated "no membership" branch instead.
+	"YA_PlayerGet":                7119,
 	"YA_PlayerFleets":             1851,
 	"YA_GetSeasonProgress":         146,
 	"YA_GetPlayersInformation":     326,

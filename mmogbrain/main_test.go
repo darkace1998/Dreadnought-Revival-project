@@ -2936,10 +2936,19 @@ func TestElitePurchasePersistsMembershipExpiry(t *testing.T) {
 
 	// YA_PlayerGet's Membership.ExpireTime goes through the client's
 	// int32-blind parser (same as tll/tpl/tc/etc) — sent as a numeric string.
+	//
+	// Before any purchase, the Membership object must be entirely absent, not
+	// present with ExpireTime="0": the client's parser (FUN_142a85120) has a
+	// dedicated branch for an absent Membership object that skips its int64
+	// FILETIME conversion, but a present object with ExpireTime="0" drives it
+	// through the value-present branch instead, computing a 1970-01-01 epoch
+	// timestamp. That is the exact value observed immediately preceding an
+	// EXCEPTION_STACK_OVERFLOW crash during hangar entry (see UE4Minidump.dmp /
+	// DreadGame.log, 2026-07-22 crash session) — the never-purchased case must
+	// use the client's own "no membership" path, not a fabricated timestamp.
 	before := buildMmogPlayerGetPayload(playerPID)
-	beforeMembership := extractNamedMmogObject(t, before, "Membership")
-	if expire := protocol.ExtractStringField(beforeMembership, "ExpireTime"); expire != "0" {
-		t.Fatalf("YA_PlayerGet ExpireTime before any purchase = %q, want \"0\"", expire)
+	if bytes.Contains(before, []byte("Membership")) {
+		t.Fatalf("YA_PlayerGet before any purchase must omit Membership entirely, got payload=%x", before)
 	}
 
 	purchaseRequest := protocol.AppendInt32Field(nil, "Duration", 30)

@@ -1012,12 +1012,27 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "SGD", "")
 	b = protocol.AppendStringField(b, "SCtA", "")
 	b = protocol.AppendStringField(b, "LGVersion", "0")
-	b, stack = protocol.AppendObjectStart(b, stack, "Membership")
-	// 0 (unset/expired) is correct for players who never bought elite —
-	// previously this always reported "active for one more year" regardless
-	// of purchase history.
-	b = protocol.AppendStringField(b, "ExpireTime", strconv.Itoa(int(membershipExpiresAt(playerPID))))
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	// Only emit the Membership block for players with real membership history
+	// (active or previously expired). For players who never bought elite,
+	// membershipExpiresAt returns 0, and the client's YA_PlayerGet parser
+	// (FUN_142a85120, called from FUN_142a70da0) has a dedicated branch for a
+	// wholly-absent Membership object (`if (*param_2 == 0)`) that skips its
+	// int64 FILETIME conversion entirely. Sending ExpireTime="0" instead drives
+	// it through the value-present branch, which computes a 1970-01-01 epoch
+	// FILETIME and logs "Membership expires on 1970.01.01-00.00.00" /
+	// "Membership expire in 0.000000 hours" — the exact last lines in the log
+	// before an EXCEPTION_STACK_OVERFLOW crash (RVA 0xc9bf1e, UnrealNames.cpp
+	// FName intern) 8s into a hangar-entry session. This was a working
+	// always-1-year-active value until f6c1fcb switched it to literal 0; use
+	// the object's presence itself as the "has membership ever" signal instead
+	// of a sentinel value, so real purchasers (including expired ones) still
+	// get a real ExpireTime while never-purchased players get the client's own
+	// designed "no membership" path instead of a fabricated epoch timestamp.
+	if expiresAt := membershipExpiresAt(playerPID); expiresAt != 0 {
+		b, stack = protocol.AppendObjectStart(b, stack, "Membership")
+		b = protocol.AppendStringField(b, "ExpireTime", strconv.Itoa(int(expiresAt)))
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b = protocol.AppendStringField(b, "DailyContractStateID", strconv.Itoa(dailyContractState(playerPID)))
 	b = protocol.AppendStringField(b, "LastContractsAssignment", strconv.Itoa(int(now)))
 	b = protocol.AppendStringField(b, "DailyContractLastReplaceTime", strconv.Itoa(int(now)))
