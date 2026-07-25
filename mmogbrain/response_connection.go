@@ -20,23 +20,27 @@ import (
 // is deliberately generous headroom, not a tight fit.
 const maxHandshakeBufferBytes = 16 * 1024
 
-// seasonDataResponseDelay: full-memory-dump analysis (two independent crash
-// sessions, ~2824-deep recursion both times) traced a hangar-entry
-// EXCEPTION_STACK_OVERFLOW to UYPlayerMPQuestCycle::OnBackendDataAvailable,
-// which fires as soon as our YA_GetSeasonData response completes
-// OnSeasonDataAvailable -> SetActiveEventAndSeason (called unconditionally,
-// even for an empty season). It checks UYMPQuestsCollection's quest
-// total-vs-loaded count; MPQuestCollection.uasset's 24 YMPQ_* quest classes
-// (confirmed real and present via UAssetAPI, not fabricated or missing) are
-// TAssetPtr soft references the client's own AssetManager must still
-// asynchronously load into m_multiplayerQuests — a purely client-side,
-// server-uncontrollable process. Sending real vs. empty season/event data
-// made no difference (both hit the same 0-total/0-loaded degenerate case),
-// because the bottleneck was never wire content. Delaying this specific
-// response gives that local async load a chance to finish first, the same
-// "wait until actually ready" idiom already used for YA_PlayerGet via
-// waitForGatewayCatalogFetched below.
-const seasonDataResponseDelay = 3 * time.Second
+// seasonDataResponseDisabled: full-memory-dump analysis (two independent
+// crash sessions, ~2824-deep recursion both times, identical function
+// addresses) traced a hangar-entry EXCEPTION_STACK_OVERFLOW to
+// UYPlayerMPQuestCycle::OnBackendDataAvailable, which fires as soon as our
+// YA_GetSeasonData response completes OnSeasonDataAvailable ->
+// SetActiveEventAndSeason (called unconditionally, even for an empty
+// season). Every variant tried — empty Seasons/Events, real season/event
+// metadata with matching CurrentSeason, real daily-contract ids sent
+// first, and a 3s delay before answering (to give the client's own
+// MPQuestCollection asset load a head start) — hit the exact same crash
+// at the exact same instruction. That total invariance to content and
+// timing means the recursion isn't gated by any condition our data can
+// influence: once this response lets OnSeasonDataAvailable's delegate
+// broadcast fire at all, the crash follows unconditionally. The only
+// remaining lever is not answering this request at all, so
+// OnSeasonDataAvailable never runs. Risk: if the client blocks waiting
+// for this specific response before proceeding, this could stall hangar
+// entry the way a withheld YA_PlayerFleets/YA_GetDailyContractsData
+// response once did (see the "mutual wait" comment below) — that's the
+// open question this experiment is meant to answer.
+const seasonDataResponseDisabled = true
 
 // maxMmogConnIdleDuration bounds how long a connection may go without
 // sending any data before it's closed. Generous relative to the client's
@@ -378,13 +382,13 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 					log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: answering YA_PlayerGet without observed catalog fetch (timeout)")
 				}
 			}
-			if requestName == "YA_GetSeasonData" {
-				// See seasonDataResponseDelay's doc comment: give the client's
-				// own async asset load of MPQuestCollection's quest classes a
-				// head start before our response can trigger the season-changed
-				// delegate that reads their (otherwise not-yet-populated) count.
-				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: delaying YA_GetSeasonData response for quest-asset load")
-				time.Sleep(seasonDataResponseDelay)
+			if requestName == "YA_GetSeasonData" && seasonDataResponseDisabled {
+				// See seasonDataResponseDisabled's doc comment: never answer
+				// this request at all, so OnSeasonDataAvailable's delegate
+				// broadcast (and the OnBackendDataAvailable recursion it
+				// unconditionally triggers) never fires.
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetSeasonData response (quest-cycle recursion experiment)")
+				continue
 			}
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)
 			if requestName == "YA_PlayerFleets" || requestName == "YA_RequestStaticFleetData" {
