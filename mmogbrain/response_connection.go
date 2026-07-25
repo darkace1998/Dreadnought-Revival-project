@@ -20,6 +20,24 @@ import (
 // is deliberately generous headroom, not a tight fit.
 const maxHandshakeBufferBytes = 16 * 1024
 
+// seasonDataResponseDelay: full-memory-dump analysis (two independent crash
+// sessions, ~2824-deep recursion both times) traced a hangar-entry
+// EXCEPTION_STACK_OVERFLOW to UYPlayerMPQuestCycle::OnBackendDataAvailable,
+// which fires as soon as our YA_GetSeasonData response completes
+// OnSeasonDataAvailable -> SetActiveEventAndSeason (called unconditionally,
+// even for an empty season). It checks UYMPQuestsCollection's quest
+// total-vs-loaded count; MPQuestCollection.uasset's 24 YMPQ_* quest classes
+// (confirmed real and present via UAssetAPI, not fabricated or missing) are
+// TAssetPtr soft references the client's own AssetManager must still
+// asynchronously load into m_multiplayerQuests — a purely client-side,
+// server-uncontrollable process. Sending real vs. empty season/event data
+// made no difference (both hit the same 0-total/0-loaded degenerate case),
+// because the bottleneck was never wire content. Delaying this specific
+// response gives that local async load a chance to finish first, the same
+// "wait until actually ready" idiom already used for YA_PlayerGet via
+// waitForGatewayCatalogFetched below.
+const seasonDataResponseDelay = 3 * time.Second
+
 // maxMmogConnIdleDuration bounds how long a connection may go without
 // sending any data before it's closed. Generous relative to the client's
 // normal ping cadence (observed ~5s) so legitimate idle players aren't
@@ -359,6 +377,14 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				if !waitForGatewayCatalogFetched(state.playerPID, gatewayCatalogFetchedTimeout) {
 					log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: answering YA_PlayerGet without observed catalog fetch (timeout)")
 				}
+			}
+			if requestName == "YA_GetSeasonData" {
+				// See seasonDataResponseDelay's doc comment: give the client's
+				// own async asset load of MPQuestCollection's quest classes a
+				// head start before our response can trigger the season-changed
+				// delegate that reads their (otherwise not-yet-populated) count.
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: delaying YA_GetSeasonData response for quest-asset load")
+				time.Sleep(seasonDataResponseDelay)
 			}
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)
 			if requestName == "YA_PlayerFleets" || requestName == "YA_RequestStaticFleetData" {
