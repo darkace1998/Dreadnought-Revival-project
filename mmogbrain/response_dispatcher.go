@@ -56,9 +56,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetTechTree":
 		return buildMmogTechTreePayload(playerPID)
 	case "YA_GetCareerProgression":
-		return buildMmogCareerProgressionPayload()
+		return buildMmogCareerProgressionPayload(playerPID)
 	case "YA_GetStaticCareerData":
-		return buildMmogStaticCareerDataPayload() // No playerPID needed
+		return buildMmogStaticCareerDataPayload() // goal definitions are player-independent
 	case "YA_GetFeatureToggle":
 		return buildMmogFeatureTogglePayload()
 	case "YA_GetGameConfigData":

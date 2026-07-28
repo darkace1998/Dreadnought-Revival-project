@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"io"
 	"net"
+	"os"
 	"time"
 
 	"github.com/dreadnought-ps/mmogbrain/protocol"
@@ -20,27 +21,48 @@ import (
 // is deliberately generous headroom, not a tight fit.
 const maxHandshakeBufferBytes = 16 * 1024
 
-// seasonDataResponseDisabled: full-memory-dump analysis (two independent
-// crash sessions, ~2824-deep recursion both times, identical function
-// addresses) traced a hangar-entry EXCEPTION_STACK_OVERFLOW to
-// UYPlayerMPQuestCycle::OnBackendDataAvailable, which fires as soon as our
-// YA_GetSeasonData response completes OnSeasonDataAvailable ->
-// SetActiveEventAndSeason (called unconditionally, even for an empty
-// season). Every variant tried — empty Seasons/Events, real season/event
-// metadata with matching CurrentSeason, real daily-contract ids sent
-// first, and a 3s delay before answering (to give the client's own
-// MPQuestCollection asset load a head start) — hit the exact same crash
-// at the exact same instruction. That total invariance to content and
-// timing means the recursion isn't gated by any condition our data can
-// influence: once this response lets OnSeasonDataAvailable's delegate
-// broadcast fire at all, the crash follows unconditionally. The only
-// remaining lever is not answering this request at all, so
-// OnSeasonDataAvailable never runs. Risk: if the client blocks waiting
-// for this specific response before proceeding, this could stall hangar
-// entry the way a withheld YA_PlayerFleets/YA_GetDailyContractsData
-// response once did (see the "mutual wait" comment below) — that's the
-// open question this experiment is meant to answer.
-const seasonDataResponseDisabled = true
+// seasonDataResponseDisabled once withheld YA_GetSeasonData entirely, as a
+// last-ditch attempt to stop the hangar-entry EXCEPTION_STACK_OVERFLOW in
+// UYPlayerMPQuestCycle::OnBackendDataAvailable. It is off because that
+// experiment was run and FAILED: the client crashed identically with the
+// response withheld.
+//
+// A full recursive stack (5MB stack-only minidump, 2026-07-27) then showed
+// why no server payload can prevent that crash. The cycle is entirely
+// client-side and unconditional:
+//
+//	OnBackendDataAvailable (FUN_1403fe800) subscribes itself to the quest
+//	collection's delegate at +0x48, then calls UYMPQuestsCollection's loader
+//	(FUN_140404440). When every YMPQ_* quest asset is already resolved there
+//	is nothing to async-load, so the loader invokes the "loaded" callback
+//	(FUN_140402db0) SYNCHRONOUSLY — and that callback ends by broadcasting
+//	the very +0x48 delegate just subscribed to, re-entering
+//	OnBackendDataAvailable with identical state. Nothing advances, so it
+//	recurses until the stack is exhausted (~2824 frames observed).
+//
+// Confirmed against a full crash dump: the collection holds 24 loaded quest
+// entries, 0 pending loads, and both load counters at 0 — so the "is a load
+// still outstanding?" guard both functions share is false on every pass.
+//
+// Nothing in that path reads server data: the quest list comes from the
+// client's own MPQuestCollection.uasset, and the season/event block we do
+// feed (interface +0x44a0..+0x44c8) is passed to the loader as an argument
+// it never reads. This is why every earlier server-side attempt — empty
+// Seasons/Events, real season metadata, real vs fabricated daily-contract
+// ids, delaying the response, and withholding it — changed nothing. Fixing
+// it requires a client-side change, not a wire change.
+const seasonDataResponseDisabled = false
+
+// dailyContractsResponseDisabled withholds YA_GetDailyContractsData. See the
+// use site for the full trace: answering it sets interface+0x44c8 = 1, which
+// arms the UYPlayerMPQuestCycle recursion that crashes the client on hangar
+// entry. Set DN_ANSWER_DAILY_CONTRACTS=1 to restore the old behaviour.
+var dailyContractsResponseDisabled = os.Getenv("DN_ANSWER_DAILY_CONTRACTS") != "1"
+
+// deferPlayerFleetsDisabled restores the old behaviour of answering
+// YA_PlayerFleets immediately (DN_NO_DEFER_PLAYER_FLEETS=1). Escape hatch
+// only; see the deferral site below for why deferring is the default.
+var deferPlayerFleetsDisabled = os.Getenv("DN_NO_DEFER_PLAYER_FLEETS") == "1"
 
 // maxMmogConnIdleDuration bounds how long a connection may go without
 // sending any data before it's closed. Generous relative to the client's
@@ -229,7 +251,17 @@ type mmogConnState struct {
 	staticFleetDataReceived  bool
 	fleetEligibilityReceived bool
 	playerFleetsReceived     bool
-	playerPID                string
+	// gatewayReadySignalled records that we have told the gateway the client
+	// has player data. Deliberately NOT set the moment we write the
+	// YA_PlayerGet response: the client processes HTTP callbacks well before
+	// it drains the mmog frame (observed live — market catalog handled on UE4
+	// frame 96, "Player Data Received" only on frame 105), so signalling on
+	// send lets the market fetch complete first and the client's
+	// OnUpdateInventory then fires with no player data. We wait for the
+	// client's NEXT read instead, which is evidence it has moved past the
+	// player-data frame.
+	gatewayReadySignalled bool
+	playerPID             string
 }
 
 // mmogJWTSecretValue is set once at startup by setMmogJWTSecret, after
@@ -255,7 +287,6 @@ func syntheticRequestID(tag byte) [16]byte {
 
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
 	state.playerGetResponded = true
-	setGatewayPlayerDataReadyState(state.playerPID, true)
 	if len(state.pendingStaticFleetData) > 0 {
 		pending := state.pendingStaticFleetData
 		state.pendingStaticFleetData = nil
@@ -306,6 +337,15 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 }
 
 func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, frames []protocol.AppFrame, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {
+	// This runs once per socket read. Reaching here with the YA_PlayerGet
+	// response already written means the client has come back for more, so it
+	// has drained that frame — only now is it safe to let the gateway answer
+	// the market catalog. See mmogConnState.gatewayReadySignalled.
+	if state.playerGetResponded && !state.gatewayReadySignalled {
+		state.gatewayReadySignalled = true
+		setGatewayPlayerDataReadyState(state.playerPID, true)
+		log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: client resumed after player data, releasing gateway catalog")
+	}
 	for _, frame := range frames {
 		requestName := protocol.ExtractRequestName(frame.Payload)
 		log.WithFields(logrus.Fields{
@@ -370,24 +410,79 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 
-			if requestName == "YA_PlayerGet" {
-				// Testing the theory that the client only accepts player data
-				// once it already has the market catalog in hand. Gateway
-				// catalog endpoints no longer wait on player-data-ready (see
-				// handleGWCatalog); instead this blocks (briefly, with a
-				// timeout fallback so a client that never hits the gateway
-				// still gets answered) until the client has fetched at least
-				// one catalog endpoint.
-				if !waitForGatewayCatalogFetched(state.playerPID, gatewayCatalogFetchedTimeout) {
-					log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: answering YA_PlayerGet without observed catalog fetch (timeout)")
-				}
-			}
+			// NOTE: YA_PlayerGet is deliberately answered immediately.
+			// It used to block here (up to 1.5s) waiting for the client to
+			// fetch a market catalog endpoint, on the theory that the client
+			// only accepts player data once it holds the catalog. A verbose
+			// client log disproved that and showed the wait actively causes a
+			// bug: the client asks for player data FIRST (t+0ms), our delay
+			// lets all five market responses land at t+13..64ms, and the
+			// client's "market data complete" handler then runs
+			// OnUpdateInventory at t+134ms — 66ms BEFORE our delayed player
+			// data arrives at t+200ms — producing "Inventory of player data
+			// not yet initialized!" and leaving the inventory unpopulated.
+			// Player data must win the race, so the catalog endpoints now wait
+			// on it instead (handleGWCatalog), matching what /bundles already
+			// did.
 			if requestName == "YA_GetSeasonData" && seasonDataResponseDisabled {
-				// See seasonDataResponseDisabled's doc comment: never answer
-				// this request at all, so OnSeasonDataAvailable's delegate
-				// broadcast (and the OnBackendDataAvailable recursion it
-				// unconditionally triggers) never fires.
-				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetSeasonData response (quest-cycle recursion experiment)")
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetSeasonData response")
+				continue
+			}
+			// Withhold YA_GetDailyContractsData: answering it is what arms the
+			// client's hangar-entry stack overflow, and the payload cannot
+			// avoid it.
+			//
+			// Traced in the shipping binary (the Ghidra export MISSES the
+			// relevant write; it was found by byte-scanning .text for the
+			// displacement, so re-derive that way rather than trusting the
+			// decompile here):
+			//
+			//   FUN_142a33640 ("Sending daily contracts data request") issues
+			//   this request on slot interface+0x3690. The response handler
+			//   inside FUN_142a21cf0 matches that slot, then calls
+			//   FUN_142a6b7f0(interface+0x44a0, payload) — which parses
+			//   ContractConfigTable / ContractTable / ContractNextResetTime and
+			//   then executes `*(byte *)(block + 0x28) = 1`, i.e.
+			//   interface+0x44c8 = 1, UNCONDITIONALLY, whatever the contents —
+			//   and finally broadcasts interface+0x1070.
+			//
+			//   interface+0x44c8 is the gate in
+			//   UYPlayerMPQuestCycle::OnBackendDataAvailable (FUN_1403fe800):
+			//   while it is 0 the cycle binds to interface+0x1070 and waits
+			//   harmlessly; once it is 1 the cycle walks
+			//   UYMPQuestsCollection instead, and because every YMPQ_* asset is
+			//   already resolved the loader invokes the "loaded" callback
+			//   synchronously, which re-broadcasts the delegate the cycle just
+			//   subscribed to — unbounded recursion (~2824 frames observed) and
+			//   EXCEPTION_STACK_OVERFLOW right after "Entering Hangar".
+			//
+			// This is why every earlier content-level attempt failed (empty
+			// Quests arrays, real vs fabricated YMPQ_ ids, empty/real seasons):
+			// the parser sets the gate before any of that is examined. Not
+			// answering at all is the only lever, and it leaves the cycle in
+			// its documented waiting state. Daily contracts are not needed to
+			// reach an interactive hangar.
+			if requestName == "YA_GetDailyContractsData" && dailyContractsResponseDisabled {
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetDailyContractsData response (arms the quest-cycle recursion)")
+				continue
+			}
+			// Defer the fleet response until player data exists client-side.
+			// Live Wine-client testing (2026-07-27) showed the client rejects a
+			// byte-perfect, non-empty Fleets array with "Invalid fleet data,
+			// fleet array is empty" + HandleMmogbrainError(8) whenever the
+			// response lands before YA_PlayerGet; deferring it until after
+			// YA_PlayerGet makes both messages disappear and the client stops
+			// crashing during hangar entry.
+			//
+			// This deliberately re-enables the deferral the comment above
+			// describes removing. That removal assumed a mutual wait — that the
+			// client blocks on this response before sending YA_PlayerGet, so
+			// only its ~44s timeout broke the deadlock. Live testing disproved
+			// it: with YA_PlayerFleets left entirely unanswered the client still
+			// sent YA_PlayerGet ~6s after login, with no stall.
+			if requestName == "YA_PlayerFleets" && !deferPlayerFleetsDisabled && !state.playerGetResponded {
+				state.pendingPlayerFleets = append(state.pendingPlayerFleets, frame)
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: deferring YA_PlayerFleets until YA_PlayerGet is answered")
 				continue
 			}
 			response := buildMmogRequestResponseFrame(frame.RequestID, frame.MsgType, requestName, state.playerPID, frame.Payload)

@@ -132,9 +132,9 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 		if !ok {
 			t.Fatalf("entities has unexpected type %T", payload["entities"])
 		}
-		if len(entities) == 0 {
-			t.Fatalf("entities should not be empty for %s", key)
-		}
+		// The market catalogs are intentionally empty — see
+		// gatewayItemCatalogSeeds. Callers that need contents assert it
+		// themselves; this helper only checks the shape.
 		return entities
 	}
 	entities, ok := catalog["entities"].([]any)
@@ -205,54 +205,6 @@ func gatewayJSONInt32(t *testing.T, value any, field string) int32 {
 	}
 }
 
-func gatewayJSONBool(t *testing.T, value any, field string) bool {
-	t.Helper()
-
-	typed, ok := value.(bool)
-	if !ok {
-		t.Fatalf("%s has unexpected type %T", field, value)
-	}
-	return typed
-}
-
-func gatewayCatalogEntityByItemID(t *testing.T, entities []any, itemID int32, field string) map[string]any {
-	t.Helper()
-
-	for _, item := range entities {
-		entry := gatewayJSONMap(t, item, field)
-		if gatewayJSONInt32(t, entry["item_id"], field+".item_id") == itemID {
-			return entry
-		}
-	}
-	t.Fatalf("%s missing item_id %d", field, itemID)
-	return nil
-}
-
-func gatewayCatalogEntityByExternalID(t *testing.T, entities []any, externalID string, field string) map[string]any {
-	t.Helper()
-
-	for _, item := range entities {
-		entry := gatewayJSONMap(t, item, field)
-		if gatewayJSONString(t, entry, "external_id") == externalID {
-			return entry
-		}
-	}
-	t.Fatalf("%s missing external_id %q", field, externalID)
-	return nil
-}
-
-func gatewayCatalogSeedByItemID(t *testing.T, seeds []gatewayCatalogEntitySeed, itemID int32) gatewayCatalogEntitySeed {
-	t.Helper()
-
-	for _, seed := range seeds {
-		if seed.itemID == itemID {
-			return seed
-		}
-	}
-	t.Fatalf("gateway catalog seeds missing item_id %d", itemID)
-	return gatewayCatalogEntitySeed{}
-}
-
 func gatewayOwnedInventoryIdentities(t *testing.T, payload map[string]any) map[int32]gatewayOwnedItemIdentity {
 	t.Helper()
 
@@ -309,96 +261,6 @@ func assertGatewayMarketMatchesOwned(t *testing.T, entry map[string]any, fieldPr
 	}
 	if got := gatewayJSONInt32(t, entry["loadout_id"], fieldPrefix+".loadout_id"); got != owned.loadoutID {
 		t.Fatalf("%s loadout_id = %d, want %d", fieldPrefix, got, owned.loadoutID)
-	}
-}
-
-func assertGatewayMarketUICompatibilityFields(t *testing.T, entry map[string]any, fieldPrefix string, wantOwned bool, wantPrice string, wantCategory string, wantParentCategory string) {
-	t.Helper()
-
-	description := gatewayJSONString(t, entry, "Description")
-	if description == "" {
-		t.Fatalf("%s Description should not be empty", fieldPrefix)
-	}
-	if got := gatewayJSONString(t, entry, "CategoryIcon"); got != "" {
-		t.Fatalf("%s CategoryIcon = %q, want empty string fallback", fieldPrefix, got)
-	}
-	if got := gatewayJSONString(t, entry, "CategoryName"); got != wantCategory {
-		t.Fatalf("%s CategoryName = %q, want %q", fieldPrefix, got, wantCategory)
-	}
-	if got := gatewayJSONString(t, entry, "ParentCategoryName"); got != wantParentCategory {
-		t.Fatalf("%s ParentCategoryName = %q, want %q", fieldPrefix, got, wantParentCategory)
-	}
-	if got := gatewayJSONString(t, entry, "CategoryDescription"); got != description {
-		t.Fatalf("%s CategoryDescription = %q, want Description %q", fieldPrefix, got, description)
-	}
-	if got := gatewayJSONString(t, entry, "Price"); got != wantPrice {
-		t.Fatalf("%s Price = %q, want %q", fieldPrefix, got, wantPrice)
-	}
-	if got := gatewayJSONBool(t, entry["IsOwned"], fieldPrefix+".IsOwned"); got != wantOwned {
-		t.Fatalf("%s IsOwned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-	if got := gatewayJSONBool(t, entry["Owned"], fieldPrefix+".Owned"); got != wantOwned {
-		t.Fatalf("%s Owned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-	if got := gatewayJSONBool(t, entry["bIsOwned"], fieldPrefix+".bIsOwned"); got != wantOwned {
-		t.Fatalf("%s bIsOwned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-	if got := gatewayJSONInt32(t, entry["ActionAvailabilityIndex"], fieldPrefix+".ActionAvailabilityIndex"); got != 0 {
-		t.Fatalf("%s ActionAvailabilityIndex = %d, want 0", fieldPrefix, got)
-	}
-	for _, field := range []string{"HasVideoPreview", "OnSale", "IsHeroShip", "HasVeteranStatus"} {
-		if got := gatewayJSONBool(t, entry[field], fieldPrefix+"."+field); got {
-			t.Fatalf("%s %s = true, want false", fieldPrefix, field)
-		}
-	}
-	for _, field := range []string{"ItemStatsArray", "AdditionalTextArray", "HeroShipStatsArray", "PreviousItemStatsArray"} {
-		if got := len(gatewayJSONArray(t, entry[field], fieldPrefix+"."+field)); got != 0 {
-			t.Fatalf("%s %s length = %d, want 0", fieldPrefix, field, got)
-		}
-	}
-	prices := gatewayJSONArray(t, entry["prices"], fieldPrefix+".prices")
-	if len(prices) == 0 {
-		t.Fatalf("%s prices should not be empty", fieldPrefix)
-	}
-	if got := gatewayJSONString(t, gatewayJSONMap(t, prices[0], fieldPrefix+".prices[0]"), "amount"); got != wantPrice {
-		t.Fatalf("%s prices[0].amount = %q, want %q", fieldPrefix, got, wantPrice)
-	}
-}
-
-func assertGatewayOwnershipFields(t *testing.T, entry map[string]any, fieldPrefix string, wantOwned bool) {
-	t.Helper()
-
-	if got := gatewayJSONBool(t, entry["IsOwned"], fieldPrefix+".IsOwned"); got != wantOwned {
-		t.Fatalf("%s IsOwned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-	if got := gatewayJSONBool(t, entry["Owned"], fieldPrefix+".Owned"); got != wantOwned {
-		t.Fatalf("%s Owned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-	if got := gatewayJSONBool(t, entry["bIsOwned"], fieldPrefix+".bIsOwned"); got != wantOwned {
-		t.Fatalf("%s bIsOwned = %t, want %t", fieldPrefix, got, wantOwned)
-	}
-}
-
-func assertGatewayInventoryIdentityFields(t *testing.T, entry map[string]any, fieldPrefix string, wantItemID int32, wantShipID int32, wantLoadoutID int32) {
-	t.Helper()
-
-	if got := gatewayJSONInt32(t, entry["item_id"], fieldPrefix+".item_id"); got != wantItemID {
-		t.Fatalf("%s item_id = %d, want %d", fieldPrefix, got, wantItemID)
-	}
-	if got := gatewayJSONInt32(t, entry["ItemID"], fieldPrefix+".ItemID"); got != wantItemID {
-		t.Fatalf("%s ItemID = %d, want %d", fieldPrefix, got, wantItemID)
-	}
-	if got := gatewayJSONInt32(t, entry["ship_id"], fieldPrefix+".ship_id"); got != wantShipID {
-		t.Fatalf("%s ship_id = %d, want %d", fieldPrefix, got, wantShipID)
-	}
-	if got := gatewayJSONInt32(t, entry["ShipID"], fieldPrefix+".ShipID"); got != wantShipID {
-		t.Fatalf("%s ShipID = %d, want %d", fieldPrefix, got, wantShipID)
-	}
-	if got := gatewayJSONInt32(t, entry["loadout_id"], fieldPrefix+".loadout_id"); got != wantLoadoutID {
-		t.Fatalf("%s loadout_id = %d, want %d", fieldPrefix, got, wantLoadoutID)
-	}
-	if got := gatewayJSONInt32(t, entry["LoadoutID"], fieldPrefix+".LoadoutID"); got != wantLoadoutID {
-		t.Fatalf("%s LoadoutID = %d, want %d", fieldPrefix, got, wantLoadoutID)
 	}
 }
 
@@ -478,21 +340,18 @@ func TestStarterInventorySeedsUseExtractedStarterIDs(t *testing.T) {
 	}
 }
 
-func TestGatewayBootstrapCatalogIsOwnedItemsOnly(t *testing.T) {
-	// issue #37 REVERTED for bootstrap: the full ~6630-SKU purchasable store
-	// (Weapons/Modules/Vanity/Heroships/currency-conversion offers) is no
-	// longer sent at bootstrap — it destabilised the client's item/offer cache
-	// (crashes caching the Heroships bucket and iterating the un_typed forex
-	// offers). The bootstrap catalog now carries only the player's owned items
-	// plus the two synthetic starter entries (currency pack, starter bundle).
-	for _, seed := range gatewayItemCatalogSeeds("CR") {
-		if !seed.gateIdentity {
-			t.Fatalf("bootstrap item catalog should only contain owned/gateIdentity items, found purchasable SKU %q (item_id %d)", seed.externalID, seed.itemID)
-		}
+func TestGatewayMarketCatalogsAreEmpty(t *testing.T) {
+	// The client resolves each catalog entry's lowercase "name" as a
+	// LOCALIZATION KEY and renders "<DNT>[[NotFound]]" when the lookup fails.
+	// We only have display names, not the backend's 32-hex keys, so every entry
+	// we list shows up unnamed in the player's inventory. Nothing depends on
+	// these lists — owned gear arrives via owned_items and YA_PlayerGet, and the
+	// wallet carries the balance — so both market catalogs stay empty.
+	if seeds := gatewayItemCatalogSeeds("CR"); len(seeds) != 0 {
+		t.Fatalf("market item catalog should be empty, got %d seeds", len(seeds))
 	}
-	currency := gatewayCurrencyCatalogSeeds("CR", "CR")
-	if len(currency) != 1 || currency[0].itemID != 9000001 {
-		t.Fatalf("bootstrap currency catalog should only contain the starter currency pack, got %d seeds", len(currency))
+	if seeds := gatewayCurrencyCatalogSeeds("CR", "CR"); len(seeds) != 0 {
+		t.Fatalf("market currency catalog should be empty, got %d seeds", len(seeds))
 	}
 }
 
@@ -679,12 +538,11 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 					assertGatewayMarketMatchesOwned(t, entry, "catalog item", owned)
 					overlapCount++
 				}
+				// The market catalogs are empty (see
+				// gatewayItemCatalogSeeds), so nothing overlaps with the
+				// player's owned inventory. owned_items is what carries
+				// ownership now, and it is asserted separately.
 				expectedOverlap := 0
-				for _, item := range starterOwnedInventorySeeds() {
-					if item.itemType != "ship" {
-						expectedOverlap++
-					}
-				}
 				if overlapCount != expectedOverlap {
 					t.Fatalf("catalog overlap = %d, want %d", overlapCount, expectedOverlap)
 				}
@@ -769,86 +627,10 @@ func TestGatewayBootstrapPinsSharedStarterIdentityListsAndOwnedMetadata(t *testi
 	}
 }
 
-func TestGatewayCatalogEntitiesExposeMarketUICompatibilityFields(t *testing.T) {
-	claims := gatewayTestClaims()
-	resetGatewayPlayerDataReady(t, testGatewayUserID)
-	setGatewayPlayerDataReadyState(testGatewayUserID, true)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/digital_items_rmt", nil)
-	rec := httptest.NewRecorder()
-	handleGWCatalog(rec, req, claims)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode gateway payload: %v", err)
-	}
-
-	entities := gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
-	firstStarter := starterShipLoadouts()[0]
-	sharedFirstStarter := sharedStarterLoadoutByID(t, firstStarter.loadoutID())
-	starterLoadout := gatewayCatalogEntityByItemID(t, entities, firstStarter.loadoutID(), "item_catalog_real entity")
-	assertGatewayMarketUICompatibilityFields(t, starterLoadout, "starter loadout catalog item", true, "0", "Loadouts", sharedFirstStarter.ShipName)
-
-	for _, entity := range entities {
-		entityMap, ok := entity.(map[string]any)
-		if !ok {
-			t.Fatalf("item_catalog_real entity type = %T, want object", entity)
-		}
-		if got := gatewayJSONString(t, entityMap, "item_type"); got == "ship" {
-			t.Fatalf("item_catalog_real should not expose ship entitlement rows that the client treats as loadout vanity: %#v", entity)
-		}
-	}
-}
-
-func TestGatewayCatalogEntitiesUseExtractedCategoryBuckets(t *testing.T) {
-	claims := gatewayTestClaims()
-	resetGatewayPlayerDataReady(t, testGatewayUserID)
-	setGatewayPlayerDataReadyState(testGatewayUserID, true)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/digital_items_rmt", nil)
-	rec := httptest.NewRecorder()
-	handleGWCatalog(rec, req, claims)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("decode gateway payload: %v", err)
-	}
-
-	entities := gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
-
-	firstStarter := starterShipLoadouts()[0]
-	starterWeapon := gatewayCatalogEntityByItemID(t, entities, firstStarter.weaponPrimaryItemID(), "starter weapon catalog item")
-	sharedFirstStarter := sharedStarterLoadoutByID(t, firstStarter.loadoutID())
-	if got := gatewayJSONString(t, starterWeapon, "CategoryName"); got != "Weapons" {
-		t.Fatalf("starter weapon CategoryName = %q, want Weapons", got)
-	}
-	if got := gatewayJSONString(t, starterWeapon, "ParentCategoryName"); got != sharedFirstStarter.ShipName {
-		t.Fatalf("starter weapon ParentCategoryName = %q, want %q", got, sharedFirstStarter.ShipName)
-	}
-
-	starterAbility := gatewayCatalogEntityByItemID(t, entities, firstStarter.abilityItemID(0), "starter ability catalog item")
-	if got := gatewayJSONString(t, starterAbility, "CategoryName"); got != "Modules" {
-		t.Fatalf("starter ability CategoryName = %q, want Modules", got)
-	}
-	if got := gatewayJSONString(t, starterAbility, "ParentCategoryName"); got != sharedFirstStarter.ShipName {
-		t.Fatalf("starter ability ParentCategoryName = %q, want %q", got, sharedFirstStarter.ShipName)
-	}
-}
-
 func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	claims := gatewayTestClaims()
 	resetGatewayPlayerDataReady(t, testGatewayUserID)
 	setGatewayBootstrapWaitTimeout(t, 20*time.Millisecond)
-	firstStarter := starterShipLoadouts()[0]
-	starterLoadoutSeed := gatewayCatalogSeedByItemID(t, gatewayItemCatalogSeeds("RMT"), firstStarter.loadoutID())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/digital_items_rmt", nil)
 	rec := httptest.NewRecorder()
@@ -873,17 +655,17 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 		t.Fatalf("starter_loadout_ids count before YA_PlayerGet = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
 	}
-	if len(gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)) == 0 {
-		t.Fatal("item_catalog_real.entities should still be populated before YA_PlayerGet")
-	}
-	entities := gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
-	starterLoadout := gatewayCatalogEntityByExternalID(t, entities, starterLoadoutSeed.externalID, "item_catalog_real entity")
-	assertGatewayOwnershipFields(t, starterLoadout, "starter loadout before YA_PlayerGet", false)
-	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout before YA_PlayerGet", firstStarter.loadoutID(), starterLoadoutSeed.shipID, firstStarter.loadoutID())
 
 	state := &mmogConnState{playerPID: protocol.NormalizePlayerPID(testGatewayUserID)}
 	if err := handlePlayerGetSatisfied(logrus.New(), &captureConn{}, "test-remote", nil, false, state, "client-request"); err != nil {
 		t.Fatalf("handlePlayerGetSatisfied: %v", err)
+	}
+
+	// Answering YA_PlayerGet is not on its own enough to release the gateway:
+	// the client must come back for more, proving it drained the player-data
+	// frame. Simulate that next read.
+	if err := processMmogAppFrames(logrus.New(), &captureConn{}, "test-remote", nil, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames (client resume): %v", err)
 	}
 
 	rec = httptest.NewRecorder()
@@ -906,10 +688,6 @@ func TestGatewayBootstrapOwnedItemsWaitForPlayerData(t *testing.T) {
 	if starterLoadouts := gatewayJSONArray(t, payload["starter_loadout_ids"], "starter_loadout_ids"); len(starterLoadouts) != len(dreadconfig.StarterInventoryLoadoutIDs()) {
 		t.Fatalf("starter_loadout_ids count after YA_PlayerGet = %d, want %d", len(starterLoadouts), len(dreadconfig.StarterInventoryLoadoutIDs()))
 	}
-	entities = gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)
-	starterLoadout = gatewayCatalogEntityByItemID(t, entities, firstStarter.loadoutID(), "item_catalog_real entity")
-	assertGatewayOwnershipFields(t, starterLoadout, "starter loadout after YA_PlayerGet", true)
-	assertGatewayInventoryIdentityFields(t, starterLoadout, "starter loadout after YA_PlayerGet", firstStarter.loadoutID(), starterLoadoutSeed.shipID, firstStarter.loadoutID())
 }
 
 func TestGatewayBootstrapHandlersWaitForPlayerDataReady(t *testing.T) {
@@ -1005,5 +783,32 @@ func TestGatewayBootstrapHandlersFallbackWhenPlayerDataReadyTimesOut(t *testing.
 				t.Fatal("bundles should stay populated after timeout fallback")
 			}
 		})
+	}
+}
+
+// The client processes HTTP callbacks well ahead of mmog frames (observed
+// live: market catalog handled on UE4 frame 96, "Player Data Received" only on
+// frame 105). If the gateway answers the market catalog as soon as we *send*
+// player data, the client's market-complete handler runs OnUpdateInventory
+// before it has player data and logs "Inventory of player data not yet
+// initialized!". Readiness must therefore be signalled only once the client
+// comes back for more.
+func TestGatewayCatalogWaitsForClientToResumeAfterPlayerGet(t *testing.T) {
+	resetGatewayPlayerDataReady(t, testGatewayUserID)
+	pid := protocol.NormalizePlayerPID(testGatewayUserID)
+	state := &mmogConnState{playerPID: pid}
+
+	if err := handlePlayerGetSatisfied(logrus.New(), &captureConn{}, "test-remote", nil, false, state, "client-request"); err != nil {
+		t.Fatalf("handlePlayerGetSatisfied: %v", err)
+	}
+	if gatewayPlayerDataReadyForUser(pid) {
+		t.Fatal("gateway must not be released just because the YA_PlayerGet response was written")
+	}
+
+	if err := processMmogAppFrames(logrus.New(), &captureConn{}, "test-remote", nil, nil, false, state); err != nil {
+		t.Fatalf("processMmogAppFrames (client resume): %v", err)
+	}
+	if !gatewayPlayerDataReadyForUser(pid) {
+		t.Fatal("gateway should be released once the client reads again after player data")
 	}
 }

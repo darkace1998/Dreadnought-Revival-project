@@ -12,20 +12,20 @@ var targetSizes = map[string]int{
 	// Was 174 — issue #50 fix: removed dead flat credits/premiumCurrency/
 	// freexp/xp fields (the client's YA_UserLogin handler never reads them),
 	// added real credits/freexp/gp fields nested under LoginStreak instead.
-	"YA_UserLogin":                 153,
-	"YA_UserOnline":                81,
+	"YA_UserLogin":  153,
+	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
-	"YA_RequestStaticFleetData":    6193,
-	"YA_GetFeatureToggle":          111,
-	"YA_GetGameConfigData":         534,
-	"YA_GetStaticCareerData":       1009,
-	"YA_GetProgressionData":        126,
-	"YA_GetScoringData":            5753,
-	"YA_GetDailyContractsData":     227,
-	"YA_GetBoosterData":            1856,
-	"YA_GetCareerProgression":       924,
-	"YA_GetPlayerScores":           277,
+	"YA_RequestStaticFleetData": 6193,
+	"YA_GetFeatureToggle":       111,
+	"YA_GetGameConfigData":      534,
+	"YA_GetStaticCareerData":    1691,
+	"YA_GetProgressionData":     126,
+	"YA_GetScoringData":         5753,
+	"YA_GetDailyContractsData":  227,
+	"YA_GetBoosterData":         1856,
+	"YA_GetCareerProgression":   443,
+	"YA_GetPlayerScores":        277,
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).
@@ -33,23 +33,23 @@ var targetSizes = map[string]int{
 	// with identity + unlock/ownership state; static ship/loadout/module
 	// definitions come from the client's own Content. This keeps the frame far
 	// under the client's 32KB (0x8000) mmog receive ring buffer.
-	"YA_GetTechTree":               14747,
+	"YA_GetTechTree": 14747,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
 	// Was 1220/4040. Now 857: progression tracks only the 10 validated T1+T2
 	// tech-tree ships (see techTreeShips).
-	"YA_GetPlayerProgression":      1097,
-	"YA_GetPlayerPurchases":        100,
+	"YA_GetPlayerProgression": 1097,
+	"YA_GetPlayerPurchases":   100,
 	// Was 305, -72 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary).
-	"YA_FleetEligibility":          233,
+	"YA_FleetEligibility": 233,
 	// Was 368116 (full tuning tables) — that overflowed the 16-bit mmog frame
 	// size field and desynced the client stream, blocking hangar entry. Now sends
 	// empty override tables (client uses its backup asset tuning); see
 	// buildMmogTunePayload. Must stay well under 65535.
-	"YA_Tune":                      299,
-	"YA_GetSeasonData":             135,
+	"YA_Tune":          299,
+	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
 	// replacing the far longer m_enabling/m_triggers/m_effects DSL text
@@ -71,10 +71,10 @@ var targetSizes = map[string]int{
 	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
-	"YA_PlayerGet":                7119,
-	"YA_PlayerFleets":             1851,
-	"YA_GetSeasonProgress":         146,
-	"YA_GetPlayersInformation":     326,
+	"YA_PlayerGet":             7119,
+	"YA_PlayerFleets":          1772,
+	"YA_GetSeasonProgress":     146,
+	"YA_GetPlayersInformation": 326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).
 	"YA_CheckReturn":               101,
 	"YA_AnalyticsBeginTransaction": 124,
@@ -104,9 +104,11 @@ func TestPayloadSizesVerify(t *testing.T) {
 		"YA_GetScoringData":         func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogScoringDataPayload()) },
 		"YA_GetDailyContractsData":  func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogDailyContractsDataPayload()) },
 		"YA_GetBoosterData":         func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogBoosterDataPayload()) },
-		"YA_GetCareerProgression":   func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogCareerProgressionPayload()) },
-		"YA_GetPlayerScores":        func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerScoresPayload()) },
-		"YA_GetTechTree":            func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTechTreePayload()) },
+		"YA_GetCareerProgression": func() []byte {
+			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogCareerProgressionPayload(pid))
+		},
+		"YA_GetPlayerScores": func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerScoresPayload()) },
+		"YA_GetTechTree":     func() []byte { return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogTechTreePayload()) },
 		"YA_GetPlayerProgression": func() []byte {
 			return protocol.BuildResponseFrame(reqID, 0x0320, buildMmogPlayerProgressionPayload(pid))
 		},

@@ -524,6 +524,23 @@ func appendMmogFleetBackendFields(b []byte, stack []int, playerPID string, fleet
 	return b, stack
 }
 
+// Each Fleets entry's FID is a GATE with TWO requirements, both confirmed by
+// disassembly and by live testing:
+//   1. It must parse as a nonzero 32-hex GUID. FUN_142a1d450 parses the value
+//      strictly as a GUID and yields an all-zero reference for anything else,
+//      which the parser rejects. A plain token like "RecruitFleet" always
+//      failed here (an old comment claimed the OPPOSITE — that FID must not be
+//      GUID-shaped — which misled several sessions).
+//   2. It must ALREADY be interned in the client's FName pool. The resolve is
+//      FIND-ONLY: FUN_140ca0ab0 returns the chunked pool (0x400 bytes of chunk
+//      pointers, count at +0x400) and the parser rejects an index that is
+//      negative, >= the count, or resolves to a null entry (checks at
+//      0x142a77ba4-0x142a77be7). A freshly generated GUID has never been
+//      interned, so it fails too — verified live with an md5-derived GUID.
+// The player's PID satisfies both: it is GUID-shaped and the client interns it
+// from its own auth data. We only ever send one (unlocked) fleet, so reusing it
+// as the fleet identity does not collide.
+
 func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet mmogFleetSeed) ([]byte, []int) {
 	// IMPORTANT: UE4 FName comparison is case-insensitive, so field names that differ
 	// only in case (e.g. "FlagShipID" vs "flagshipID") collide in the parsed object's
@@ -531,12 +548,12 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// the first, which corrupted FlagShipID with the loadout ID and made the client's
 	// fleet validator drop every entry ("Invalid fleet data, fleet array is empty").
 	// Keep exactly one canonical field per logical attribute.
-	// 
+	//
 	// IMPORTANT: The client parser only handles field types 1-4 (double, double, int64, string).
 	// int32 fields (protocol type 0x56) fall through to default=0, causing fleet type
 	// validation to fail with 'Invalid fleet data received'. Use string fields for Type/Name.
 	// MINIMAL fleet entry. The client's Fleets-array parser (FUN_142a77910)
-	// reads exactly these fields: FID (gate — must not be GUID-shaped), PID,
+	// reads exactly these fields: FID (gate — see the FID note below), PID,
 	// FleetType, AutoRepair, Maintenance, LastWinTime, ChargingBeginTime,
 	// ChargingCharges, Rating, shipIds, ShipTechTreeComplete, FlagShipID,
 	// FlagShipLoadoutIndex. Everything the parser ignores was dropped
@@ -546,7 +563,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// they feed a separate native reflection class (YLocalServerPlayerDataInformation),
 	// not the parser, and are shared with the YA_PlayerGet fleet summary.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "FID", fleet.token)
+	b = protocol.AppendStringField(b, "FID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
@@ -595,21 +612,56 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	}
 	fleets = unlockedFleetsOnly(fleets)
 
+	// "result" IS the fleet array itself — not an object wrapping one.
+	//
+	// The client's YA_PlayerFleets handler (dispatched on request slot
+	// interface+0x3730) does, at 0x142a2646a:
+	//     GetField(payload, "result")  ->  FUN_142a77910(dest, thatValue)
+	// i.e. it hands the "result" VALUE to the Fleets-array parser and never
+	// looks at the payload root. Sending FID/PID/Fleets/Items at the top level
+	// made that lookup return nothing, so the parser saw an element count of 0
+	// (the check at 0x142a77a52), logged "Invalid fleet data, fleet array is
+	// empty", returned false, and the handler called HandleMmogbrainError(8)
+	// ("Failed to receive fleet updated data") instead of broadcasting the
+	// fleet-updated delegate at interface+0xa50. That delegate is what sets
+	// UYFleetManager readiness bit 2, so readiness stalled at 13 and the client
+	// never left the loading screen (CheckCompletedInitialization needs 15).
+	//
+	// YA_RequestStaticFleetData already wraps its content in "result" — this
+	// response was simply inconsistent with it.
 	b = protocol.AppendStringField(b, "RT", "YA_PlayerFleets")
 	b = protocol.AppendStringField(b, "FID", "PlayerFleets")
 	b = protocol.AppendStringField(b, "PID", normalizedPlayerStatePID(playerPID))
 	b = protocol.AppendStringField(b, "Name", "PlayerFleets")
 	b = protocol.AppendInt32Field(b, "PlayedMatches", 0)
-	b, stack = protocol.AppendArrayStart(b, stack, "Fleets")
+	// "result" IS the fleet array — not an object containing one.
+	//
+	// The handler does GetField(payload, "result") and hands that VALUE
+	// straight to the Fleets-array parser (FUN_142a77910), which iterates the
+	// value's elements as fleet entries. Two earlier shapes both failed:
+	//   - fleets at the payload root, no "result": lookup returned nothing, so
+	//     element count 0 -> "Invalid fleet data, fleet array is empty".
+	//   - "result" as an OBJECT wrapping a "Fleets" array: the parser counted
+	//     that object's members as entries. The client logged "Fleets received
+	//     (5)" — our six members minus PlayedMatches, whose int32 tag its value
+	//     parser drops — then rejected the first "entry" (the FID string) with
+	//     "Invalid fleet data received".
+	// Emitting the array directly gives the parser exactly what it iterates.
+	b, stack = protocol.AppendArrayStart(b, stack, "result")
 	for _, fleet := range fleets {
 		b, stack = appendMmogPlayerFleetEntry(b, stack, playerPID, fleet)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "Items")
-	for _, fleet := range fleets {
-		b, stack = appendMmogFleetUnlockEntry(b, stack, fleet)
-	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	// NO root-level "Items" array. Its presence corrupted the client's parsed
+	// value tree for the sibling "result" array: the Fleets parser read a
+	// nonsense element count while its data pointer stayed correct, so entry 0
+	// always parsed perfectly and a phantom entry 1 then failed with "Invalid
+	// fleet data received". Measured counts were incoherent — 1 fleet reported
+	// 2, 2 fleets reported 12, 3 fleets reported 12 — which is why no encoding
+	// formula explained it. Dropping Items makes the count exact (1 fleet -> 1),
+	// the entry parse succeeds, HandleMmogbrainFleetUpdated fires, and
+	// UYFleetManager readiness finally reaches 15. Items was never read by this
+	// parser anyway; fleet unlock state comes from the tech tree.
 	return b
 }
 
@@ -784,9 +836,22 @@ func buildMmogStaticFleetDataPayloadForPlayer(playerPID string) []byte {
 // mmogSeasonDataSeasonsJSON has "m_active":true.
 const mmogCurrentSeasonID = "PVE_Season1"
 
-const mmogSeasonDataSeasonsJSON = `[]` // emptied: any season/event makes the client's UYPlayerMPQuestCycle build an empty-but-non-null quest provider that infinite-recurses (dump-confirmed: cycle obj +0x90=0 entries, never marks done)
+// The client imports these two blobs as JSON DataTables. An empty array is
+// NOT accepted — it makes UYSeasonsDataManager log "Error in seasons/events
+// data table coming from mmogbrain: Failed to parse the JSON data", so send
+// one well-formed row each. Both are declared INACTIVE (m_active:false, and
+// CurrentSeason empty below) so no season/event is running.
+//
+// These were previously emptied to `[]` on the theory that any season/event
+// let the client's UYPlayerMPQuestCycle build an empty-but-non-null quest
+// provider and infinite-recurse. That theory is disproven: a full crash dump
+// shows the flag actually gating that recursion (mmog interface +0x44c8) is
+// still 1 with the season response withheld ENTIRELY, and the quest
+// collection it recurses over is built from the client's own
+// MPQuestCollection.uasset, not from anything we send.
+const mmogSeasonDataSeasonsJSON = `[{"Name":"PVE_Season1","m_active":false,"m_name":"Miner Inconvenience","m_descShort":"","m_descLong":"","m_imageLarge":"None","m_imageSmall":"None","m_rewardLevels":[]}]`
 
-const mmogSeasonDataEventsJSON = `[]` // emptied with Seasons (see above)
+const mmogSeasonDataEventsJSON = `[{"Name":"PVE_S1E1","m_name":"Incident Management","m_descShort":"","m_descLong":"","m_map":"None","m_mapParameters":"","m_gameMode":"YGMT_HORDE","m_color":{"r":160,"g":144,"b":131,"a":255},"m_imageSmall":"None","m_imageLarge":"None","m_rewardLevels":[],"m_startDate":"2018.05.16-16.00.00","m_endDate":"2018.05.16-16.19.59","m_season":"PVE_Season1"}]`
 
 func buildMmogSeasonDataPayload() []byte {
 	var b []byte
@@ -1105,6 +1170,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "selectedLoadoutID", starterFleet.flagshipLoadoutID)
 	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipLoadoutIndex)
 	b, stack = appendMmogFleetBackendFields(b, stack, playerPID, starterFleet)
+	// Adding a full "Fleets" array here was tested against the live client
+	// (2026-07-27) and changed nothing — the fleet array the client complained
+	// about comes from YA_PlayerFleets, not player data. Left out to keep
+	// YA_PlayerGet small.
 	b, stack = protocol.AppendArrayStart(b, stack, "FactionReputation")
 	for _, entry := range loadPlayerFactionReputation(playerPID) {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
@@ -1500,16 +1569,12 @@ func appendMmogModuleUIDataEntry(b []byte, stack []int, module mmogModuleUIDataS
 	return b, stack
 }
 
-func buildMmogCareerProgressionPayload() []byte {
+func buildMmogCareerProgressionPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetCareerProgression")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b, stack = protocol.AppendArrayStart(b, stack, "m_categories")
-	b, stack = appendMmogProgressionCategories(b, stack)
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, _ = protocol.AppendObjectEnd(b, stack)
+	b, _ = appendCareerGoalProgress(b, stack, playerPID)
 	return b
 }
 
@@ -1599,12 +1664,7 @@ func buildMmogStaticCareerDataPayload() []byte {
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetStaticCareerData")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "m_categoryDTPath", configBackedProgressionCategoryDataTablePath())
-	b, stack = protocol.AppendArrayStart(b, stack, "m_categories")
-	b, stack = appendMmogProgressionCategories(b, stack)
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, _ = protocol.AppendObjectEnd(b, stack)
+	b, _ = appendCareerGoalsConfig(b, stack)
 	return b
 }
 
@@ -1635,22 +1695,22 @@ func buildMmogProjectileDataPayload() []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_GetProjectileData")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Projectiles")
-	
+
 	for rowName, projectile := range projectiles {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "RowName", rowName)
-		
+
 		// Use reflection to add all projectile fields
 		val := reflect.ValueOf(projectile)
 		typeOf := val.Type()
-		
+
 		for i := 0; i < val.NumField(); i++ {
 			field := val.Field(i)
 			fieldName := typeOf.Field(i).Name
-			
+
 			// Convert field name to the format expected by the client
 			clientFieldName := "m_" + toLowerCamelCase(fieldName)
-			
+
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
 				b = protocol.AppendStringField(b, clientFieldName, fmt.Sprintf("%.6f", field.Float()))
@@ -1664,10 +1724,10 @@ func buildMmogProjectileDataPayload() []byte {
 				b = protocol.AppendStringField(b, clientFieldName, field.String())
 			}
 		}
-		
+
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	
+
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -1682,22 +1742,22 @@ func BuildYAGetShipFeatsPayload() []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_GetShipFeats")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipFeats")
-	
+
 	for compositeName, feat := range shipFeats {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "CompositeName", compositeName)
-		
+
 		// Use reflection to add all ship feat fields
 		val := reflect.ValueOf(feat)
 		typeOf := val.Type()
-		
+
 		for i := 0; i < val.NumField(); i++ {
 			field := val.Field(i)
 			fieldName := typeOf.Field(i).Name
-			
+
 			// Convert field name to the format expected by the client
 			clientFieldName := "m_" + toLowerCamelCase(fieldName)
-			
+
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
 				b = protocol.AppendStringField(b, clientFieldName, fmt.Sprintf("%.6f", field.Float()))
@@ -1711,10 +1771,10 @@ func BuildYAGetShipFeatsPayload() []byte {
 				b = protocol.AppendStringField(b, clientFieldName, field.String())
 			}
 		}
-		
+
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	
+
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -1729,22 +1789,22 @@ func BuildYAGetAbilitiesPayload() []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_GetAbilities")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "Abilities")
-	
+
 	for compositeName, ability := range abilities {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "CompositeName", compositeName)
-		
+
 		// Use reflection to add all ability fields
 		val := reflect.ValueOf(ability)
 		typeOf := val.Type()
-		
+
 		for i := 0; i < val.NumField(); i++ {
 			field := val.Field(i)
 			fieldName := typeOf.Field(i).Name
-			
+
 			// Convert field name to the format expected by the client
 			clientFieldName := "m_" + toLowerCamelCase(fieldName)
-			
+
 			switch field.Kind() {
 			case reflect.Float32, reflect.Float64:
 				b = protocol.AppendStringField(b, clientFieldName, fmt.Sprintf("%.6f", field.Float()))
@@ -1758,10 +1818,10 @@ func BuildYAGetAbilitiesPayload() []byte {
 				b = protocol.AppendStringField(b, clientFieldName, field.String())
 			}
 		}
-		
+
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	
+
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -1955,11 +2015,11 @@ func buildMmogBoosterDataPayload() []byte {
 }
 
 type boosterEffectSeed struct {
-	effectType int32
-	target     int32
+	effectType   int32
+	target       int32
 	creditsPools []int32
-	repPools   []int32
-	multiplier string
+	repPools     []int32
+	multiplier   string
 }
 
 type boosterSeed struct {
@@ -2041,15 +2101,15 @@ var bossTypes = []struct {
 
 // Havoc Mode Wave Configuration
 var havocWaveConfig = []struct {
-	waveNumber     int32
-	enemyCount     int32
-	eliteCount     int32
-	bossWave       bool
-	bossID         string
-	timeLimit      int32
-	rewardXP       int32
-	rewardGP       int32
-	description    string
+	waveNumber  int32
+	enemyCount  int32
+	eliteCount  int32
+	bossWave    bool
+	bossID      string
+	timeLimit   int32
+	rewardXP    int32
+	rewardGP    int32
+	description string
 }{
 	{1, 5, 0, false, "", 120, 100, 200, "Initial wave - light enemies"},
 	{2, 8, 1, false, "", 120, 150, 300, "Second wave - increased count"},
@@ -2091,12 +2151,12 @@ var pveRewardTiers = []struct {
 // PvE Progress Tracking Functions
 
 type pveProgress struct {
-	mode         string
-	highestWave  int32
-	totalWaves   int32
-	bossKills    int32
-	totalKills   int32
-	bestScore    int32
+	mode        string
+	highestWave int32
+	totalWaves  int32
+	bossKills   int32
+	totalKills  int32
+	bestScore   int32
 }
 
 func loadPlayerPvEProgress(playerPID string) []pveProgress {
@@ -2162,10 +2222,10 @@ func loadPlayerBossKills(playerPID string) []bossKillRecord {
 }
 
 type aiPreferences struct {
-	difficulty     string
-	aiBehavior     string
-	spawnRate      float32
-	bossFrequency  float32
+	difficulty    string
+	aiBehavior    string
+	spawnRate     float32
+	bossFrequency float32
 }
 
 func loadPlayerAIPreferences(playerPID string) aiPreferences {

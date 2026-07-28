@@ -2012,17 +2012,25 @@ func TestBootstrapPayloadsExposeFullFleetWithoutHeavyBattleReadyData(t *testing.
 	if bytes.Contains(playerFleets, appendFieldMarker("Bonuses", 0x0d)) {
 		t.Fatal("YA_PlayerFleets should not include battle-ready bonus placeholders after payload trim")
 	}
-	// A new player owns ONLY the Recruit fleet; the locked Veteran/Legendary
-	// fleets (0 ships, not unlocked) are no longer sent — sending those empty
-	// locked fleets made the client reject the whole set as "fleet array is
-	// empty" (see unlockedFleetsOnly).
-	if !bytes.Contains(playerFleets, []byte("RecruitFleet")) {
-		t.Fatal("YA_PlayerFleets missing the owned RecruitFleet")
+	// A new player owns ONLY the Recruit fleet, and it is identified on the wire
+	// by its FID — the player's PID — not by the "RecruitFleet" token, which the
+	// client rejects because FID must be a GUID it has already interned.
+	if !bytes.Contains(playerFleets, appendFieldMarker("FID", 0x09)) {
+		t.Fatal("YA_PlayerFleets missing the fleet FID")
+	}
+	if !bytes.Contains(playerFleets, []byte(defaultMmogPlayerPID)) {
+		t.Fatal("YA_PlayerFleets fleet FID should be the player's PID (GUID-shaped and already interned client-side)")
 	}
 	for _, fleetName := range []string{"VeteranFleet", "LegendaryFleet"} {
 		if bytes.Contains(playerFleets, []byte(fleetName)) {
 			t.Fatalf("YA_PlayerFleets should not include locked/unowned fleet %q for a new player", fleetName)
 		}
+	}
+	// The sibling root-level "Items" array corrupted the client's parsed value
+	// tree for "result", producing a nonsense element count and a phantom entry
+	// that failed validation. It must stay out.
+	if bytes.Contains(playerFleets, appendFieldMarker("Items", 0x0d)) {
+		t.Fatal("YA_PlayerFleets must not carry a root-level Items array — it breaks the client's fleet-array parse")
 	}
 	if got := bytes.Count(playerFleets, appendFieldMarker("m_fleetId", 0x56)); got != 1 {
 		t.Fatalf("YA_PlayerFleets fleet row count = %d, want 1 (Recruit only)", got)
@@ -2164,49 +2172,48 @@ func TestDailyContractsPayloadIsInertButParserShaped(t *testing.T) {
 	}
 }
 
-func TestCareerPayloadsUseConfigBackedProgressionMetadata(t *testing.T) {
+func TestCareerPayloadsUseGoalsModel(t *testing.T) {
+	// The client parses career progression as a GOALS system, not the
+	// progression-item taxonomy this used to send. FYCareerProgressionConfig::Load
+	// reads "CareerGoalsConfig" from the static response and resolves m_category /
+	// m_platformVisibility / m_rewardType through UEnum::GetValueByName, so those
+	// must be enum NAME strings. FYCareerProgressionData::Update reads
+	// {goalId, progress} from the dynamic response and rejects ids that are not in
+	// the static config, so both sides must agree on m_id.
 	staticCareerData := buildMmogStaticCareerDataPayload()
-	careerProgression := buildMmogCareerProgressionPayload()
-	taxonomies := configBackedProgressionTaxonomies()
-	staticCategories := extractNamedMmogArray(t, extractNamedMmogObject(t, staticCareerData, "result"), "m_categories")
-	careerCategories := extractNamedMmogArray(t, extractNamedMmogObject(t, careerProgression, "result"), "m_categories")
-
-	if got := bytes.Count(staticCategories, appendFieldMarker("TableCategory", 0x09)); got != len(taxonomies) {
-		t.Fatalf("YA_GetStaticCareerData category count = %d, want %d", got, len(taxonomies))
-	}
-	if got := bytes.Count(careerCategories, appendFieldMarker("TableCategory", 0x09)); got != len(taxonomies) {
-		t.Fatalf("YA_GetCareerProgression category count = %d, want %d", got, len(taxonomies))
+	careerProgression := buildMmogCareerProgressionPayload(defaultMmogPlayerPID)
+	goals := careerGoalsConfig()
+	if len(goals) == 0 {
+		t.Fatal("careerGoalsConfig must not be empty — an empty config is what made the client log \"Career progression Data empty\"")
 	}
 
-	wantPath := configBackedProgressionCategoryDataTablePath()
-	if !bytes.Contains(staticCareerData, protocol.AppendStringField(nil, "m_categoryDTPath", wantPath)) {
-		t.Fatalf("YA_GetStaticCareerData missing config-backed m_categoryDTPath %q", wantPath)
+	// CareerGoalsConfig is a ROOT-level array (like YA_GetBoosterData's
+	// BoosterTable), not nested under "result".
+	config := extractNamedMmogArray(t, staticCareerData, "CareerGoalsConfig")
+	for _, field := range []string{"m_id", "m_title", "m_description", "m_counterID", "m_category", "m_platformVisibility", "m_stageData"} {
+		if !bytes.Contains(config, appendFieldMarker(field, 0x09)) && !bytes.Contains(config, appendFieldMarker(field, 0x0d)) {
+			t.Fatalf("CareerGoalsConfig entries missing %q", field)
+		}
+	}
+	for _, enumName := range []string{"EYGoalCategory::YGC_RECRUIT", "EYGoalRewardType::YGR_CREDITS", "EYGoalPlatformVisibility::YGPV_PC"} {
+		if !bytes.Contains(config, []byte(enumName)) {
+			t.Fatalf("CareerGoalsConfig should carry the FULLY-QUALIFIED enum name %q (UEnum::GetValueByName rejects bare entry names)", enumName)
+		}
+	}
+	if bytes.Contains(staticCareerData, appendFieldMarker("m_categories", 0x0d)) {
+		t.Fatal("static career data should no longer send m_categories — that belongs to UYPlayerMatchStatisticsManager, not career progression")
 	}
 
-	for _, taxonomy := range taxonomies {
-		if !bytes.Contains(staticCategories, protocol.AppendStringField(nil, "TableCategory", taxonomy.TableCategory)) {
-			t.Fatalf("YA_GetStaticCareerData missing progression category %q", taxonomy.TableCategory)
-		}
-		if !bytes.Contains(careerCategories, protocol.AppendStringField(nil, "TableCategory", taxonomy.TableCategory)) {
-			t.Fatalf("YA_GetCareerProgression missing progression category %q", taxonomy.TableCategory)
-		}
-		if !bytes.Contains(staticCategories, protocol.AppendStringField(nil, "CategoryID", strconv.Itoa(int(taxonomy.CategoryID)))) {
-			t.Fatalf("YA_GetStaticCareerData missing category id %d", taxonomy.CategoryID)
-		}
-		if !bytes.Contains(careerCategories, protocol.AppendStringField(nil, "CategoryID", strconv.Itoa(int(taxonomy.CategoryID)))) {
-			t.Fatalf("YA_GetCareerProgression missing category id %d", taxonomy.CategoryID)
-		}
-		for _, assetRoot := range taxonomy.AssetRoots {
-			if !bytes.Contains(staticCategories, protocol.AppendUnnamedStringField(nil, assetRoot)) {
-				t.Fatalf("YA_GetStaticCareerData missing asset root %q", assetRoot)
-			}
-			if !bytes.Contains(careerCategories, protocol.AppendUnnamedStringField(nil, assetRoot)) {
-				t.Fatalf("YA_GetCareerProgression missing asset root %q", assetRoot)
-			}
+	progress := extractNamedMmogArray(t, careerProgression, "CareerProgression")
+	if !bytes.Contains(progress, appendFieldMarker("goalId", 0x09)) {
+		t.Fatal("career progression entries missing goalId")
+	}
+	for _, goal := range goals {
+		if !bytes.Contains(progress, []byte(goal.id)) {
+			t.Fatalf("career progression missing goal id %q declared in the static config", goal.id)
 		}
 	}
 }
-
 func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 	payload := buildMmogSeasonProgressPayload()
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "RT", "YA_GetSeasonProgress")) {
@@ -2226,17 +2233,20 @@ func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
-	// Seasons/Events intentionally EMPTY ("[]"): any season/event makes the
-	// client's UYPlayerMPQuestCycle build an empty-but-non-null MP-quest
-	// provider that infinite-recurses (dump-confirmed). No season => no
-	// provider => the cycle terminates. See buildMmogSeasonDataPayload.
+	// Seasons/Events must be well-formed, NON-empty JSON arrays: the client
+	// imports each as a JSON DataTable and rejects "[]" with "Failed to parse
+	// the JSON data" (observed live). They are declared inactive instead of
+	// omitted. See buildMmogSeasonDataPayload.
 	seasonsRaw := protocol.ExtractStringField(result, "Seasons")
-	if seasonsRaw != "[]" {
-		t.Fatalf("YA_GetSeasonData Seasons must be empty to avoid the MP-quest recursion, got %q", seasonsRaw)
+	if !strings.HasPrefix(seasonsRaw, "[{") {
+		t.Fatalf("YA_GetSeasonData Seasons must be a non-empty JSON array the client can import, got %q", seasonsRaw)
+	}
+	if !strings.Contains(seasonsRaw, `"m_active":false`) {
+		t.Fatalf("YA_GetSeasonData Seasons must declare no active season, got %q", seasonsRaw)
 	}
 	eventsRaw := protocol.ExtractStringField(result, "Events")
-	if eventsRaw != "[]" {
-		t.Fatalf("YA_GetSeasonData Events must be empty to avoid the MP-quest recursion, got %q", eventsRaw)
+	if !strings.HasPrefix(eventsRaw, "[{") {
+		t.Fatalf("YA_GetSeasonData Events must be a non-empty JSON array the client can import, got %q", eventsRaw)
 	}
 	// CurrentSeason intentionally EMPTY: an active season activates the
 	// client's UYPlayerMPQuestCycle, which infinite-recurses loading MP season
@@ -2331,7 +2341,7 @@ func TestCriticalPayloadsMaintainValidMmogNesting(t *testing.T) {
 	}
 }
 
-func TestPlayerFleetsRespondsBeforePlayerGet(t *testing.T) {
+func TestPlayerFleetsIsDeferredUntilPlayerGet(t *testing.T) {
 	conn := &captureConn{}
 	fleetRequestID := syntheticRequestID(0xa1)
 	requestPayload := protocol.AppendStringField(nil, "RT", "YA_PlayerFleets")
@@ -2351,33 +2361,42 @@ func TestPlayerFleetsRespondsBeforePlayerGet(t *testing.T) {
 		t.Fatalf("processMmogAppFrames: %v", err)
 	}
 
-	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
-	if len(remaining) != 0 {
-		t.Fatalf("unexpected remaining bytes after parsing fleet response")
+	// The client rejects a byte-perfect Fleets array with "Invalid fleet data,
+	// fleet array is empty" (then HandleMmogbrainError(8)) if it arrives before
+	// player data exists, so nothing may go out yet — verified against a live
+	// client, 2026-07-27.
+	if conn.Len() != 0 {
+		t.Fatalf("YA_PlayerFleets answered before YA_PlayerGet, want deferral")
 	}
-	// YA_PlayerFleets is followed by a YA_FleetUpdate push — see
-	// buildMmogFleetUpdatePush's doc comment for why (live-debugging evidence
-	// that HandleMmogbrainFleetUpdated never fires from the response alone).
-	if len(frames) != 2 {
-		t.Fatalf("YA_PlayerFleets wrote %d frames, want 2 (response + YA_FleetUpdate push)", len(frames))
-	}
-	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerFleets" {
-		t.Fatalf("frame 0 = %q, want YA_PlayerFleets", got)
-	}
-	if frames[0].RequestID != fleetRequestID {
-		t.Fatalf("YA_PlayerFleets response id = %x, want original %x", frames[0].RequestID, fleetRequestID)
-	}
-	if got := protocol.ExtractRequestName(frames[1].Payload); got != "YA_FleetUpdate" {
-		t.Fatalf("frame 1 = %q, want YA_FleetUpdate", got)
-	}
-	if frames[1].RequestID == fleetRequestID {
-		t.Fatal("YA_FleetUpdate push must use a fresh request id, not the exhausted YA_PlayerFleets one (a second frame reusing that id is likely dropped before any RT dispatch)")
+	if len(state.pendingPlayerFleets) != 1 {
+		t.Fatalf("pendingPlayerFleets = %d, want 1", len(state.pendingPlayerFleets))
 	}
 	if state.playerGetResponded {
 		t.Fatal("YA_PlayerFleets should not mark playerGetResponded")
 	}
 	if !state.playerFleetsReceived {
 		t.Fatal("YA_PlayerFleets should mark playerFleetsReceived")
+	}
+
+	// Answering YA_PlayerGet must flush the queued fleet response.
+	if err := handlePlayerGetSatisfied(logrus.New(), conn, "test-remote", nil, false, state, "client-request"); err != nil {
+		t.Fatalf("handlePlayerGetSatisfied: %v", err)
+	}
+	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
+	if len(remaining) != 0 {
+		t.Fatalf("unexpected remaining bytes after parsing fleet response")
+	}
+	if len(frames) != 1 {
+		t.Fatalf("flush wrote %d frames, want 1 (the deferred YA_PlayerFleets response)", len(frames))
+	}
+	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_PlayerFleets" {
+		t.Fatalf("flushed frame = %q, want YA_PlayerFleets", got)
+	}
+	if frames[0].RequestID != fleetRequestID {
+		t.Fatalf("deferred response id = %x, want original %x", frames[0].RequestID, fleetRequestID)
+	}
+	if len(state.pendingPlayerFleets) != 0 {
+		t.Fatalf("pendingPlayerFleets = %d after flush, want 0", len(state.pendingPlayerFleets))
 	}
 }
 
@@ -2392,12 +2411,17 @@ func TestFleetUpdatePushIsTopLevelWithFleetsArray(t *testing.T) {
 	}
 }
 
-// The client sends its bootstrap reads (purchases, fleet, contracts) and blocks
-// waiting for the responses *before* it will send YA_PlayerGet. Deferring these
-// until YA_PlayerGet therefore deadlocked the client into a ~44s stall (see
-// DreadGame.log). They carry no dependency on YA_PlayerGet — every response is
-// built from state.playerPID, already selected at YA_UserLogin — so they must be
+// These bootstrap reads carry no dependency on YA_PlayerGet — every response is
+// built from state.playerPID, already selected at YA_UserLogin — so they are
 // answered immediately.
+//
+// YA_PlayerFleets is the exception and IS deferred (see
+// TestPlayerFleetsIsDeferredUntilPlayerGet): the client rejects its fleet array
+// outright if it lands before player data. The old blanket rule here assumed
+// the client blocks on all of these before sending YA_PlayerGet, so deferring
+// any of them would deadlock it into a ~44s stall; live client testing on
+// 2026-07-27 disproved that for the fleet response specifically — with it
+// entirely unanswered, YA_PlayerGet still arrived ~6s after login.
 func TestPlayerPurchasesAnsweredImmediately(t *testing.T) {
 	conn := &captureConn{}
 	purchasesRequestID := syntheticRequestID(0xb1)
@@ -2443,7 +2467,11 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 		wantFrames  int
 		wantDelayed bool
 	}{
-		{requestName: "YA_GetDailyContractsData", wantFrames: 1},
+		// YA_GetDailyContractsData is deliberately NOT answered — see the
+		// withholding site in response_connection.go: any response to it sets
+		// interface+0x44c8 = 1, which arms the client's hangar-entry
+		// stack-overflow recursion.
+		{requestName: "YA_GetDailyContractsData", wantFrames: 0},
 		{requestName: "YA_GetSeasonProgress", wantFrames: 1},
 	} {
 		requestName := tc.requestName
@@ -2486,11 +2514,17 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 	}
 }
 
-func TestDailyContractsAnsweredImmediately(t *testing.T) {
+func TestDailyContractsResponseIsWithheld(t *testing.T) {
+	// Answering YA_GetDailyContractsData is what arms the hangar-entry crash:
+	// the client's handler parses the payload with FUN_142a6b7f0, which sets
+	// interface+0x44c8 = 1 UNCONDITIONALLY (whatever the contents) and then
+	// broadcasts interface+0x1070. That gate is what makes
+	// UYPlayerMPQuestCycle::OnBackendDataAvailable walk the quest collection
+	// and recurse until the stack is exhausted. While the gate stays 0 the
+	// cycle just binds to +0x1070 and waits, which is harmless.
 	conn := &captureConn{}
-	dailyContractsRequestID := syntheticRequestID(0xd1)
-	dailyContractsRequest := protocol.AppendStringField(nil, "RT", "YA_GetDailyContractsData")
-	dailyContractsRequest = protocol.AppendRootEnd(dailyContractsRequest)
+	request := protocol.AppendStringField(nil, "RT", "YA_GetDailyContractsData")
+	request = protocol.AppendRootEnd(request)
 	state := &mmogConnState{
 		playerPID:         defaultMmogPlayerPID,
 		loginResponseSent: true,
@@ -2498,29 +2532,19 @@ func TestDailyContractsAnsweredImmediately(t *testing.T) {
 
 	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
 		MsgType:   0x0320,
-		RequestID: dailyContractsRequestID,
-		Payload:   dailyContractsRequest,
+		RequestID: syntheticRequestID(0xd1),
+		Payload:   request,
 	}}, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames daily contracts: %v", err)
 	}
+	if conn.Len() != 0 {
+		frames, _ := protocol.ParseAppFrames(conn.Bytes())
+		t.Fatalf("YA_GetDailyContractsData wrote %d frames, want 0 (it must go unanswered)", len(frames))
+	}
 	if len(state.pendingDailyContracts) != 0 {
-		t.Fatal("YA_GetDailyContractsData must not be deferred; the client blocks on it before YA_PlayerGet")
-	}
-	frames, remaining := protocol.ParseAppFrames(conn.Bytes())
-	if len(remaining) != 0 {
-		t.Fatalf("daily contracts response left %d trailing bytes", len(remaining))
-	}
-	if len(frames) != 1 {
-		t.Fatalf("YA_GetDailyContractsData wrote %d frames, want 1 (answered immediately)", len(frames))
-	}
-	if got := protocol.ExtractRequestName(frames[0].Payload); got != "YA_GetDailyContractsData" {
-		t.Fatalf("frame = %q, want YA_GetDailyContractsData", got)
-	}
-	if frames[0].RequestID != dailyContractsRequestID {
-		t.Fatalf("YA_GetDailyContractsData response id = %x, want %x", frames[0].RequestID, dailyContractsRequestID)
+		t.Fatal("YA_GetDailyContractsData must be dropped outright, not queued for later delivery")
 	}
 }
-
 func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	conn := &captureConn{}
 	state := &mmogConnState{

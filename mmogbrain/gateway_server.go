@@ -38,16 +38,6 @@ var (
 	gatewayPlayerDataReady   = make(map[string]*playerDataReadyState)
 
 	gatewayBootstrapPlayerDataReadyTimeout = 1500 * time.Millisecond
-
-	// gatewayCatalogFetched tracks, per player, whether the client has fetched
-	// at least one market catalog endpoint over the gateway HTTP channel.
-	// Mirrors gatewayPlayerDataReady's wait/signal mechanics but in the
-	// opposite direction, to test the theory that YA_PlayerGet should be
-	// answered only after the client has the market catalog in hand.
-	gatewayCatalogFetchedMu sync.Mutex
-	gatewayCatalogFetched   = make(map[string]*playerDataReadyState)
-
-	gatewayCatalogFetchedTimeout = 1500 * time.Millisecond
 )
 
 func startGatewaySessionCleanup(ctx context.Context, log *logrus.Logger) {
@@ -346,10 +336,18 @@ func handleGWBundles(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 }
 
 // handleGWCatalog handles catalog endpoints.
+//
+// This waits for player data to be ready (same as handleGWBundles) rather than
+// answering immediately. Completing the market fetch is what triggers the
+// client's OnUpdateInventory, and that handler needs player data already in
+// hand — otherwise it logs "Inventory of player data not yet initialized!" and
+// the inventory never populates. A verbose client log showed exactly that race,
+// lost by 66ms. The wait has a timeout fallback so a client whose YA_PlayerGet
+// never arrives still gets a catalog rather than hanging.
 func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
 	playerID := protocol.GatewayClaimsUserID(claims)
-	gwJSON(w, gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), gatewayPlayerDataReadyForUser(playerID)))
-	setGatewayCatalogFetchedState(playerID)
+	ready := waitForGatewayBootstrapPlayerDataReady(playerID)
+	gwJSON(w, gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), ready))
 }
 
 func gatewayCatalogResponseKey(path string) string {
@@ -442,95 +440,6 @@ func setGatewayPlayerDataReadyState(playerID string, ready bool) {
 	gatewayPlayerDataReadyMu.Unlock()
 }
 
-func setGatewayCatalogFetchedState(playerID string) {
-	key := protocol.GatewayPlayerDataReadyKey(playerID)
-	if key == "" {
-		return
-	}
-
-	var waiters []chan struct{}
-	gatewayCatalogFetchedMu.Lock()
-	state := gatewayCatalogFetched[key]
-	if state == nil {
-		state = &playerDataReadyState{}
-		gatewayCatalogFetched[key] = state
-	}
-	if !state.ready {
-		state.ready = true
-		waiters = append(waiters, state.waiters...)
-		state.waiters = nil
-	}
-	gatewayCatalogFetchedMu.Unlock()
-	for _, waiter := range waiters {
-		close(waiter)
-	}
-}
-
-func gatewayCatalogFetchedForUser(playerID string) bool {
-	key := protocol.GatewayPlayerDataReadyKey(playerID)
-	if key == "" {
-		return false
-	}
-	gatewayCatalogFetchedMu.Lock()
-	defer gatewayCatalogFetchedMu.Unlock()
-	state := gatewayCatalogFetched[key]
-	return state != nil && state.ready
-}
-
-// waitForGatewayCatalogFetched blocks until the client has fetched a market
-// catalog endpoint for playerID, or the timeout elapses — whichever first.
-// Always returns (never blocks forever), matching the same
-// deadlock-avoidance pattern as waitForGatewayPlayerDataReady: an unmet
-// dependency degrades to "answer anyway" rather than hanging the connection.
-func waitForGatewayCatalogFetched(playerID string, timeout time.Duration) bool {
-	key := protocol.GatewayPlayerDataReadyKey(playerID)
-	if key == "" {
-		return false
-	}
-
-	readyCh := make(chan struct{})
-	gatewayCatalogFetchedMu.Lock()
-	state := gatewayCatalogFetched[key]
-	if state != nil && state.ready {
-		gatewayCatalogFetchedMu.Unlock()
-		return true
-	}
-	if state == nil {
-		state = &playerDataReadyState{}
-		gatewayCatalogFetched[key] = state
-	}
-	state.waiters = append(state.waiters, readyCh)
-	gatewayCatalogFetchedMu.Unlock()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case <-readyCh:
-		return true
-	case <-timer.C:
-		gatewayCatalogFetchedMu.Lock()
-		defer gatewayCatalogFetchedMu.Unlock()
-
-		state := gatewayCatalogFetched[key]
-		if state == nil {
-			return false
-		}
-		if state.ready {
-			return true
-		}
-		for i, waiter := range state.waiters {
-			if waiter == readyCh {
-				state.waiters = append(state.waiters[:i], state.waiters[i+1:]...)
-				break
-			}
-		}
-		if len(state.waiters) == 0 {
-			delete(gatewayCatalogFetched, key)
-		}
-		return false
-	}
-}
 
 func waitForGatewayPlayerDataReady(playerID string, timeout time.Duration) bool {
 	key := protocol.GatewayPlayerDataReadyKey(playerID)

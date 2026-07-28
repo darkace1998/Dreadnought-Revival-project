@@ -328,19 +328,27 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	// internal buffer is preserved across a timed-out Read, so retrying
 	// Decode() on the same decoder correctly resumes any partially-received
 	// message rather than corrupting/dropping it.
-	lastActivity := time.Now()
 	for {
 		var msgRaw json.RawMessage
-		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		// One deadline covering the whole permitted idle window, and a timeout
+		// is FATAL — never retried.
+		//
+		// This connection is a *tls.Conn, and crypto/tls permanently latches
+		// the first read error: after a deadline fires, every later Read
+		// returns that same timeout immediately without touching the socket.
+		// The previous code used a short 30s deadline and treated a timeout as
+		// "client is just quiet" (continue), so a single timeout turned into a
+		// hot spin — Decode returning instantly, looping until the 15-minute
+		// idle cap. Observed burning ~45% CPU on an idle server with no client
+		// connected. Using the full idle window as the deadline keeps the same
+		// tolerance for quiet clients without ever retrying a latched error.
+		_ = conn.SetReadDeadline(time.Now().Add(maxMmogConnIdleDuration))
 		err := decoder.Decode(&msgRaw)
 		_ = conn.SetReadDeadline(time.Time{})
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				if time.Since(lastActivity) > maxMmogConnIdleDuration {
-					log.WithField("remote", remote).Info("firmament: closing connection idle past maximum duration")
-					return
-				}
-				continue
+				log.WithField("remote", remote).Info("firmament: closing connection idle past maximum duration")
+				return
 			}
 			if err == io.EOF {
 				log.WithField("remote", remote).Info("firmament: client disconnected")
@@ -349,7 +357,6 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 			}
 			return
 		}
-		lastActivity = time.Now()
 		var msg map[string]interface{}
 		if json.Unmarshal(msgRaw, &msg) != nil {
 			log.WithFields(logrus.Fields{"remote": remote, "hex": hex.EncodeToString(msgRaw)}).Info("firmament: non-JSON message")

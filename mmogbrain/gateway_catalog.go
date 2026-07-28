@@ -293,73 +293,37 @@ var realCatalogBucketIDBase = map[string]int32{
 	"un_typed":            31000000,
 }
 
-func gatewayItemCatalogSeeds(priceCurrencyID string) []gatewayCatalogEntitySeed {
-	seeds := make([]gatewayCatalogEntitySeed, 0, len(starterOwnedInventorySeeds()))
-	for _, item := range starterOwnedInventorySeeds() {
-		if item.itemType == "ship" {
-			continue
-		}
-		price := int32(0)
-		if p, ok := catalogPrices[item.itemID]; ok {
-			price = p
-		}
-		seeds = append(seeds, gatewayCatalogEntitySeed{
-			itemID:          item.itemID,
-			externalID:      item.externalID,
-			displayName:     item.name,
-			description:     item.description,
-			entityType:      "item",
-			itemType:        item.itemType,
-			manufacturer:    item.manufacturer,
-			shipID:          item.shipID,
-			loadoutID:       item.loadoutID,
-			priceCurrencyID: priceCurrencyID,
-			priceAmount:     price,
-			owned:           true,
-			hidden:          item.itemType != "ship" && item.itemType != "loadout",
-			quantity:        item.quantity,
-			gateIdentity:    true,
-		})
-	}
-	// issue #37 REVERTED for bootstrap: the full purchasable store (Weapons,
-	// Modules, 5x Vanity, Code Redemptions, Heroships — hundreds of synthetic
-	// SKUs) is NOT needed for hangar entry and destabilised the client's item
-	// cache (crash while caching the Heroships bucket, itemIDs 29000xxx). The
-	// bootstrap catalog now carries only the player's OWNED items (the loop
-	// above). The purchasable store, if wanted, should be served on demand when
-	// the player opens the store, not in the bootstrap batch. realCatalogBucketSeeds
-	// / realCatalogBucketIDBase remain for that future on-demand path.
-	_ = realCatalogBucketSeeds
-	return seeds
+// gatewayItemCatalogSeeds returns the market (store) catalog contents.
+//
+// It is EMPTY on purpose. The client resolves each catalog entry's lowercase
+// "name" as a LOCALIZATION KEY: FUN_142a80350 reads "name", looks it up via
+// FUN_142a60670 against the client's own string tables, and writes the result
+// to "Name", substituting the literal placeholder "<DNT>[[NotFound]]" when the
+// lookup fails. The real backend sent 32-hex localization keys; we only have
+// display names ("Agosta", "Repeater Turrets"), and there is no id -> key
+// mapping anywhere in our data (ItemIDTable.json / ItemIDRegister.json contain
+// zero such keys), so EVERY entry we list renders as "<DNT>[[NotFound]]" in the
+// player's inventory — loadouts included. Filtering by item type does not help:
+// a name that merely appears in DreadGame.locres appears there as a VALUE, not
+// as a key, so it still fails the lookup.
+//
+// Nothing needs this list: the player's owned gear reaches the client through
+// owned_items and YA_PlayerGet (loadouts, weapons, abilities, ships), and this
+// private server has no purchasable store. So we advertise nothing rather than
+// advertise items the client cannot name.
+func gatewayItemCatalogSeeds(_ string) []gatewayCatalogEntitySeed {
+	return nil
 }
 
-func gatewayCurrencyCatalogSeeds(priceCurrencyID string, grantedCurrency string) []gatewayCatalogEntitySeed {
-	grantedAmount := int32(1000)
-	if grantedCurrency == "CR" {
-		grantedAmount = 10000
-	}
-	seeds := []gatewayCatalogEntitySeed{{
-		itemID:          9000001,
-		externalID:      "currency_pack_" + strings.ToLower(grantedCurrency),
-		displayName:     strings.ToUpper(grantedCurrency) + " Starter Pack",
-		description:     "Bootstrap currency pack for hangar readiness",
-		entityType:      "forex_offer",
-		itemType:        "currency_pack",
-		priceCurrencyID: priceCurrencyID,
-		priceAmount:     0,
-		grantedCurrency: grantedCurrency,
-		grantedAmount:   grantedAmount,
-		quantity:        1,
-	}}
-	// issue #37 REVERTED for bootstrap: the "GP to CR" and "un_typed" forex
-	// buckets are dozens of synthetic currency-conversion offers with junk
-	// names ("un_typed 999352…", itemIDs 31001xxx). The client's shop iterates
-	// every ForexOffer at bootstrap and CRASHED processing this un_typed bucket
-	// (DreadGame.log truncates mid "ForexOffer Id: 99931001032 … itemId:
-	// 31001033"). None of it is needed for hangar entry — only the starter
-	// currency pack above is. If a real currency store is wanted later, serve
-	// it on demand when the player opens the store, not in the bootstrap batch.
-	return seeds
+// gatewayCurrencyCatalogSeeds returns the currency (forex) store contents.
+//
+// Empty for the same reason as gatewayItemCatalogSeeds: the single synthetic
+// "CR/RMT Starter Pack" entry (itemID 9000001) is not a real SKU, its name is
+// not a localization key, and the client rendered it as "<DNT>[[NotFound]]".
+// The player's balance is delivered by the separate "wallet" field, so nothing
+// depends on listing a purchasable currency pack.
+func gatewayCurrencyCatalogSeeds(_ string, _ string) []gatewayCatalogEntitySeed {
+	return nil
 }
 
 func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
