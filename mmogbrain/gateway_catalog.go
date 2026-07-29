@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -8,9 +9,14 @@ import (
 )
 
 type gatewayCatalogEntitySeed struct {
-	itemID          int32
-	externalID      string
-	displayName     string
+	itemID      int32
+	externalID  string
+	displayName string
+	// localizationKey is what goes in the entity's lowercase "name" field. The
+	// client resolves that against its own string tables and renders
+	// "<DNT>[[NotFound]]" for anything that is not a real key, so a human
+	// display name must never be put there. See marketItemLocalizationKeys.
+	localizationKey string
 	description     string
 	entityType      string
 	itemType        string
@@ -295,24 +301,87 @@ var realCatalogBucketIDBase = map[string]int32{
 
 // gatewayItemCatalogSeeds returns the market (store) catalog contents.
 //
-// It is EMPTY on purpose. The client resolves each catalog entry's lowercase
-// "name" as a LOCALIZATION KEY: FUN_142a80350 reads "name", looks it up via
-// FUN_142a60670 against the client's own string tables, and writes the result
-// to "Name", substituting the literal placeholder "<DNT>[[NotFound]]" when the
-// lookup fails. The real backend sent 32-hex localization keys; we only have
-// display names ("Agosta", "Repeater Turrets"), and there is no id -> key
-// mapping anywhere in our data (ItemIDTable.json / ItemIDRegister.json contain
-// zero such keys), so EVERY entry we list renders as "<DNT>[[NotFound]]" in the
-// player's inventory — loadouts included. Filtering by item type does not help:
-// a name that merely appears in DreadGame.locres appears there as a VALUE, not
-// as a key, so it still fails the lookup.
+// This was served EMPTY for a long time, on the grounds that each entry's
+// lowercase "name" is a localization key we did not have, so every item
+// rendered as "<DNT>[[NotFound]]". That is no longer true: the keys were
+// recovered from the game's own shipped .locres data -- see
+// marketItemLocalizationKeys.
 //
-// Nothing needs this list: the player's owned gear reaches the client through
-// owned_items and YA_PlayerGet (loadouts, weapons, abilities, ships), and this
-// private server has no purchasable store. So we advertise nothing rather than
-// advertise items the client cannot name.
-func gatewayItemCatalogSeeds(_ string) []gatewayCatalogEntitySeed {
-	return nil
+// Serving nothing was not cosmetic. The client builds the tech tree, the market
+// grid and the loadout/vanity pickers from catalog items, and with none it logs
+//
+//	UTechTreeInterpreter::ComposeShipManufacturerDataForLoadout Could not find item for ship id 33489198
+//	UTechTreeInterpreter::GetHeroShipsFromManufacturerData Could not find a manufacturer with id 0
+//	Script Msg: Attempted to access index 0 from array MarketGridItems of length 0
+//
+// leaving an empty tech tree, an empty market, and no items to choose from when
+// editing a loadout or a ship's vanity.
+//
+// Everything is listed as owned and free. This server has no real store, and
+// gatewayMarketEntity deliberately reports price 0 for every entry so the client
+// never computes a campaign discount against its own local prices.
+func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
+	purchased := persistedMmogPlayerPurchasedItemIDSet(playerID)
+
+	// Starter gear already carries the ship/loadout it belongs to. Catalog
+	// entries must report the same association, otherwise an entry and the
+	// owned_items record for the same item disagree about which ship it is on.
+	starter := map[int32]mmogInventoryItemSeed{}
+	for _, item := range starterOwnedInventorySeeds() {
+		starter[item.itemID] = item
+	}
+
+	seeds := make([]gatewayCatalogEntitySeed, 0, len(marketItemLocalizationKeys))
+	for _, itemID := range sortedMarketCatalogItemIDs() {
+		meta, ok := extractedMarketItemMetadataForID(itemID)
+		if !ok {
+			continue
+		}
+		seed := gatewayCatalogEntitySeed{
+			itemID:          itemID,
+			externalID:      extractedMarketItemExternalID(itemID, meta.displayName),
+			displayName:     meta.displayName,
+			localizationKey: marketItemLocalizationKeys[itemID],
+			entityType:      "item",
+			itemType:        meta.itemType,
+			priceCurrencyID: "CR",
+			priceAmount:     0,
+			quantity:        1,
+		}
+		if owned, isStarter := starter[itemID]; isStarter {
+			seed.externalID = owned.externalID
+			seed.shipID = owned.shipID
+			seed.loadoutID = owned.loadoutID
+			seed.manufacturer = owned.manufacturer
+			seed.owned = true
+		}
+		if _, bought := purchased[itemID]; bought {
+			seed.owned = true
+		}
+		if meta.itemType == "ship" {
+			seed.shipID = itemID
+			if ship, found := gatewayShipByID(itemID); found {
+				seed.manufacturer = ship.manufacturer
+			}
+		}
+		if meta.itemType == "loadout" {
+			seed.loadoutID = itemID
+		}
+		seeds = append(seeds, seed)
+	}
+	return seeds
+}
+
+// sortedMarketCatalogItemIDs returns the catalog's item ids in a stable order.
+// Map iteration order is random in Go, and an unstable catalog would make the
+// client's grid reshuffle between fetches.
+func sortedMarketCatalogItemIDs() []int32 {
+	ids := make([]int32, 0, len(marketItemLocalizationKeys))
+	for itemID := range marketItemLocalizationKeys {
+		ids = append(ids, itemID)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 // gatewayCurrencyCatalogSeeds returns the currency (forex) store contents.
@@ -413,7 +482,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"ImgUrlL":             "",
 		"Flags":               0,
 		"id":                  entityID,
-		"name":                seed.displayName,
+		"name":                gatewayMarketLocalizationName(seed),
 		"display_name":        seed.displayName,
 		"entity_id":           entityID,
 		"external_id":         seed.externalID,
@@ -491,4 +560,25 @@ func gatewayWeaponStatsArray(itemID int32) []any {
 		map[string]any{"stat_name": "SlotType", "stat_value": weapon.SlotType},
 		map[string]any{"stat_name": "Class", "stat_value": weapon.Class},
 	}
+}
+
+// gatewayMarketLocalizationName returns the value for a catalog entity's
+// lowercase "name" field.
+//
+// That field is a localization KEY, not a label: the client looks it up in its
+// own string tables and substitutes the literal "<DNT>[[NotFound]]" when the
+// lookup fails. Keys come from marketItemLocalizationKeys, recovered from the
+// game's shipped .locres data.
+//
+// When an item has no known key we send an empty string rather than its display
+// name. A wrong key renders as the "[[NotFound]]" placeholder either way, and an
+// empty value at least does not look like a failed lookup of a real name.
+func gatewayMarketLocalizationName(seed gatewayCatalogEntitySeed) string {
+	if seed.localizationKey != "" {
+		return seed.localizationKey
+	}
+	if key, ok := marketItemLocalizationKeys[seed.itemID]; ok {
+		return key
+	}
+	return ""
 }

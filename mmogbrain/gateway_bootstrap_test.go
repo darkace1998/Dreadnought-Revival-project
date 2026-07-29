@@ -340,16 +340,43 @@ func TestStarterInventorySeedsUseExtractedStarterIDs(t *testing.T) {
 	}
 }
 
-func TestGatewayMarketCatalogsAreEmpty(t *testing.T) {
-	// The client resolves each catalog entry's lowercase "name" as a
-	// LOCALIZATION KEY and renders "<DNT>[[NotFound]]" when the lookup fails.
-	// We only have display names, not the backend's 32-hex keys, so every entry
-	// we list shows up unnamed in the player's inventory. Nothing depends on
-	// these lists — owned gear arrives via owned_items and YA_PlayerGet, and the
-	// wallet carries the balance — so both market catalogs stay empty.
-	if seeds := gatewayItemCatalogSeeds("CR"); len(seeds) != 0 {
-		t.Fatalf("market item catalog should be empty, got %d seeds", len(seeds))
+func TestGatewayItemCatalogIsPopulatedWithLocalizationKeys(t *testing.T) {
+	// The client builds the tech tree, the market grid and the loadout/vanity
+	// pickers from catalog items. An empty catalog leaves all three blank and
+	// makes it log "Could not find item for ship id ..." and
+	// "Attempted to access index 0 from array MarketGridItems of length 0".
+	seeds := gatewayItemCatalogSeeds("CR")
+	if len(seeds) == 0 {
+		t.Fatal("market item catalog is empty; the tech tree and market render blank without it")
 	}
+
+	// Each entry's lowercase "name" is a localization KEY, not a label: the
+	// client resolves it against its own string tables and renders
+	// "<DNT>[[NotFound]]" for anything that is not a real key. Keys are 32 hex
+	// characters. An empty value is allowed for the few items with no known
+	// key; a human-readable display name is never acceptable there.
+	named := 0
+	for _, seed := range seeds {
+		name := gatewayMarketLocalizationName(seed)
+		if name == "" {
+			continue
+		}
+		named++
+		if len(name) != 32 {
+			t.Fatalf("item %d name %q is not a 32-character localization key", seed.itemID, name)
+		}
+		for _, c := range name {
+			if !strings.ContainsRune("0123456789ABCDEFabcdef", c) {
+				t.Fatalf("item %d name %q is not hex; a display name here renders as <DNT>[[NotFound]]", seed.itemID, name)
+			}
+		}
+	}
+	if named == 0 {
+		t.Fatal("no catalog entry carries a localization key")
+	}
+
+	// The currency store stays empty: this server sells nothing, and the
+	// player's balance is delivered by the separate wallet field.
 	if seeds := gatewayCurrencyCatalogSeeds("CR", "CR"); len(seeds) != 0 {
 		t.Fatalf("market currency catalog should be empty, got %d seeds", len(seeds))
 	}
@@ -538,13 +565,11 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 					assertGatewayMarketMatchesOwned(t, entry, "catalog item", owned)
 					overlapCount++
 				}
-				// The market catalogs are empty (see
-				// gatewayItemCatalogSeeds), so nothing overlaps with the
-				// player's owned inventory. owned_items is what carries
-				// ownership now, and it is asserted separately.
-				expectedOverlap := 0
-				if overlapCount != expectedOverlap {
-					t.Fatalf("catalog overlap = %d, want %d", overlapCount, expectedOverlap)
+				// Every piece of starter gear appears in both the catalog
+				// and owned_items, and the two must agree on identity --
+				// assertGatewayMarketMatchesOwned above checks that per entry.
+				if overlapCount == 0 {
+					t.Fatal("no catalog entry overlaps the player's owned inventory; the catalog and owned_items have diverged")
 				}
 				return
 			}
