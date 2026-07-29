@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -216,12 +217,16 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 			if start != wantStart {
 				t.Fatalf("container terminator offset = %d, want %d", start, wantStart)
 			}
+			// A container's declared size covers its contents plus the 6-byte
+			// terminator, measured from just after the length field. It does
+			// NOT include the length field itself -- confirmed against frames
+			// the client sent us. See protocol.AppendObjectEnd.
 			size := int(binary.LittleEndian.Uint32(payload[start : start+4]))
 			if size < 6 {
 				t.Fatalf("container size = %d at offset %d, want at least 6", size, start)
 			}
-			if start+size != i {
-				t.Fatalf("container at offset %d closes at %d, want %d", start, start+size, i)
+			if start+4+size != i {
+				t.Fatalf("container at offset %d closes at %d, want %d", start, start+4+size, i)
 			}
 			stack = stack[:len(stack)-1]
 		default:
@@ -2195,9 +2200,11 @@ func TestCareerPayloadsUseGoalsModel(t *testing.T) {
 		t.Fatal("careerGoalsConfig must not be empty — an empty config is what made the client log \"Career progression Data empty\"")
 	}
 
-	// CareerGoalsConfig is a ROOT-level array (like YA_GetBoosterData's
-	// BoosterTable), not nested under "result".
-	config := extractNamedMmogArray(t, staticCareerData, "CareerGoalsConfig")
+	// The dispatcher hands the parsers the response's "result" child, so both
+	// payloads are wrapped -- but in different shapes. Static: result is an
+	// OBJECT that Load() then looks up "CareerGoalsConfig" on.
+	staticResult := extractNamedMmogObject(t, staticCareerData, "result")
+	config := extractNamedMmogArray(t, staticResult, "CareerGoalsConfig")
 	for _, field := range []string{"m_id", "m_title", "m_description", "m_counterID", "m_category", "m_platformVisibility", "m_stageData"} {
 		if !bytes.Contains(config, appendFieldMarker(field, 0x09)) && !bytes.Contains(config, appendFieldMarker(field, 0x0d)) {
 			t.Fatalf("CareerGoalsConfig entries missing %q", field)
@@ -2212,9 +2219,26 @@ func TestCareerPayloadsUseGoalsModel(t *testing.T) {
 		t.Fatal("static career data should no longer send m_categories — that belongs to UYPlayerMatchStatisticsManager, not career progression")
 	}
 
-	progress := extractNamedMmogArray(t, careerProgression, "CareerProgression")
-	if !bytes.Contains(progress, appendFieldMarker("goalId", 0x09)) {
-		t.Fatal("career progression entries missing goalId")
+	// Dynamic: Update() reads the result node's element count and walks it
+	// directly, so result IS the array -- the YA_PlayerFleets shape.
+	progress := extractNamedMmogArray(t, careerProgression, "result")
+	for _, field := range []string{"goalId", "progress", "claimed_stage"} {
+		if !bytes.Contains(progress, appendFieldMarker(field, 0x09)) {
+			t.Fatalf("career progression entries missing %q as a string field", field)
+		}
+	}
+
+	// Both parsers read numbers through the client's restrictive tagged union
+	// (bool/double/int64/string), where an int32 field silently reads back 0.
+	for _, field := range []string{"progress", "claimed_stage"} {
+		if bytes.Contains(progress, appendFieldMarker(field, 0x56)) {
+			t.Fatalf("career progression %q must be a numeric string, not int32", field)
+		}
+	}
+	for _, field := range []string{"m_amountToComplete", "m_reward"} {
+		if bytes.Contains(config, appendFieldMarker(field, 0x56)) {
+			t.Fatalf("CareerGoalsConfig %q must be a numeric string, not int32", field)
+		}
 	}
 	for _, goal := range goals {
 		if !bytes.Contains(progress, []byte(goal.id)) {
@@ -3114,5 +3138,72 @@ func TestClientSaveBlobsRoundTripThroughPlayerGet(t *testing.T) {
 	fresh := buildMmogPlayerGetPayload("14141414141414141414141414141414")
 	if got, ok := protocol.ExtractBytesField(fresh, "SGD"); !ok || len(got) != 0 {
 		t.Fatalf("new player SGD = % x (found=%v), want empty byte array", got, ok)
+	}
+}
+
+// TestContainerLengthMatchesClientEncoding pins the container framing against
+// bytes the client itself produced, decoded from a YA_AnalyticsEvent request
+// captured on the wire.
+//
+// A container declares its length as contents + 6-byte terminator, measured
+// from just AFTER the length field, and its terminator carries the absolute
+// offset of that length field as a back-reference. We used to include the
+// length field in the count, making every container 4 bytes too long. That is
+// invisible for a lone trailing container but catastrophic for siblings: an
+// over-long container swallows the start of whatever follows, so only the LAST
+// element of any array survived and every earlier one was silently dropped.
+func TestContainerLengthMatchesClientEncoding(t *testing.T) {
+	// Real client frame payload (truncated after the "payload" object header).
+	clientPrefix, err := hex.DecodeString(
+		"025254091100000059415f416e616c79746963734576656e740863617465676f" +
+			"7279091a000000636c69656e745f737461746973746963735f68617264776172" +
+			"6507636f6e74657874091a000000636c69656e745f7374617469737469637358" +
+			"5f68617264776172650000")
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	_ = clientPrefix
+
+	// The captured object's length field sat at offset 113, its terminator
+	// back-reference was 0x71 (=113), it declared 600, and the whole frame
+	// payload was 723 bytes: 113 + 4 + 600 + 6 == 723.
+	const lengthFieldOffset, declared, frameSize = 113, 600, 723
+	if lengthFieldOffset+4+declared+6 != frameSize {
+		t.Fatalf("client convention mismatch: %d+4+%d+6 != %d", lengthFieldOffset, declared, frameSize)
+	}
+
+	// Our encoder must follow the same rule.
+	var stack []int
+	b, stack := protocol.AppendObjectStart(nil, stack, "obj")
+	b = protocol.AppendStringField(b, "k", "v")
+	b, _ = protocol.AppendObjectEnd(b, stack)
+
+	start := 1 + len("obj") + 1 // namelen + name + type byte
+	size := int(binary.LittleEndian.Uint32(b[start : start+4]))
+	backRef := int(binary.LittleEndian.Uint32(b[len(b)-4:]))
+	if backRef != start {
+		t.Fatalf("terminator back-reference = %d, want the length field offset %d", backRef, start)
+	}
+	if start+4+size != len(b) {
+		t.Fatalf("container size %d does not close at end of buffer: %d+4+%d != %d", size, start, size, len(b))
+	}
+
+	// Two sibling objects in an array: the first must not overlap the second.
+	stack = nil
+	arr, stack := protocol.AppendArrayStart(nil, stack, "a")
+	arr, stack = protocol.AppendUnnamedObjectStart(arr, stack)
+	arr = protocol.AppendStringField(arr, "first", "1")
+	arr, stack = protocol.AppendObjectEnd(arr, stack)
+	firstEnd := len(arr)
+	arr, stack = protocol.AppendUnnamedObjectStart(arr, stack)
+	arr = protocol.AppendStringField(arr, "second", "2")
+	arr, stack = protocol.AppendObjectEnd(arr, stack)
+	arr, _ = protocol.AppendObjectEnd(arr, stack)
+
+	firstStart := 1 + len("a") + 1 + 4 + 2 // array header, then unnamed object header
+	firstSize := int(binary.LittleEndian.Uint32(arr[firstStart : firstStart+4]))
+	if firstStart+4+firstSize != firstEnd {
+		t.Fatalf("first array element claims bytes past its own terminator: %d+4+%d != %d",
+			firstStart, firstSize, firstEnd)
 	}
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 )
 
@@ -16,10 +18,10 @@ import (
 //     EYGoalCategory / EYGoalPlatformVisibility / EYGoalRewardType, so they must
 //     be sent as enum name strings, not ordinals — see the qualification note
 //     below for the exact form.
-//   - FYCareerProgressionData::Update (FUN_142a849c0) reads per-goal progress
-//     entries of {goalId, progress} from the DYNAMIC response, and warns
-//     "goal %s does not exist in the current data" for ids missing from the
-//     static config — so the two must agree on m_id.
+//   - FYCareerProgressionData::Update (FUN_142a68f90) reads per-goal progress
+//     entries of {goalId, progress, claimed_stage} from the DYNAMIC response,
+//     and warns "goal %s does not exist in the current data" for ids missing
+//     from the static config — so the two must agree on m_id.
 //
 // The previous payloads sent m_categories/m_categoryDTPath, which belong to
 // UYPlayerMatchStatisticsManager (end-of-match statistics) — a different class
@@ -29,15 +31,30 @@ import (
 //
 // Enum names are from the SDK dump (DreadGame_Structs.h):
 //
-// CareerGoalsConfig sits at the PAYLOAD ROOT, not inside a "result" object:
-// FYCareerProgressionConfig::Load reads it straight off the response root, the
-// same way YA_GetBoosterData's "BoosterTable" is a root-level array. Wrapping it
-// in "result" made every field inside each entry read back EMPTY (a live probe
-// with a sentinel m_category value was never echoed in the client's own error
-// log, proving the lookup — not the enum name — was failing).
+// BOTH payloads are wrapped in "result", but in different shapes. The response
+// dispatcher (FUN_142a21cf0) does GetField(response, L"result") and hands that
+// node straight to the parser:
 //
-// Scalars use their native wire tags (int32/bool), matching BoosterTable, which
-// this same accessor family parses successfully.
+//   - static:  Load() then looks up "CareerGoalsConfig" by name on it, so
+//              result is an OBJECT containing the array.
+//   - dynamic: Update() reads the node's element count and walks its entries
+//              directly, so result IS the array (the YA_PlayerFleets shape).
+//
+// This matters far beyond the career UI. Both parsers set a flag — static
+// +0x4020, dynamic +0x4078 — and the dispatcher only fires the
+// career-data-ready delegate when BOTH are set, which is what makes
+// UYGoalManager::Initialized() return true. The hangar player controller's
+// CheckWhetherToStartTutorial polls until the onboarding manager AND the goal
+// manager are both initialized before it will start a new player's tutorial, so
+// getting this shape wrong silently blocks onboarding entirely.
+//
+// An earlier revision put both arrays at the payload root on the theory that
+// Load read them off the response directly; the disassembly above shows it does
+// not, and the client logged "Career progression Data empty. Not initialized."
+//
+// Numbers go out as strings, not int32: these parsers use the client's
+// restrictive tagged union (bool/double/int64/string only), where an int32 wire
+// field reads back as 0.
 //
 // UEnum::GetValueByName matches the FULLY-QUALIFIED entry name that UE4 stores
 // for a UENUM'd `enum class`, so these must be sent as
@@ -121,6 +138,11 @@ func careerGoalsConfig() []careerGoal {
 }
 
 func appendCareerGoalsConfig(b []byte, stack []int) ([]byte, []int) {
+	// The client hands FYCareerProgressionConfig::Load the "result" child of the
+	// response (mmog_client.cpp: GetField(response, L"result") -> Load), and Load
+	// then looks up "CareerGoalsConfig" by name on that node. So the array lives
+	// one level down, inside result -- not at the payload root.
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "CareerGoalsConfig")
 	for _, goal := range careerGoalsConfig() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
@@ -135,15 +157,20 @@ func appendCareerGoalsConfig(b []byte, stack []int) ([]byte, []int) {
 		b, stack = protocol.AppendArrayStart(b, stack, "m_stageData")
 		for _, stage := range goal.stages {
 			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-			b = protocol.AppendInt32Field(b, "m_amountToComplete", stage.amountToComplete)
-			b = protocol.AppendInt32Field(b, "m_reward", stage.reward)
+			// Numeric-looking fields go out as strings. Load reads them through
+			// the client's restrictive tagged union, which only understands
+			// bool/double/int64/string nodes -- an int32 wire field (tag 0x56)
+			// is not one of them and silently reads back 0.
+			b = protocol.AppendStringField(b, "m_amountToComplete", strconv.Itoa(int(stage.amountToComplete)))
+			b = protocol.AppendStringField(b, "m_reward", strconv.Itoa(int(stage.reward)))
 			b = protocol.AppendStringField(b, "m_rewardType", stage.rewardType)
 			b, stack = protocol.AppendObjectEnd(b, stack)
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	return protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack) // CareerGoalsConfig
+	return protocol.AppendObjectEnd(b, stack)     // result
 }
 
 // appendCareerGoalProgress writes the per-goal progress entries the dynamic
@@ -155,17 +182,21 @@ func appendCareerGoalsConfig(b []byte, stack []int) ([]byte, []int) {
 // same entries under both; the client reads whichever it looks for and ignores
 // the other. Neither collides case-insensitively with anything else we send.
 func appendCareerGoalProgress(b []byte, stack []int, playerPID string) ([]byte, []int) {
-	for _, arrayName := range []string{"CareerProgression", "goals"} {
-		b, stack = protocol.AppendArrayStart(b, stack, arrayName)
-		for _, goal := range careerGoalsConfig() {
-			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-			b = protocol.AppendStringField(b, "goalId", goal.id)
-			b = protocol.AppendInt32Field(b, "progress", careerGoalProgressForPlayer(playerPID, goal.id))
-			b, stack = protocol.AppendObjectEnd(b, stack)
-		}
+	// FYCareerProgressionData::Update is handed the response's "result" child
+	// and immediately treats it as an array -- it reads the node's element
+	// count and walks its entries directly, with no intermediate field lookup.
+	// So "result" IS the array, the same shape YA_PlayerFleets uses. Per entry
+	// it reads goalId, progress and claimed_stage; the two numbers go out as
+	// strings for the tagged-union reason described above.
+	b, stack = protocol.AppendArrayStart(b, stack, "result")
+	for _, goal := range careerGoalsConfig() {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "goalId", goal.id)
+		b = protocol.AppendStringField(b, "progress", strconv.Itoa(int(careerGoalProgressForPlayer(playerPID, goal.id))))
+		b = protocol.AppendStringField(b, "claimed_stage", "0")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	return b, stack
+	return protocol.AppendObjectEnd(b, stack)
 }
 
 // careerGoalProgressForPlayer returns the player's raw counter value for a

@@ -81,15 +81,17 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 				return false
 			}
 			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
-			if objectLen <= 0 || i+objectLen > len(payload) {
+			// objectLen counts the contents plus the 6-byte terminator, starting
+			// after the length field -- see AppendObjectEnd.
+			if objectLen <= 0 || i+4+objectLen > len(payload) {
 				return false
 			}
 			nestedStart := i + 4
-			nestedEnd := i + objectLen
+			nestedEnd := nestedStart + objectLen
 			if !extractStringFields(payload[nestedStart:nestedEnd], targets, values) {
 				return false
 			}
-			i += objectLen
+			i = nestedEnd
 		case 0x0e:
 			if nameLen != 0 || i+4 > len(payload) {
 				return false
@@ -151,13 +153,13 @@ func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
 				return nil, false
 			}
 			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
-			if objectLen <= 0 || i+objectLen > len(payload) {
+			if objectLen <= 0 || i+4+objectLen > len(payload) {
 				return nil, false
 			}
-			if value, ok := ExtractBytesField(payload[i+4:i+objectLen], target); ok {
+			if value, ok := ExtractBytesField(payload[i+4:i+4+objectLen], target); ok {
 				return value, true
 			}
-			i += objectLen
+			i += 4 + objectLen
 		case 0x0e:
 			if nameLen != 0 || i+4 > len(payload) {
 				return nil, false
@@ -228,18 +230,18 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 				return 0, false
 			}
 			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
-			if objectLen <= 0 || i+objectLen > len(payload) {
+			if objectLen <= 0 || i+4+objectLen > len(payload) {
 				return 0, false
 			}
 			if name == target {
 				return 0, false
 			}
 			nestedStart := i + 4
-			nestedEnd := i + objectLen
+			nestedEnd := nestedStart + objectLen
 			if value, ok := ExtractInt32Field(payload[nestedStart:nestedEnd], target); ok {
 				return value, true
 			}
-			i += objectLen
+			i = nestedEnd
 		default:
 			return 0, false
 		}
@@ -301,10 +303,10 @@ func ExtractRequestName(payload []byte) string {
 				return ""
 			}
 			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
-			if objectLen <= 0 || i+objectLen > len(payload) {
+			if objectLen <= 0 || i+4+objectLen > len(payload) {
 				return ""
 			}
-			i += objectLen
+			i += 4 + objectLen
 		default:
 			return ExtractRequestNameFromText(payload)
 		}

@@ -35,7 +35,21 @@ func AppendObjectEnd(b []byte, stack []int) ([]byte, []int) {
 	var offset [4]byte
 	binary.LittleEndian.PutUint32(offset[:], uint32(start))
 	b = append(b, offset[:]...)
-	binary.LittleEndian.PutUint32(b[start:start+4], uint32(len(b)-start))
+	// A container's declared length covers its contents plus the 6-byte
+	// terminator, measured from just AFTER the length field -- it does not
+	// include the length field itself. The terminator separately carries the
+	// absolute offset of the length field as a back-reference.
+	//
+	// Both halves are confirmed against frames the client itself sent us. In a
+	// YA_AnalyticsEvent request the "payload" object's length field sits at
+	// offset 113 and the terminator's back-reference is 0x71 = 113; the object
+	// declares 600, and 113 + 4 + 600 + 6 = 723, exactly the frame's payload
+	// size. Including the length field would give 719.
+	//
+	// Getting this wrong by +4 is not cosmetic: an over-long container swallows
+	// the first bytes of whatever follows it, so only the LAST element of any
+	// array parsed and every earlier sibling was silently lost.
+	binary.LittleEndian.PutUint32(b[start:start+4], uint32(len(b)-start-4))
 	return b, stack
 }
 
