@@ -1579,7 +1579,20 @@ func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufactur
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
-	b = protocol.AppendStringField(b, "Visible", "1")
+	// Visible is a BOOL field, and it must not be a string.
+	//
+	// It gates the whole item: a falsy Visible makes the loader jump past the
+	// rest of the entry, so the item is never stored and nothing can look it up
+	// afterwards. Its truthiness test is
+	//
+	//	type < 1            -> skip
+	//	type < 4 (bool/num) -> truthy = numeric slot != 0
+	//	type == 4 (string)  -> truthy = (length - 1) > 0
+	//
+	// so a one-character string like "1" evaluates FALSE -- length 1 gives
+	// 0 > 0. Only a 2+ character string would pass, which is clearly not the
+	// intent. A bool lands as node type 1 and reads through the numeric slot.
+	b = protocol.AppendBoolField(b, "Visible", true)
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(ship.unlockCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")

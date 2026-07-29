@@ -3385,8 +3385,17 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 	}
 	// Fields the loader resolves by name. Id is the key
 	// TechTreeManager::FindItemForShipId matches on.
+	// Visible is a bool, not a string: it gates the entire item, and its
+	// string branch tests (length - 1) > 0, so the one-character "1" it used to
+	// send read as FALSE and every item was discarded.
+	if !bytes.Contains(document, appendFieldMarker("Visible", 0x05)) {
+		t.Error("Visible must be a bool field")
+	}
+	if bytes.Contains(document, appendFieldMarker("Visible", 0x09)) {
+		t.Error(`Visible must not be a string: a 1-char string reads as false and drops the item`)
+	}
 	for _, field := range []string{
-		"Id", "ClassId", "Manufacturer", "Tier", "Position", "Visible",
+		"Id", "ClassId", "Manufacturer", "Tier", "Position",
 		"XPCost", "FPCost", "NumTechTreeItemsRequired", "ProxyType",
 	} {
 		if !bytes.Contains(document, appendFieldMarker(field, 0x09)) {
