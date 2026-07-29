@@ -494,7 +494,15 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			// that id and wants manufacturer data), so they need the same
 			// treatment as a real ship even though their item type says
 			// "loadout".
-			seed.shipID = itemID
+			//
+			// Only when nothing better is known: for starter gear the block
+			// above already set shipID to the PAWN id of the ship the item is
+			// fitted to, which is what "ship_id" means and what the gateway's
+			// owned_items reports. Overwriting that with the item's own id made
+			// the catalog and owned_items disagree about the same item.
+			if seed.shipID == 0 {
+				seed.shipID = itemID
+			}
 			if ship, found := gatewayShipByID(itemID); found {
 				seed.manufacturer = ship.manufacturer
 			}
@@ -787,12 +795,16 @@ func gatewayMarketLocalizationName(seed gatewayCatalogEntitySeed) string {
 }
 
 // fleetShipCatalogIDs is the set of ids the fleet reports as its ships. They are
-// development precast-loadout ids rather than ship pawn ids, but the client
-// resolves manufacturer and category data for them as if they were ships.
+// precast-loadout ids rather than ship pawn ids, but the client resolves
+// manufacturer and category data for them as if they were ships.
+//
+// These were the DEVELOPMENT loadout ids until the class names the client
+// instantiates were corrected; see nativeStarterLoadoutClassName.
 func fleetShipCatalogIDs() map[int32]bool {
-	ids := make(map[int32]bool, len(fleetStarterShipIDsByPrecastID))
-	for _, shipID := range fleetStarterShipIDsByPrecastID {
-		ids[shipID] = true
+	starters := dreadconfig.StarterInventoryLoadoutIDs()
+	ids := make(map[int32]bool, len(starters))
+	for _, loadoutID := range starters {
+		ids[fleetStarterShipIDForPrecast(loadoutID)] = true
 	}
 	return ids
 }

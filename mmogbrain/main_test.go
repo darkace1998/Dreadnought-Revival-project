@@ -1514,10 +1514,7 @@ func starterFleetShipIDsFromShared(t *testing.T) []int32 {
 	sharedLoadouts := dreadconfig.StarterInventoryLoadouts()
 	ids := make([]int32, 0, len(sharedLoadouts))
 	for _, loadout := range sharedLoadouts {
-		fleetShipID, ok := fleetStarterShipIDsByPrecastID[loadout.LoadoutID]
-		if !ok {
-			t.Fatalf("missing fleet ship id for starter loadout %d", loadout.LoadoutID)
-		}
+		fleetShipID := fleetStarterShipIDForPrecast(loadout.LoadoutID)
 		ids = append(ids, fleetShipID)
 	}
 	return ids
@@ -1568,10 +1565,7 @@ func TestStarterRosterMatchesSharedConfigExactly(t *testing.T) {
 		if loadout.ship.name != wantShip.name {
 			t.Fatalf("starter ship name[%d] = %q, want %q", idx, loadout.ship.name, wantShip.name)
 		}
-		wantFleetShipID, ok := fleetStarterShipIDsByPrecastID[sharedLoadout.LoadoutID]
-		if !ok {
-			t.Fatalf("missing fleet ship id for starter loadout %d", sharedLoadout.LoadoutID)
-		}
+		wantFleetShipID := fleetStarterShipIDForPrecast(sharedLoadout.LoadoutID)
 		if loadout.effectiveFleetShipID() != wantFleetShipID {
 			t.Fatalf("starter fleet ship id[%d] = %d, want %d", idx, loadout.effectiveFleetShipID(), wantFleetShipID)
 		}
@@ -1613,11 +1607,15 @@ func TestStarterLoadoutsUseRealPrecastIDsAndActiveFlags(t *testing.T) {
 	for _, loadout := range dreadconfig.StarterInventoryLoadouts() {
 		expectedPrecastIDs[loadout.LoadoutID] = loadout.LoadoutID
 	}
+	// The SHIPPING precast blueprints. These used to name the Development
+	// variants under /Game/Generic/Loadouts/Precast/Development/, which made the
+	// client instantiate a development blueprint and report that blueprint's own
+	// m_precastLoadoutID (33489198 and friends) instead of the id we asked for.
 	expectedNativeIDs := map[int32]string{
-		33489262: "Default__VH_AssaultMedium_T1_Loadout_BP_C",
-		33489423: "Default__VH_DreadnoughtMedium_Loadout_BP_C",
-		33489263: "Default__VH_SniperMedium_T1_Loadout_BP_C",
-		33489264: "Default__VH_SupportMedium_T1_Loadout_BP_C",
+		33489262: "Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C",
+		33489423: "Default__VH_DreadnoughtMedium_T1_PrecastLoadout_BP_C",
+		33489263: "Default__VH_SniperMedium_T1_PrecastLoadout_BP_C",
+		33489264: "Default__VH_SupportMedium_T1_PrecastLoadout_BP_C",
 	}
 
 	playerGet := buildMmogPlayerGetPayload(defaultMmogPlayerPID)
@@ -1668,11 +1666,16 @@ func TestStarterLoadoutsUseRealPrecastIDsAndActiveFlags(t *testing.T) {
 			t.Fatalf("YA_RequestStaticFleetData native loadout IDs should use development-table object IDs, not stale display id %q", staleID)
 		}
 	}
-	if bytes.Contains(playerGet, []byte("PrecastLoadout_BP")) {
-		t.Fatal("YA_PlayerGet native loadout IDs should use development-table object IDs, not precast asset IDs")
+	// INVERTED on evidence. These used to require the development blueprints and
+	// forbid the shipping precast ones. The client instantiates whatever class is
+	// named here and then reports THAT blueprint's own m_precastLoadoutID, so
+	// naming a development BP made it report 33489198 and friends -- ids no
+	// ship-class check can accept. See nativeStarterLoadoutClassName.
+	if !bytes.Contains(playerGet, []byte("PrecastLoadout_BP")) {
+		t.Fatal("YA_PlayerGet must name the shipping precast loadout blueprints")
 	}
-	if bytes.Contains(staticFleetData, []byte("PrecastLoadout_BP")) {
-		t.Fatal("YA_RequestStaticFleetData native loadout IDs should use development-table object IDs, not precast asset IDs")
+	if !bytes.Contains(staticFleetData, []byte("PrecastLoadout_BP")) {
+		t.Fatal("YA_RequestStaticFleetData must name the shipping precast loadout blueprints")
 	}
 
 	if !bytes.Contains(playerGet, appendFieldMarker("precastLoadout", 0x56)) {
@@ -1700,7 +1703,7 @@ func TestMmogPlayerStateNormalizesStaleStarterNativeLoadoutIDs(t *testing.T) {
 	if err := database.QueryRow(`SELECT native_loadout_id FROM player_ship_loadouts WHERE user_id=? AND precast_loadout_id=33489262`, playerPID).Scan(&nativeLoadoutID); err != nil {
 		t.Fatalf("query normalized native loadout id: %v", err)
 	}
-	if nativeLoadoutID != "Default__VH_AssaultMedium_T1_Loadout_BP_C" {
+	if nativeLoadoutID != "Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C" {
 		t.Fatalf("normalized assault native loadout ID = %q", nativeLoadoutID)
 	}
 }

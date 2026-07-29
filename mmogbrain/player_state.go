@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,7 +59,7 @@ func defaultMmogPlayerState(playerPID string) mmogPlayerState {
 		currentXP:   100,
 		currentRank: 1,
 		rankXP:      100,
-		fleets:          mmogFleetSeeds(),
+		fleets:      mmogFleetSeeds(),
 	}
 }
 
@@ -210,7 +211,15 @@ func seedMmogPlayerState(database *sql.DB, playerPID string) error {
 }
 
 func normalizePersistedStarterNativeLoadoutIDs(exec sqlExecer, playerPID string) error {
-	for precastID, nativeID := range nativeStarterLoadoutIDsByPrecastID {
+	// Rewrites rows persisted with the old DEVELOPMENT class names
+	// (Default__VH_AssaultMedium_T1_Loadout_BP_C and friends) to the shipping
+	// precast ones, so existing players pick the correction up on next login
+	// rather than keeping a development blueprint forever.
+	for _, precastID := range dreadconfig.StarterInventoryLoadoutIDs() {
+		nativeID, ok := nativeStarterLoadoutClassName(precastID)
+		if !ok {
+			continue
+		}
 		if _, err := exec.Exec(`UPDATE player_ship_loadouts SET native_loadout_id=?, updated_at=datetime('now') WHERE user_id=? AND precast_loadout_id=? AND native_loadout_id<>?`,
 			nativeID, playerPID, precastID, nativeID); err != nil {
 			return fmt.Errorf("normalize starter native loadout id %d: %w", precastID, err)

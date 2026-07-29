@@ -93,30 +93,54 @@ func (loadout mmogShipLoadoutSeed) displayInfo() string {
 	return noShipVanityDisplayInfo
 }
 
-var nativeStarterLoadoutIDsByPrecastID = map[int32]string{
-	33489262: "Default__VH_AssaultMedium_T1_Loadout_BP_C",
-	33489423: "Default__VH_DreadnoughtMedium_Loadout_BP_C",
-	33489263: "Default__VH_SniperMedium_T1_Loadout_BP_C",
-	33489264: "Default__VH_SupportMedium_T1_Loadout_BP_C",
-}
-
-var fleetStarterShipIDsByPrecastID = map[int32]int32{
-	33489262: 33489198,
-	33489423: 33489239,
-	33489263: 33489199,
-	33489264: 33489200,
+// nativeStarterLoadoutClassName is the blueprint class the client instantiates
+// for a starter loadout, derived from the loadout id's registered asset path.
+//
+// This was a hardcoded table naming the DEVELOPMENT blueprints --
+// Default__VH_AssaultMedium_T1_Loadout_BP_C and friends, from
+// /Game/Generic/Loadouts/Precast/Development/. That is where the whole
+// 33489198/33489239/33489199/33489200 id space came from: the client
+// instantiates the blueprint named here and then reports the blueprint's OWN
+// m_precastLoadoutID (UYShipLoadout+0xC0), which for a development BP is the
+// development item id, not the id we asked for. Confirmed from
+// "ObjectToIDCachedVanity | Loadout Simargl | 33489239", whose %d argument is
+// exactly that offset while we were sending precastLoadoutID 33489423.
+//
+// Deriving it from the register instead yields the shipping assets, and matches
+// what ItemIDConversionTable independently records for the three of these four
+// that appear in it (e.g. 33489262 ->
+// .../T1/VH_AssaultMedium_T1_PrecastLoadout_BP.Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C).
+func nativeStarterLoadoutClassName(precastLoadoutID int32) (string, bool) {
+	item, ok := dreadconfig.ItemByID(precastLoadoutID)
+	if !ok || item.AssetPath == "" {
+		return "", false
+	}
+	asset := item.AssetPath
+	if idx := strings.LastIndex(asset, "/"); idx >= 0 {
+		asset = asset[idx+1:]
+	}
+	if asset == "" {
+		return "", false
+	}
+	return "Default__" + asset + "_C", true
 }
 
 func nativeStarterLoadoutID(precastLoadoutID int32) (string, bool) {
-	id, ok := nativeStarterLoadoutIDsByPrecastID[precastLoadoutID]
-	return id, ok
+	return nativeStarterLoadoutClassName(precastLoadoutID)
 }
 
+// fleetStarterShipIDForPrecast is the id the fleet reports for a slot.
+//
+// It used to map each loadout to the DEVELOPMENT blueprint's item id, which
+// only made sense while nativeStarterLoadoutID pointed at those blueprints.
+// Now that the client instantiates the shipping precast asset, it reports that
+// asset's own id, so the two have to agree -- hence the identity. Getting this
+// out of step with the class name above is what breaks the hangar's flagship
+// lookup, which resolves FlagShipID against the loadouts the client actually
+// built ("AYGameMode_Outpost::InitializeOutpostShipInternal | No flagship
+// found!").
 func fleetStarterShipIDForPrecast(precastLoadoutID int32) int32 {
-	if id, ok := fleetStarterShipIDsByPrecastID[precastLoadoutID]; ok {
-		return id
-	}
-	return 0
+	return precastLoadoutID
 }
 
 func countOwnedShips(ships []mmogShipSeed) int {
@@ -240,9 +264,12 @@ func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
 			}
 			seen[slot.itemID] = len(seeds)
 			seeds = append(seeds, mmogModuleUIDataSeed{
-				itemID:   slot.itemID,
-				index:    int32(len(seeds)),
-				shipID:   loadout.effectiveFleetShipID(),
+				itemID: slot.itemID,
+				index:  int32(len(seeds)),
+				// The pawn id: "ship_id" on an owned item names the ship the
+				// item is fitted to, and the gateway's owned_items reports pawn
+				// ids, so the two have to agree.
+				shipID:   loadout.ship.id,
 				owned:    true,
 				equipped: true,
 			})
