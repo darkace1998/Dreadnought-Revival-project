@@ -3474,3 +3474,89 @@ func TestRewardCurrenciesCarriesBalanceAsStrings(t *testing.T) {
 	}
 	validateMmogPayloadNesting(t, protocol.AppendRootEnd(payload))
 }
+
+// TestTechTreeRowsAreKeyedOnAdmissibleIDs pins the id space of the tech tree's
+// ship rows.
+//
+// The gate deciding whether a row enters the array TechTreeManager::
+// FindItemForShipId searches compares the top byte of the id -- a category tag,
+// (Id >> 24) & 0xff -- against the resolved YShipLoadoutHero and
+// YShipLoadoutPrecast classes, which ItemIDTable numbers 3 and 1. YPawn is
+// category 10, so a pawn id is silently discarded by the loader and the row
+// might as well not have been sent. Every row therefore has to be keyed on a
+// precast or hero loadout id.
+func TestTechTreeRowsAreKeyedOnAdmissibleIDs(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	const (
+		categoryPrecastLoadout = 1
+		categoryHeroLoadout    = 3
+	)
+	seen := map[int32]bool{}
+	for _, ship := range techTreeShips() {
+		rowID := techTreeRowID(ship)
+		switch category := (rowID >> 24) & 0xff; category {
+		case categoryPrecastLoadout, categoryHeroLoadout:
+		default:
+			t.Errorf("ship %d keys its row on %d, whose category byte is %d; only 1 (precast) and 3 (hero) are admitted",
+				ship.id, rowID, category)
+		}
+		seen[rowID] = true
+	}
+	if len(seen) == 0 {
+		t.Fatal("no tech tree rows")
+	}
+
+	// Each id must appear exactly once in the emitted document. Mapping every
+	// T1 ship onto the loadout id its fleet row already used means the raw ship
+	// list contains duplicates by design; buildMmogTechTreeDocument drops them,
+	// and it has to, or the loader would file the same item under one
+	// manufacturer group twice.
+	document := inflateTechTreeDocument(t, buildMmogTechTreePayload(defaultMmogPlayerPID))
+	for rowID := range seen {
+		field := protocol.AppendStringField(nil, "Id", strconv.Itoa(int(rowID)))
+		if got := bytes.Count(document, field); got != 1 {
+			t.Errorf("row id %d appears %d times in the document, want exactly 1", rowID, got)
+		}
+	}
+
+	// The derivation must keep reproducing the four starter loadout ids that
+	// were known independently, from the shared config. That is what
+	// distinguishes it from the hand-written table it replaced.
+	for shipID, wantLoadoutID := range map[int32]int32{
+		184483982: 33489262, // Agosta
+		184484170: 33489423, // Simargl
+		184483950: 33489263, // Rurik
+		184484202: 33489264, // Cerberus
+	} {
+		got, ok := techTreePrecastLoadoutID(shipID)
+		if !ok {
+			t.Errorf("no precast loadout derived for starter ship %d", shipID)
+			continue
+		}
+		if got != wantLoadoutID {
+			t.Errorf("starter ship %d derived precast loadout %d, want %d", shipID, got, wantLoadoutID)
+		}
+	}
+}
+
+// inflateTechTreeDocument returns the zlib-compressed document carried in
+// YA_GetTechTree's TechTrees byte-array field.
+func inflateTechTreeDocument(t *testing.T, payload []byte) []byte {
+	t.Helper()
+
+	blob, ok := protocol.ExtractBytesField(payload, "TechTrees")
+	if !ok {
+		t.Fatal("YA_GetTechTree carries no TechTrees blob")
+	}
+	reader, err := zlib.NewReader(bytes.NewReader(blob))
+	if err != nil {
+		t.Fatalf("TechTrees blob does not inflate: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	document, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read inflated TechTrees: %v", err)
+	}
+	return document
+}

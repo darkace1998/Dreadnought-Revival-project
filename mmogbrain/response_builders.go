@@ -1541,17 +1541,26 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 // they compose FUIShipData through the tech-tree interpreter, so with no items
 // every ship entry comes back with an empty m_loadouts and m_shipId 0.
 func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
-	byManufacturer := map[int32][]mmogShipSeed{}
+	// Rows are keyed by PRECAST LOADOUT id, not ship-pawn id -- see
+	// techTreeRowID. Mapping collapses each T1 ship onto the same id as the
+	// fleet row that already carried it, so duplicates are dropped here.
+	byManufacturer := map[int32][]techTreeRow{}
 	order := []int32{}
+	emitted := map[int32]bool{}
 	for _, ship := range ships {
 		id := shipManufacturerID(ship.manufacturer)
 		if id < 0 {
 			continue
 		}
+		rowID := techTreeRowID(ship)
+		if emitted[rowID] {
+			continue
+		}
+		emitted[rowID] = true
 		if _, seen := byManufacturer[id]; !seen {
 			order = append(order, id)
 		}
-		byManufacturer[id] = append(byManufacturer[id], ship)
+		byManufacturer[id] = append(byManufacturer[id], techTreeRow{id: rowID, ship: ship})
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
 
@@ -1559,8 +1568,8 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	var stack []int
 	for _, manufacturerID := range order {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
-		for position, ship := range byManufacturer[manufacturerID] {
-			b, stack = appendMmogTechTreeItem(b, stack, ship, manufacturerID, int32(position))
+		for position, row := range byManufacturer[manufacturerID] {
+			b, stack = appendMmogTechTreeItem(b, stack, row, manufacturerID, int32(position))
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -1581,9 +1590,16 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 // family of failures it was expected to.
 const techTreeProxyTypeShip = -1
 
-func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufacturerID int32, position int32) ([]byte, []int) {
+// techTreeRow pairs a ship with the id its tech tree row is keyed on.
+type techTreeRow struct {
+	id   int32
+	ship mmogShipSeed
+}
+
+func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturerID int32, position int32) ([]byte, []int) {
+	ship := row.ship
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(ship.id)))
+	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(row.id)))
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(ship.classID)))
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
