@@ -152,7 +152,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_AnalyticsEvent", "YA_SaveCtAData", "YA_IncrementPlayerStatsCounter",
 		"YA_AnalyticsEndTransaction", "YA_AnalyticsUpdateTransaction",
 		"YA_AnalyticsTutorialEvent", "YA_AnalyticsTutorialSummaryEvent",
-		"YA_AnalyticsOnboardingMovie":
+		"YA_AnalyticsOnboardingMovie", "YA_AnalyticsButtonClicked":
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Client-owned save blobs ---
@@ -162,13 +162,12 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_SaveGame":
 		return buildMmogRequestSuccessPayload(requestName)
 
-	// --- Captain registration ---
-	// Sent once, right after the tutorial, when the player names their captain.
-	// The name is persisted by persistMmogPlayerMutation; without an
-	// acknowledgement here the client sat on a loading screen forever waiting
-	// for this response.
+	// --- Captain registration / appearance ---
+	// Sent when the player names or restyles their captain. The value is
+	// persisted by persistMmogPlayerMutation, which runs before this, so the
+	// echo below carries what was just saved.
 	case "YA_SavePlayerDisplayInformation":
-		return buildMmogRequestSuccessPayload(requestName)
+		return buildMmogSavePlayerDisplayInformationPayload(requestName, playerPID)
 	case "YA_AnalyticsBeginTransaction":
 		transactionId := protocol.ExtractStringField(payload, "transactionId")
 		if transactionId == "" {

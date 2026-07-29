@@ -1072,7 +1072,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "repSU_M", "0")
 	b = protocol.AppendStringField(b, "repSU_H", "0")
 	b = protocol.AppendStringField(b, "ReputationGoalID", "0")
-	b = protocol.AppendStringField(b, "disp", "")
+	// "disp" is the captain appearance string the client uploads with
+	// YA_SavePlayerDisplayInformation and reads back here. Sending it empty
+	// threw away the player's customisation on every login.
+	b = protocol.AppendStringField(b, "disp", state.displayInfo)
 	b = protocol.AppendStringField(b, "motto", "")
 	// Client-owned save blobs, echoed back exactly as uploaded. These must be
 	// byte-array fields (tag 0x0a), not strings: the client reads them through
@@ -3407,5 +3410,33 @@ func buildMmogRibbonsPayload(playerPID string) []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// buildMmogSavePlayerDisplayInformationPayload answers the captain
+// registration/appearance save.
+//
+// The client's handler for this response does two things, and a generic success
+// payload satisfies neither:
+//
+//   - It reads "PID", parses it strictly as a GUID, and compares it against the
+//     player it already knows. On a mismatch -- which is what an absent field
+//     produces, since the missing value parses to an all-zero GUID -- it
+//     broadcasts mmogbrain error 0x10. That is the error UYCaptain picks up and
+//     logs as "HandleMmogbrainError | General MMogbrain captain display
+//     information error", once per save.
+//   - Only on a match does it read "disp", store it as the live captain
+//     appearance, and broadcast the display-information-updated delegate that
+//     the captain UI listens on.
+//
+// So the response has to echo both fields. persistMmogPlayerMutation has
+// already run by this point, so the state read here is the value just saved.
+func buildMmogSavePlayerDisplayInformationPayload(requestName string, playerPID string) []byte {
+	state := mmogPlayerStateForPID(playerPID)
+
+	var b []byte
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendStringField(b, "disp", state.displayInfo)
 	return b
 }

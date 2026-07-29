@@ -3244,57 +3244,73 @@ func TestOnboardingFlowRequestsAreAcknowledged(t *testing.T) {
 	}
 }
 
-// TestLoadoutDisplayInfoCarriesSlotItemIDs covers the string the client parses
-// with UYDreadnoughtExternalFunctions::GetItemIDsFromDisplayInfoString.
-//
-// UYShipLoadout::ImportLoadoutParameterAsync refuses to load a loadout's assets
-// when this string yields no item IDs, logging "No item IDs retrieved from
-// display info!" followed by "Start async. loading 0 assets" — which leaves the
-// hangar with nothing to display.
-func TestLoadoutDisplayInfoCarriesSlotItemIDs(t *testing.T) {
+// TestLoadoutDisplayInfoIsWellFormedShipVanity guards the ship-customisation
+// string. UYShipCustomisationComponent::ImportFromDisplayInfo rejects anything
+// that does not split into exactly five ';' groups ("Invalid import string"),
+// and UYShipLoadout::ImportLoadoutParameterAsync rejects a string shorter than
+// two characters ("No item IDs retrieved from display info!"). Both have been
+// hit live, from opposite directions.
+func TestLoadoutDisplayInfoIsWellFormedShipVanity(t *testing.T) {
 	loadouts := starterShipLoadouts()
 	if len(loadouts) == 0 {
 		t.Fatal("no starter loadouts to check")
 	}
 	for _, loadout := range loadouts {
 		info := loadout.displayInfo()
-		if info == "" {
-			t.Fatalf("%s has an empty display info string", loadout.entryID())
+		if len(info) < 2 {
+			t.Fatalf("%s display info %q is too short; the loadout importer needs >1 char", loadout.entryID(), info)
 		}
-		// The parser splits on ';' and the client then walks ten slots:
-		// two weapons, four abilities, four perks.
-		parts := strings.Split(info, ";")
-		if len(parts) != 10 {
-			t.Fatalf("%s display info has %d slots, want 10: %q", loadout.entryID(), len(parts), info)
+		groups := strings.Split(info, ";")
+		if len(groups) != 5 {
+			t.Fatalf("%s display info has %d groups, want exactly 5: %q", loadout.entryID(), len(groups), info)
 		}
-		for i, part := range parts {
-			if _, err := strconv.Atoi(part); err != nil {
-				t.Fatalf("%s display info slot %d is not numeric: %q", loadout.entryID(), i, part)
+		// A first group of 2+ chars must itself split into exactly four mesh
+		// ids, or the importer logs "Invalid mesh import string".
+		if len(groups[0]) > 1 {
+			if meshes := strings.Split(groups[0], "#"); len(meshes) != 4 {
+				t.Fatalf("%s mesh group has %d parts, want 4: %q", loadout.entryID(), len(meshes), groups[0])
 			}
-		}
-		// Slot order must match the client's, which appends weaponPrimary,
-		// weaponSecondary, then the four abilities, then the four perks.
-		if parts[0] != strconv.Itoa(int(loadout.weaponPrimaryItemID())) {
-			t.Fatalf("%s display info slot 0 = %q, want the primary weapon", loadout.entryID(), parts[0])
-		}
-		if parts[1] != strconv.Itoa(int(loadout.weaponSecondaryItemID())) {
-			t.Fatalf("%s display info slot 1 = %q, want the secondary weapon", loadout.entryID(), parts[1])
-		}
-		for i := 0; i < 4; i++ {
-			if id := loadout.abilityItemID(i); id != 0 && parts[2+i] != strconv.Itoa(int(id)) {
-				t.Fatalf("%s display info slot %d = %q, want ability %d", loadout.entryID(), 2+i, parts[2+i], id)
-			}
-		}
-		// A weapon slot is never empty on a starter loadout; an unfilled slot
-		// must be -1, the value the client's own parser substitutes for blanks.
-		if parts[0] == "-1" || parts[1] == "-1" {
-			t.Fatalf("%s is missing a weapon: %q", loadout.entryID(), info)
 		}
 	}
 
 	// It has to reach the wire too, not just the accessor.
 	payload := buildMmogPlayerFleetsPayload(defaultMmogPlayerPID)
-	if !bytes.Contains(payload, []byte(loadouts[0].displayInfo())) {
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "m_displayInfo", loadouts[0].displayInfo())) {
 		t.Fatal("YA_PlayerFleets does not carry the loadout display info string")
+	}
+}
+
+// TestSavePlayerDisplayInformationEchoesPIDAndAppearance covers the captain
+// save round trip.
+//
+// The client checks the response's PID as a GUID against the player it knows
+// and, on a mismatch (including an absent field, which parses to an all-zero
+// GUID), broadcasts mmogbrain error 0x10 -- logged as "UYCaptain::
+// HandleMmogbrainError | General MMogbrain captain display information error".
+// Only on a match does it read "disp" and broadcast the update to the UI.
+func TestSavePlayerDisplayInformationEchoesPIDAndAppearance(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const playerPID = "15151515151515151515151515151515"
+	const appearance = "GENDER_FEMALE;#iiS=872349703#iiH=872349769#bIam=0"
+
+	_ = buildMmogPlayerGetPayload(playerPID)
+
+	// The client sends the appearance in "disp", not "DisplayInfo".
+	mutation := protocol.AppendStringField(nil, "disp", appearance)
+	if err := persistMmogPlayerMutation(playerPID, "YA_SavePlayerDisplayInformation", mutation); err != nil {
+		t.Fatalf("persist: %v", err)
+	}
+
+	response := buildMmogRequestResponsePayload("YA_SavePlayerDisplayInformation", playerPID, mutation)
+	if got := protocol.ExtractStringField(response, "PID"); got != playerPID {
+		t.Fatalf("response PID = %q, want %q — a mismatch raises mmogbrain error 0x10", got, playerPID)
+	}
+	if got := protocol.ExtractStringField(response, "disp"); got != appearance {
+		t.Fatalf("response disp = %q, want the saved appearance %q", got, appearance)
+	}
+
+	// And it must actually have been stored, not just echoed back.
+	if got := buildMmogPlayerGetPayload(playerPID); protocol.ExtractStringField(got, "disp") != appearance {
+		t.Fatal("YA_PlayerGet does not carry the saved captain appearance")
 	}
 }

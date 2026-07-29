@@ -67,42 +67,30 @@ func (loadout mmogShipLoadoutSeed) entryID() string {
 	return "Default__" + strings.ReplaceAll(loadout.loadoutName, " ", "") + "_" + strconv.FormatInt(int64(loadout.loadoutID()), 10) + "_C"
 }
 
-// displayInfo is the loadout's equipped-item list, which the client parses with
-// UYDreadnoughtExternalFunctions::GetItemIDsFromDisplayInfoString: a
-// semicolon-separated list of item IDs, in slot order.
+// noShipVanityDisplayInfo is a ship's cosmetic-customisation string with nothing
+// applied. It is NOT the functional loadout — weapons, abilities and perks
+// travel in their own fields (weaponPrimary, m_abilityIDs, m_perkIDs, ...).
 //
-// UYShipLoadout::ImportLoadoutParameterAsync feeds this string to that parser
-// and, on success, appends the loadout's own slots in the order
-// weaponPrimary, weaponSecondary, then four abilities, then four perks -- so
-// the string has to use the same ten slots in the same order. Empty slots are
-// written as -1, which is the value the parser itself substitutes for a blank
-// entry ("Using -1 for empty entriy in string %s").
+// The format comes from UYShipCustomisationComponent::ExportToDisplayInfo,
+// which builds exactly "%s;%s;%s;%s;%s" — five semicolon-separated groups, the
+// first of which is itself "%s#%s#%s#%s" (four mesh ids). Its importer enforces
+// that: ImportFromDisplayInfo rejects anything that does not split into exactly
+// five parts with "Invalid import string %s", and rejects a first group that
+// does not split into four with "Invalid mesh import string %s". A group
+// shorter than two characters is skipped silently, so five empty groups is
+// precisely what the client itself exports for a ship with no vanity applied.
 //
-// Returning "" here made the client log "No item IDs retrieved from display
-// info!", then "Start async. loading 0 assets" and "Given list of item IDs is
-// empty!", leaving the hangar with no ship assets to load.
+// Both extremes were wrong. An empty string made
+// UYShipLoadout::ImportLoadoutParameterAsync log "No item IDs retrieved from
+// display info!" and load zero assets. A ten-slot item list (an earlier attempt
+// here) cleared that but tripped the customisation importer's five-part check.
+const noShipVanityDisplayInfo = ";;;;"
+
+// displayInfo is the ship's cosmetic-customisation string. Starter ships ship
+// with no vanity applied, and this server does not yet persist per-ship vanity,
+// so every loadout reports the empty-but-well-formed form.
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
-	slots := []int32{
-		loadout.weaponPrimaryItemID(),
-		loadout.weaponSecondaryItemID(),
-		loadout.abilityItemID(0),
-		loadout.abilityItemID(1),
-		loadout.abilityItemID(2),
-		loadout.abilityItemID(3),
-		loadout.perkItemID(0),
-		loadout.perkItemID(1),
-		loadout.perkItemID(2),
-		loadout.perkItemID(3),
-	}
-	parts := make([]string, 0, len(slots))
-	for _, itemID := range slots {
-		if itemID == 0 {
-			parts = append(parts, "-1")
-			continue
-		}
-		parts = append(parts, strconv.FormatInt(int64(itemID), 10))
-	}
-	return strings.Join(parts, ";")
+	return noShipVanityDisplayInfo
 }
 
 var nativeStarterLoadoutIDsByPrecastID = map[int32]string{

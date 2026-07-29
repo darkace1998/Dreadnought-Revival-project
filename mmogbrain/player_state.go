@@ -578,7 +578,17 @@ func loadPlayerSaveBlob(playerPID string, slot string) []byte {
 }
 
 func persistSavePlayerDisplayInformation(database *sql.DB, playerPID string, payload []byte) error {
-	displayInfo := protocol.ExtractStringField(payload, "DisplayInfo")
+	// The client names this field "disp", not "DisplayInfo" -- confirmed from a
+	// captured request:
+	//
+	//   RT "YA_SavePlayerDisplayInformation"  PID <guid>
+	//   disp "GENDER_FEMALE;#iiS=872349703#iiH=872349769#...#bIam=0"
+	//
+	// Reading the wrong name meant every captain the player customised was
+	// silently discarded and the account reverted to the default appearance.
+	// "DisplayInfo" is kept as a fallback: it is the name this server uses when
+	// it hands the same string back in other payloads.
+	displayInfo := firstMmogStringField(payload, "disp", "DisplayInfo")
 	displayName := firstMmogStringField(payload, "DisplayName", "displayName")
 
 	if displayInfo == "" && strings.TrimSpace(displayName) == "" {
