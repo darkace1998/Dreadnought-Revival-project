@@ -3243,3 +3243,58 @@ func TestOnboardingFlowRequestsAreAcknowledged(t *testing.T) {
 		})
 	}
 }
+
+// TestLoadoutDisplayInfoCarriesSlotItemIDs covers the string the client parses
+// with UYDreadnoughtExternalFunctions::GetItemIDsFromDisplayInfoString.
+//
+// UYShipLoadout::ImportLoadoutParameterAsync refuses to load a loadout's assets
+// when this string yields no item IDs, logging "No item IDs retrieved from
+// display info!" followed by "Start async. loading 0 assets" — which leaves the
+// hangar with nothing to display.
+func TestLoadoutDisplayInfoCarriesSlotItemIDs(t *testing.T) {
+	loadouts := starterShipLoadouts()
+	if len(loadouts) == 0 {
+		t.Fatal("no starter loadouts to check")
+	}
+	for _, loadout := range loadouts {
+		info := loadout.displayInfo()
+		if info == "" {
+			t.Fatalf("%s has an empty display info string", loadout.entryID())
+		}
+		// The parser splits on ';' and the client then walks ten slots:
+		// two weapons, four abilities, four perks.
+		parts := strings.Split(info, ";")
+		if len(parts) != 10 {
+			t.Fatalf("%s display info has %d slots, want 10: %q", loadout.entryID(), len(parts), info)
+		}
+		for i, part := range parts {
+			if _, err := strconv.Atoi(part); err != nil {
+				t.Fatalf("%s display info slot %d is not numeric: %q", loadout.entryID(), i, part)
+			}
+		}
+		// Slot order must match the client's, which appends weaponPrimary,
+		// weaponSecondary, then the four abilities, then the four perks.
+		if parts[0] != strconv.Itoa(int(loadout.weaponPrimaryItemID())) {
+			t.Fatalf("%s display info slot 0 = %q, want the primary weapon", loadout.entryID(), parts[0])
+		}
+		if parts[1] != strconv.Itoa(int(loadout.weaponSecondaryItemID())) {
+			t.Fatalf("%s display info slot 1 = %q, want the secondary weapon", loadout.entryID(), parts[1])
+		}
+		for i := 0; i < 4; i++ {
+			if id := loadout.abilityItemID(i); id != 0 && parts[2+i] != strconv.Itoa(int(id)) {
+				t.Fatalf("%s display info slot %d = %q, want ability %d", loadout.entryID(), 2+i, parts[2+i], id)
+			}
+		}
+		// A weapon slot is never empty on a starter loadout; an unfilled slot
+		// must be -1, the value the client's own parser substitutes for blanks.
+		if parts[0] == "-1" || parts[1] == "-1" {
+			t.Fatalf("%s is missing a weapon: %q", loadout.entryID(), info)
+		}
+	}
+
+	// It has to reach the wire too, not just the accessor.
+	payload := buildMmogPlayerFleetsPayload(defaultMmogPlayerPID)
+	if !bytes.Contains(payload, []byte(loadouts[0].displayInfo())) {
+		t.Fatal("YA_PlayerFleets does not carry the loadout display info string")
+	}
+}
