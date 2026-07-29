@@ -158,3 +158,59 @@ loadout.
 wrong classes or wrong tiers. What it is sending is *too little* — 10 of 51 available rows —
 and the remaining client-side failures (`<13>`, `m_loadouts of length 0`) are not traceable to
 any value we emit.
+
+## 10. Manufacturer ids: NOT validated (answering the direct question)
+
+**The numbering `0=JupiterArms, 1=AkulaVektor, 2=Oberon` in `shipManufacturerID()` is a
+hand-written guess and I have not validated it.** Searched for a source and found none:
+
+- No `EYManufacturer`/`EManufacturer` enum in the SDK. `HandleManufacturerClicked` takes a
+  bare `int32 manufacturerId`.
+- `UI_Screen_Manufacturers.uasset` references all three logos and three buttons, but the name
+  table is **alphabetically sorted**, so it encodes no ordering.
+- No ship asset carries a manufacturer property at all (§5), so the client has nothing to
+  contradict or confirm.
+
+What I validated earlier was the *assignment* (which ship belongs to which maker, via lore
+text) and the *names* (in locres) — not the numbers.
+
+**However, the numbering cannot be the cause of the current failure.** The client asks for
+0, 1 and 2; we emit groups keyed exactly 0, 1 and 2; it finds *none of them*. A wrong
+numbering would produce wrong grouping, not zero groups. The failure is upstream.
+
+## 11. Blob format: validated (a previous assumption, now confirmed)
+
+`compressMmogDocument` sends **bare zlib with no length prefix**, while the one captured
+client blob (`YA_SaveCtAData`) is `int32 uncompressed size + zlib`. That difference was a
+deliberate but untested choice. It is now confirmed correct.
+
+The decompressor is `FUN_142a4c430` ("Error during output decompression: %d",
+YMmogbrain.cpp:0x141):
+
+    count    = *(int*)(param_1 + 1)      // byte-array count; returns early if 0
+    next_in  = *param_1                  // data pointer, OFFSET 0
+    inflateInit_(&stream, "1.2.5", 0x58) // zlib, not raw deflate
+    loop { inflate() into 0x8000 chunks }
+
+`next_in` is the start of the array. **No length prefix is read.** So our framing matches, and
+the save-blob convention does not apply here.
+
+Also confirmed in the same pass:
+
+- The group key accessor `FUN_140238000` handles node type 4 via `_wtoi`, so
+  `Manufacturer` as the string `"0"`/`"1"`/`"2"` parses to 0/1/2 correctly.
+- The emitted document decodes as intended: root → three unnamed arrays (one per
+  manufacturer) → unnamed objects whose first fields are `Id`, `ClassId`, `Manufacturer`.
+
+## 12. Where that leaves the tech tree
+
+Every layer we control now checks out: blob framing, document structure, field names, value
+encodings, id categories, and the group keys. And the client still reports no manufacturers.
+
+That points upstream of the data entirely. `InitializeTechTreeMmogClient` is a **UFunction** —
+Blueprint-callable — and the document it parses is read from `mmogInterface+0x40a0`. I have
+**not** verified that anything ever writes `+0x40a0`, nor that the loader is ever invoked.
+
+So the next question is not "which field is wrong" but **"does the loader run at all?"** Until
+that is answered, further field changes cannot be evaluated — which is also why the last
+several schema fixes produced no visible change.
