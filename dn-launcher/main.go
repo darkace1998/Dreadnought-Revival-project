@@ -469,7 +469,21 @@ func main() {
 		// the log file to flush after every line so nothing is lost if the
 		// client crashes mid-session. Substantially larger log files —
 		// intended for one-off debugging, not routine play.
-		args = append(args, `-LogCmds=global verbose`, "-forcelogflush")
+		//
+		// LogYComVOComponent is deliberately held down: raising it past Verbose
+		// makes the client crash. UYComVOComponent::PlayVoiceLineInternal
+		// (YComVOComponent.cpp:461) logs "%s with %s" from two UObject names,
+		// and it does so before validating them -- by the time the tutorial's
+		// intro movie ends one of those objects has already been destroyed, so
+		// its NamePrivate slot holds a recycled heap pointer and FName::ToString
+		// indexes the name pool with garbage.
+		//
+		// Confirmed from a full-memory dump of that crash: access violation at
+		// FName::ToString, the "FName" read from object+0x18 was the pointer
+		// 0x000001f898b6f300, and the category's live verbosity byte was 7.
+		// The guard is `if (5 < verbosity)`, so anything up to Verbose (5) is
+		// safe and VeryVerbose (6) or All (7) is not.
+		args = append(args, `-LogCmds=global verbose, LogYComVOComponent log`, "-forcelogflush")
 		fmt.Println("[*] Verbose logging enabled (DN_VERBOSE_LOG / verbose_logging) — expect much larger client log files.")
 	}
 
