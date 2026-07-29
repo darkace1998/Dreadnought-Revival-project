@@ -69,18 +69,40 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 	payload["CustomSettings"] = map[string]any{}
 	payload["FoundersPackUrl"] = ""
 	if catalog := gatewayRequestedCatalogCollection(playerID, requestedCatalog, playerDataReady); catalog != nil {
-		// No top-level "entities": the catalog parser reads Items, ItemOffers,
-		// ForexOffers and Bundles, never entities, so this was a third verbatim
-		// copy of the same 62 objects in a 292 KB response.
+		// Top-level "entities" is REQUIRED, on every catalog, even when empty.
+		//
+		// It is not read by the catalog parser (0x142a34700), which is what an
+		// earlier version of this checked before dropping the field as dead
+		// weight. But MarketManager's completion check (FUN_1403dac50) looks
+		// "entities" up by name on each of the four catalog responses and fails
+		// the whole fetch if the key is missing, with "Market data retrieval was
+		// not successful! One or more returned catalogs were missing data." --
+		// which is exactly what dropping it produced.
+		//
+		// Only presence is tested, not contents: the two currency catalogs have
+		// always sent an empty entities array and the fetch succeeded, so the
+		// empty real-money catalog is fine. Bundles is the one that is
+		// length-checked (0 < count) and it is checked on "bundles", not here.
+		payload["entities"] = catalog["entities"]
 		payload["Items"] = catalog["Items"]
 		payload["ItemOffers"] = catalog["ItemOffers"]
 		payload["ForexOffers"] = catalog["ForexOffers"]
 	}
 	if requestedCatalog == "bundles" {
-		// Only "Bundles". The lowercase alias collided with it under
-		// case-insensitive FName lookup, the same way the per-offer
-		// Name/name pair did, and the catalog parser reads "Bundles".
-		payload["Bundles"] = gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
+		// BOTH spellings, deliberately. The catalog parser (0x142a34700) reads
+		// L"Bundles" while MarketManager's completion check (FUN_1403dac50)
+		// reads L"bundles" and requires a non-empty array, so the two halves of
+		// the client disagree about the capitalisation.
+		//
+		// This is the one case-differing pair that is safe to send. A collision
+		// only does damage when the two spellings carry DIFFERENT values, as
+		// Name/name did -- one silently wins and which one is unpredictable.
+		// Here both names are bound to the same slice, so either winner is the
+		// right answer. Dropping the lowercase alias as "just a collision" is
+		// what failed the market fetch.
+		bundles := gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
+		payload["Bundles"] = bundles
+		payload["bundles"] = bundles
 	}
 	return payload
 }

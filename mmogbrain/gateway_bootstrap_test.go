@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -130,17 +131,9 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 		if requestedCatalog, _ := payload["requested_catalog"].(string); requestedCatalog != key {
 			t.Fatalf("%s has unexpected type %T", key, payload[key])
 		}
-		// There is no top-level "entities" any more: the client's catalog
-		// parser reads Items/ItemOffers/ForexOffers and never entities, so
-		// sending it was a third verbatim copy of the same objects. The
-		// contents now come from whichever array this catalog kind populates.
-		alias := "Items"
-		if key == gatewayKeyCurrencyReal || key == gatewayKeyCurrencyVC {
-			alias = "ForexOffers"
-		}
-		entities, ok := payload[alias].([]any)
+		entities, ok := payload["entities"].([]any)
 		if !ok {
-			t.Fatalf("%s has unexpected type %T", alias, payload[alias])
+			t.Fatalf("entities has unexpected type %T", payload["entities"])
 		}
 		return entities
 	}
@@ -484,8 +477,15 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 					t.Fatalf("bundle item count = %d, want 0 to avoid duplicate FYItemData loads", got)
 				}
 			} else {
-				if _, present := payload["entities"]; present {
-					t.Fatalf("top-level entities must not be sent in %s: the catalog parser never reads it", tc.name)
+				// MarketManager's completion check (FUN_1403dac50) resolves
+				// "entities" by name on every catalog response and fails the
+				// entire market fetch when the key is absent. Dropping it as
+				// unread -- the catalog parser genuinely never reads it -- broke
+				// the market with "One or more returned catalogs were missing
+				// data." Presence is what matters; an empty array is accepted,
+				// which is how the currency catalogs have always behaved.
+				if _, present := payload["entities"]; !present {
+					t.Fatalf("%s payload has no top-level entities; MarketManager fails the whole fetch without it", tc.name)
 				}
 				nestedEntities := gatewayCatalogEntities(t, payload, tc.requestedKey)
 				for _, alias := range []string{"Items", "ItemOffers", "ForexOffers"} {
@@ -911,13 +911,24 @@ func TestGatewayPayloadsHaveNoCaseCollidingKeys(t *testing.T) {
 		gatewayKeyItemCatalogVC, gatewayKeyItemCatalogReal,
 		gatewayKeyCurrencyVC, gatewayKeyCurrencyReal, gatewayKeyBundles,
 	} {
+		payload := gatewayBootstrapPayload(defaultMmogPlayerPID, key, true)
 		seen := map[string]string{}
-		for field := range gatewayBootstrapPayload(defaultMmogPlayerPID, key, true) {
+		for field, value := range payload {
 			lower := strings.ToLower(field)
-			if other, clash := seen[lower]; clash {
-				t.Errorf("%s payload sends both %q and %q; FName lookups are case-insensitive", key, other, field)
+			other, clash := seen[lower]
+			if !clash {
+				seen[lower] = field
+				continue
 			}
-			seen[lower] = field
+			// A case-differing pair is only harmful when the two spellings
+			// carry different values: the lookup is case-insensitive, one
+			// silently wins, and which one is unpredictable. Identical values
+			// make either winner correct -- which is what lets Bundles/bundles
+			// stay, since the parser reads one spelling and MarketManager's
+			// completion check reads the other.
+			if !reflect.DeepEqual(value, payload[other]) {
+				t.Errorf("%s payload sends %q and %q with different values; the case-insensitive lookup keeps only one", key, other, field)
+			}
 		}
 	}
 }
