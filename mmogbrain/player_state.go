@@ -508,9 +508,73 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 		return persistRemoveFromFleet(database, pid, payload)
 	case "YA_ChargeFleet", "YA_RepairFleet":
 		return nil
+	case "YA_SaveGame":
+		return persistPlayerSaveBlob(database, pid, playerSaveSlotOnboarding, payload)
+	case "YA_SaveCtAData":
+		return persistPlayerSaveBlob(database, pid, playerSaveSlotCtA, payload)
 	default:
 		return nil
 	}
+}
+
+// The client's own save blobs. It uploads them with YA_SaveGame /
+// YA_SaveCtAData and reads them back from these YA_PlayerGet fields, so the
+// slot names are deliberately the wire field names they are echoed into.
+const (
+	playerSaveSlotOnboarding = "SGD"
+	playerSaveSlotCtA        = "SCtA"
+)
+
+// persistPlayerSaveBlob stores the opaque blob from a client save request.
+//
+// Both requests carry it in a byte-array field called "data". The contents are
+// an int32 uncompressed size followed by zlib data, wrapping a magic tag and
+// UE4 tagged-property serialisation of a UObject ("ONBS" +
+// UYOnboardingSavedData for YA_SaveGame, "DAtC" + UYCtASaveData for
+// YA_SaveCtAData). The server has no reason to understand any of that: it is
+// client-owned state that only has to survive a round trip, so it is stored
+// verbatim.
+//
+// This is what makes onboarding progress stick. UYOnboardingManager::LoadStates
+// restores each rule's last-fired timestamp from the SGD blob, and the login
+// gate's tutorial check is exactly "the Ob_TutorialFinished rule has a non-zero
+// timestamp". Without persistence the client re-runs onboarding from scratch on
+// every login and can never satisfy that check.
+func persistPlayerSaveBlob(database *sql.DB, playerPID string, slot string, payload []byte) error {
+	blob, ok := protocol.ExtractBytesField(payload, "data")
+	if !ok {
+		// Nothing to store. Deliberately not an error: dropping the previous
+		// blob because one request arrived malformed would lose real progress.
+		return nil
+	}
+	if _, err := database.Exec(
+		`INSERT INTO player_save_blobs(user_id, slot, data, updated_at)
+		 VALUES(?, ?, ?, datetime('now'))
+		 ON CONFLICT(user_id, slot) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at`,
+		playerPID, slot, blob,
+	); err != nil {
+		return fmt.Errorf("persist %s save blob: %w", slot, err)
+	}
+	return nil
+}
+
+// loadPlayerSaveBlob returns the stored blob for a slot, or nil when the player
+// has never saved one (a brand-new account, which must still go through
+// onboarding).
+func loadPlayerSaveBlob(playerPID string, slot string) []byte {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	var blob []byte
+	err := database.QueryRow(
+		`SELECT data FROM player_save_blobs WHERE user_id=? AND slot=?`,
+		normalizedPlayerStatePID(playerPID), slot,
+	).Scan(&blob)
+	if err != nil {
+		return nil
+	}
+	return blob
 }
 
 func persistSavePlayerDisplayInformation(database *sql.DB, playerPID string, payload []byte) error {

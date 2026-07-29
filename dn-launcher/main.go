@@ -45,7 +45,7 @@ func buildTLSConfig() *tls.Config {
 					continue
 				}
 				sum := sha256.Sum256(cert.Raw)
-			actual := hex.EncodeToString(sum[:])
+				actual := hex.EncodeToString(sum[:])
 				if strings.ToLower(actual) == expected {
 					return nil
 				}
@@ -288,6 +288,7 @@ type Config struct {
 	FirmamentPort  string `json:"firmament_port"`
 	GamePath       string `json:"game_path"`
 	VerboseLogging bool   `json:"verbose_logging"`
+	SkipOnboarding bool   `json:"skip_onboarding"`
 }
 
 func defaultConfig() Config {
@@ -313,6 +314,12 @@ func loadConfig(exeDir string) Config {
 	// one-off debugging session) without editing dn-launcher.json.
 	if v := strings.TrimSpace(os.Getenv("DN_VERBOSE_LOG")); v != "" && v != "0" {
 		cfg.VerboseLogging = true
+	}
+	// DN_SKIP_ONBOARDING is a debugging escape hatch that jumps straight to the
+	// hangar. Onboarding is on by default so new players get the same first-run
+	// experience they had on the live servers.
+	if v := strings.TrimSpace(os.Getenv("DN_SKIP_ONBOARDING")); v != "" && v != "0" {
+		cfg.SkipOnboarding = true
 	}
 	return cfg
 }
@@ -437,22 +444,23 @@ func main() {
 		// Steam subsystem init entirely, matching the flag the project's own
 		// dedicated-server launch command already uses (see README.md).
 		"-NoSteam",
-		// UUI_LoginGateScreen::EnterGame refuses to leave the loading screen
-		// unless the onboarding rule "Ob_TutorialFinished" is marked complete,
-		// which normally requires having played the tutorial match. The client
-		// restores that state from the YA_PlayerGet "SGD" field: a zlib blob
-		// (int32 raw size + "ONBS" + UE4 tagged properties) that the client
-		// itself produces via YA_SaveGame. A brand-new account has no blob, so
-		// the gate never opens.
-		//
+	}
+
+	if cfg.SkipOnboarding {
 		// UYDreadnoughtLocalPlayer's constructor reads
 		// m_noOnboarding = FParse::Param(FCommandLine::Get(), "noonboarding"),
-		// and every onboarding gate (including the tutorial check the login
-		// gate calls) short-circuits to "satisfied" when it is set. That makes
-		// this a pure command-line switch already built into the shipping
-		// binary — no exe patching — and it only affects the onboarding
-		// prompts, nothing else in the hangar.
-		"-noonboarding",
+		// and every onboarding gate — including the tutorial check that
+		// UUI_LoginGateScreen::EnterGame runs before it will leave the loading
+		// screen — short-circuits to "satisfied" when it is set.
+		//
+		// This is off by default on purpose: new players are supposed to go
+		// through onboarding, exactly as they did on the live servers. The
+		// server persists the client's own onboarding save blob (YA_SaveGame ->
+		// the SGD field of YA_PlayerGet), so progress sticks across logins
+		// without skipping anything. Use this only to get straight to the
+		// hangar while debugging.
+		args = append(args, "-noonboarding")
+		fmt.Println("[*] Onboarding disabled (DN_SKIP_ONBOARDING / skip_onboarding) — the tutorial gate is bypassed.")
 	}
 
 	if cfg.VerboseLogging {

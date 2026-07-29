@@ -216,6 +216,19 @@ var migrations = []string{
 		PRIMARY KEY (user_id, faction_id),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	// Opaque client-authored save blobs. The client serialises some of its own
+	// state (onboarding rule progress, call-to-arms history) into a compressed
+	// binary blob, uploads it with YA_SaveGame / YA_SaveCtAData, and expects it
+	// back verbatim in the SGD / SCtA fields of YA_PlayerGet. The server never
+	// interprets the contents — it is a per-player key/value store.
+	`CREATE TABLE IF NOT EXISTS player_save_blobs (
+		user_id     TEXT NOT NULL,
+		slot        TEXT NOT NULL,  -- 'SGD' (onboarding) or 'SCtA' (call to arms)
+		data        BLOB NOT NULL,
+		updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, slot),
+		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

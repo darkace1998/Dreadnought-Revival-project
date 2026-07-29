@@ -52,6 +52,30 @@ func AppendStringField(b []byte, name string, value string) []byte {
 	return b
 }
 
+// AppendBytesField writes a raw byte-array field (tag 0x0a).
+//
+// The client reads these into a value node that keeps a pointer/length pair at
+// +0x38/+0x40 rather than the string slot at +0x28/+0x30, so a byte array is a
+// distinct wire type from a string and cannot be substituted with one. The
+// layout is otherwise identical to a string field: <namelen><name>0x0a<u32
+// length><bytes>.
+//
+// Confirmed from a captured YA_SaveCtAData request the client sent us:
+//
+//	04 "data" 0a 1d000000 15000000 789c ...
+//
+// i.e. field "data", tag 0x0a, 0x1d bytes, whose contents are a save blob
+// (int32 uncompressed size followed by zlib data). This is the type the SGD
+// and SCtA fields of YA_PlayerGet use.
+func AppendBytesField(b []byte, name string, value []byte) []byte {
+	b = appendFieldNameAndType(b, name, 0x0a)
+	var length [4]byte
+	binary.LittleEndian.PutUint32(length[:], uint32(len(value)))
+	b = append(b, length[:]...)
+	b = append(b, value...)
+	return b
+}
+
 func AppendInt32Field(b []byte, name string, value int32) []byte {
 	b = appendFieldNameAndType(b, name, 0x56)
 	var raw [4]byte

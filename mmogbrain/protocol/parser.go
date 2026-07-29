@@ -52,6 +52,20 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 			if _, ok := targets[name]; ok && (name != "" || strings.TrimSpace(value) != "") {
 				*values = append(*values, value)
 			}
+		case 0x0a:
+			// Byte array: same length prefix as a string, but it is binary and
+			// must never be surfaced as a string value. Skipping it correctly
+			// matters because requests that carry one (YA_SaveGame,
+			// YA_SaveCtAData) also carry fields we do read.
+			if i+4 > len(payload) {
+				return false
+			}
+			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if valueLen < 0 || i+valueLen > len(payload) {
+				return false
+			}
+			i += valueLen
 		case 0x05:
 			if i >= len(payload) {
 				return false
@@ -92,6 +106,74 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 	return true
 }
 
+// ExtractBytesField returns the contents of a byte-array field (tag 0x0a).
+// Used to pull the opaque save blobs out of YA_SaveGame / YA_SaveCtAData so
+// they can be stored and handed back verbatim on the next login.
+func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
+	for i := 0; i < len(payload); {
+		nameLen := int(payload[i])
+		i++
+		if i+nameLen+1 > len(payload) {
+			return nil, false
+		}
+		name := string(payload[i : i+nameLen])
+		i += nameLen
+		fieldType := payload[i]
+		i++
+		switch fieldType {
+		case 0x09, 0x0a:
+			if i+4 > len(payload) {
+				return nil, false
+			}
+			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if valueLen < 0 || i+valueLen > len(payload) {
+				return nil, false
+			}
+			if fieldType == 0x0a && name == target {
+				value := make([]byte, valueLen)
+				copy(value, payload[i:i+valueLen])
+				return value, true
+			}
+			i += valueLen
+		case 0x05:
+			if i >= len(payload) {
+				return nil, false
+			}
+			i++
+		case 0x56:
+			if i+4 > len(payload) {
+				return nil, false
+			}
+			i += 4
+		case 0x0c, 0x0d:
+			if i+4 > len(payload) {
+				return nil, false
+			}
+			objectLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			if objectLen <= 0 || i+objectLen > len(payload) {
+				return nil, false
+			}
+			if value, ok := ExtractBytesField(payload[i+4:i+objectLen], target); ok {
+				return value, true
+			}
+			i += objectLen
+		case 0x0e:
+			if nameLen != 0 || i+4 > len(payload) {
+				return nil, false
+			}
+			start := binary.LittleEndian.Uint32(payload[i : i+4])
+			i += 4
+			if start == 0 {
+				return nil, false
+			}
+		default:
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
 func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 	for i := 0; i < len(payload); {
 		nameLen := int(payload[i])
@@ -108,6 +190,16 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 		i++
 		switch fieldType {
 		case 0x09:
+			if i+4 > len(payload) {
+				return 0, false
+			}
+			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if valueLen < 0 || i+valueLen > len(payload) {
+				return 0, false
+			}
+			i += valueLen
+		case 0x0a:
 			if i+4 > len(payload) {
 				return 0, false
 			}
@@ -184,6 +276,16 @@ func ExtractRequestName(payload []byte) string {
 			if name == "RT" {
 				return value
 			}
+		case 0x0a:
+			if i+4 > len(payload) {
+				return ""
+			}
+			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if valueLen < 0 || i+valueLen > len(payload) {
+				return ""
+			}
+			i += valueLen
 		case 0x05:
 			if i >= len(payload) {
 				return ""

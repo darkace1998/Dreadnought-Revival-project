@@ -1074,8 +1074,15 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "ReputationGoalID", "0")
 	b = protocol.AppendStringField(b, "disp", "")
 	b = protocol.AppendStringField(b, "motto", "")
-	b = protocol.AppendStringField(b, "SGD", "")
-	b = protocol.AppendStringField(b, "SCtA", "")
+	// Client-owned save blobs, echoed back exactly as uploaded. These must be
+	// byte-array fields (tag 0x0a), not strings: the client reads them through
+	// a value-node accessor that only looks at the node's binary pointer/length
+	// slot, so a string field would always read back as zero-length. Sending an
+	// empty array for a player who has never saved is correct — that is a new
+	// account, and the client will run onboarding and then upload its first
+	// blob via YA_SaveGame.
+	b = protocol.AppendBytesField(b, "SGD", loadPlayerSaveBlob(playerPID, playerSaveSlotOnboarding))
+	b = protocol.AppendBytesField(b, "SCtA", loadPlayerSaveBlob(playerPID, playerSaveSlotCtA))
 	b = protocol.AppendStringField(b, "LGVersion", "0")
 	// Only emit the Membership block for players with real membership history
 	// (active or previously expired). For players who never bought elite,

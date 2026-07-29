@@ -170,14 +170,14 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 				t.Fatalf("bool value truncated at byte %d", i)
 			}
 			i++
-		case 0x09:
+		case 0x09, 0x0a:
 			if i+4 > len(payload) {
-				t.Fatalf("string length truncated at byte %d", i)
+				t.Fatalf("string/bytes length truncated at byte %d", i)
 			}
 			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
 			i += 4
 			if i+valueLen > len(payload) {
-				t.Fatalf("string overruns payload at byte %d", i)
+				t.Fatalf("string/bytes overruns payload at byte %d", i)
 			}
 			i += valueLen
 		case 0x56:
@@ -1895,7 +1895,7 @@ func assertMmogPayloadHasNoSiblingFNameCollisions(t *testing.T, payloadName stri
 		}
 
 		switch typeByte {
-		case 0x09: // string
+		case 0x09, 0x0a: // string / byte array (same u32 length prefix)
 			if idx+4 > len(payload) {
 				return
 			}
@@ -3051,5 +3051,68 @@ func TestChatPayloadDeliversPersistedMessages(t *testing.T) {
 	}
 	if !bytes.Contains(messages, protocol.AppendStringField(nil, "text", "hello world")) {
 		t.Fatalf("messages array missing text for persisted chat message: %x", messages)
+	}
+}
+
+// TestClientSaveBlobsRoundTripThroughPlayerGet covers the onboarding
+// persistence path. The client uploads its own onboarding state with
+// YA_SaveGame and restores it from the SGD field of YA_PlayerGet; if that round
+// trip is lossy, UYOnboardingManager::LoadStates restores nothing, the
+// Ob_TutorialFinished rule keeps a zero timestamp, and
+// UUI_LoginGateScreen::EnterGame refuses to leave the loading screen forever.
+func TestClientSaveBlobsRoundTripThroughPlayerGet(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const playerPID = "13131313131313131313131313131313"
+
+	// Shaped like a real blob: int32 uncompressed size then zlib data. The
+	// server must not care what is inside, so exercise bytes that are not
+	// valid UTF-8 and contain NULs.
+	onboarding := []byte{0x15, 0x00, 0x00, 0x00, 0x78, 0x9c, 0x00, 0xff, 0xfe, 0x01}
+	cta := []byte{0x04, 0x00, 0x00, 0x00, 0x78, 0x9c, 0x80, 0x00}
+
+	_ = buildMmogPlayerGetPayload(playerPID)
+
+	for _, tc := range []struct {
+		request string
+		slot    string
+		blob    []byte
+	}{
+		{"YA_SaveGame", "SGD", onboarding},
+		{"YA_SaveCtAData", "SCtA", cta},
+	} {
+		mutation := protocol.AppendBytesField(nil, "data", tc.blob)
+		if err := persistMmogPlayerMutation(playerPID, tc.request, mutation); err != nil {
+			t.Fatalf("persist %s: %v", tc.request, err)
+		}
+		if got := loadPlayerSaveBlob(playerPID, tc.slot); !bytes.Equal(got, tc.blob) {
+			t.Fatalf("%s blob round trip = % x, want % x", tc.slot, got, tc.blob)
+		}
+	}
+
+	// A second save must replace the first, not append or be ignored: this is
+	// how onboarding progress advances.
+	updated := []byte{0x20, 0x00, 0x00, 0x00, 0x78, 0x9c, 0x11, 0x22}
+	if err := persistMmogPlayerMutation(playerPID, "YA_SaveGame", protocol.AppendBytesField(nil, "data", updated)); err != nil {
+		t.Fatalf("persist second YA_SaveGame: %v", err)
+	}
+	if got := loadPlayerSaveBlob(playerPID, "SGD"); !bytes.Equal(got, updated) {
+		t.Fatalf("updated SGD blob = % x, want % x", got, updated)
+	}
+
+	// And it has to come back out on the wire as a byte array, since the
+	// client's accessor only reads a value node's binary slot.
+	payload := buildMmogPlayerGetPayload(playerPID)
+	if got, ok := protocol.ExtractBytesField(payload, "SGD"); !ok || !bytes.Equal(got, updated) {
+		t.Fatalf("YA_PlayerGet SGD = % x (found=%v), want % x", got, ok, updated)
+	}
+	if got, ok := protocol.ExtractBytesField(payload, "SCtA"); !ok || !bytes.Equal(got, cta) {
+		t.Fatalf("YA_PlayerGet SCtA = % x (found=%v), want % x", got, ok, cta)
+	}
+
+	// A brand-new player has no blob and must still get a well-formed empty
+	// byte array, so the client runs onboarding instead of reading garbage.
+	fresh := buildMmogPlayerGetPayload("14141414141414141414141414141414")
+	if got, ok := protocol.ExtractBytesField(fresh, "SGD"); !ok || len(got) != 0 {
+		t.Fatalf("new player SGD = % x (found=%v), want empty byte array", got, ok)
 	}
 }
