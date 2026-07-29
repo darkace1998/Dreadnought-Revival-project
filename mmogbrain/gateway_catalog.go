@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -514,6 +515,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		bundleItems = append(bundleItems, gatewayMarketEntity(item, playerDataReady))
 	}
 	itemStatsArray := gatewayWeaponStatsArray(seed.itemID)
+	itemTier := gatewayMarketItemTier(seed.itemID)
 	entity := map[string]any{
 		"ID":                  itemID,
 		"Name":                seed.displayName,
@@ -561,21 +563,31 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"ItemStatsArray":          itemStatsArray,
 		"AdditionalTextArray":     []any{},
 		"IsHeroShip":              false,
-		"HasVeteranStatus":        false,
-		"HeroShipStatsArray":      []any{},
-		"PreviousItemStatsArray":  []any{},
-		"Manufacturer":            seed.manufacturer,
-		"ship_id":                 shipID,
-		"ShipID":                  shipID,
-		"loadout_id":              loadoutID,
-		"LoadoutID":               loadoutID,
-		"PriceId":                 "price_free",
-		"campaign_id":             "",
-		"PromotionFlagSet":        []any{},
-		"prices":                  []any{price},
-		"items":                   bundleItems,
-		"entities":                []any{},
-		"entitlements":            []any{},
+		// Tier drives the UI's tier badge, whose texture path is built as
+		// /Game/Generic/UI/tiers/UI_tier_<n>. With no tier field at all the
+		// client read the value uninitialised and asked for nonsense like
+		// UI_tier_1107296256 (0x42000000, the float 32.0) and UI_tier_148,
+		// against assets that only exist for 1..16 -- so every item icon
+		// failed to load. Sent under each spelling the payload uses elsewhere.
+		"Tier":                   itemTier,
+		"tier":                   itemTier,
+		"ItemTier":               itemTier,
+		"item_tier":              itemTier,
+		"HasVeteranStatus":       false,
+		"HeroShipStatsArray":     []any{},
+		"PreviousItemStatsArray": []any{},
+		"Manufacturer":           seed.manufacturer,
+		"ship_id":                shipID,
+		"ShipID":                 shipID,
+		"loadout_id":             loadoutID,
+		"LoadoutID":              loadoutID,
+		"PriceId":                "price_free",
+		"campaign_id":            "",
+		"PromotionFlagSet":       []any{},
+		"prices":                 []any{price},
+		"items":                  bundleItems,
+		"entities":               []any{},
+		"entitlements":           []any{},
 	}
 	if seed.grantedCurrency != "" {
 		entity["granted_currency_id"] = seed.grantedCurrency
@@ -646,3 +658,33 @@ func techTreeShipManufacturer(shipID int32) string {
 	}
 	return ""
 }
+
+// gatewayMarketItemTier returns the 1-based tier the UI shows on an item badge.
+//
+// Tier is encoded in the item's asset path as a /T<n>/ directory. The families
+// are inconsistent about where they start (some at T0, some at T1), so a T0 and
+// a T1 variant both mean "first tier" here; anything higher maps straight
+// across. Items with no tier in their path are first tier.
+//
+// The result is clamped to 1..5. The UI only ships tier badges for a small
+// range, and an out-of-range value produces a texture path that cannot resolve.
+func gatewayMarketItemTier(itemID int32) int32 {
+	item, ok := dreadconfig.ItemByID(itemID)
+	if !ok {
+		return 1
+	}
+	match := assetPathTierPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return 1
+	}
+	tier, err := strconv.Atoi(match[1])
+	if err != nil || tier <= 1 {
+		return 1
+	}
+	if tier > 5 {
+		return 5
+	}
+	return int32(tier)
+}
+
+var assetPathTierPattern = regexp.MustCompile(`/T(\d+)/`)
