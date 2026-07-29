@@ -1567,10 +1567,26 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	return protocol.AppendRootEnd(b)
 }
 
-// techTreeProxyTypeShip is the ProxyType for a ship node. The loader accepts
-// -1..9 and rejects anything else with "Invalid tech tree item type: %d"; -1 is
-// its own default for an absent value.
-const techTreeProxyTypeShip = 0
+// techTreeProxyTypeShip is the ProxyType for a ship node, and it must be -1.
+//
+// ProxyType decides WHICH of two sub-arrays the loader files an item under
+// inside its manufacturer group: the one at +0x08 when the value is -1, the one
+// at +0x18 for anything else. TechTreeManager::FindItemForShipId reads only the
+// +0x08 array, so a ship filed anywhere else can never be found by ship id.
+//
+// Sending 0 put every item in the wrong sub-array. The effect was subtle rather
+// than total: the manufacturer lookup (FUN_1403f4c70) only matches a group's
+// key, so manufacturers 0/1/2 resolved and the tech tree screen populated,
+// while every FindItemForShipId call still missed -- for real ship pawn ids as
+// much as for loadout ids. That is what "ComposeShipManufacturerDataForId Could
+// not find item for ship id ...", "GetShipResearchData Could not find a ship
+// research data with id ...", "ComposeModuleUiDataForShip | Modules not found"
+// and the junk tier badges built from an unfound item all shared.
+//
+// -1 is also the loader's own default when the field is absent (it seeds the
+// slot with 0xff before parsing), which is the clue that -1 is what a ship is
+// supposed to be.
+const techTreeProxyTypeShip = -1
 
 func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufacturerID int32, position int32) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)

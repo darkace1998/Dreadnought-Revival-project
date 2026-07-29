@@ -3409,6 +3409,14 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 			t.Errorf("%q is an int32 field; the loader reads that as 0", field)
 		}
 	}
+	// ProxyType must be -1: it selects which sub-array of the manufacturer group
+	// the item is filed under, and FindItemForShipId reads only the -1 one. Any
+	// other value leaves every ship unfindable by ship id even though the
+	// manufacturer groups themselves resolve.
+	if !bytes.Contains(document, protocol.AppendStringField(nil, "ProxyType", "-1")) {
+		t.Error("ProxyType must be -1 or ships land in the sub-array FindItemForShipId never reads")
+	}
+
 	// Prereq and Wires are arrays, not scalars.
 	for _, field := range []string{"Prereq", "Wires"} {
 		if !bytes.Contains(document, appendFieldMarker(field, 0x0d)) {
