@@ -33,7 +33,7 @@ var targetSizes = map[string]int{
 	// with identity + unlock/ownership state; static ship/loadout/module
 	// definitions come from the client's own Content. This keeps the frame far
 	// under the client's 32KB (0x8000) mmog receive ring buffer.
-	"YA_GetTechTree": 14795,
+	"YA_GetTechTree": 15587,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

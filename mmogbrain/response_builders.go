@@ -1508,6 +1508,13 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	// silently reads as 0). Static presentation data (Name, weapon stats,
 	// per-ship loadout info) is intentionally omitted — the client fills it
 	// from its own Content assets keyed by ShipID/NodeID.
+	// The client groups the tech tree by manufacturer and looks the groups up
+	// by numeric id (see shipManufacturerID); a row without one cannot be
+	// placed under any maker, which left every manufacturer page empty.
+	if manufacturerID := shipManufacturerID(ship.manufacturer); manufacturerID >= 0 {
+		b = protocol.AppendStringField(b, "m_manufacturerID", strconv.Itoa(int(manufacturerID)))
+		b = protocol.AppendStringField(b, "manufacturerId", strconv.Itoa(int(manufacturerID)))
+	}
 	b = protocol.AppendStringField(b, "NodeID", strconv.Itoa(int(ship.nodeID)))
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))

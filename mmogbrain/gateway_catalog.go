@@ -142,6 +142,30 @@ func gatewayManufacturerDisplayName(manufacturer string) string {
 	}
 }
 
+// shipManufacturerID maps a manufacturer to the numeric id the client asks for.
+//
+// UYTechTreeManager stores the tech tree as an array of manufacturer entries
+// (id at offset 0, stride 0x28), each holding the ship array that
+// ComposeShipManufacturerDataForLoadout searches, and YUIExternalFunctions::
+// GetManufacturerData looks them up by that id -- it logged "Could not find a
+// manufacturer with id 0/1/2" while our tech tree carried no manufacturer at
+// all.
+//
+// The client requests exactly 0, 1 and 2 and we have exactly three makers. The
+// order below is the assumed one; if ships appear under the wrong maker's page,
+// only these three numbers need reordering.
+func shipManufacturerID(manufacturer string) int32 {
+	switch manufacturer {
+	case "JupiterArms":
+		return 0
+	case "AkulaVektor":
+		return 1
+	case "Oberon":
+		return 2
+	}
+	return -1
+}
+
 func gatewayMarketCategoryName(itemType string) string {
 	switch itemType {
 	case "ship":
