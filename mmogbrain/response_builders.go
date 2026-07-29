@@ -466,7 +466,7 @@ func appendMmogFleetRawFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byt
 	b = protocol.AppendStringField(b, "FleetType", strconv.Itoa(int(fleet.fleetType)))
 	b, stack = protocol.AppendStringArrayField(b, stack, "shipIds", int32SliceToStrings(fleet.shipIDs()))
 	b, stack = protocol.AppendBoolArrayField(b, stack, "ShipTechTreeComplete", fleet.shipTechTreeComplete())
-	b = protocol.AppendStringField(b, "FlagShipID", strconv.Itoa(int(fleet.flagshipShipID)))
+	b = protocol.AppendStringField(b, "FlagShipID", strconv.Itoa(int(fleet.flagshipRealShipID())))
 	b = protocol.AppendStringField(b, "FlagShipLoadoutID", strconv.Itoa(int(fleet.flagshipLoadoutID)))
 	b = protocol.AppendStringField(b, "FlagShipLoadoutIndex", strconv.Itoa(int(fleet.flagshipLoadoutIndex)))
 	return b, stack
