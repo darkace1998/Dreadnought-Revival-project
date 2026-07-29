@@ -434,6 +434,29 @@ func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
 	return fleet
 }
 
+// shipIDs is what the wire field "shipIds" carries: LOADOUT ids, not ship-pawn
+// ids. Do not "fix" this to pawn ids -- that was tried in b5b6df1 and reverted
+// in 24986d4 because it broke the hangar flagship spawn
+// ("AYGameMode_Outpost::InitializeOutpostShipInternal | No flagship found!").
+//
+// That commit's justification was also simply wrong, and the reasoning is worth
+// recording because it inverts what the client actually does. The gate on the
+// tech-tree item array at manager+0x38 is
+//
+//	byte5(FUN_140547970(Id)) == 1 || FUN_1405483e0(Id)
+//
+// and both compare (Id >> 24) & 0xff -- the top byte of the id, a category tag,
+// via FUN_1402cf640 -- against a resolved class: FUN_140547970 against
+// YShipLoadoutHero, FUN_1405483e0 against YShipLoadoutPrecast. ItemIDTable gives
+// those categories IDs 3 and 1. The top byte of 33489262/33489423/33489263/
+// 33489264 is 1; YPawn is category 10 and the top byte of 184483982/184484170
+// is 10.
+//
+// So that gate ADMITS precast and hero loadout ids and REJECTS pawn ids. Loadout
+// ids belong here. It also means the ten pawn-id rows buildMmogTechTreeDocument
+// currently emits are discarded by the loader, and a correct document would key
+// its ship rows on precast loadout ids -- which is the next thing to change, not
+// this field.
 func (fleet mmogFleetSeed) shipIDs() []int32 {
 	ids := make([]int32, 0, len(fleet.shipLoadouts))
 	for _, loadout := range fleet.shipLoadouts {

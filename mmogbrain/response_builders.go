@@ -1567,25 +1567,18 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	return protocol.AppendRootEnd(b)
 }
 
-// techTreeProxyTypeShip is the ProxyType for a ship node, and it must be -1.
+// techTreeProxyTypeShip is the ProxyType for a ship node.
 //
-// ProxyType decides WHICH of two sub-arrays the loader files an item under
-// inside its manufacturer group: the one at +0x08 when the value is -1, the one
-// at +0x18 for anything else. TechTreeManager::FindItemForShipId reads only the
-// +0x08 array, so a ship filed anywhere else can never be found by ship id.
-//
-// Sending 0 put every item in the wrong sub-array. The effect was subtle rather
-// than total: the manufacturer lookup (FUN_1403f4c70) only matches a group's
-// key, so manufacturers 0/1/2 resolved and the tech tree screen populated,
-// while every FindItemForShipId call still missed -- for real ship pawn ids as
-// much as for loadout ids. That is what "ComposeShipManufacturerDataForId Could
-// not find item for ship id ...", "GetShipResearchData Could not find a ship
-// research data with id ...", "ComposeModuleUiDataForShip | Modules not found"
-// and the junk tier badges built from an unfound item all shared.
-//
-// -1 is also the loader's own default when the field is absent (it seeds the
-// slot with 0xff before parsing), which is the clue that -1 is what a ship is
-// supposed to be.
+// -1 is the loader's own default for an absent ProxyType (it seeds the slot with
+// 0xff before parsing), so it is the right value to send. But CORRECTION: an
+// earlier version of this comment claimed -1 was needed because ProxyType picks
+// which sub-array TechTreeManager::FindItemForShipId reads. That is wrong. The
+// two-sub-array split (+0x08 when ProxyType is -1, +0x18 otherwise) is in the
+// array at manager+0x48. The array FindItemForShipId searches is the one at
+// manager+0x38, and its store path has no ProxyType branch at all -- it always
+// uses the sub-array at +0x08. Changing this value did not affect
+// FindItemForShipId, and did not fix the "Could not find item for ship id"
+// family of failures it was expected to.
 const techTreeProxyTypeShip = -1
 
 func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufacturerID int32, position int32) ([]byte, []int) {
