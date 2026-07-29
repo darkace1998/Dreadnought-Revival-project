@@ -242,16 +242,23 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 
 // gatewayWalletSnapshot reports the player's balances.
 //
-// These are the only place the client learns them: the YA_PlayerGet parser
-// reads no currency field at all -- its field set is PID, SID, tll, tpl, tc,
-// rep*, disp, motto, SGD, SCtA, PPF, tslm, FreeXp, Membership, Officers,
-// ShipLoadouts, ShipXps, Ribbons, Medals, Friends, Squad, Faction* and
-// LGVersion -- so the wallet here is authoritative.
+// CAUTION: the client does not read this field. The string "wallet" does not
+// occur anywhere in the shipping binary, so whatever is sent here is ignored.
+// It previously returned a hardcoded 10000/0/0; reporting the player's real
+// balance is at least honest, but it does not drive anything on screen.
 //
-// This used to return a hardcoded 10000/0/0 for every player, which meant
-// spending or earning anything never showed up: the balance the client
-// displayed was a constant, unrelated to the value being persisted in
-// player_state.
+// The HUD's three numbers are FPlayerCurrencyAmountsData{m_freeXP,
+// m_softCurrency, m_hardCurrency}. Only m_freeXP is currently fed, by the
+// "FreeXp" field of YA_PlayerGet -- and it is correct, matching the persisted
+// value. The other two read zero because nothing this server sends supplies
+// them: a complete enumeration of the YA_PlayerGet parser's 47 FName lookups
+// contains no currency field, and the gateway fields that might have carried
+// one ("wallet") are unknown to the client.
+//
+// Other gateway fields in this payload are likewise absent from the binary and
+// therefore dead: owned_items, player_id, catalog_version, starter_ship_ids and
+// requested_catalog. Only entities/Items/ItemOffers/ForexOffers are read.
+// Finding the real source of m_softCurrency/m_hardCurrency is still open.
 func gatewayWalletSnapshot(playerID string) map[string]any {
 	state := mmogPlayerStateForPID(playerID)
 	return map[string]any{
