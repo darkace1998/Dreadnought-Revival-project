@@ -4,11 +4,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/zlib"
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -3312,5 +3314,45 @@ func TestSavePlayerDisplayInformationEchoesPIDAndAppearance(t *testing.T) {
 	// And it must actually have been stored, not just echoed back.
 	if got := buildMmogPlayerGetPayload(playerPID); protocol.ExtractStringField(got, "disp") != appearance {
 		t.Fatal("YA_PlayerGet does not carry the saved captain appearance")
+	}
+}
+
+// TestTechTreeCarriesZlibBlob pins the envelope the client actually reads.
+//
+// The YA_GetTechTree handler (response slot 0x36b0) fetches exactly one field,
+// "TechTrees", through the byte-array accessor, inflates it with inflateInit_
+// -- a standard zlib stream, no length prefix -- and hands the result to the
+// ordinary mmog document parser. Everything else in the response is ignored
+// without an error, which is how a fully populated techTreeRow array produced
+// no parse logging at all and left the tech tree manager empty.
+func TestTechTreeCarriesZlibBlob(t *testing.T) {
+	payload := buildMmogTechTreePayload(defaultMmogPlayerPID)
+
+	blob, ok := protocol.ExtractBytesField(payload, "TechTrees")
+	if !ok {
+		t.Fatal("YA_GetTechTree has no TechTrees byte field; the client reads nothing else")
+	}
+	if len(blob) == 0 {
+		t.Fatal("TechTrees blob is empty")
+	}
+	// A zlib stream, not raw deflate: the client uses inflateInit_.
+	if blob[0]&0x0f != 8 {
+		t.Fatalf("TechTrees blob is not a zlib stream (CMF=0x%02x)", blob[0])
+	}
+
+	reader, err := zlib.NewReader(bytes.NewReader(blob))
+	if err != nil {
+		t.Fatalf("TechTrees blob does not inflate: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	document, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read inflated TechTrees: %v", err)
+	}
+
+	// The inflated bytes must be a well-formed mmog document.
+	validateMmogPayloadNesting(t, document)
+	if !bytes.Contains(document, appendFieldMarker("techTreeRow", 0x0d)) {
+		t.Fatal("inflated TechTrees document carries no techTreeRow array")
 	}
 }

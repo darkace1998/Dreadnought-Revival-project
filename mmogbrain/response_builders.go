@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/zlib"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"github.com/dreadnought-ps/mmogbrain/protocol"
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // --- Frame builders ---
@@ -1486,7 +1489,61 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
+
+	// The client does not read any of the above. Its YA_GetTechTree handler
+	// (response slot 0x36b0) builds the FName "TechTrees", fetches that single
+	// field, and reads it through the BYTE-ARRAY accessor -- the same one the
+	// SGD save blob uses. Everything else in the response is ignored, silently
+	// and without an error, which is why a fully populated techTreeRow array
+	// produced no parse logging and left the tech tree manager empty.
+	//
+	// The blob is a plain zlib stream: FYMmogbrain inflates it with
+	// inflateInit_ ("1.2.5", stream size 0x58) straight from the field bytes,
+	// with no length prefix, growing the output in 32KB chunks and logging
+	// "Error during output decompression: %d" on failure. The inflated bytes
+	// are then handed to the ordinary mmog document parser -- it dispatches on
+	// the same wire tags we already emit (0x09 string, 0x56 int32) -- so the
+	// payload inside is just another mmog document.
+	b = protocol.AppendBytesField(b, "TechTrees", compressMmogDocument(buildMmogTechTreeDocument(ships)))
 	return b
+}
+
+// buildMmogTechTreeDocument builds the document that goes inside the TechTrees
+// blob. It carries the same rows as the (ignored) plain fields above so the two
+// cannot drift while the inner field names are still being established.
+func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
+	var b []byte
+	var stack []int
+	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
+	b, stack = protocol.AppendArrayStart(b, stack, "techTreeRow")
+	for _, ship := range ships {
+		b, stack = appendMmogTechTreeRow(b, stack, ship)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "moduleUiData")
+	for _, module := range starterModuleUIDataSeeds() {
+		b, stack = appendMmogModuleOwnershipEntry(b, stack, module)
+	}
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return protocol.AppendRootEnd(b)
+}
+
+// compressMmogDocument zlib-compresses a document for a blob field. The client
+// inflates with inflateInit_, i.e. a standard zlib stream with its 2-byte
+// header -- not a raw deflate stream and not the length-prefixed form the
+// save-game blobs use.
+func compressMmogDocument(document []byte) []byte {
+	var out bytes.Buffer
+	writer := zlib.NewWriter(&out)
+	if _, err := writer.Write(document); err != nil {
+		logrus.WithError(err).Warn("mmog: compress tech tree document")
+		return nil
+	}
+	if err := writer.Close(); err != nil {
+		logrus.WithError(err).Warn("mmog: finish tech tree document")
+		return nil
+	}
+	return out.Bytes()
 }
 
 // techTreeRowTier returns 1 for T1 nodes (free/default-owned starters) and 2
