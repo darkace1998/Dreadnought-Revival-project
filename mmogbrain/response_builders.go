@@ -3507,3 +3507,28 @@ func buildMmogSavePlayerDisplayInformationPayload(requestName string, playerPID 
 	b = protocol.AppendStringField(b, "disp", state.displayInfo)
 	return b
 }
+
+// buildMmogRewardCurrenciesPayload reports the player's credit and GP balances.
+//
+// This is the only channel the client has for them. Its HUD reads
+// FPlayerCurrencyAmountsData{m_freeXP, m_softCurrency, m_hardCurrency}; m_freeXP
+// comes from YA_PlayerGet's "FreeXp", but a complete enumeration of that
+// parser's 47 field lookups contains no currency field at all, so soft and hard
+// currency have to arrive here.
+//
+// The YA_RewardCurrencies handler reads root-level "Credits" and "Points" and
+// ASSIGNS them (mov [iface+0x3be4], Credits / mov [iface+0x3be0], Points) rather
+// than adding, so sending the current balance is idempotent and safe to repeat
+// on every login despite the "Reward" in the name.
+//
+// Both values go through FUN_1402380b0 -- the same accessor family that only
+// understands double/int64/string and silently reads an int32 wire field as 0 --
+// so they must be numeric strings.
+func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
+	state := mmogPlayerStateForPID(playerPID)
+
+	b := buildMmogRequestSuccessPayload("YA_RewardCurrencies")
+	b = protocol.AppendStringField(b, "Credits", strconv.Itoa(int(state.softCurrency)))
+	b = protocol.AppendStringField(b, "Points", strconv.Itoa(int(state.premiumCurrency)))
+	return b
+}

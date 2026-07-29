@@ -2614,8 +2614,8 @@ func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	if len(remaining) != 0 {
 		t.Fatalf("unexpected remaining bytes after responses")
 	}
-	if len(parsed) != 3 {
-		t.Fatalf("frame count = %d, want 3 (2 purchases answered immediately + YA_PlayerGet)", len(parsed))
+	if len(parsed) != 4 {
+		t.Fatalf("frame count = %d, want 4 (2 purchases answered immediately + YA_PlayerGet + its currency push)", len(parsed))
 	}
 	// Both purchase responses are answered immediately in request order, ahead of
 	// the later YA_PlayerGet frame.
@@ -2623,7 +2623,11 @@ func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 		t.Fatal("immediate purchase responses did not preserve original request IDs in order")
 	}
 	if got := protocol.ExtractRequestName(parsed[2].Payload); got != "YA_PlayerGet" {
-		t.Fatalf("last frame = %q, want YA_PlayerGet", got)
+		t.Fatalf("frame 3 = %q, want YA_PlayerGet", got)
+	}
+	// The currency push must trail the player data it reflects, never precede it.
+	if got := protocol.ExtractRequestName(parsed[3].Payload); got != "YA_RewardCurrencies" {
+		t.Fatalf("last frame = %q, want the YA_RewardCurrencies push", got)
 	}
 }
 
@@ -3355,4 +3359,45 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 	if !bytes.Contains(document, appendFieldMarker("techTreeRow", 0x0d)) {
 		t.Fatal("inflated TechTrees document carries no techTreeRow array")
 	}
+}
+
+// TestRewardCurrenciesCarriesBalanceAsStrings covers the only channel the client
+// has for credit and GP balances.
+//
+// Its HUD reads FPlayerCurrencyAmountsData{m_freeXP, m_softCurrency,
+// m_hardCurrency}. m_freeXP arrives via YA_PlayerGet's "FreeXp", but that
+// parser has no currency field of any spelling among its 47 lookups, so soft
+// and hard currency can only come from YA_RewardCurrencies' root-level
+// "Credits" and "Points". Both are read through the accessor family that
+// silently reads an int32 wire field as 0, so they must be numeric strings.
+func TestRewardCurrenciesCarriesBalanceAsStrings(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const playerPID = "17171717171717171717171717171717"
+
+	_ = buildMmogPlayerGetPayload(playerPID)
+	database := currentMmogPlayerStateDB()
+	if _, err := database.Exec(
+		`UPDATE player_state SET soft_currency=?, premium_currency=? WHERE user_id=?`,
+		4242, 77, normalizedPlayerStatePID(playerPID),
+	); err != nil {
+		t.Fatalf("seed balances: %v", err)
+	}
+
+	payload := buildMmogRewardCurrenciesPayload(playerPID)
+	if got := protocol.ExtractStringField(payload, "RT"); got != "YA_RewardCurrencies" {
+		t.Fatalf("RT = %q, want YA_RewardCurrencies", got)
+	}
+	if got := protocol.ExtractStringField(payload, "Credits"); got != "4242" {
+		t.Fatalf("Credits = %q, want the persisted 4242", got)
+	}
+	if got := protocol.ExtractStringField(payload, "Points"); got != "77" {
+		t.Fatalf("Points = %q, want the persisted 77", got)
+	}
+	// int32 here reads back as 0 on the client.
+	for _, field := range []string{"Credits", "Points"} {
+		if bytes.Contains(payload, appendFieldMarker(field, 0x56)) {
+			t.Fatalf("%s must be a numeric string, not an int32 field", field)
+		}
+	}
+	validateMmogPayloadNesting(t, protocol.AppendRootEnd(payload))
 }

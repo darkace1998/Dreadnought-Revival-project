@@ -528,6 +528,16 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 			}
 			if requestName == "YA_PlayerGet" {
+				// The client has no currency field in YA_PlayerGet at all, so
+				// its credit and GP balances can only arrive through
+				// YA_RewardCurrencies. Its handler assigns rather than adds, so
+				// pushing the current balance here is idempotent. Correlate to
+				// this request so it arrives after the player data it reflects.
+				currencies := buildMmogRewardCurrenciesPayload(state.playerPID)
+				currencyFrame := protocol.BuildResponseFrame(frame.RequestID, frame.MsgType, currencies)
+				if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, "YA_RewardCurrencies", currencyFrame, appEncoder, encryptResponses, "currency push failed", "sent YA_RewardCurrencies push"); err != nil {
+					return err
+				}
 				if err := handlePlayerGetSatisfied(log, conn, remote, appEncoder, encryptResponses, state, "client-request"); err != nil {
 					return err
 				}
