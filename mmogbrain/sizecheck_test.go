@@ -41,9 +41,12 @@ var targetSizes = map[string]int{
 	// tech-tree ships (see techTreeShips).
 	"YA_GetPlayerProgression": 1097,
 	"YA_GetPlayerPurchases":   100,
-	// Was 305, -72 after removing fabricated Eligible/isEligible bool
-	// fields (issue #51 — zero footprint in the client binary).
-	"YA_FleetEligibility": 233,
+	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
+	// fields (issue #51 — zero footprint in the client binary). Now 953: the
+	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,
+	// shared with YA_RequestStaticFleetData. The old "fleet_eligibility" array
+	// was smaller because none of its field names were ones the client reads.
+	"YA_FleetEligibility": 953,
 	// Was 368116 (full tuning tables) — that overflowed the 16-bit mmog frame
 	// size field and desynced the client stream, blocking hangar entry. Now sends
 	// empty override tables (client uses its backup asset tuning); see

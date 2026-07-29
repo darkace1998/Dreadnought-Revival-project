@@ -1393,8 +1393,25 @@ func TestFleetMetadataUsesConfigBackedEligibility(t *testing.T) {
 	if got := len(mmogFleetSeeds()); got != len(wantEligibilities) {
 		t.Fatalf("fleet seed count = %d, want %d", got, len(wantEligibilities))
 	}
-	if got := bytes.Count(fleetEligibility, appendFieldMarker("FleetType", 0x56)); got != len(wantEligibilities) {
-		t.Fatalf("YA_FleetEligibility FleetType count = %d, want %d", got, len(wantEligibilities))
+	// YA_FleetEligibility is parsed by FUN_142a78790, the same function as
+	// YA_RequestStaticFleetData, so it carries FleetTypes entries -- not the
+	// "fleet_eligibility" array of FleetType/Reason pairs it used to send,
+	// which shared no field name with that parser and filled nothing.
+	if got := bytes.Count(fleetEligibility, appendFieldMarker("Tiers", 0x0d)); got != len(wantEligibilities) {
+		t.Fatalf("YA_FleetEligibility FleetTypes tier-array count = %d, want %d", got, len(wantEligibilities))
+	}
+	for _, eligibility := range wantEligibilities {
+		if !bytes.Contains(fleetEligibility, protocol.AppendStringField(nil, "ID", strconv.Itoa(int(eligibility.FleetType)))) {
+			t.Fatalf("YA_FleetEligibility missing config-backed FleetType id %d", eligibility.FleetType)
+		}
+	}
+	// The AI-ship spawner reads Tiers; an int32 tag there is silently read as 0.
+	if bytes.Contains(fleetEligibility, appendFieldMarker("FleetType", 0x56)) {
+		t.Fatal("YA_FleetEligibility still carries the old int32 FleetType field")
+	}
+	// Maintenance is resolved on the result object, not per FleetTypes entry.
+	if !bytes.Contains(fleetEligibility, appendFieldMarker("Maintenance", 0x0c)) {
+		t.Fatal("YA_FleetEligibility is missing the result-level Maintenance object")
 	}
 	if got := bytes.Count(fleetTypes, appendFieldMarker("Tiers", 0x0d)); got != len(wantEligibilities) {
 		t.Fatalf("YA_RequestStaticFleetData FleetTypes tier-array count = %d, want %d", got, len(wantEligibilities))
@@ -1424,9 +1441,6 @@ func TestFleetMetadataUsesConfigBackedEligibility(t *testing.T) {
 		}
 		if !bytes.Contains(fleetTypes, protocol.AppendStringField(nil, "AvailableCharges", strconv.Itoa(1))) {
 			t.Fatalf("YA_RequestStaticFleetData missing AvailableCharges=1 for fleet type %d", eligibility.FleetType)
-		}
-		if !bytes.Contains(fleetEligibility, protocol.AppendInt32Field(nil, "FleetType", eligibility.FleetType)) {
-			t.Fatalf("YA_FleetEligibility missing config-backed FleetType %d", eligibility.FleetType)
 		}
 		for _, tier := range eligibility.AllowedTiers {
 			tierCounts[tier]++

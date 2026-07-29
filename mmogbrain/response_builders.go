@@ -2674,18 +2674,37 @@ func buildMmogFleetEligibilityPayload() []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_FleetEligibility")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b, stack = protocol.AppendArrayStart(b, stack, "fleet_eligibility")
+	// Same body as YA_RequestStaticFleetData's FleetTypes/Maintenance, because
+	// it is parsed by the same function.
+	//
+	// This response is dispatched on request slot interface+0x3740 -- the two
+	// send sites, 0x142a1f2d5 and 0x142a40ec5, both bind that slot to
+	// "YA_FleetEligibility" -- and the handler at 0x142a26e5b passes result to
+	// FUN_142a78790, which is exactly the parser appendMmogStaticFleetTypeEntry
+	// and appendMmogStaticFleetMaintenanceConfig were already written against.
+	// The old body sent a "fleet_eligibility" array of FleetType/Reason pairs
+	// and shared not one field name with what that parser reads, so it filled
+	// nothing.
+	//
+	// FUN_142a78790 writes the array at interface+0x3c10, guarded by the flag
+	// at +0x3c3c. Two consumers were left reading an empty array: the AI-ship
+	// spawner in YGameMode_Multiplayer, which needs Tiers and otherwise logs
+	// "No mmog tier data available for spawning AI ships, using default
+	// hardcoded data", and the fourth UYFleetManager readiness bit, whose data
+	// holder is that same +0x3c10 / +0x3c3c pair.
+	//
+	// The AllowedTiers this sends -- {1,2}, {2,3}, {4,5} -- are corroborated
+	// independently: they are exactly the per-fleet-type min/max pairs the
+	// client falls back to at 0x14036e2xx when the data is missing.
+	b, stack = protocol.AppendArrayStart(b, stack, "FleetTypes")
 	for _, eligibility := range configBackedFleetEligibilities() {
-		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendInt32Field(b, "FleetType", eligibility.FleetType)
-		// issue #51: "Eligible"/"isEligible" have zero footprint anywhere in
-		// the client binary (verified byte-level, ASCII and UTF-16LE) — not
-		// real field names, removed. "FleetType" and "Reason" are confirmed
-		// real tokens in the client string pool; left as-is.
-		b = protocol.AppendStringField(b, "Reason", "")
-		b, stack = protocol.AppendObjectEnd(b, stack)
+		b, stack = appendMmogStaticFleetTypeEntry(b, stack, eligibility)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// Maintenance is resolved on the result object, not per entry
+	// (FUN_140237c30(param_2, ...) at 0x142a78790+0x414, against
+	// FUN_140237c30(lVar5, ...) for every field above).
+	b, stack = appendMmogStaticFleetMaintenanceConfig(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
