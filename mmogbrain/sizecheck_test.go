@@ -16,9 +16,7 @@ var targetSizes = map[string]int{
 	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
-	// +5: shipIds/FlagShipID now carry ship-pawn ids, which are longer numbers
-	// than the loadout ids they replaced (see mmogFleetSeed.shipIDs).
-	"YA_RequestStaticFleetData": 6246,
+	"YA_RequestStaticFleetData": 6241,
 	"YA_GetFeatureToggle":       111,
 	"YA_GetGameConfigData":      534,
 	"YA_GetStaticCareerData":    2153,
@@ -83,7 +81,7 @@ var targetSizes = map[string]int{
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
 	"YA_PlayerGet":             9879,
-	"YA_PlayerFleets":          1793,
+	"YA_PlayerFleets":          1788,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).

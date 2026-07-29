@@ -393,49 +393,12 @@ func (fleet mmogFleetSeed) flagshipOnly() mmogFleetSeed {
 	return fleet
 }
 
-// shipIDs is what the wire field "shipIds" carries, and it must be REAL ship
-// (pawn) ids -- not the fleet/loadout ids effectiveFleetShipID returns.
-//
-// The client resolves each of these ids to a local asset and checks its CLASS
-// before it will store the corresponding tech-tree item in the array
-// TechTreeManager::FindItemForShipId searches (manager+0x38): the gate is
-// byte5(FUN_140547970(Id)) == 1 || FUN_1405483e0(Id), and both are class
-// checks. A loadout blueprint is not a ship pawn, so a loadout id can never
-// pass either one:
-//
-//	33489239 -> /Game/Generic/Loadouts/Precast/Development/VH_DreadnoughtMedium_Loadout_BP
-//	33489423 -> /Game/Generic/Loadouts/Precast/T1/VH_DreadnoughtMedium_T1_PrecastLoadout_BP
-//	184484170 -> /Game/Generic/Ships/Dreadnought/Medium/T1/VH_DreadM_Pawn_T1_BP   <- a pawn
-//
-// Sending loadout ids here is what produced "ComposeShipManufacturerDataForId
-// Could not find item for ship id 33489239", the junk tier badges built from an
-// unfound item's uninitialised tier (UI_tier_596, TierColors index 595), and
-// "ComposeModuleUiDataForShip | Modules not found". Which loadout id we picked
-// was irrelevant -- the non-development one fails the same class check.
-//
-// The loadout a slot is using still travels separately, in FlagShipLoadoutID
-// and the m_loadoutList entries, so nothing loses the ship-to-loadout pairing.
 func (fleet mmogFleetSeed) shipIDs() []int32 {
 	ids := make([]int32, 0, len(fleet.shipLoadouts))
 	for _, loadout := range fleet.shipLoadouts {
-		ids = append(ids, loadout.ship.id)
+		ids = append(ids, loadout.effectiveFleetShipID())
 	}
 	return ids
-}
-
-// flagshipRealShipID is the flagship's ship-pawn id, for the same reason
-// shipIDs returns pawn ids: the client looks FlagShipID up inside shipIds, so
-// the two have to be in the same id space.
-func (fleet mmogFleetSeed) flagshipRealShipID() int32 {
-	for _, loadout := range fleet.shipLoadouts {
-		if loadout.loadoutID() == fleet.flagshipLoadoutID {
-			return loadout.ship.id
-		}
-	}
-	if len(fleet.shipLoadouts) > 0 {
-		return fleet.shipLoadouts[0].ship.id
-	}
-	return 0
 }
 
 func (fleet mmogFleetSeed) loadoutIDs() []int32 {

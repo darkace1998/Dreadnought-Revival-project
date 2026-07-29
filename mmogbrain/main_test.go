@@ -565,8 +565,8 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	// client's int32-blind fleet-array parser (FUN_142a77910 in the
 	// decompile — see int32SliceToStrings' doc comment in
 	// response_builders.go) and must be numeric strings, not int32.
-	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipRealShipID())))) {
-		t.Fatalf("YA_PlayerFleets does not expose starter flagship ship %d", starterFleet.flagshipRealShipID())
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
+		t.Fatalf("YA_PlayerFleets does not expose starter flagship ship %d", starterFleet.flagshipShipID)
 	}
 	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipLoadoutID", strconv.Itoa(int(starterFleet.flagshipLoadoutID)))) {
 		t.Fatalf("YA_PlayerFleets does not expose starter flagship loadout %d", starterFleet.flagshipLoadoutID)
@@ -574,8 +574,8 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	if !bytes.Contains(staticFleetData, appendFieldMarker("Fleets", 0x0d)) {
 		t.Fatal("YA_RequestStaticFleetData does not expose Fleets array")
 	}
-	if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipRealShipID())))) {
-		t.Fatalf("YA_RequestStaticFleetData does not expose starter flagship ship %d", starterFleet.flagshipRealShipID())
+	if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
+		t.Fatalf("YA_RequestStaticFleetData does not expose starter flagship ship %d", starterFleet.flagshipShipID)
 	}
 	if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "FlagShipLoadoutID", strconv.Itoa(int(starterFleet.flagshipLoadoutID)))) {
 		t.Fatalf("YA_RequestStaticFleetData does not expose starter flagship loadout %d", starterFleet.flagshipLoadoutID)
@@ -657,9 +657,8 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 		if !bytes.Contains(staticFleetData, protocol.AppendStringField(nil, "LoadoutID", strconv.Itoa(int(loadout.loadoutID())))) {
 			t.Fatalf("YA_RequestStaticFleetData missing starter loadout id %d", loadout.loadoutID())
 		}
-		// shipIds is in the ship-pawn id space now (see mmogFleetSeed.shipIDs).
-		if !bytes.Contains(playerGet, protocol.AppendUnnamedInt32Field(nil, loadout.ship.id)) {
-			t.Fatalf("YA_PlayerGet missing starter fleet ship id %d", loadout.ship.id)
+		if !bytes.Contains(playerGet, protocol.AppendUnnamedInt32Field(nil, loadout.effectiveFleetShipID())) {
+			t.Fatalf("YA_PlayerGet missing starter fleet ship id %d", loadout.effectiveFleetShipID())
 		}
 	}
 	for _, loadout := range starterShipLoadouts() {
@@ -668,16 +667,9 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 			"YA_RequestStaticFleetData": staticFleetData,
 			"YA_PlayerGet":              playerGet,
 		} {
-			// INVERTED on evidence. This used to require the loadout-range
-			// fleet id and forbid the pawn id. It is the other way round: the
-			// client resolves each shipIds entry to an asset and checks its
-			// class before storing the matching tech-tree item, and a loadout
-			// blueprint is not a ship pawn, so a loadout id can never satisfy
-			// it. Sending them produced "ComposeShipManufacturerDataForId Could
-			// not find item for ship id 33489239" and the junk tier badges
-			// built from the unfound item. See mmogFleetSeed.shipIDs.
-			if bytes.Contains(payload, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))) {
-				t.Fatalf("%s carries loadout id %d as FlagShipID; it must be the pawn id %d", payloadName, loadout.effectiveFleetShipID(), loadout.ship.id)
+			if bytes.Contains(payload, protocol.AppendInt32Field(nil, "FlagShipID", loadout.ship.id)) ||
+				bytes.Contains(payload, protocol.AppendUnnamedInt32Field(nil, loadout.ship.id)) {
+				t.Fatalf("%s should use fleet/loadout-development ship id %d, not pawn item id %d", payloadName, loadout.effectiveFleetShipID(), loadout.ship.id)
 			}
 		}
 	}
@@ -1519,10 +1511,16 @@ func sharedStarterLoadoutByID(t *testing.T, loadoutID int32) dreadconfig.Starter
 func starterFleetShipIDsFromShared(t *testing.T) []int32 {
 	t.Helper()
 
-	// Real ship-pawn ids, not the loadout-range fleet ids this used to map to.
-	// The wire field "shipIds" has to be in the pawn id space or the client
-	// cannot resolve the ids to a ship class -- see mmogFleetSeed.shipIDs.
-	return dreadconfig.StarterInventoryShipIDs()
+	sharedLoadouts := dreadconfig.StarterInventoryLoadouts()
+	ids := make([]int32, 0, len(sharedLoadouts))
+	for _, loadout := range sharedLoadouts {
+		fleetShipID, ok := fleetStarterShipIDsByPrecastID[loadout.LoadoutID]
+		if !ok {
+			t.Fatalf("missing fleet ship id for starter loadout %d", loadout.LoadoutID)
+		}
+		ids = append(ids, fleetShipID)
+	}
+	return ids
 }
 
 func TestStarterRosterMatchesSharedConfigExactly(t *testing.T) {
@@ -1805,10 +1803,8 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 	// duplicate may carry a different value.
 	// FlagShipID in a Fleets array entry is sent as a numeric string, not
 	// int32 (see int32SliceToStrings' doc comment in response_builders.go).
-	// FlagShipID must be in the same id space as shipIds, i.e. a ship-pawn id,
-	// because the client looks it up inside that array.
-	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipRealShipID())))) {
-		t.Fatalf("YA_PlayerFleets missing FlagShipID=%d", starterFleet.flagshipRealShipID())
+	if !bytes.Contains(playerFleets, protocol.AppendStringField(nil, "FlagShipID", strconv.Itoa(int(starterFleet.flagshipShipID)))) {
+		t.Fatalf("YA_PlayerFleets missing FlagShipID=%d", starterFleet.flagshipShipID)
 	}
 	if bytes.Contains(playerFleets, protocol.AppendInt32Field(nil, "flagshipID", starterFleet.flagshipLoadoutID)) {
 		t.Fatal("YA_PlayerFleets must not emit flagshipID (case-insensitive duplicate of FlagShipID) with a non-ship value")
