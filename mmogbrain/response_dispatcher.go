@@ -146,8 +146,28 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Analytics ---
+	// YA_AnalyticsTutorialEvent / TutorialSummaryEvent / OnboardingMovie are
+	// only sent while a new player is going through onboarding, which is why
+	// they never showed up before the tutorial could be reached.
 	case "YA_AnalyticsEvent", "YA_SaveCtAData", "YA_IncrementPlayerStatsCounter",
-		"YA_AnalyticsEndTransaction", "YA_AnalyticsUpdateTransaction":
+		"YA_AnalyticsEndTransaction", "YA_AnalyticsUpdateTransaction",
+		"YA_AnalyticsTutorialEvent", "YA_AnalyticsTutorialSummaryEvent",
+		"YA_AnalyticsOnboardingMovie":
+		return buildMmogRequestSuccessPayload(requestName)
+
+	// --- Client-owned save blobs ---
+	// The blob itself is stored by persistMmogPlayerMutation; this is just the
+	// acknowledgement. Answering with an error made the client treat its own
+	// onboarding save as failed.
+	case "YA_SaveGame":
+		return buildMmogRequestSuccessPayload(requestName)
+
+	// --- Captain registration ---
+	// Sent once, right after the tutorial, when the player names their captain.
+	// The name is persisted by persistMmogPlayerMutation; without an
+	// acknowledgement here the client sat on a loading screen forever waiting
+	// for this response.
+	case "YA_SavePlayerDisplayInformation":
 		return buildMmogRequestSuccessPayload(requestName)
 	case "YA_AnalyticsBeginTransaction":
 		transactionId := protocol.ExtractStringField(payload, "transactionId")

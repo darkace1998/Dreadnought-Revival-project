@@ -3207,3 +3207,39 @@ func TestContainerLengthMatchesClientEncoding(t *testing.T) {
 			firstStart, firstSize, firstEnd)
 	}
 }
+
+// TestOnboardingFlowRequestsAreAcknowledged guards the requests a brand-new
+// player sends while going through the tutorial. They only appear once
+// onboarding can actually be reached, so they were invisible for a long time
+// and fell through to the dispatcher's "unknown command" error.
+//
+// That was not harmless. YA_SavePlayerDisplayInformation is the captain
+// registration sent immediately after the tutorial: answering it with an error
+// left the client sitting on a loading screen forever. YA_SaveGame carries the
+// onboarding save blob, so an error reply makes the client treat its own
+// progress as unsaved.
+func TestOnboardingFlowRequestsAreAcknowledged(t *testing.T) {
+	for _, requestName := range []string{
+		"YA_SavePlayerDisplayInformation",
+		"YA_SaveGame",
+		"YA_SaveCtAData",
+		"YA_AnalyticsTutorialEvent",
+		"YA_AnalyticsTutorialSummaryEvent",
+		"YA_AnalyticsOnboardingMovie",
+		"YA_PlayerStateInHangar",
+	} {
+		t.Run(requestName, func(t *testing.T) {
+			request := protocol.AppendRootEnd(protocol.AppendStringField(nil, "RT", requestName))
+			response := buildMmogRequestResponsePayload(requestName, defaultMmogPlayerPID, request)
+			if len(response) == 0 {
+				t.Fatalf("%s produced no response at all", requestName)
+			}
+			if bytes.Contains(response, protocol.AppendStringField(nil, fieldStatus, "error")) {
+				t.Fatalf("%s was answered with an error payload; the client waits on this reply", requestName)
+			}
+			if !bytes.Contains(response, protocol.AppendStringField(nil, "RT", requestName)) {
+				t.Fatalf("%s response missing its RT acknowledgement", requestName)
+			}
+		})
+	}
+}
