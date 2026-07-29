@@ -25,6 +25,18 @@ func AppendUnnamedObjectStart(b []byte, stack []int) ([]byte, []int) {
 	return b, stack
 }
 
+// AppendUnnamedArrayStart writes an array that is itself an element of an
+// enclosing array, i.e. one with no field name of its own.
+//
+// The tech tree document needs this: its root is an array whose elements are
+// arrays (one per manufacturer), whose elements are the item objects.
+func AppendUnnamedArrayStart(b []byte, stack []int) ([]byte, []int) {
+	b = append(b, 0x00, 0x0d)
+	stack = append(stack, len(b))
+	b = append(b, 0, 0, 0, 0)
+	return b, stack
+}
+
 func AppendObjectEnd(b []byte, stack []int) ([]byte, []int) {
 	if len(stack) == 0 {
 		return b, stack

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"time"
 	"unicode"
@@ -1511,21 +1512,93 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 // buildMmogTechTreeDocument builds the document that goes inside the TechTrees
 // blob. It carries the same rows as the (ignored) plain fields above so the two
 // cannot drift while the inner field names are still being established.
+// buildMmogTechTreeDocument builds the document carried, zlib-compressed, in
+// YA_GetTechTree's "TechTrees" byte-array field.
+//
+// SHAPE: the root is an ARRAY of ARRAYS of item objects -- not a named object.
+// UYTechTreeManager's loader walks it as AsArray(root) -> AsArray(element) ->
+// item, and stores it as an outer array (manager+0x38, stride 0x28) of inner
+// arrays (stride 0x48). Each inner array is one manufacturer's tree. The old
+// document invented a "techTreeRow"/"moduleUiData" object at the root, so the
+// very first AsArray produced nothing and the manager stayed empty.
+//
+// FIELDS: the loader resolves these by wide-string name --
+//
+//	Id                        the item id; this is the key
+//	                          TechTreeManager::FindItemForShipId matches on
+//	ClassId, Manufacturer, Tier, Position, Visible
+//	XPCost, FPCost, NumTechTreeItemsRequired
+//	Prereq                    ARRAY of prerequisite ids
+//	ProxyType                 scalar, validated to -1..9; anything else logs
+//	                          "Invalid tech tree item type: %d"
+//	Wires                     ARRAY of {type, x_start, y_start, x_end, y_end}
+//
+// Every numeric value is a numeric string: this loader reads through the same
+// restrictive union as the rest of the protocol (types 1/2 double, 3 int64, 4
+// string via _wtoi) and yields 0 for an int32 wire tag.
+//
+// An empty manager is why the hangar's fleet and loadout screens do nothing:
+// they compose FUIShipData through the tech-tree interpreter, so with no items
+// every ship entry comes back with an empty m_loadouts and m_shipId 0.
 func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
+	byManufacturer := map[int32][]mmogShipSeed{}
+	order := []int32{}
+	for _, ship := range ships {
+		id := shipManufacturerID(ship.manufacturer)
+		if id < 0 {
+			continue
+		}
+		if _, seen := byManufacturer[id]; !seen {
+			order = append(order, id)
+		}
+		byManufacturer[id] = append(byManufacturer[id], ship)
+	}
+	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
+
 	var b []byte
 	var stack []int
-	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
-	b, stack = protocol.AppendArrayStart(b, stack, "techTreeRow")
-	for _, ship := range ships {
-		b, stack = appendMmogTechTreeRow(b, stack, ship)
+	for _, manufacturerID := range order {
+		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+		for position, ship := range byManufacturer[manufacturerID] {
+			b, stack = appendMmogTechTreeItem(b, stack, ship, manufacturerID, int32(position))
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "moduleUiData")
-	for _, module := range starterModuleUIDataSeeds() {
-		b, stack = appendMmogModuleOwnershipEntry(b, stack, module)
-	}
-	b, _ = protocol.AppendObjectEnd(b, stack)
 	return protocol.AppendRootEnd(b)
+}
+
+// techTreeProxyTypeShip is the ProxyType for a ship node. The loader accepts
+// -1..9 and rejects anything else with "Invalid tech tree item type: %d"; -1 is
+// its own default for an absent value.
+const techTreeProxyTypeShip = 0
+
+func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufacturerID int32, position int32) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(ship.id)))
+	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(ship.classID)))
+	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
+	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
+	b = protocol.AppendStringField(b, "Visible", "1")
+	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(ship.unlockCost)))
+	b = protocol.AppendStringField(b, "FPCost", "0")
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
+	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeShip))
+	// Prereq is an array the loader copies into the item's TArray<int32>.
+	prereqs := []string{}
+	for _, id := range []int32{ship.prereqID1, ship.prereqID2} {
+		if id != 0 {
+			prereqs = append(prereqs, strconv.Itoa(int(id)))
+		}
+	}
+	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
+	// Wires are the connector lines drawn between nodes. Empty is valid -- the
+	// nodes still render, just without the joining lines -- and the real
+	// coordinates are a layout concern to solve once nodes appear at all.
+	b, stack = protocol.AppendArrayStart(b, stack, "Wires")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
 }
 
 // compressMmogDocument zlib-compresses a document for a blob field. The client

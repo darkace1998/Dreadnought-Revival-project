@@ -33,7 +33,13 @@ var targetSizes = map[string]int{
 	// with identity + unlock/ownership state; static ship/loadout/module
 	// definitions come from the client's own Content. This keeps the frame far
 	// under the client's 32KB (0x8000) mmog receive ring buffer.
-	"YA_GetTechTree": 18194,
+	// Now 16938: the TechTrees document is the array-of-arrays shape
+	// UYTechTreeManager's loader actually walks, carrying only the fields it
+	// resolves by name (Id/ClassId/Manufacturer/Tier/Position/Visible/XPCost/
+	// FPCost/NumTechTreeItemsRequired/ProxyType/Prereq/Wires). The previous
+	// document was larger because it carried invented fields the loader never
+	// read.
+	"YA_GetTechTree": 16938,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

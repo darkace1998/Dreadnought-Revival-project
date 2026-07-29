@@ -3370,8 +3370,38 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 
 	// The inflated bytes must be a well-formed mmog document.
 	validateMmogPayloadNesting(t, document)
-	if !bytes.Contains(document, appendFieldMarker("techTreeRow", 0x0d)) {
-		t.Fatal("inflated TechTrees document carries no techTreeRow array")
+
+	// The root is an ARRAY of ARRAYS of item objects, matching how
+	// UYTechTreeManager's loader walks it: AsArray(root) -> AsArray(element)
+	// -> item. It is not a named object -- a "techTreeRow" array at the root
+	// made the loader's very first AsArray produce nothing, leaving the
+	// manager empty and every tech-tree-derived screen (including fleet
+	// management) with no data.
+	if bytes.Contains(document, appendFieldMarker("techTreeRow", 0x0d)) {
+		t.Fatal("document still carries the invented techTreeRow array")
+	}
+	if document[0] != 0x00 || document[1] != 0x0d {
+		t.Fatalf("document must open with an unnamed array, got % x", document[:2])
+	}
+	// Fields the loader resolves by name. Id is the key
+	// TechTreeManager::FindItemForShipId matches on.
+	for _, field := range []string{
+		"Id", "ClassId", "Manufacturer", "Tier", "Position", "Visible",
+		"XPCost", "FPCost", "NumTechTreeItemsRequired", "ProxyType",
+	} {
+		if !bytes.Contains(document, appendFieldMarker(field, 0x09)) {
+			t.Errorf("document has no %q field, which the loader reads", field)
+		}
+		// int32 reads as 0 through this loader's union, same as elsewhere.
+		if bytes.Contains(document, appendFieldMarker(field, 0x56)) {
+			t.Errorf("%q is an int32 field; the loader reads that as 0", field)
+		}
+	}
+	// Prereq and Wires are arrays, not scalars.
+	for _, field := range []string{"Prereq", "Wires"} {
+		if !bytes.Contains(document, appendFieldMarker(field, 0x0d)) {
+			t.Errorf("%q must be an array field", field)
+		}
 	}
 }
 
