@@ -47,6 +47,12 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogPvERewardTiersPayload()
 	case "YA_PlayerGet":
 		return buildMmogPlayerGetPayload(playerPID)
+	// The client can request this itself (its sender at 0x142a42542 sets
+	// RT=YA_RewardCurrencies), not just receive the push we send after
+	// YA_PlayerGet. Without a case here that request fell through to the
+	// unknown-command error.
+	case "YA_RewardCurrencies":
+		return buildMmogRewardCurrenciesPayload(playerPID)
 	case "YA_GetRibbons":
 		return buildMmogRibbonsPayload(playerPID)
 	case "YA_GetPlayerStatsCounterData":

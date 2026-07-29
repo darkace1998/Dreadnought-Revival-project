@@ -3527,7 +3527,19 @@ func buildMmogSavePlayerDisplayInformationPayload(requestName string, playerPID 
 func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
 	state := mmogPlayerStateForPID(playerPID)
 
-	b := buildMmogRequestSuccessPayload("YA_RewardCurrencies")
+	// "result" here is a plain STRING compared against "ok", not the usual
+	// result{status:"ok"} object. The handler does
+	//
+	//	call 0x140237c30            ; GetField(response, "result")
+	//	call 0x140237ef0            ; AsString(node, &out)
+	//	call 0x14022d590            ; strcmp(out, "ok")
+	//	jne  0x142a2c5ea            ; skip BOTH assignments
+	//
+	// and an object node yields an empty string from AsString, so sending the
+	// standard success envelope silently skipped the currency writes entirely.
+	var b []byte
+	b = protocol.AppendStringField(b, "RT", "YA_RewardCurrencies")
+	b = protocol.AppendStringField(b, "result", "ok")
 	b = protocol.AppendStringField(b, "Credits", strconv.Itoa(int(state.softCurrency)))
 	b = protocol.AppendStringField(b, "Points", strconv.Itoa(int(state.premiumCurrency)))
 	return b

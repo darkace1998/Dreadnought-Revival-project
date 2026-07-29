@@ -3387,6 +3387,15 @@ func TestRewardCurrenciesCarriesBalanceAsStrings(t *testing.T) {
 	if got := protocol.ExtractStringField(payload, "RT"); got != "YA_RewardCurrencies" {
 		t.Fatalf("RT = %q, want YA_RewardCurrencies", got)
 	}
+	// "result" is compared as a plain string against "ok"; the usual
+	// result{status:"ok"} object reads back as an empty string there and makes
+	// the client skip both currency assignments.
+	if got := protocol.ExtractStringField(payload, "result"); got != "ok" {
+		t.Fatalf("result = %q, want the bare string \"ok\" (not a status object)", got)
+	}
+	if bytes.Contains(payload, appendFieldMarker("result", 0x0c)) {
+		t.Fatal("result must be a string field, not an object")
+	}
 	if got := protocol.ExtractStringField(payload, "Credits"); got != "4242" {
 		t.Fatalf("Credits = %q, want the persisted 4242", got)
 	}
