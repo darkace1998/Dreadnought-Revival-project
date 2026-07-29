@@ -202,7 +202,7 @@ func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
 	loadouts := starterShipLoadouts()
 	seen := make(map[int32]int)
 	seeds := make([]mmogModuleUIDataSeed, 0, len(loadouts)*6)
-	
+
 	// F6: Wire perks into tech tree - add perk items to module UI data
 	// Load all perks and add them to the seeds
 	for _, perk := range dreadconfig.AllPerks() {
@@ -220,7 +220,7 @@ func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
 			equipped: false, // Perks are not equipped by default
 		})
 	}
-	
+
 	for _, loadout := range loadouts {
 		for _, slot := range loadout.loadoutSlots() {
 			if slot.itemID == 0 {
@@ -436,12 +436,11 @@ var starterShips = []mmogShipSeed{
 }
 
 var lockedT1Ships = []mmogShipSeed{
-	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                        // Jupiter Arms Corvette
+	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                     // Jupiter Arms Corvette
 	{id: extractedShipIDLeipzig, name: "Leipzig", classID: 14, shipClass: 4, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDLeipzig, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
 	{id: extractedShipIDTrieste, name: "Trieste", classID: 6, shipClass: 0, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDTrieste, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},    // Akula Vektor Dreadnought T2
 	{id: extractedShipIDCeres, name: "Ceres", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: false, nodeID: extractedShipIDCeres, parentID: extractedShipIDAion, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAion, prereqID2: 0, bIsNew: false},              // Oberon Tactical follow-up
 }
-
 
 // heroShips are the real named Hero-variant ship loadouts (issue #40),
 // extracted programmatically from data/assets/ItemIDTable.json's
@@ -463,53 +462,53 @@ var lockedT1Ships = []mmogShipSeed{
 // variants), kept as separate entries rather than guessing which is
 // canonical.
 var heroShips = []mmogShipSeed{
-	{id: 67043329, name: "Skagerrak", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043329, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultHeavy
-	{id: 67043330, name: "FallofTroy", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043330, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultMedium
-	{id: 67043331, name: "Trident", classID: 6, shipClass: 0, weight: 2, manufacturer: "", owned: false, nodeID: 67043331, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtHeavy
-	{id: 67043332, name: "Morningstar", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043332, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043333, name: "Ravenswood", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043333, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043334, name: "Aquila", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043334, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutLight
-	{id: 67043335, name: "Outis", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043335, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutMedium
-	{id: 67043336, name: "Kore", classID: 10, shipClass: 2, weight: 2, manufacturer: "", owned: false, nodeID: 67043336, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperHeavy
-	{id: 67043337, name: "Silesia", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043337, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperLight
-	{id: 67043338, name: "JunkyardPrince", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043338, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperMedium
-	{id: 67043339, name: "Kali", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043339, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportHeavy
-	{id: 67043340, name: "Tonder", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043340, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportLight
-	{id: 67043341, name: "Anansi", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043341, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportMedium
-	{id: 67043342, name: "Jerina", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043342, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperMedium
-	{id: 67043343, name: "Jarilo", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043343, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultHeavy
-	{id: 67043344, name: "Hasta", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043344, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperLight
-	{id: 67043345, name: "Samar", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043345, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultMedium
-	{id: 67043346, name: "Minotaurus", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043346, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultLight
-	{id: 67043352, name: "Nimbus", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043352, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtLight
-	{id: 67043355, name: "MorningstarNew", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043355, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043356, name: "SilesiaNew", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043356, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperLight
-	{id: 67043359, name: "Akkoro", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043359, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportMedium
-	{id: 67043362, name: "Phoenix", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043362, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutMedium
-	{id: 67043363, name: "Tunmen", classID: 10, shipClass: 2, weight: 2, manufacturer: "", owned: false, nodeID: 67043363, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperHeavy
-	{id: 67043364, name: "Viper", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043364, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutLight
-	{id: 67043365, name: "Indrik", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043365, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportHeavy
-	{id: 67043366, name: "Orion", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043366, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultMedium
-	{id: 67043368, name: "Zilant", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043368, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043369, name: "Nereid", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043369, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportMedium
-	{id: 67043372, name: "Artemis", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043372, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperMedium
-	{id: 67043373, name: "Leviathan", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043373, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtLight
-	{id: 67043374, name: "Hammerhead", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043374, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultMedium
-	{id: 67043375, name: "Strix", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043375, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportLight
-	{id: 67043377, name: "MinotaurusV2", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043377, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultLight
-	{id: 67043378, name: "TridentV2", classID: 6, shipClass: 0, weight: 2, manufacturer: "", owned: false, nodeID: 67043378, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtHeavy
-	{id: 67043379, name: "SkagerrakV2", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043379, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultHeavy
-	{id: 67043380, name: "OutisV2", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043380, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutMedium
-	{id: 67043381, name: "KaliV2", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043381, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportHeavy
-	{id: 67043382, name: "SilesiaV2", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043382, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperLight
-	{id: 67043383, name: "MorningstarV2", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043383, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043384, name: "SilesiaNewV2", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043384, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperLight
+	{id: 67043329, name: "Skagerrak", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043329, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},       // Hero AssaultHeavy
+	{id: 67043330, name: "FallofTroy", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043330, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero AssaultMedium
+	{id: 67043331, name: "Trident", classID: 6, shipClass: 0, weight: 2, manufacturer: "", owned: false, nodeID: 67043331, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero DreadnoughtHeavy
+	{id: 67043332, name: "Morningstar", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043332, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero DreadnoughtMedium
+	{id: 67043333, name: "Ravenswood", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043333, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},       // Hero DreadnoughtMedium
+	{id: 67043334, name: "Aquila", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043334, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero ScoutLight
+	{id: 67043335, name: "Outis", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043335, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero ScoutMedium
+	{id: 67043336, name: "Kore", classID: 10, shipClass: 2, weight: 2, manufacturer: "", owned: false, nodeID: 67043336, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero SniperHeavy
+	{id: 67043337, name: "Silesia", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043337, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},         // Hero SniperLight
+	{id: 67043338, name: "JunkyardPrince", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043338, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},  // Hero SniperMedium
+	{id: 67043339, name: "Kali", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043339, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero SupportHeavy
+	{id: 67043340, name: "Tonder", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043340, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportLight
+	{id: 67043341, name: "Anansi", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043341, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportMedium
+	{id: 67043342, name: "Jerina", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043342, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SniperMedium
+	{id: 67043343, name: "Jarilo", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043343, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero AssaultHeavy
+	{id: 67043344, name: "Hasta", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043344, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero SniperLight
+	{id: 67043345, name: "Samar", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043345, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero AssaultMedium
+	{id: 67043346, name: "Minotaurus", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043346, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero AssaultLight
+	{id: 67043352, name: "Nimbus", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043352, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero DreadnoughtLight
+	{id: 67043355, name: "MorningstarNew", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043355, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},   // Hero DreadnoughtMedium
+	{id: 67043356, name: "SilesiaNew", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043356, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero SniperLight
+	{id: 67043359, name: "Akkoro", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043359, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportMedium
+	{id: 67043362, name: "Phoenix", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043362, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero ScoutMedium
+	{id: 67043363, name: "Tunmen", classID: 10, shipClass: 2, weight: 2, manufacturer: "", owned: false, nodeID: 67043363, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SniperHeavy
+	{id: 67043364, name: "Viper", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043364, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero ScoutLight
+	{id: 67043365, name: "Indrik", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043365, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportHeavy
+	{id: 67043366, name: "Orion", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043366, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero AssaultMedium
+	{id: 67043368, name: "Zilant", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043368, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero DreadnoughtMedium
+	{id: 67043369, name: "Nereid", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043369, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportMedium
+	{id: 67043372, name: "Artemis", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043372, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},         // Hero SniperMedium
+	{id: 67043373, name: "Leviathan", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043373, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Hero DreadnoughtLight
+	{id: 67043374, name: "Hammerhead", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043374, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero AssaultMedium
+	{id: 67043375, name: "Strix", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043375, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero SupportLight
+	{id: 67043377, name: "MinotaurusV2", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043377, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Hero AssaultLight
+	{id: 67043378, name: "TridentV2", classID: 6, shipClass: 0, weight: 2, manufacturer: "", owned: false, nodeID: 67043378, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Hero DreadnoughtHeavy
+	{id: 67043379, name: "SkagerrakV2", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043379, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},     // Hero AssaultHeavy
+	{id: 67043380, name: "OutisV2", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043380, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero ScoutMedium
+	{id: 67043381, name: "KaliV2", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043381, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportHeavy
+	{id: 67043382, name: "SilesiaV2", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043382, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},       // Hero SniperLight
+	{id: 67043383, name: "MorningstarV2", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043383, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Hero DreadnoughtMedium
+	{id: 67043384, name: "SilesiaNewV2", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043384, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Hero SniperLight
 	{id: 67043385, name: "MorningstarNewV2", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043385, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtMedium
-	{id: 67043390, name: "FlightSchool", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043390, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultMedium
-	{id: 67043391, name: "WolfHead", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043391, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero AssaultLight
-	{id: 67043392, name: "Hermes", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043392, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero ScoutLight
-	{id: 67043393, name: "Jester", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043393, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SupportLight
-	{id: 67043394, name: "Dragon", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043394, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero DreadnoughtLight
+	{id: 67043390, name: "FlightSchool", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043390, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Hero AssaultMedium
+	{id: 67043391, name: "WolfHead", classID: 14, shipClass: 4, weight: 0, manufacturer: "", owned: false, nodeID: 67043391, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},        // Hero AssaultLight
+	{id: 67043392, name: "Hermes", classID: 2, shipClass: 1, weight: 0, manufacturer: "", owned: false, nodeID: 67043392, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero ScoutLight
+	{id: 67043393, name: "Jester", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043393, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportLight
+	{id: 67043394, name: "Dragon", classID: 6, shipClass: 0, weight: 0, manufacturer: "", owned: false, nodeID: 67043394, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},           // Hero DreadnoughtLight
 }
 
 func allT1Ships() []mmogShipSeed {
@@ -557,19 +556,24 @@ func realShipsOnly(ships []mmogShipSeed) []mmogShipSeed {
 // own Content assets, so YA_GetTechTree only needs to convey per-node identity
 // + the player's unlock/ownership state (see buildMmogTechTreePayload). T1 is
 // owned by default; T2 is researchable (owned iff the player has purchased it).
+// Manufacturer is REQUIRED on every row. The client groups the tech tree by
+// maker, so rows without one cannot be placed on any manufacturer page and
+// every page renders empty. Assignment follows starterShipArchetypes:
+// assault -> Jupiter Arms, dreadnought/sniper -> Akula Vektor,
+// support -> Oberon, scout -> Jupiter Arms.
 var t1t2TechTreeShips = []mmogShipSeed{
 	// T1 (owned by default)
-	{id: 184483982, name: "Assault Medium T1", classID: 14, shipClass: 4, weight: 1, owned: true, nodeID: 184483982, nodeType: 0, unlockCost: 0},
-	{id: 184484170, name: "Dreadnought Medium T1", classID: 6, shipClass: 0, weight: 1, owned: true, nodeID: 184484170, nodeType: 0, unlockCost: 0},
-	{id: 184483950, name: "Sniper Medium T1", classID: 10, shipClass: 2, weight: 1, owned: true, nodeID: 184483950, nodeType: 0, unlockCost: 0},
-	{id: 184484202, name: "Support Medium T1", classID: 12, shipClass: 3, weight: 1, owned: true, nodeID: 184484202, nodeType: 0, unlockCost: 0},
+	{id: 184483982, name: "Assault Medium T1", classID: 14, shipClass: 4, weight: 1, owned: true, nodeID: 184483982, nodeType: 0, unlockCost: 0, manufacturer: "JupiterArms"},
+	{id: 184484170, name: "Dreadnought Medium T1", classID: 6, shipClass: 0, weight: 1, owned: true, nodeID: 184484170, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
+	{id: 184483950, name: "Sniper Medium T1", classID: 10, shipClass: 2, weight: 1, owned: true, nodeID: 184483950, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
+	{id: 184484202, name: "Support Medium T1", classID: 12, shipClass: 3, weight: 1, owned: true, nodeID: 184484202, nodeType: 0, unlockCost: 0, manufacturer: "Oberon"},
 	// T2 (researchable; parentID links to the corresponding T1 node)
-	{id: 184483981, name: "Assault Medium T2", classID: 14, shipClass: 4, weight: 1, owned: false, nodeID: 184483981, parentID: 184483982, prereqID1: 184483982, nodeType: 0, unlockCost: 5000},
-	{id: 184483972, name: "Dreadnought Medium T2", classID: 6, shipClass: 0, weight: 1, owned: false, nodeID: 184483972, parentID: 184484170, prereqID1: 184484170, nodeType: 0, unlockCost: 5000},
-	{id: 184483949, name: "Sniper Medium T2", classID: 10, shipClass: 2, weight: 1, owned: false, nodeID: 184483949, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000},
-	{id: 184483954, name: "Sniper Light T2", classID: 10, shipClass: 2, weight: 0, owned: false, nodeID: 184483954, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000},
-	{id: 184483964, name: "Scout Light T2", classID: 2, shipClass: 1, weight: 0, owned: false, nodeID: 184483964, parentID: 0, nodeType: 0, unlockCost: 5000},
-	{id: 184484205, name: "Support Medium T2", classID: 12, shipClass: 3, weight: 1, owned: false, nodeID: 184484205, parentID: 184484202, prereqID1: 184484202, nodeType: 0, unlockCost: 5000},
+	{id: 184483981, name: "Assault Medium T2", classID: 14, shipClass: 4, weight: 1, owned: false, nodeID: 184483981, parentID: 184483982, prereqID1: 184483982, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
+	{id: 184483972, name: "Dreadnought Medium T2", classID: 6, shipClass: 0, weight: 1, owned: false, nodeID: 184483972, parentID: 184484170, prereqID1: 184484170, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483949, name: "Sniper Medium T2", classID: 10, shipClass: 2, weight: 1, owned: false, nodeID: 184483949, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483954, name: "Sniper Light T2", classID: 10, shipClass: 2, weight: 0, owned: false, nodeID: 184483954, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483964, name: "Scout Light T2", classID: 2, shipClass: 1, weight: 0, owned: false, nodeID: 184483964, parentID: 0, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
+	{id: 184484205, name: "Support Medium T2", classID: 12, shipClass: 3, weight: 1, owned: false, nodeID: 184484205, parentID: 184484202, prereqID1: 184484202, nodeType: 0, unlockCost: 5000, manufacturer: "Oberon"},
 }
 
 func techTreeShips() []mmogShipSeed {
@@ -604,6 +608,12 @@ func techTreeShips() []mmogShipSeed {
 				id: fleetShipID, name: loadout.ship.name + " fleet entry",
 				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
 				weight: loadout.ship.weight, owned: true, nodeID: fleetShipID, nodeType: 0,
+				// Without the manufacturer these synthetic entries cannot be
+				// grouped under a maker, so the client's per-manufacturer tech
+				// tree pages come up empty and
+				// ComposeShipManufacturerDataForLoadout finds no maker for the
+				// ship id the fleet reports.
+				manufacturer: shipManufacturerForClassID(loadout.ship.classID, loadout.ship.manufacturer),
 			})
 		}
 		loadoutID := loadout.loadoutID()
@@ -613,6 +623,7 @@ func techTreeShips() []mmogShipSeed {
 				id: loadoutID, name: loadout.ship.name + " " + loadout.loadoutName,
 				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
 				weight: loadout.ship.weight, owned: true, nodeID: loadoutID, nodeType: 0,
+				manufacturer:   loadout.ship.manufacturer,
 				isLoadoutAlias: true,
 			})
 		}
@@ -791,7 +802,7 @@ func developmentShipLoadouts() []mmogShipLoadoutSeed {
 		loadoutSeed := mmogShipLoadoutSeed{
 			ship:              ship,
 			fleetShipID:       devLoadout.ShipID, // Use ShipID as fleetShipID
-			precastLoadoutID:  0,                // Will be set later if needed
+			precastLoadoutID:  0,                 // Will be set later if needed
 			nativeLoadoutID:   nativeID,
 			loadoutIndex:      0,
 			loadoutName:       devLoadout.Name,
@@ -963,4 +974,23 @@ func starterLoadoutByShipID(shipID int32) (mmogShipLoadoutSeed, bool) {
 		}
 	}
 	return mmogShipLoadoutSeed{}, false
+}
+
+// shipManufacturerForClassID resolves the maker for a synthetic tech-tree row.
+// The fleet-alias and loadout-alias rows are built from a loadout whose ship
+// record may carry no manufacturer, and a row without one cannot appear on any
+// manufacturer page.
+func shipManufacturerForClassID(classID int32, existing string) string {
+	if existing != "" {
+		return existing
+	}
+	switch classID {
+	case 14, 2: // assault, scout
+		return "JupiterArms"
+	case 6, 10: // dreadnought, sniper
+		return "AkulaVektor"
+	case 12: // support
+		return "Oberon"
+	}
+	return ""
 }

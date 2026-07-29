@@ -23,6 +23,15 @@ package main
 //
 // Generated from the extracted client data; regenerate if the item set changes.
 var marketItemLocalizationKeys = map[int32]string{
+	// The fleet identifies its ships by their development precast-loadout id
+	// (VH_<Class>_Loadout_BP), not by the ship pawn id, and the client then
+	// looks up an item under that id -- "ComposeShipManufacturerDataForLoadout
+	// Could not find item for ship id 33489198". They name the same ships as
+	// the precast loadouts above, so they share their keys.
+	33489198:  "C0F4B2094FC4E520FC5EC4A6C8D794A3", // Agosta (fleet ship entry)
+	33489199:  "782800DC42783501C6F177850AC2300B", // Rurik (fleet ship entry)
+	33489200:  "60536F1F437BC4B3F0A650AAC0F62BCF", // Cerberus (fleet ship entry)
+	33489239:  "BBD288674F213AD81CBC0798A521E6D1", // Simargl (fleet ship entry)
 	33489262:  "C0F4B2094FC4E520FC5EC4A6C8D794A3", // Agosta (loadout)
 	33489263:  "782800DC42783501C6F177850AC2300B", // Rurik (loadout)
 	33489264:  "60536F1F437BC4B3F0A650AAC0F62BCF", // Cerberus (loadout)

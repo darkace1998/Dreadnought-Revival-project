@@ -148,7 +148,10 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 func gatewayExpectedCatalogAliasCount(catalogKey string, alias string, entityCount int) int {
 	switch catalogKey {
 	case gatewayKeyItemCatalogReal, gatewayKeyItemCatalogVC:
-		if alias == "Items" {
+		// Items is the definition list and ItemOffers is what the store
+		// presents; the client's market grid and per-ship purchase data come
+		// from the offers, so both carry every entity.
+		if alias == "Items" || alias == "ItemOffers" {
 			return entityCount
 		}
 	case gatewayKeyCurrencyReal, gatewayKeyCurrencyVC:

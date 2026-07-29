@@ -88,10 +88,16 @@ func starterLoadoutIDsForBootstrap() []int32 {
 }
 
 func gatewayItemCatalogCollection(entities []any) map[string]any {
+	// Items is the definition list; ItemOffers is what the store actually
+	// presents. The client builds its market grid and per-ship purchase data
+	// from the offers, so leaving them empty produced "MarketGridItems of
+	// length 0" and "GetShipPurchaseData Offer not found for ship ..." even
+	// with Items fully populated. Every item is offered, at the price 0 that
+	// gatewayMarketEntity already reports.
 	return map[string]any{
 		"entities":    entities,
 		"Items":       entities,
-		"ItemOffers":  []any{},
+		"ItemOffers":  entities,
 		"ForexOffers": []any{},
 	}
 }
@@ -358,10 +364,21 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		if _, bought := purchased[itemID]; bought {
 			seed.owned = true
 		}
-		if meta.itemType == "ship" {
+		if meta.itemType == "ship" || fleetShipCatalogIDs()[itemID] {
+			// Fleet entries are precast-loadout ids that the client treats as
+			// ship ids (ComposeShipManufacturerDataForLoadout looks them up by
+			// that id and wants manufacturer data), so they need the same
+			// treatment as a real ship even though their item type says
+			// "loadout".
 			seed.shipID = itemID
 			if ship, found := gatewayShipByID(itemID); found {
 				seed.manufacturer = ship.manufacturer
+			}
+			if seed.manufacturer == "" {
+				// Fleet-alias ids live only in the tech tree, not in the ship
+				// lists gatewayShipByID searches. Manufacturer is what the
+				// client groups the tech tree by, so it cannot be left blank.
+				seed.manufacturer = techTreeShipManufacturer(itemID)
 			}
 		}
 		if meta.itemType == "loadout" {
@@ -579,6 +596,29 @@ func gatewayMarketLocalizationName(seed gatewayCatalogEntitySeed) string {
 	}
 	if key, ok := marketItemLocalizationKeys[seed.itemID]; ok {
 		return key
+	}
+	return ""
+}
+
+// fleetShipCatalogIDs is the set of ids the fleet reports as its ships. They are
+// development precast-loadout ids rather than ship pawn ids, but the client
+// resolves manufacturer and category data for them as if they were ships.
+func fleetShipCatalogIDs() map[int32]bool {
+	ids := make(map[int32]bool, len(fleetStarterShipIDsByPrecastID))
+	for _, shipID := range fleetStarterShipIDsByPrecastID {
+		ids[shipID] = true
+	}
+	return ids
+}
+
+// techTreeShipManufacturer returns the maker recorded for a tech-tree node,
+// including the synthetic fleet- and loadout-alias rows that do not appear in
+// the ship lists gatewayShipByID searches.
+func techTreeShipManufacturer(shipID int32) string {
+	for _, ship := range techTreeShips() {
+		if ship.id == shipID {
+			return ship.manufacturer
+		}
 	}
 	return ""
 }
