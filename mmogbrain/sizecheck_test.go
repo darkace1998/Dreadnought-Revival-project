@@ -71,7 +71,7 @@ var targetSizes = map[string]int{
 	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
-	"YA_PlayerGet":             7119,
+	"YA_PlayerGet":             9708,
 	"YA_PlayerFleets":          1772,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,

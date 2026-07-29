@@ -437,6 +437,22 @@ func main() {
 		// Steam subsystem init entirely, matching the flag the project's own
 		// dedicated-server launch command already uses (see README.md).
 		"-NoSteam",
+		// UUI_LoginGateScreen::EnterGame refuses to leave the loading screen
+		// unless the onboarding rule "Ob_TutorialFinished" is marked complete,
+		// which normally requires having played the tutorial match. The client
+		// restores that state from the YA_PlayerGet "SGD" field: a zlib blob
+		// (int32 raw size + "ONBS" + UE4 tagged properties) that the client
+		// itself produces via YA_SaveGame. A brand-new account has no blob, so
+		// the gate never opens.
+		//
+		// UYDreadnoughtLocalPlayer's constructor reads
+		// m_noOnboarding = FParse::Param(FCommandLine::Get(), "noonboarding"),
+		// and every onboarding gate (including the tutorial check the login
+		// gate calls) short-circuits to "satisfied" when it is set. That makes
+		// this a pure command-line switch already built into the shipping
+		// binary — no exe patching — and it only affects the onboarding
+		// prompts, nothing else in the hangar.
+		"-noonboarding",
 	}
 
 	if cfg.VerboseLogging {

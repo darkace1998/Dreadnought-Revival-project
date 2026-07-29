@@ -1224,6 +1224,38 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "PPF", "")
 	// tslm: same int32-blind parser as tll/tpl/tc/ServerTime/ClientTime above.
 	b = protocol.AppendStringField(b, "tslm", "0")
+	// "Items" is the player's OWNED-ITEM inventory, and without it the hangar
+	// has nothing to show. UYInventoryManager::UpdateItemsFromInventory reads
+	// the owned-item array from the player-data snapshot at +0x150/+0x158, and
+	// that array is filled only by FUN_142a6ced0 parsing this exact field out of
+	// YA_PlayerGet. We never sent it, so the client logged
+	// "UpdateItemsFromInventory | Updated 0 items."
+	//
+	// It is emitted LAST on purpose. In YA_PlayerFleets a trailing sibling
+	// array corrupted the parsed value tree of the array BEFORE it, so an array
+	// that must parse correctly should have no array siblings after it.
+	//
+	// Per-entry the client reads ItemID, Amount, NewPromotionID and Credits
+	// (FUN_142a77660) through the restrictive tagged union that only accepts
+	// double/int64/string — our int32 tag reads as 0 — so every value goes as a
+	// numeric string. ItemID must be non-zero or the entry is skipped outright.
+	b, stack = protocol.AppendArrayStart(b, stack, "Items")
+	for _, item := range starterOwnedInventorySeeds() {
+		if item.itemID == 0 {
+			continue
+		}
+		amount := item.quantity
+		if amount <= 0 {
+			amount = 1
+		}
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(item.itemID)))
+		b = protocol.AppendStringField(b, "Amount", strconv.Itoa(int(amount)))
+		b = protocol.AppendStringField(b, "NewPromotionID", "0")
+		b = protocol.AppendStringField(b, "Credits", "0")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

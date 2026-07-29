@@ -1990,10 +1990,18 @@ func TestBootstrapPayloadsExposeFullFleetWithoutHeavyBattleReadyData(t *testing.
 		}
 	}
 
-	for _, field := range []string{"OwnedShipLoadouts", "PreviewLoadoutItems", "Items"} {
+	for _, field := range []string{"OwnedShipLoadouts", "PreviewLoadoutItems"} {
 		if bytes.Contains(playerGet, appendFieldMarker(field, 0x0d)) {
 			t.Fatalf("YA_PlayerGet should not include %s after payload trim", field)
 		}
+	}
+	// "Items" is NOT legacy bloat: it is the owned-item inventory. It feeds the
+	// player-data snapshot at +0x150/+0x158, which is the only source
+	// UYInventoryManager::UpdateItemsFromInventory reads. Trimming it made the
+	// client log "UpdateItemsFromInventory | Updated 0 items." and left the
+	// hangar with nothing to show.
+	if !bytes.Contains(playerGet, appendFieldMarker("Items", 0x0d)) {
+		t.Fatal("YA_PlayerGet must include the owned-item Items array")
 	}
 	for _, field := range []string{"BaseMaintenanceCost", "ChargeTime", "ChargeCost", "AvailableCharges", "ShipsToUnlock"} {
 		if !bytes.Contains(staticFleetData, appendFieldMarker(field, 0x09)) {

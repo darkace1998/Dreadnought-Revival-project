@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/dreadnought-ps/mmogbrain/protocol"
+	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 )
@@ -29,8 +29,6 @@ const (
 	gatewayKeyOwnedItems      = "owned_items"
 	gatewayKeyWallet          = "wallet"
 )
-
-
 
 func gatewayTestClaims() jwt.MapClaims {
 	return jwt.MapClaims{claimUserIDKey: testGatewayUserID}
@@ -297,8 +295,10 @@ func TestStarterInventorySeedsCoverShipsLoadoutsAndSlots(t *testing.T) {
 		t.Fatalf("starter perk seed count = %d, want 0", got)
 	}
 
-	if bytes.Contains(playerGet, appendFieldMarker("Items", 0x0d)) {
-		t.Fatal("YA_PlayerGet should not include the legacy Items inventory array after payload trim")
+	// Items is the owned-item inventory the client reads into the player-data
+	// snapshot (+0x150/+0x158); without it the hangar shows nothing.
+	if !bytes.Contains(playerGet, appendFieldMarker("Items", 0x0d)) {
+		t.Fatal("YA_PlayerGet must include the owned-item Items array")
 	}
 }
 
