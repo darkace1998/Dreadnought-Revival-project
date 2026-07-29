@@ -25,9 +25,13 @@ const (
 	gatewayKeyCurrencyReal    = "currency_catalog_real"
 	gatewayKeyItemCatalogVC   = "item_catalog_virtual"
 	gatewayKeyCurrencyVC      = "currency_catalog_virtual"
-	gatewayKeyBundles         = "bundles"
-	gatewayKeyOwnedItems      = "owned_items"
-	gatewayKeyWallet          = "wallet"
+	// The request key stays "bundles" (the endpoint name); the field the
+	// payload carries them under is "Bundles", the single spelling the
+	// client's catalog parser reads.
+	gatewayKeyBundles    = "bundles"
+	gatewayFieldBundles  = "Bundles"
+	gatewayKeyOwnedItems = "owned_items"
+	gatewayKeyWallet     = "wallet"
 )
 
 func gatewayTestClaims() jwt.MapClaims {
@@ -126,13 +130,18 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 		if requestedCatalog, _ := payload["requested_catalog"].(string); requestedCatalog != key {
 			t.Fatalf("%s has unexpected type %T", key, payload[key])
 		}
-		entities, ok := payload["entities"].([]any)
-		if !ok {
-			t.Fatalf("entities has unexpected type %T", payload["entities"])
+		// There is no top-level "entities" any more: the client's catalog
+		// parser reads Items/ItemOffers/ForexOffers and never entities, so
+		// sending it was a third verbatim copy of the same objects. The
+		// contents now come from whichever array this catalog kind populates.
+		alias := "Items"
+		if key == gatewayKeyCurrencyReal || key == gatewayKeyCurrencyVC {
+			alias = "ForexOffers"
 		}
-		// The market catalogs are intentionally empty — see
-		// gatewayItemCatalogSeeds. Callers that need contents assert it
-		// themselves; this helper only checks the shape.
+		entities, ok := payload[alias].([]any)
+		if !ok {
+			t.Fatalf("%s has unexpected type %T", alias, payload[alias])
+		}
 		return entities
 	}
 	entities, ok := catalog["entities"].([]any)
@@ -465,7 +474,7 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 				if _, ok := payload["entities"]; ok {
 					t.Fatalf("unexpected top-level entities in %s payload", tc.name)
 				}
-				bundles := gatewayJSONArray(t, payload[gatewayKeyBundles], gatewayKeyBundles)
+				bundles := gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles)
 				if len(bundles) == 0 {
 					t.Fatal("bundles should not be empty")
 				}
@@ -475,11 +484,10 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 					t.Fatalf("bundle item count = %d, want 0 to avoid duplicate FYItemData loads", got)
 				}
 			} else {
-				topLevelEntities := gatewayJSONArray(t, payload["entities"], "entities")
-				nestedEntities := gatewayCatalogEntities(t, payload, tc.requestedKey)
-				if len(topLevelEntities) != len(nestedEntities) {
-					t.Fatalf("top-level entities count = %d, want %d for %s", len(topLevelEntities), len(nestedEntities), tc.name)
+				if _, present := payload["entities"]; present {
+					t.Fatalf("top-level entities must not be sent in %s: the catalog parser never reads it", tc.name)
 				}
+				nestedEntities := gatewayCatalogEntities(t, payload, tc.requestedKey)
 				for _, alias := range []string{"Items", "ItemOffers", "ForexOffers"} {
 					topLevelAlias := gatewayJSONArray(t, payload[alias], alias)
 					wantCount := gatewayExpectedCatalogAliasCount(tc.requestedKey, alias, len(nestedEntities))
@@ -568,6 +576,17 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 					assertGatewayMarketMatchesOwned(t, entry, "catalog item", owned)
 					overlapCount++
 				}
+				// The real-money item catalog is empty by design: the two item
+				// catalogs are split by the currency an item is priced in, and
+				// nothing this server sells costs real money. They used to
+				// return the same 62 items, which listed every item twice once
+				// MarketManager concatenated the five catalogs.
+				if tc.requestedKey == gatewayKeyItemCatalogReal {
+					if overlapCount != 0 {
+						t.Fatalf("real-money catalog carried %d credit-priced entries; it must only hold RMT-priced items", overlapCount)
+					}
+					return
+				}
 				// Every piece of starter gear appears in both the catalog
 				// and owned_items, and the two must agree on identity --
 				// assertGatewayMarketMatchesOwned above checks that per entry.
@@ -577,7 +596,7 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 				return
 			}
 
-			for _, bundle := range gatewayJSONArray(t, payload[gatewayKeyBundles], gatewayKeyBundles) {
+			for _, bundle := range gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles) {
 				bundleEntry := gatewayJSONMap(t, bundle, "bundle")
 				if got := len(gatewayJSONArray(t, bundleEntry["items"], "bundle items")); got != 0 {
 					t.Fatalf("bundle item count = %d, want 0 to avoid duplicate market item rows", got)
@@ -807,7 +826,7 @@ func TestGatewayBootstrapHandlersFallbackWhenPlayerDataReadyTimesOut(t *testing.
 				if len(gatewayCatalogEntities(t, payload, gatewayKeyItemCatalogReal)) == 0 {
 					t.Fatal("item_catalog_real.entities should stay populated after timeout fallback")
 				}
-			} else if len(gatewayJSONArray(t, payload[gatewayKeyBundles], gatewayKeyBundles)) == 0 {
+			} else if len(gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles)) == 0 {
 				t.Fatal("bundles should stay populated after timeout fallback")
 			}
 		})
@@ -871,6 +890,110 @@ func TestGatewayWalletReflectsPersistedBalance(t *testing.T) {
 		}
 		if got != tc.want {
 			t.Fatalf("wallet[%s] = %d, want %d — the wallet is not reading persisted state", tc.key, got, tc.want)
+		}
+	}
+}
+
+// TestGatewayMarketOfferCarriesTheFieldsTheClientReads pins the offer schema to
+// what the client's own loaders parse, rather than to what looks plausible.
+//
+// FYItemOfferData::Load (0x142a6d760) reads exactly the fields listed below and
+// nothing else, and FYItemData::Load (0x142a6d020) reads Name/Flags/
+// GrantedCurrency/ImgUrl*. Before this, the payload carried 62 keys per offer
+// and hit 4 of the offer loader's 18: every price the store showed came out as
+// "hard: 0 soft: 0 real: 0.00" in the client log because Price/CurrencyAmount/
+// prices[] -- which is where the prices were -- are read by nothing.
+// TestGatewayPayloadsHaveNoCaseCollidingKeys covers the top level of every
+// catalog response for the same FName hazard the per-offer check covers.
+func TestGatewayPayloadsHaveNoCaseCollidingKeys(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	for _, key := range []string{
+		gatewayKeyItemCatalogVC, gatewayKeyItemCatalogReal,
+		gatewayKeyCurrencyVC, gatewayKeyCurrencyReal, gatewayKeyBundles,
+	} {
+		seen := map[string]string{}
+		for field := range gatewayBootstrapPayload(defaultMmogPlayerPID, key, true) {
+			lower := strings.ToLower(field)
+			if other, clash := seen[lower]; clash {
+				t.Errorf("%s payload sends both %q and %q; FName lookups are case-insensitive", key, other, field)
+			}
+			seen[lower] = field
+		}
+	}
+}
+
+func TestGatewayMarketOfferCarriesTheFieldsTheClientReads(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	seeds := gatewayItemCatalogSeedsForCurrency(defaultMmogPlayerPID, gatewayVirtualCurrencyIDs)
+	if len(seeds) == 0 {
+		t.Fatal("virtual-currency catalog is empty")
+	}
+	// Round-trip through JSON so this asserts against the bytes the client
+	// actually receives, not the Go map.
+	raw, err := json.Marshal(gatewayMarketEntities(seeds, true))
+	if err != nil {
+		t.Fatalf("marshal market entities: %v", err)
+	}
+	var entities []any
+	if err := json.Unmarshal(raw, &entities); err != nil {
+		t.Fatalf("decode market entities: %v", err)
+	}
+	first := gatewayJSONMap(t, entities[0], "offer")
+
+	for _, field := range []string{
+		"CRPrice", "CRCurrency", "SPPrice", "SPCurrency", "RCPrice", "RCCurrency", "RCSymbol",
+		"OriginalPrice", "PriceID", "PromotionFlags", "ExpirationTime",
+		"ProvidedCredits", "ProvidedPoints", "ItemIDs",
+		"ItemID", "IsNew", "DoNotDisplayInStore", "full_image_url",
+	} {
+		if _, ok := first[field]; !ok {
+			t.Errorf("offer is missing %q, which FYItemOfferData::Load reads", field)
+		}
+	}
+
+	// UE resolves these through FNames and FName comparison is case-insensitive,
+	// so two spellings of one field collide in the parsed object and one
+	// silently wins. Never send both.
+	for _, entity := range entities {
+		entry := gatewayJSONMap(t, entity, "offer")
+		seen := map[string]string{}
+		for key := range entry {
+			lower := strings.ToLower(key)
+			if other, clash := seen[lower]; clash {
+				t.Fatalf("offer sends both %q and %q; FName lookups are case-insensitive so one silently overwrites the other", other, key)
+			}
+			seen[lower] = key
+		}
+	}
+
+	// A priced item must report that price where the client looks for it, and
+	// OriginalPrice must match so no phantom discount is derived.
+	priced := 0
+	for _, entity := range entities {
+		entry := gatewayJSONMap(t, entity, "offer")
+		credits := gatewayJSONInt32(t, entry["CRPrice"], "CRPrice")
+		if credits == 0 {
+			continue
+		}
+		priced++
+		if got := gatewayJSONInt32(t, entry["OriginalPrice"], "OriginalPrice"); got != credits {
+			t.Fatalf("OriginalPrice = %d, want it equal to CRPrice %d", got, credits)
+		}
+		if entry["PriceID"] == "price_free" {
+			t.Fatalf("item priced at %d credits still reports PriceID price_free", credits)
+		}
+	}
+	if priced == 0 {
+		t.Fatal("no offer carries a credit price; the store would show everything as free")
+	}
+
+	// Debug loadouts must not be listed in a storefront.
+	for _, entity := range entities {
+		entry := gatewayJSONMap(t, entity, "offer")
+		name, _ := entry["display_name"].(string)
+		if gatewayMarketItemIsDevelopmentAsset(name) && entry["DoNotDisplayInStore"] != true {
+			t.Fatalf("development asset %q is displayed in the store", name)
 		}
 	}
 }

@@ -32,6 +32,11 @@ type gatewayCatalogEntitySeed struct {
 	priceAmount     int32
 	grantedCurrency string
 	grantedAmount   int32
+	// providedCredits/providedPoints are what a currency pack GRANTS on
+	// purchase, as opposed to grantedCurrency/grantedAmount which is the
+	// display-side pairing. Both are 0 for ordinary items.
+	providedCredits int32
+	providedPoints  int32
 	owned           bool
 	hidden          bool
 	quantity        int32
@@ -55,26 +60,48 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		"starter_ship_ids":    starterShipIDsForBootstrap(),
 		"starter_loadout_ids": starterLoadoutIDsForBootstrap(),
 	}
-	if catalog := gatewayRequestedCatalogCollection(requestedCatalog, playerDataReady); catalog != nil {
-		payload["entities"] = catalog["entities"]
+	// Gp2CreditsConversion, Campaigns, CustomSettings and FoundersPackUrl are
+	// read by the catalog parser (0x142a34700) and were never sent. The
+	// conversion rate is the one with a visible effect: it is what the market's
+	// GP-to-credits exchange divides by, and it read 0 without this.
+	payload["Gp2CreditsConversion"] = gatewayGpToCreditsRate
+	payload["Campaigns"] = []any{}
+	payload["CustomSettings"] = map[string]any{}
+	payload["FoundersPackUrl"] = ""
+	if catalog := gatewayRequestedCatalogCollection(playerID, requestedCatalog, playerDataReady); catalog != nil {
+		// No top-level "entities": the catalog parser reads Items, ItemOffers,
+		// ForexOffers and Bundles, never entities, so this was a third verbatim
+		// copy of the same 62 objects in a 292 KB response.
 		payload["Items"] = catalog["Items"]
 		payload["ItemOffers"] = catalog["ItemOffers"]
 		payload["ForexOffers"] = catalog["ForexOffers"]
 	}
 	if requestedCatalog == "bundles" {
-		bundles := gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
-		payload["bundles"] = bundles
-		payload["Bundles"] = bundles
+		// Only "Bundles". The lowercase alias collided with it under
+		// case-insensitive FName lookup, the same way the per-offer
+		// Name/name pair did, and the catalog parser reads "Bundles".
+		payload["Bundles"] = gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
 	}
 	return payload
 }
 
-func gatewayRequestedCatalogCollection(requestedCatalog string, playerDataReady bool) map[string]any {
+// gatewayRequestedCatalogCollection answers one of the five catalog endpoints.
+//
+// The two item catalogs are split by the currency an item is priced in, and are
+// NOT interchangeable. MarketManager waits for all five responses and then
+// concatenates them into a single store list (FUN_1403dac50, "Received all
+// market data. Concatenating item catalog, currency catalog and bundles"), so
+// returning the same items for both digital_items_rmt and digital_items_vc
+// listed every item in the store twice. Everything this server sells is priced
+// in credits, so the real-money catalog is legitimately empty -- which the gate
+// tolerates, since it only requires each of the five responses to arrive, and
+// the currency catalogs have always been empty without stalling it.
+func gatewayRequestedCatalogCollection(playerID string, requestedCatalog string, playerDataReady bool) map[string]any {
 	switch requestedCatalog {
 	case "item_catalog_real":
-		return gatewayItemCatalogCollection(gatewayMarketEntities(gatewayItemCatalogSeeds("RMT"), playerDataReady))
+		return gatewayItemCatalogCollection(gatewayMarketEntities(gatewayItemCatalogSeedsForCurrency(playerID, gatewayRealMoneyCurrencyIDs), playerDataReady))
 	case "item_catalog_virtual":
-		return gatewayItemCatalogCollection(gatewayMarketEntities(gatewayItemCatalogSeeds("CR"), playerDataReady))
+		return gatewayItemCatalogCollection(gatewayMarketEntities(gatewayItemCatalogSeedsForCurrency(playerID, gatewayVirtualCurrencyIDs), playerDataReady))
 	case "currency_catalog_real":
 		return gatewayCurrencyCatalogCollection(gatewayMarketEntities(gatewayCurrencyCatalogSeeds("RMT", "RMT"), playerDataReady))
 	case "currency_catalog_virtual":
@@ -82,6 +109,28 @@ func gatewayRequestedCatalogCollection(requestedCatalog string, playerDataReady 
 	default:
 		return nil
 	}
+}
+
+// gatewayVirtualCurrencyIDs / gatewayRealMoneyCurrencyIDs partition the catalog.
+// CR is credits (soft), GP is the hard currency, RMT is real money.
+var (
+	gatewayVirtualCurrencyIDs   = map[string]bool{"CR": true, "GP": true}
+	gatewayRealMoneyCurrencyIDs = map[string]bool{"RMT": true}
+)
+
+func gatewayItemCatalogSeedsForCurrency(playerID string, currencies map[string]bool) []gatewayCatalogEntitySeed {
+	// gatewayItemCatalogSeeds takes a playerID -- the two call sites used to
+	// pass the strings "RMT" and "CR" here, so every catalog was built for a
+	// player named after a currency and no purchase the player had actually
+	// made was ever reflected in it.
+	all := gatewayItemCatalogSeeds(playerID)
+	seeds := make([]gatewayCatalogEntitySeed, 0, len(all))
+	for _, seed := range all {
+		if currencies[seed.priceCurrencyID] {
+			seeds = append(seeds, seed)
+		}
+	}
+	return seeds
 }
 
 func starterShipIDsForBootstrap() []int32 {
@@ -400,8 +449,9 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			entityType:      "item",
 			itemType:        meta.itemType,
 			priceCurrencyID: "CR",
-			priceAmount:     0,
+			priceAmount:     gatewayMarketCreditPrice(meta.itemType, gatewayMarketItemTier(itemID)),
 			quantity:        1,
+			hidden:          gatewayMarketItemIsDevelopmentAsset(meta.displayName),
 		}
 		if owned, isStarter := starter[itemID]; isStarter {
 			seed.externalID = owned.externalID
@@ -515,23 +565,40 @@ func gatewayMarketEntities(seeds []gatewayCatalogEntitySeed, playerDataReady boo
 
 func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) map[string]any {
 	categoryIcon, categoryName, parentCategoryName, categoryDescription := gatewayMarketCategoryMetadata(seed)
-	// Do NOT send server-side prices. The client already holds every item's
-	// price/campaign definition in its own Content, and when our synthetic
-	// price (e.g. the 500 placeholder on purchasable buckets) differs from the
-	// client's local "original price" it logs a flood of
-	// "UpdateOfferCampaignData | Original Price is lower than the offer price"
-	// warnings and destabilises the shop (client crash observed while caching
-	// the Heroships bucket, itemIDs 29000xxx). We only convey identity +
-	// ownership; the client fills price/campaign from its own data. Price is
-	// reported as free (0) uniformly so no campaign discount is ever computed.
-	priceValue := "0"
+	// Prices go out in the CR/SP/RC fields below, NOT in "Price"/"CurrencyAmount".
+	//
+	// This used to send everything at 0 on the belief that the client holds its
+	// own price data and that a server price would trigger a flood of
+	// "UpdateOfferCampaignData | Original Price is lower than the offer price".
+	// The first half is wrong: FYItemOfferData::Load (0x142a6d760) reads prices
+	// only from CRPrice/SPPrice/RCPrice, which were never sent, so every offer
+	// in the client logged "hard: 0 soft: 0 real: 0.00" and the store had no
+	// prices at all. The second half is still respected -- OriginalPrice is
+	// always emitted equal to the offer price, so no campaign discount is ever
+	// computed and that comparison can never fire.
+	creditsPrice, hardPrice := 0, 0
+	switch seed.priceCurrencyID {
+	case "GP":
+		hardPrice = int(seed.priceAmount)
+	default:
+		creditsPrice = int(seed.priceAmount)
+	}
+	// OriginalPrice must equal the offer price. The client treats a higher
+	// original as a discount and warns "Original Price is lower than the offer
+	// price" when the two disagree; keeping them identical means no campaign
+	// discount is ever derived.
+	originalPrice := creditsPrice
+	if hardPrice != 0 {
+		originalPrice = hardPrice
+	}
+	priceID := gatewayMarketPriceID(seed)
+	priceValue := strconv.Itoa(int(seed.priceAmount))
 	owned := playerDataReady && seed.owned
 	itemID, shipID, loadoutID, entityID := gatewayMarketIdentity(seed, playerDataReady)
 	price := map[string]any{
-		"id":            "price_free",
-		"PriceID":       "price_free",
-		"PriceId":       "price_free",
-		"price_id":      "price_free",
+		"id":            priceID,
+		"PriceID":       priceID,
+		"price_id":      priceID,
 		"region_id":     "US",
 		"amount":        priceValue,
 		"currency_id":   seed.priceCurrencyID,
@@ -544,25 +611,34 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	}
 	itemStatsArray := gatewayWeaponStatsArray(seed.itemID)
 	itemTier := gatewayMarketItemTier(seed.itemID)
+	bundleItemIDs := make([]any, 0, len(seed.bundleItems))
+	for _, item := range seed.bundleItems {
+		bundleItemIDs = append(bundleItemIDs, item.itemID)
+	}
 	entity := map[string]any{
-		"ID":                  itemID,
-		"Name":                seed.displayName,
-		"Sku":                 seed.externalID,
-		"ImgUrlS":             "",
-		"ImgUrlM":             "",
-		"ImgUrlL":             "",
-		"Flags":               0,
-		"id":                  entityID,
+		"ID":      itemID,
+		"Sku":     seed.externalID,
+		"ImgUrlS": "",
+		"ImgUrlM": "",
+		"ImgUrlL": "",
+		"Flags":   0,
+		// Exactly one spelling per field. UE resolves these through FNames,
+		// whose comparison is case-insensitive, so "Name"/"name", "ID"/"id",
+		// "Tier"/"tier", "Description"/"description" and "entity_ID"/"entity_id"
+		// were five pairs that collided in the parsed object -- one silently
+		// overwrote the other, with no way to predict which survived. The same
+		// collision is already documented as having corrupted fleet data in
+		// appendMmogPlayerFleetEntry. "name" is kept over "Name" because the
+		// client resolves this one as a localization key and writes the resolved
+		// text back into "Name" itself.
 		"name":                gatewayMarketLocalizationName(seed),
 		"display_name":        seed.displayName,
 		"entity_id":           entityID,
 		"external_id":         seed.externalID,
 		"item_id":             itemID,
-		"entity_ID":           itemID,
 		"entity_type":         seed.entityType,
 		"item_type":           seed.itemType,
 		"Description":         seed.description,
-		"description":         seed.description,
 		"full_image_url":      "",
 		"ImageURL":            "",
 		"currency_id":         seed.priceCurrencyID,
@@ -598,7 +674,6 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		// against assets that only exist for 1..16 -- so every item icon
 		// failed to load. Sent under each spelling the payload uses elsewhere.
 		"Tier":                   itemTier,
-		"tier":                   itemTier,
 		"ItemTier":               itemTier,
 		"item_tier":              itemTier,
 		"HasVeteranStatus":       false,
@@ -609,13 +684,38 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"ShipID":                 shipID,
 		"loadout_id":             loadoutID,
 		"LoadoutID":              loadoutID,
-		"PriceId":                "price_free",
+		"PriceID":                priceID,
 		"campaign_id":            "",
 		"PromotionFlagSet":       []any{},
-		"prices":                 []any{price},
-		"items":                  bundleItems,
-		"entities":               []any{},
-		"entitlements":           []any{},
+		// The 12 fields below are the ones FYItemOfferData::Load (0x142a6d760)
+		// actually reads. Everything above is either read by FYItemData::Load
+		// (Name/Flags/GrantedCurrency/ImgUrl*) or inert display scaffolding.
+		//
+		// Currency mapping is confirmed from the loader's stores and the log
+		// format "hard: %d soft: %d real: %0.2f": SPPrice lands at +0x14 and is
+		// printed as hard, CRPrice at +0x18 as soft, RCPrice at +0x20 as real.
+		// So CR = credits, SP = GP, RC = real money.
+		"CRPrice":         creditsPrice,
+		"CRCurrency":      "CR",
+		"SPPrice":         hardPrice,
+		"SPCurrency":      "GP",
+		"RCPrice":         0,
+		"RCCurrency":      "USD",
+		"RCSymbol":        "$",
+		"OriginalPrice":   originalPrice,
+		"ExpirationTime":  0,
+		"PromotionFlags":  0,
+		"ProvidedCredits": seed.providedCredits,
+		"ProvidedPoints":  seed.providedPoints,
+		// ItemIDs is how the offer loader reads a bundle's contents. Unlike
+		// items[], which carries whole entities and caused duplicate
+		// FYItemData loads for ids the item catalog already sent (issue #58),
+		// this is ids only, so it can be populated safely.
+		"ItemIDs":      bundleItemIDs,
+		"prices":       []any{price},
+		"items":        bundleItems,
+		"entities":     []any{},
+		"entitlements": []any{},
 	}
 	if seed.grantedCurrency != "" {
 		entity["granted_currency_id"] = seed.grantedCurrency
@@ -733,4 +833,61 @@ func techTreeShipClass(shipID int32) int32 {
 		return ship.shipClass
 	}
 	return 0
+}
+
+// gatewayGpToCreditsRate is the divisor the market's GP-to-credits exchange
+// uses. The client reads it as "Gp2CreditsConversion" and had nothing to read,
+// leaving the exchange at 0. No authentic rate survives in the extracted game
+// data, so this is a chosen value: 1 GP buys 250 credits.
+const gatewayGpToCreditsRate = 250
+
+// gatewayMarketPriceID names the price a purchase is made against. The client
+// reads it as "PriceID" and echoes it back when buying, so it has to be stable
+// for a given item and price, not the "price_free" constant every entry used to
+// carry regardless of cost.
+func gatewayMarketPriceID(seed gatewayCatalogEntitySeed) string {
+	if seed.priceAmount <= 0 {
+		return "price_free"
+	}
+	return "price_" + strings.ToLower(seed.priceCurrencyID) + "_" + strconv.Itoa(int(seed.priceAmount))
+}
+
+// gatewayMarketCreditPrice is the credit cost of a catalog item.
+//
+// ASSUMPTION, clearly flagged: no authentic price table survives. The extracted
+// content has no price/cost datatable, the SDK has no offer struct, and the
+// client holds no local prices -- it reads them from the CRPrice field only.
+// So these are derived from the two signals the catalog does carry, item type
+// and tier, on a doubling-per-tier curve. They are deliberately confined to
+// this one function so a real table can replace it without touching anything
+// else.
+func gatewayMarketCreditPrice(itemType string, tier int32) int32 {
+	var base int32
+	switch itemType {
+	case "ship", "loadout":
+		base = 25000
+	case "weapon", "ability", "module":
+		base = 5000
+	case "bundle", "currency":
+		return 0
+	default:
+		base = 5000
+	}
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > 5 {
+		tier = 5
+	}
+	return base << uint(tier-1)
+}
+
+// gatewayMarketItemIsDevelopmentAsset reports whether a catalog id is one of the
+// engine-side "Precast Development ..." loadouts. They are debug assets that a
+// live storefront would never list, so they are marked DoNotDisplayInStore
+// rather than dropped -- the player's fleet still references these ids, and
+// removing the entries entirely would leave those ships with no catalog entry
+// at all.
+func gatewayMarketItemIsDevelopmentAsset(displayName string) bool {
+	return strings.Contains(displayName, "Precast Development") || strings.Contains(displayName, "DevLoadout")
 }
