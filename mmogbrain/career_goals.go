@@ -36,9 +36,9 @@ import (
 // node straight to the parser:
 //
 //   - static:  Load() then looks up "CareerGoalsConfig" by name on it, so
-//              result is an OBJECT containing the array.
+//     result is an OBJECT containing the array.
 //   - dynamic: Update() reads the node's element count and walks its entries
-//              directly, so result IS the array (the YA_PlayerFleets shape).
+//     directly, so result IS the array (the YA_PlayerFleets shape).
 //
 // This matters far beyond the career UI. Both parsers set a flag — static
 // +0x4020, dynamic +0x4078 — and the dispatcher only fires the
@@ -94,6 +94,28 @@ type careerGoal struct {
 // unknown-counter warnings.
 func careerGoalsConfig() []careerGoal {
 	return []careerGoal{
+		{
+			// The client hardcodes this goal id. UYGoalManager::UpdateData
+			// compares the goal's FINAL stage m_amountToComplete against the
+			// player's current amount for it and stores the result as
+			// IsGameModesUnlocked(); with the goal absent it logs
+			// "###### GoalID NOT Found! ###, UnlockAllModes" on every refresh.
+			//
+			// We report it as already satisfied. The comparison is driven by a
+			// per-player counter that this server does not track, so gating on
+			// it would leave the game modes locked permanently rather than
+			// unlocking them through play.
+			id:                 "UnlockAllModes",
+			title:              "Full Deployment",
+			description:        "All game modes are available.",
+			uiGuideAvailable:   false,
+			counterID:          "MatchesPlayed",
+			category:           "EYGoalCategory::YGC_RECRUIT",
+			platformVisibility: "EYGoalPlatformVisibility::YGPV_PC",
+			stages: []careerGoalStage{
+				{amountToComplete: 1, reward: 0, rewardType: "EYGoalRewardType::YGR_NONE"},
+			},
+		},
 		{
 			id:                 "GOAL_MATCHES_PLAYED",
 			title:              "Shakedown Cruise",
@@ -202,6 +224,11 @@ func appendCareerGoalProgress(b []byte, stack []int, playerPID string) ([]byte, 
 // careerGoalProgressForPlayer returns the player's raw counter value for a
 // goal. There is no per-goal progress persistence yet, so a new player starts
 // every goal at zero.
-func careerGoalProgressForPlayer(_ string, _ string) int32 {
+func careerGoalProgressForPlayer(_ string, goalID string) int32 {
+	if goalID == "UnlockAllModes" {
+		// Must meet the goal's final-stage amount, or UYGoalManager reports
+		// game modes as locked. See the goal's definition above.
+		return 1
+	}
 	return 0
 }

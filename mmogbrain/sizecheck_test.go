@@ -19,12 +19,12 @@ var targetSizes = map[string]int{
 	"YA_RequestStaticFleetData": 6193,
 	"YA_GetFeatureToggle":       111,
 	"YA_GetGameConfigData":      534,
-	"YA_GetStaticCareerData":    1749,
+	"YA_GetStaticCareerData":    2153,
 	"YA_GetProgressionData":     126,
 	"YA_GetScoringData":         5753,
 	"YA_GetDailyContractsData":  227,
 	"YA_GetBoosterData":         1856,
-	"YA_GetCareerProgression":   309,
+	"YA_GetCareerProgression":   382,
 	"YA_GetPlayerScores":        277,
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
