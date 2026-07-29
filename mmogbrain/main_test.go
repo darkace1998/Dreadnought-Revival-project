@@ -3560,3 +3560,35 @@ func inflateTechTreeDocument(t *testing.T, payload []byte) []byte {
 	}
 	return document
 }
+
+// TestTechTreeClassIDsMatchTheAssetPaths validates every tech tree row's ClassId
+// against the class encoded in its ship's registered asset path.
+//
+// A full audit of the extracted client tables found exactly one disagreement --
+// Sniper Light T2 (184483954) carried classID 10, SNIPER_MEDIUM, where its path
+// (/Game/Generic/Ships/Sniper/Light/T2/) says 3, SNIPER_LIGHT. Deriving the
+// value fixes it; this test keeps the seeds and the asset data from diverging
+// again.
+func TestTechTreeClassIDsMatchTheAssetPaths(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	checked := 0
+	for _, ship := range techTreeShips() {
+		want, ok := derivedShipClassID(ship.id)
+		if !ok {
+			continue // fleet rows are loadout ids, not pawn paths
+		}
+		checked++
+		if got := techTreeRowClassID(ship); got != want {
+			t.Errorf("ship %d reports ClassId %d, but its asset path says %d", ship.id, got, want)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no ship rows had a derivable class; the derivation is not being exercised")
+	}
+
+	// The specific drift the audit found, pinned by id.
+	if got, ok := derivedShipClassID(184483954); !ok || got != 3 {
+		t.Errorf("Sniper Light T2 derives ClassId %d (ok=%v), want 3 (YSC_SNIPER_LIGHT)", got, ok)
+	}
+}

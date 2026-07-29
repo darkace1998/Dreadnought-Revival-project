@@ -80,6 +80,44 @@ func techTreePrecastLoadoutID(shipID int32) (int32, bool) {
 	return id, ok
 }
 
+// eyShipClassByKey is EYShipClass from the SDK, keyed by "<Class><Size>" as it
+// appears in a ship's asset path.
+var eyShipClassByKey = map[string]int32{
+	"DreadnoughtLight": 1, "ScoutLight": 2, "SniperLight": 3, "SupportLight": 4, "AssaultLight": 5,
+	"DreadnoughtMedium": 6, "DreadnoughtHeavy": 7, "ScoutMedium": 8, "ScoutHeavy": 9,
+	"SniperMedium": 10, "SniperHeavy": 11, "SupportMedium": 12, "SupportHeavy": 13,
+	"AssaultMedium": 14, "AssaultHeavy": 15,
+}
+
+// derivedShipClassID returns a ship's EYShipClass from its registered asset
+// path, which encodes class and size.
+//
+// This exists because the hand-written classID values in the ship seeds had
+// drifted: Sniper Light T2 (184483954) carried 10 (SNIPER_MEDIUM) instead of 3
+// (SNIPER_LIGHT). Validating every seed against its asset path found that one
+// and nothing else, and deriving it keeps the two from diverging again.
+func derivedShipClassID(shipID int32) (int32, bool) {
+	item, ok := dreadconfig.ItemByID(shipID)
+	if !ok {
+		return 0, false
+	}
+	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return 0, false
+	}
+	id, ok := eyShipClassByKey[match[1]+match[2]]
+	return id, ok
+}
+
+// techTreeRowClassID is the ClassId a tech tree row reports: derived from the
+// ship's asset path where possible, and otherwise the seed's own value.
+func techTreeRowClassID(ship mmogShipSeed) int32 {
+	if id, ok := derivedShipClassID(ship.id); ok {
+		return id
+	}
+	return ship.classID
+}
+
 // techTreeRowID is the id a tech tree row is keyed on: the ship's precast
 // loadout id where one can be derived, and otherwise the id as given -- which
 // covers the fleet rows that are already precast loadout ids.

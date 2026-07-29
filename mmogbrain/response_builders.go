@@ -1600,7 +1600,7 @@ func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturer
 	ship := row.ship
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(row.id)))
-	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(ship.classID)))
+	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(techTreeRowClassID(ship))))
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
