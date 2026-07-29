@@ -1555,6 +1555,9 @@ func appendMmogModuleOwnershipEntry(b []byte, stack []int, module mmogModuleUIDa
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "m_itemId", strconv.Itoa(int(module.itemID)))
 	b = protocol.AppendStringField(b, "m_index", strconv.Itoa(int(module.index)))
+	// Module UI data is stored per ship on the client; without the ship id an
+	// entry belongs to no ship and ComposeModuleUiDataForShip finds nothing.
+	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(module.shipID)))
 	b = protocol.AppendStringField(b, "m_techTreeItemState", strconv.Itoa(4))
 	b = protocol.AppendBoolField(b, "m_isOwned", module.owned)
 	b = protocol.AppendBoolField(b, "m_isEquipped", module.equipped)

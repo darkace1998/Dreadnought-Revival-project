@@ -182,8 +182,14 @@ type mmogLoadoutItemSeed struct {
 }
 
 type mmogModuleUIDataSeed struct {
-	itemID   int32
-	index    int32
+	itemID int32
+	index  int32
+	// shipID is the ship this module is fitted to. The client stores module UI
+	// data keyed by ship (UTechTreeInterpreter::ComposeModuleUiDataForShip
+	// looks it up by ship id and logged "Modules not found for ship id
+	// 33489198"), so an entry with no ship cannot be found for any of them. It
+	// is the fleet ship id, which is what the client asks with.
+	shipID   int32
 	owned    bool
 	equipped bool
 }
@@ -236,6 +242,7 @@ func starterModuleUIDataSeeds() []mmogModuleUIDataSeed {
 			seeds = append(seeds, mmogModuleUIDataSeed{
 				itemID:   slot.itemID,
 				index:    int32(len(seeds)),
+				shipID:   loadout.effectiveFleetShipID(),
 				owned:    true,
 				equipped: true,
 			})

@@ -22,6 +22,10 @@ type gatewayCatalogEntitySeed struct {
 	entityType      string
 	itemType        string
 	manufacturer    string
+	// shipClass is the BASE ship class (0=Dreadnought, 1=Corvette,
+	// 2=ArtilleryCruiser, 3=TacticalCruiser, 4=Destroyer), not EYShipClass.
+	// See gatewayShipClassDisplayName.
+	shipClass       int32
 	shipID          int32
 	loadoutID       int32
 	priceCurrencyID string
@@ -385,6 +389,9 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			seed.loadoutID = owned.loadoutID
 			seed.manufacturer = owned.manufacturer
 			seed.owned = true
+			// Gear inherits the class of the ship it is fitted to, so its card
+			// shows the same class icon as that ship.
+			seed.shipClass = techTreeShipClass(owned.shipID)
 		}
 		if _, bought := purchased[itemID]; bought {
 			seed.owned = true
@@ -405,6 +412,7 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 				// client groups the tech tree by, so it cannot be left blank.
 				seed.manufacturer = techTreeShipManufacturer(itemID)
 			}
+			seed.shipClass = techTreeShipClass(itemID)
 		}
 		if meta.itemType == "loadout" {
 			seed.loadoutID = itemID
@@ -688,3 +696,21 @@ func gatewayMarketItemTier(itemID int32) int32 {
 }
 
 var assetPathTierPattern = regexp.MustCompile(`/T(\d+)/`)
+
+// techTreeShipClass returns a ship's BASE class ordinal (0=Dreadnought,
+// 1=Corvette, 2=ArtilleryCruiser, 3=TacticalCruiser, 4=Destroyer), covering the
+// synthetic fleet- and loadout-alias rows as well as real ships.
+func techTreeShipClass(shipID int32) int32 {
+	if shipID == 0 {
+		return 0
+	}
+	for _, ship := range techTreeShips() {
+		if ship.id == shipID {
+			return ship.shipClass
+		}
+	}
+	if ship, ok := gatewayShipByID(shipID); ok {
+		return ship.shipClass
+	}
+	return 0
+}
