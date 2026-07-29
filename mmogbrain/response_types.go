@@ -84,7 +84,21 @@ func (loadout mmogShipLoadoutSeed) entryID() string {
 // UYShipLoadout::ImportLoadoutParameterAsync log "No item IDs retrieved from
 // display info!" and load zero assets. A ten-slot item list (an earlier attempt
 // here) cleared that but tripped the customisation importer's five-part check.
-const noShipVanityDisplayInfo = ";;;;"
+//
+// "nothing applied" is spelled as an explicit -1 per slot, not as empty groups.
+// GetItemIDsFromDisplayInfoString treats a group shorter than two characters as
+// missing: it logs "Using -1 for empty entriy in string %s" and substitutes -1
+// anyway. So ";;;;" and this string produce identical results, except that
+// ";;;;" logged an error for every group of every call -- and the client calls
+// it once per vanity category, eight categories per loadout, on every refresh,
+// which buried the log in thousands of identical Error lines.
+//
+// The separators are ';' between groups and '#' inside the mesh group,
+// confirmed from the parser's own split constants (0x142f90f34 and
+// 0x142f913e4). Five groups whose first splits into exactly four satisfies both
+// importer checks, and yields 4+1+1+1+1 = 8 ids -- exactly the eight categories
+// ObjectToIDCachedVanity asks for.
+const noShipVanityDisplayInfo = "-1#-1#-1#-1;-1;-1;-1;-1"
 
 // displayInfo is the ship's cosmetic-customisation string. Starter ships ship
 // with no vanity applied, and this server does not yet persist per-ship vanity,

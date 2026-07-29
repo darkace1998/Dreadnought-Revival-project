@@ -16,7 +16,7 @@ var targetSizes = map[string]int{
 	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
-	"YA_RequestStaticFleetData": 6272,
+	"YA_RequestStaticFleetData": 6500,
 	"YA_GetFeatureToggle":       111,
 	"YA_GetGameConfigData":      534,
 	"YA_GetStaticCareerData":    2153,
@@ -39,10 +39,13 @@ var targetSizes = map[string]int{
 	// FPCost/NumTechTreeItemsRequired/ProxyType/Prereq/Wires). The previous
 	// document was larger because it carried invented fields the loader never
 	// read.
-	// Now 13592: the four development loadout aliases collapsed into the real
+	// +176 since: every m_displayInfo grew from ";;;;" to the explicit
+	// "-1#-1#-1#-1;-1;-1;-1;-1" form, which stops the client logging an "empty
+	// entriy" Error for every vanity slot of every call.
+	// Now 13768: the four development loadout aliases collapsed into the real
 	// precast ids, leaving 14 items instead of 18 (see
 	// nativeStarterLoadoutClassName).
-	"YA_GetTechTree": 13592,
+	"YA_GetTechTree": 13768,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
@@ -83,8 +86,8 @@ var targetSizes = map[string]int{
 	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
-	"YA_PlayerGet":             9910,
-	"YA_PlayerFleets":          1788,
+	"YA_PlayerGet":             10138,
+	"YA_PlayerFleets":          1864,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).
