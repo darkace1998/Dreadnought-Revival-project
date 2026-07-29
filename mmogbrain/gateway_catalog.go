@@ -50,7 +50,7 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		"catalog_version":     "starter-hangar-bootstrap-v6",
 		"requested_catalog":   requestedCatalog,
 		"player_id":           playerID,
-		"wallet":              gatewayWalletSnapshot(),
+		"wallet":              gatewayWalletSnapshot(playerID),
 		"owned_items":         ownedItems,
 		"starter_ship_ids":    starterShipIDsForBootstrap(),
 		"starter_loadout_ids": starterLoadoutIDsForBootstrap(),
@@ -240,11 +240,24 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 	return "", categoryName, parentCategoryName, categoryDescription
 }
 
-func gatewayWalletSnapshot() map[string]any {
+// gatewayWalletSnapshot reports the player's balances.
+//
+// These are the only place the client learns them: the YA_PlayerGet parser
+// reads no currency field at all -- its field set is PID, SID, tll, tpl, tc,
+// rep*, disp, motto, SGD, SCtA, PPF, tslm, FreeXp, Membership, Officers,
+// ShipLoadouts, ShipXps, Ribbons, Medals, Friends, Squad, Faction* and
+// LGVersion -- so the wallet here is authoritative.
+//
+// This used to return a hardcoded 10000/0/0 for every player, which meant
+// spending or earning anything never showed up: the balance the client
+// displayed was a constant, unrelated to the value being persisted in
+// player_state.
+func gatewayWalletSnapshot(playerID string) map[string]any {
+	state := mmogPlayerStateForPID(playerID)
 	return map[string]any{
-		"CR":     10000,
-		"RMT":    0,
-		"FreeXp": 0,
+		"CR":     state.softCurrency,
+		"RMT":    state.premiumCurrency,
+		"FreeXp": state.freeXP,
 	}
 }
 

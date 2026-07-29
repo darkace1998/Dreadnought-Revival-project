@@ -840,3 +840,37 @@ func TestGatewayCatalogWaitsForClientToResumeAfterPlayerGet(t *testing.T) {
 		t.Fatal("gateway should be released once the client reads again after player data")
 	}
 }
+
+// TestGatewayWalletReflectsPersistedBalance guards the player's balances.
+//
+// The wallet is the only place the client learns them: the YA_PlayerGet parser
+// reads no currency field at all. This returned a hardcoded 10000/0/0 for every
+// player, so anything spent or earned was persisted but never displayed.
+func TestGatewayWalletReflectsPersistedBalance(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const playerPID = "16161616161616161616161616161616"
+
+	// Seed the player, then move the balance away from the old constant.
+	_ = buildMmogPlayerGetPayload(playerPID)
+	database := currentMmogPlayerStateDB()
+	if _, err := database.Exec(
+		`UPDATE player_state SET soft_currency=?, premium_currency=?, free_xp=? WHERE user_id=?`,
+		1234, 56, 789, normalizedPlayerStatePID(playerPID),
+	); err != nil {
+		t.Fatalf("seed balances: %v", err)
+	}
+
+	wallet := gatewayWalletSnapshot(playerPID)
+	for _, tc := range []struct {
+		key  string
+		want int32
+	}{{"CR", 1234}, {"RMT", 56}, {"FreeXp", 789}} {
+		got, ok := wallet[tc.key].(int32)
+		if !ok {
+			t.Fatalf("wallet[%s] = %v (%T), want an int32", tc.key, wallet[tc.key], wallet[tc.key])
+		}
+		if got != tc.want {
+			t.Fatalf("wallet[%s] = %d, want %d — the wallet is not reading persisted state", tc.key, got, tc.want)
+		}
+	}
+}
