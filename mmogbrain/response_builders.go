@@ -1579,20 +1579,27 @@ func appendMmogTechTreeItem(b []byte, stack []int, ship mmogShipSeed, manufactur
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
-	// Visible is a BOOL field, and it must not be a string.
+	// Visible gates the whole item: a falsy value makes the loader jump past the
+	// rest of the entry, so the item is never stored, no manufacturer group is
+	// created for it, and GetManufacturerData(0/1/2) finds nothing -- which is
+	// what left the tech tree screen with "Could not find a manufacturer with
+	// id 0" and an empty TreeWidgetList.
 	//
-	// It gates the whole item: a falsy Visible makes the loader jump past the
-	// rest of the entry, so the item is never stored and nothing can look it up
-	// afterwards. Its truthiness test is
+	// The truthiness test is:
 	//
 	//	type < 1            -> skip
 	//	type < 4 (bool/num) -> truthy = numeric slot != 0
 	//	type == 4 (string)  -> truthy = (length - 1) > 0
 	//
-	// so a one-character string like "1" evaluates FALSE -- length 1 gives
-	// 0 > 0. Only a 2+ character string would pass, which is clearly not the
-	// intent. A bool lands as node type 1 and reads through the numeric slot.
-	b = protocol.AppendBoolField(b, "Visible", true)
+	// This deliberately uses the STRING branch with a two-character value.
+	// ";;;;"-style one-character strings such as "1" evaluate FALSE there
+	// (length 1 gives 0 > 0), and the earlier attempt at a bool relied on an
+	// unverified assumption about where a bool node keeps its payload -- the
+	// manufacturers stayed missing, so that assumption was wrong. The string
+	// branch is read directly off the disassembly and needs no assumption: any
+	// value of length 2 or more is true. "01" is also still numeric, so nothing
+	// that parses it as a number gets a surprise.
+	b = protocol.AppendStringField(b, "Visible", "01")
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(ship.unlockCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
