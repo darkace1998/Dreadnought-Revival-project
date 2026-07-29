@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -108,9 +107,35 @@ type playerIdentity struct {
 	PlayerID string `json:"player_id"`
 }
 
-// loadOrCreatePlayerID returns a stable ID derived from machine+user info,
-// persisted in %LOCALAPPDATA%\DreadnoughtPS\player.json.
-func loadOrCreatePlayerID() (string, error) {
+// loadOrCreatePlayerID returns this installation's account identity.
+//
+// This identity IS the account. The server has no other notion of who you are:
+// the launcher sends sha256("steam:"+playerID) as the Steam ticket, the auth
+// server hashes that again into a steam_id, and a steam_id it has not seen
+// before auto-registers a brand new player. Losing the identity therefore
+// silently abandons the account -- fresh credits, empty fleet, and the tutorial
+// from the top.
+//
+// That used to be a real hazard, because the generated ID mixed in 16 random
+// bytes. Nothing could reproduce it, so a missing or unreadable player.json
+// meant the old account was gone for good. It is now derived only from stable
+// machine and user identifiers, so regenerating produces the SAME ID as before
+// and the account survives losing the file. Both hashes are one-way, so this is
+// the only recovery route there can be.
+//
+// Precedence: PlayerID from dn-launcher.json (or DN_PLAYER_ID) wins outright,
+// which is also how an account can be moved to another machine.
+func loadOrCreatePlayerID(configured string) (string, error) {
+	if id := strings.TrimSpace(configured); id != "" {
+		return id, nil
+	}
+	if id := strings.TrimSpace(os.Getenv("DN_PLAYER_ID")); id != "" {
+		return id, nil
+	}
+	return loadOrDerivePlayerID()
+}
+
+func loadOrDerivePlayerID() (string, error) {
 	appData := os.Getenv("LOCALAPPDATA")
 	if appData == "" {
 		appData = os.TempDir()
@@ -129,16 +154,20 @@ func loadOrCreatePlayerID() (string, error) {
 		if json.Unmarshal(data, &ident) == nil && ident.PlayerID != "" {
 			return ident.PlayerID, nil
 		}
-		fmt.Fprintf(os.Stderr, "[!] Player identity file corrupted, regenerating...\n")
-	} else {
-		fmt.Fprintf(os.Stderr, "[!] No player identity file found, generating new identity...\n")
+		fmt.Fprintf(os.Stderr, "[!] Player identity file at %s is unreadable; re-deriving it.\n", fpath)
+		fmt.Fprintf(os.Stderr, "[!] If your account looks new after this, set \"player_id\" in dn-launcher.json to your previous ID.\n")
+	} else if !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "[!] Could not read %s (%v); re-deriving the identity.\n", fpath, err)
 	}
 
+	// Deterministic on purpose -- see the note on loadOrCreatePlayerID. Adding
+	// entropy here is what made a lost player.json unrecoverable.
 	hostname, _ := os.Hostname()
 	username := os.Getenv("USERNAME")
-	entropy := make([]byte, 16)
-	rand.Read(entropy)
-	seed := sha256.Sum256([]byte(hostname + ":" + username + ":" + hex.EncodeToString(entropy)))
+	if username == "" {
+		username = os.Getenv("USER")
+	}
+	seed := sha256.Sum256([]byte("dreadnought-ps:" + hostname + ":" + username))
 	id := hex.EncodeToString(seed[:16])
 
 	out, err := json.Marshal(playerIdentity{PlayerID: id})
@@ -289,6 +318,10 @@ type Config struct {
 	GamePath       string `json:"game_path"`
 	VerboseLogging bool   `json:"verbose_logging"`
 	SkipOnboarding bool   `json:"skip_onboarding"`
+	// PlayerID pins the account identity. Leave empty to derive it from this
+	// machine and user; set it to carry an account to another machine, or to
+	// recover one after the identity file was lost.
+	PlayerID string `json:"player_id"`
 }
 
 func defaultConfig() Config {
@@ -391,7 +424,7 @@ func main() {
 	cfg := loadConfig(exeDir)
 
 	fmt.Println("[*] Loading player identity...")
-	playerID, err := loadOrCreatePlayerID()
+	playerID, err := loadOrCreatePlayerID(cfg.PlayerID)
 	if err != nil {
 		fatalf("[!] Failed to load player identity: %v", err)
 	}
