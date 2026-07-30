@@ -80,3 +80,77 @@ var baseShipLoadouts = []baseShipLoadout{
 	{loadoutID: 33489297, hullLine: "SupportMedium", tier: 4, name: "Aion", clientNamed: true, primary: 100597873, secondary: 100597997, abilities: [4]int32{83820870, 83820897, 83820854, 83820956}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489312, hullLine: "SupportMedium", tier: 5, name: "Feronia", clientNamed: true, primary: 0, secondary: 0, abilities: [4]int32{0, 0, 0, 0}, perks: [4]int32{0, 0, 0, 0}},
 }
+
+// heroShipLoadout is a hero ship. It carries its own manufacturer because
+// heroes do NOT follow the hull-line rule the base roster does -- the same
+// reference shows Kore as Oberon and Tunmen as Jupiter Arms, both SniperHeavy.
+//
+// These belong in the tech tree document: the client does not fetch heroes
+// separately. GetHeroShipsFromManufacturerData reads the manufacturer's ordinary
+// item array and keeps the entries whose type byte the manager set to "hero",
+// which it does purely from the id's category (3 = YShipLoadoutHero).
+type heroShipLoadout struct {
+	loadoutID    int32
+	hullLine     string
+	tier         int32
+	name         string
+	clientNamed  bool
+	manufacturer string
+	primary      int32
+	secondary    int32
+	abilities    [4]int32
+	perks        [4]int32
+}
+
+// 48 hero ships; 13 named by ItemIDConversionTable,
+// 35 by the reference.
+var heroShipLoadouts = []heroShipLoadout{
+	{loadoutID: 67043355, hullLine: "DreadnoughtMedium", tier: 2, name: "(new) Morningstar", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597968, secondary: 100598576, abilities: [4]int32{83821005, 83820669, 83821006, 83820923}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043385, hullLine: "DreadnoughtMedium", tier: 2, name: "(new) Morningstar Mk.2", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597968, secondary: 100598576, abilities: [4]int32{83820641, 83821067, 83820625, 83820923}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043338, hullLine: "SniperMedium", tier: 2, name: "Junkyard Prince", clientNamed: true, manufacturer: "AkulaVektor", primary: 100597986, secondary: 100598572, abilities: [4]int32{83820801, 83821008, 83821103, 83820760}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043368, hullLine: "DreadnoughtMedium", tier: 2, name: "Zilant", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597968, secondary: 100598568, abilities: [4]int32{83820654, 83820665, 83820625, 83820941}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043343, hullLine: "AssaultHeavy", tier: 3, name: "Jarilo", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597763, secondary: 100598561, abilities: [4]int32{83821015, 83821063, 83821064, 83821065}, perks: [4]int32{117375016, 117375007, 117375017, 117375005}},
+	{loadoutID: 67043372, hullLine: "SniperMedium", tier: 4, name: "Artemis", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597984, secondary: 100597856, abilities: [4]int32{83820790, 83820817, 83820927, 83820758}, perks: [4]int32{117374981, 117374997, 117374992, 117374982}},
+	{loadoutID: 67043360, hullLine: "ScoutHeavy", tier: 4, name: "Demeter", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597957, secondary: 100597830, abilities: [4]int32{83820734, 83820750, 83820707, 83820688}, perks: [4]int32{117374978, 117374997, 117374990, 117374982}},
+	{loadoutID: 67043329, hullLine: "AssaultHeavy", tier: 4, name: "Huscarl", clientNamed: true, manufacturer: "AkulaVektor", primary: 100597764, secondary: 100597784, abilities: [4]int32{83820573, 83820594, 83820936, 83820553}, perks: [4]int32{117374980, 117374995, 117374990, 117374987}},
+	{loadoutID: 67043365, hullLine: "SupportHeavy", tier: 4, name: "Indrik", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597863, secondary: 100597878, abilities: [4]int32{83820879, 83820547, 83820846, 83820836}, perks: [4]int32{117374979, 117374993, 117374990, 117374984}},
+	{loadoutID: 67043342, hullLine: "SniperMedium", tier: 4, name: "Jerina", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597984, secondary: 100597856, abilities: [4]int32{83820798, 83820819, 83820780, 83820763}, perks: [4]int32{117374979, 117374994, 117374988, 117374983}},
+	{loadoutID: 67043339, hullLine: "SupportHeavy", tier: 4, name: "Kali", clientNamed: true, manufacturer: "AkulaVektor", primary: 100597863, secondary: 100597878, abilities: [4]int32{83820862, 83820881, 83820908, 83820840}, perks: [4]int32{117374978, 117374996, 117374992, 117374984}},
+	{loadoutID: 67043381, hullLine: "SupportHeavy", tier: 4, name: "Kali Mk.2", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597863, secondary: 100597878, abilities: [4]int32{83820856, 83820894, 83820850, 83820842}, perks: [4]int32{117374981, 117374993, 117374991, 117374984}},
+	{loadoutID: 67043332, hullLine: "DreadnoughtMedium", tier: 4, name: "Morningstar", clientNamed: true, manufacturer: "AkulaVektor", primary: 100597800, secondary: 100597809, abilities: [4]int32{83820644, 83820668, 83820634, 83820921}, perks: [4]int32{117374978, 117374997, 117374988, 117374984}},
+	{loadoutID: 67043383, hullLine: "DreadnoughtMedium", tier: 4, name: "Morningstar Mk.2", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597800, secondary: 100597809, abilities: [4]int32{83820637, 83820674, 83820944, 83820921}, perks: [4]int32{117374978, 117374993, 117374988, 117374983}},
+	{loadoutID: 67043333, hullLine: "DreadnoughtMedium", tier: 4, name: "Ravenswood", clientNamed: true, manufacturer: "AkulaVektor", primary: 100597800, secondary: 100597806, abilities: [4]int32{83820651, 83820661, 83820944, 83820615}, perks: [4]int32{117374980, 117374993, 117374990, 117374986}},
+	{loadoutID: 67043379, hullLine: "AssaultHeavy", tier: 4, name: "Skagerrak Mk.2", clientNamed: false, manufacturer: "AkulaVektor", primary: 100597764, secondary: 100597784, abilities: [4]int32{83820584, 83820605, 83820936, 83820553}, perks: [4]int32{117374977, 117374995, 117374991, 117374987}},
+	{loadoutID: 67043393, hullLine: "SupportLight", tier: 2, name: "Jester", clientNamed: false, manufacturer: "JupiterArms", primary: 100601266, secondary: 100598567, abilities: [4]int32{83820915, 83821137, 83821138, 83821139}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043366, hullLine: "AssaultMedium", tier: 2, name: "Orion", clientNamed: false, manufacturer: "JupiterArms", primary: 100597773, secondary: 100598565, abilities: [4]int32{83820576, 83820602, 83820937, 83820976}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043390, hullLine: "AssaultMedium", tier: 3, name: "Flight School", clientNamed: false, manufacturer: "JupiterArms", primary: 100597774, secondary: 100598604, abilities: [4]int32{83820577, 83821063, 83820932, 83820558}, perks: [4]int32{117374979, 117375011, 117375000, 117375008}},
+	{loadoutID: 67043392, hullLine: "ScoutLight", tier: 3, name: "Hermes", clientNamed: false, manufacturer: "JupiterArms", primary: 100597819, secondary: 100597833, abilities: [4]int32{83820714, 83820744, 83820952, 83820694}, perks: [4]int32{117374979, 117374996, 117374990, 117375008}},
+	{loadoutID: 67043375, hullLine: "SupportLight", tier: 3, name: "Strix", clientNamed: false, manufacturer: "JupiterArms", primary: 100597948, secondary: 100597997, abilities: [4]int32{83820860, 83820897, 83820913, 83820904}, perks: [4]int32{117374980, 117374994, 117374992, 117374983}},
+	{loadoutID: 67043364, hullLine: "ScoutLight", tier: 3, name: "Viper", clientNamed: false, manufacturer: "JupiterArms", primary: 100597819, secondary: 100597833, abilities: [4]int32{83820732, 83820748, 83820952, 83820948}, perks: [4]int32{117374979, 117374996, 117374990, 117375008}},
+	{loadoutID: 67043334, hullLine: "ScoutLight", tier: 4, name: "Aquila", clientNamed: true, manufacturer: "JupiterArms", primary: 100597820, secondary: 100597829, abilities: [4]int32{83820716, 83820753, 83820703, 83820696}, perks: [4]int32{117374977, 117374993, 117374989, 117374987}},
+	{loadoutID: 67043330, hullLine: "AssaultMedium", tier: 4, name: "Fall of Troy", clientNamed: true, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597782, abilities: [4]int32{83820982, 83820592, 83820934, 83820554}, perks: [4]int32{117374977, 117374993, 117374988, 117374986}},
+	{loadoutID: 67043374, hullLine: "AssaultMedium", tier: 4, name: "Hammerhead", clientNamed: false, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597778, abilities: [4]int32{83820982, 83820599, 83820934, 83820549}, perks: [4]int32{117374980, 117374993, 117374992, 117374983}},
+	{loadoutID: 67043335, hullLine: "ScoutMedium", tier: 4, name: "Outis", clientNamed: true, manufacturer: "JupiterArms", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820720, 83820737, 83820950, 83820691}, perks: [4]int32{117374980, 117374995, 117374992, 117374983}},
+	{loadoutID: 67043380, hullLine: "ScoutMedium", tier: 4, name: "Outis Mk.2", clientNamed: false, manufacturer: "JupiterArms", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820712, 83820746, 83820707, 83820691}, perks: [4]int32{117374979, 117374995, 117374989, 117374983}},
+	{loadoutID: 67043345, hullLine: "AssaultMedium", tier: 4, name: "Samar", clientNamed: false, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597778, abilities: [4]int32{83820571, 83820605, 83820934, 83820556}, perks: [4]int32{117374981, 117374997, 117374990, 117374982}},
+	{loadoutID: 67043340, hullLine: "SupportLight", tier: 4, name: "Tonder", clientNamed: true, manufacturer: "JupiterArms", primary: 100597949, secondary: 100597996, abilities: [4]int32{83820877, 83820547, 83820911, 83820835}, perks: [4]int32{117374980, 117374993, 117374990, 117374983}},
+	{loadoutID: 67043331, hullLine: "DreadnoughtHeavy", tier: 4, name: "Trident", clientNamed: true, manufacturer: "JupiterArms", primary: 100597789, secondary: 100597804, abilities: [4]int32{83820653, 83820661, 83820628, 83820614}, perks: [4]int32{117374981, 117374997, 117374988, 117374986}},
+	{loadoutID: 67043378, hullLine: "DreadnoughtHeavy", tier: 4, name: "Trident Mk.2", clientNamed: false, manufacturer: "JupiterArms", primary: 100597789, secondary: 100597804, abilities: [4]int32{83820653, 83820672, 83820623, 83820921}, perks: [4]int32{117374978, 117374993, 117374992, 117374984}},
+	{loadoutID: 67043363, hullLine: "SniperHeavy", tier: 4, name: "Tunmen", clientNamed: false, manufacturer: "JupiterArms", primary: 100597840, secondary: 100597860, abilities: [4]int32{83820794, 83820819, 83820780, 83820773}, perks: [4]int32{117374980, 117374994, 117374990, 117374982}},
+	{loadoutID: 67043356, hullLine: "SniperLight", tier: 2, name: "(new) Silesia", clientNamed: false, manufacturer: "Oberon", primary: 100597843, secondary: 100598577, abilities: [4]int32{83821007, 83821008, 83821009, 83821010}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043384, hullLine: "SniperLight", tier: 2, name: "(new) Silesia Mk.2", clientNamed: false, manufacturer: "Oberon", primary: 100597843, secondary: 100598577, abilities: [4]int32{83821007, 83820826, 83820783, 83820760}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043369, hullLine: "SupportMedium", tier: 2, name: "Nereid", clientNamed: false, manufacturer: "Oberon", primary: 100597871, secondary: 100598567, abilities: [4]int32{83820915, 83820884, 83820853, 83820905}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 67043344, hullLine: "SniperLight", tier: 3, name: "Hasta", clientNamed: false, manufacturer: "Oberon", primary: 100597844, secondary: 100597859, abilities: [4]int32{83820802, 83820833, 83820788, 83820771}, perks: [4]int32{117374978, 117374994, 117374988, 117374982}},
+	{loadoutID: 67043359, hullLine: "SupportMedium", tier: 4, name: "Akkoro", clientNamed: false, manufacturer: "Oberon", primary: 100597873, secondary: 100597878, abilities: [4]int32{83820864, 83820894, 83820850, 83820837}, perks: [4]int32{117374980, 117374993, 117374992, 117374984}},
+	{loadoutID: 67043341, hullLine: "SupportMedium", tier: 4, name: "Anansi", clientNamed: true, manufacturer: "Oberon", primary: 100597873, secondary: 100597766, abilities: [4]int32{83820856, 83820887, 83820850, 83820842}, perks: [4]int32{117374981, 117374996, 117374988, 117374984}},
+	{loadoutID: 67043394, hullLine: "DreadnoughtLight", tier: 4, name: "Dragon", clientNamed: false, manufacturer: "Oberon", primary: 100597794, secondary: 100597806, abilities: [4]int32{83820647, 83821045, 83820623, 83821047}, perks: [4]int32{117374998, 117375007, 117375012, 117375008}},
+	{loadoutID: 67043336, hullLine: "SniperHeavy", tier: 4, name: "Kore", clientNamed: true, manufacturer: "Oberon", primary: 100597840, secondary: 100597860, abilities: [4]int32{83820809, 83820815, 83820930, 83820757}, perks: [4]int32{117374980, 117374994, 117374988, 117374982}},
+	{loadoutID: 67043373, hullLine: "DreadnoughtLight", tier: 4, name: "Leviathan", clientNamed: false, manufacturer: "Oberon", primary: 100597794, secondary: 100597804, abilities: [4]int32{83820637, 83820661, 83820933, 83820616}, perks: [4]int32{117374978, 117374996, 117374992, 117374982}},
+	{loadoutID: 67043346, hullLine: "AssaultLight", tier: 4, name: "Minotaurus", clientNamed: false, manufacturer: "Oberon", primary: 100597768, secondary: 100597784, abilities: [4]int32{83820983, 83820592, 83820564, 83820554}, perks: [4]int32{117374979, 117374995, 117374989, 117374987}},
+	{loadoutID: 67043377, hullLine: "AssaultLight", tier: 4, name: "Minotaurus Mk.2", clientNamed: false, manufacturer: "Oberon", primary: 100597768, secondary: 100597784, abilities: [4]int32{83821056, 83820592, 83820934, 83820552}, perks: [4]int32{117374977, 117374993, 117374992, 117374983}},
+	{loadoutID: 67043352, hullLine: "DreadnoughtLight", tier: 4, name: "Nimbus", clientNamed: false, manufacturer: "Oberon", primary: 100597793, secondary: 100597803, abilities: [4]int32{83820642, 83820675, 83820939, 83820984}, perks: [4]int32{117374980, 117374996, 117374992, 117374982}},
+	{loadoutID: 67043362, hullLine: "ScoutMedium", tier: 4, name: "Phoenix", clientNamed: false, manufacturer: "Oberon", primary: 100597825, secondary: 100597834, abilities: [4]int32{83820716, 83820753, 83820703, 83820690}, perks: [4]int32{117374981, 117374996, 117374990, 117374987}},
+	{loadoutID: 67043337, hullLine: "SniperLight", tier: 4, name: "Silesia", clientNamed: true, manufacturer: "Oberon", primary: 100597845, secondary: 100597856, abilities: [4]int32{83820804, 83820819, 83820927, 83820756}, perks: [4]int32{117374981, 117374995, 117374989, 117374986}},
+	{loadoutID: 67043382, hullLine: "SniperLight", tier: 4, name: "Silesia Mk.2", clientNamed: false, manufacturer: "Oberon", primary: 100597845, secondary: 100597856, abilities: [4]int32{83820804, 83820824, 83820780, 83820758}, perks: [4]int32{117374979, 117374994, 117374989, 117374987}},
+	{loadoutID: 67043391, hullLine: "AssaultLight", tier: 4, name: "Wolf Head", clientNamed: false, manufacturer: "Oberon", primary: 100597768, secondary: 100597784, abilities: [4]int32{83820982, 83820592, 83820936, 83820975}, perks: [4]int32{117374998, 117374993, 117374990, 117374983}},
+}

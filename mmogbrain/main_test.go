@@ -696,39 +696,46 @@ func TestFleetStateIsConsistentAcrossResponses(t *testing.T) {
 	}
 }
 
-func TestTechTreeExcludesHeroShips(t *testing.T) {
-	// issue #40 REVERTED: the Hero-variant ships (ItemIDTable.json
-	// YShipLoadoutHero, CategoryID 3) are premium/store loadouts, not tech-tree
-	// progression nodes. Including all 47 bloated YA_GetTechTree to ~56KB,
-	// overflowing the client's 32KB mmog receive ring buffer and stalling the
-	// bootstrap batch. They must NOT appear in the tech tree.
-	ships := techTreeShips()
-	if len(heroShips) == 0 {
-		t.Fatal("heroShips should not be empty")
-	}
-	byID := make(map[int32]mmogShipSeed, len(ships))
-	for _, ship := range ships {
-		byID[ship.id] = ship
-	}
-	for _, hero := range heroShips {
-		if _, ok := byID[hero.id]; ok {
-			t.Fatalf("tech tree should not contain hero ship %s (id %d) — it is a premium/store loadout, not a tech-tree node", hero.name, hero.id)
-		}
+func TestHeroShipsAreInTheDocumentButNotTheResponseRows(t *testing.T) {
+	// Heroes were once pulled out of the tech tree entirely: adding all of them
+	// as response ROWS, each carrying its static data, took YA_GetTechTree to
+	// ~56KB and overflowed the client's 32KB mmog receive ring buffer (0x8000,
+	// confirmed in FUN_142a655a0). That reasoning applied to the rows, not to
+	// the tree itself -- and the client cannot show a manufacturer's hero row
+	// without them, because GetHeroShipsFromManufacturerData reads the
+	// manufacturer's item array and filters on the hero category. So they now
+	// ride in the zlib'd document, and the rows stay as they were.
+	if len(heroShipLoadouts) == 0 {
+		t.Fatal("the hero roster is empty")
 	}
 
 	techTree := buildMmogTechTreePayload()
-	if bytes.Contains(techTree, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(heroShips[0].id)))) {
-		t.Fatalf("YA_GetTechTree should not contain hero ship ShipID=%d", heroShips[0].id)
+	for _, hero := range heroShipLoadouts {
+		row := protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(hero.loadoutID)))
+		if bytes.Contains(techTree, row) {
+			t.Fatalf("hero %s (%d) leaked into the response rows; that is what caused the 56KB overflow", hero.name, hero.loadoutID)
+		}
 	}
-	// The client's mmog receive path is a 32KB (0x8000) streaming ring buffer
-	// (mmog_client_int.cpp FUN_142a655a0/FUN_142a63130). A single frame this
-	// large is the biggest contributor to the bootstrap-batch burst; keep an
-	// eye on it. Currently ~39KB after the hero-ship revert — still worth
-	// reducing further (e.g. splitting moduleUiData) if the client still
-	// stalls on the batch.
+
+	document := inflateTechTreeDocument(t, techTree)
+	for _, hero := range heroShipLoadouts {
+		if !bytes.Contains(document, protocol.AppendStringField(nil, "Id", strconv.Itoa(int(hero.loadoutID)))) {
+			t.Errorf("hero %s (%d) is missing from the tech tree document", hero.name, hero.loadoutID)
+		}
+	}
+
+	// The whole point: hero ids must be category 3, because that is the only
+	// thing that makes the manager tag them as heroes.
+	for _, hero := range heroShipLoadouts {
+		if category := (hero.loadoutID >> 24) & 0xff; category != 3 {
+			t.Errorf("hero %s (%d) is category %d, not 3 (YShipLoadoutHero); it would render as an ordinary ship", hero.name, hero.loadoutID, category)
+		}
+	}
+
 	if len(techTree) >= 0x8000 {
-		t.Logf("WARNING: YA_GetTechTree payload %d bytes >= 32768 (0x8000) client mmog ring buffer size — monitor for bootstrap stalls", len(techTree))
+		t.Errorf("YA_GetTechTree is %d bytes, at or over the client's 32768-byte mmog ring buffer", len(techTree))
 	}
+	t.Logf("YA_GetTechTree %d bytes with %d heroes in the document", len(techTree), len(heroShipLoadouts))
 }
 
 func TestPlayerGetPayloadPopulatesFactionReputation(t *testing.T) {
@@ -3605,14 +3612,24 @@ func TestShipAndHeroNamesMatchTheAuthoritativeTable(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 
 	checked := 0
-	for _, ship := range append(techTreeShips(), heroShips...) {
-		want, ok := authoritativeShipName(ship.id)
+	named := map[int32]string{}
+	for _, ship := range techTreeShips() {
+		named[ship.id] = ship.name
+	}
+	for _, hero := range heroShipLoadouts {
+		named[hero.loadoutID] = hero.name
+	}
+	for _, hull := range baseShipLoadouts {
+		named[hull.loadoutID] = hull.name
+	}
+	for id, name := range named {
+		want, ok := authoritativeShipName(id)
 		if !ok {
 			continue // no authoritative name for this id
 		}
 		checked++
-		if !strings.EqualFold(strings.ReplaceAll(ship.name, " ", ""), strings.ReplaceAll(want, " ", "")) {
-			t.Errorf("id %d is named %q in the seeds; the game calls it %q", ship.id, ship.name, want)
+		if !strings.EqualFold(strings.ReplaceAll(name, " ", ""), strings.ReplaceAll(want, " ", "")) {
+			t.Errorf("id %d is named %q by the server; the game calls it %q", id, name, want)
 		}
 	}
 	if checked == 0 {

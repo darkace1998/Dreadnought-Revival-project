@@ -1546,8 +1546,13 @@ type techTreeItem struct {
 	classID      int32
 	manufacturer int32
 	tier         int32
+	position     int32
 	xpCost       int32
 	prereq       []int32
+	// hero items are laid out in their own grid on the manufacturer page
+	// (HeroShipTechTreeRow0..4 alongside TechTreeRow0..4), so their Position
+	// counts from zero independently of the ships'.
+	hero bool
 }
 
 // techTreeXPCostByTier is what a hull costs to research.
@@ -1605,6 +1610,45 @@ func techTreeBaseItems() []techTreeItem {
 	return items
 }
 
+// techTreeHeroItems turns the hero roster into tech tree nodes.
+//
+// Heroes belong in this document: the client never fetches them separately.
+// UTechTreeInterpreter::GetHeroShipsFromManufacturerData asks the manager for a
+// manufacturer's ordinary item array and keeps the entries whose type byte the
+// manager stamped as "hero" -- which it decides purely from the id's category
+// (3 = YShipLoadoutHero, against 1 = YShipLoadoutPrecast for the base hulls).
+// So sending hero loadout ids with a Manufacturer is the whole requirement; no
+// extra flag exists on the wire.
+//
+// Sending them used to blow the response to ~56KB and overflow the client's
+// 32KB mmog receive ring buffer, which is why they were pulled. That happened
+// because they were added as full response ROWS, with all their static data.
+// Here they are items in the zlib'd document instead, which costs a fraction of
+// that -- and the response rows are deliberately left alone.
+func techTreeHeroItems() []techTreeItem {
+	items := make([]techTreeItem, 0, len(heroShipLoadouts))
+	for _, hero := range heroShipLoadouts {
+		manufacturerID := shipManufacturerID(hero.manufacturer)
+		if manufacturerID < 0 {
+			logrus.WithFields(logrus.Fields{"hero": hero.name, "manufacturer": hero.manufacturer}).
+				Warn("mmog: hero ship has no manufacturer id; it cannot be placed on any maker page")
+			continue
+		}
+		items = append(items, techTreeItem{
+			id:           hero.loadoutID,
+			classID:      eyShipClassByKey[hero.hullLine],
+			manufacturer: manufacturerID,
+			tier:         hero.tier,
+			// Heroes are bought in the store, not researched, and nothing in
+			// the client states a research cost for them -- so 0 rather than a
+			// made-up figure. Their real price rides on the market catalog.
+			xpCost: 0,
+			hero:   true,
+		})
+	}
+	return items
+}
+
 // buildMmogTechTreeDocument emits the tech tree the client actually reads.
 //
 // It is built from the base hull roster rather than from the response's ship
@@ -1618,7 +1662,13 @@ func techTreeBaseItems() []techTreeItem {
 // group so Position increases along each line.
 func buildMmogTechTreeDocument() []byte {
 	byManufacturer := map[int32][]techTreeItem{}
-	for _, item := range techTreeBaseItems() {
+	nextPosition := map[int32]map[bool]int32{}
+	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+		if nextPosition[item.manufacturer] == nil {
+			nextPosition[item.manufacturer] = map[bool]int32{}
+		}
+		item.position = nextPosition[item.manufacturer][item.hero]
+		nextPosition[item.manufacturer][item.hero]++
 		byManufacturer[item.manufacturer] = append(byManufacturer[item.manufacturer], item)
 	}
 	order := make([]int32, 0, len(byManufacturer))
@@ -1631,8 +1681,8 @@ func buildMmogTechTreeDocument() []byte {
 	var stack []int
 	for _, manufacturerID := range order {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
-		for position, item := range byManufacturer[manufacturerID] {
-			b, stack = appendMmogTechTreeItem(b, stack, item, int32(position))
+		for _, item := range byManufacturer[manufacturerID] {
+			b, stack = appendMmogTechTreeItem(b, stack, item)
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -1679,13 +1729,13 @@ func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
 	return prereqs
 }
 
-func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem, position int32) ([]byte, []int) {
+func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(item.id)))
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(item.classID)))
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(item.manufacturer)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
-	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
+	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(item.position)))
 	// Visible gates the whole item: a falsy value makes the loader jump past the
 	// rest of the entry, so the item is never stored, no manufacturer group is
 	// created for it, and GetManufacturerData(0/1/2) finds nothing -- which is

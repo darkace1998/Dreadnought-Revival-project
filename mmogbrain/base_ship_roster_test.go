@@ -117,8 +117,13 @@ func TestTechTreeDocumentCoversEveryBaseHull(t *testing.T) {
 			t.Errorf("tech tree document is missing %s (%d)", hull.name, hull.loadoutID)
 		}
 	}
-	if len(emitted) != len(baseShipLoadouts) {
-		t.Errorf("document carries %d ids, roster has %d hulls", len(emitted), len(baseShipLoadouts))
+	for _, hero := range heroShipLoadouts {
+		if !emitted[strconv.Itoa(int(hero.loadoutID))] {
+			t.Errorf("tech tree document is missing hero %s (%d)", hero.name, hero.loadoutID)
+		}
+	}
+	if want := len(baseShipLoadouts) + len(heroShipLoadouts); len(emitted) != want {
+		t.Errorf("document carries %d ids, roster has %d hulls + %d heroes = %d", len(emitted), len(baseShipLoadouts), len(heroShipLoadouts), want)
 	}
 
 	// Position must increase inside each manufacturer group, or nodes stack on
