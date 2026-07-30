@@ -57,10 +57,11 @@ func buildTLSConfig() *tls.Config {
 // ---- DPAPI (Windows CryptProtectData) --------------------------------
 
 var (
-	crypt32dll       = syscall.NewLazyDLL("crypt32.dll")
-	kernel32dll      = syscall.NewLazyDLL("kernel32.dll")
-	procCryptProtect = crypt32dll.NewProc("CryptProtectData")
-	procLocalFree    = kernel32dll.NewProc("LocalFree")
+	crypt32dll         = syscall.NewLazyDLL("crypt32.dll")
+	kernel32dll        = syscall.NewLazyDLL("kernel32.dll")
+	procCryptProtect   = crypt32dll.NewProc("CryptProtectData")
+	procCryptUnprotect = crypt32dll.NewProc("CryptUnprotectData")
+	procLocalFree      = kernel32dll.NewProc("LocalFree")
 )
 
 type dataBlob struct {
@@ -94,6 +95,41 @@ func dpapiEncrypt(data []byte) ([]byte, error) {
 	)
 	if ret == 0 {
 		return nil, fmt.Errorf("CryptProtectData: %w", syscall.GetLastError())
+	}
+	result := make([]byte, outBlob.cbData)
+	copy(result, unsafe.Slice(outBlob.pbData, outBlob.cbData))
+	_, _, _ = procLocalFree.Call(uintptr(unsafe.Pointer(outBlob.pbData)))
+	return result, nil
+}
+
+// dpapiDecrypt reverses dpapiEncrypt. It fails for a blob written by a
+// different Windows user, which is the point: the launcher's stored session
+// token is readable only by the account that signed in.
+func dpapiDecrypt(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty data")
+	}
+	if len(data) > int(^uint32(0)) {
+		return nil, fmt.Errorf("data too large")
+	}
+	inBlob := dataBlob{
+		//nolint:gosec // Length is bounded above and DPAPI requires a uint32 byte count.
+		cbData: uint32(len(data)),
+		pbData: &data[0],
+	}
+	var outBlob dataBlob
+	const CRYPTPROTECT_UI_FORBIDDEN = 1
+	ret, _, _ := procCryptUnprotect.Call(
+		uintptr(unsafe.Pointer(&inBlob)),
+		0, // ppszDataDescr
+		0, // pOptionalEntropy
+		0, // pvReserved
+		0, // pPromptStruct
+		CRYPTPROTECT_UI_FORBIDDEN,
+		uintptr(unsafe.Pointer(&outBlob)),
+	)
+	if ret == 0 {
+		return nil, fmt.Errorf("CryptUnprotectData: %w", syscall.GetLastError())
 	}
 	result := make([]byte, outBlob.cbData)
 	copy(result, unsafe.Slice(outBlob.pbData, outBlob.cbData))
@@ -423,19 +459,42 @@ func main() {
 
 	cfg := loadConfig(exeDir)
 
-	fmt.Println("[*] Loading player identity...")
-	playerID, err := loadOrCreatePlayerID(cfg.PlayerID)
-	if err != nil {
-		fatalf("[!] Failed to load player identity: %v", err)
+	// Sign in with a real account when one is available, and fall back to the
+	// derived machine identity otherwise.
+	//
+	// The fallback is what shipped before: an id derived from the machine and
+	// user, hashed into a Steam ticket, which the server auto-registers on first
+	// sight. It cannot move between PCs, cannot be shared, and quietly strands
+	// the old save whenever the derivation changes. An account removes all of
+	// that, so it is preferred whenever the player has one -- but existing
+	// installs keep working untouched until they choose to sign in.
+	var (
+		jwtToken string
+		username string
+	)
+	if strings.TrimSpace(cfg.PlayerID) != "" || os.Getenv("DN_PLAYER_ID") != "" {
+		// An explicitly pinned identity wins, which is how an account is moved
+		// or recovered.
+		jwtToken, username = authenticateWithDerivedIdentity(cfg)
+	} else if creds, ok := loadCredentials(); ok && !signOutRequested() {
+		fmt.Printf("[*] Signed in as %s.\n", creds.Username)
+		jwtToken, username = creds.Token, creds.Username
+	} else {
+		if signOutRequested() {
+			clearCredentials()
+		}
+		fmt.Println("[*] Opening the sign-in window...")
+		creds, signInErr := runSignInUI(cfg.AuthURL)
+		if signInErr != nil {
+			fatalf("[!] Sign-in failed: %v", signInErr)
+		}
+		if saveErr := saveCredentials(creds); saveErr != nil {
+			fmt.Printf("[!] Could not remember this sign-in (%v); you will be asked again next time.\n", saveErr)
+		}
+		fmt.Printf("[+] Signed in as %s.\n", creds.Username)
+		jwtToken, username = creds.Token, creds.Username
 	}
-	fmt.Printf("[*] Player ID: %s\n", playerID)
-
-	fmt.Printf("[*] Authenticating with %s ...\n", cfg.AuthURL)
-	jwtToken, username, err := getJWT(cfg.AuthURL, playerID)
-	if err != nil {
-		fatalf("[!] Auth failed: %v", err)
-	}
-	fmt.Printf("[+] Authenticated as: %s\n", username)
+	_ = username
 
 	fmt.Println("[*] Writing auth token to registry...")
 	if err := writeAuthToken(jwtToken); err != nil {
@@ -534,6 +593,41 @@ func main() {
 		fatalf("[!] Failed to launch game: %v", err)
 	}
 	fmt.Printf("[+] Game launched (PID %d). Launcher exiting.\n", cmd.Process.Pid)
+}
+
+// authenticateWithDerivedIdentity is the pre-account path: derive this
+// machine's id and exchange it for a token. Kept for installs that pin
+// player_id, and as the route by which an old account is recovered.
+func authenticateWithDerivedIdentity(cfg Config) (jwtToken, username string) {
+	fmt.Println("[*] Loading player identity...")
+	playerID, err := loadOrCreatePlayerID(cfg.PlayerID)
+	if err != nil {
+		fatalf("[!] Failed to load player identity: %v", err)
+	}
+	fmt.Printf("[*] Player ID: %s\n", playerID)
+
+	fmt.Printf("[*] Authenticating with %s ...\n", cfg.AuthURL)
+	jwtToken, username, err = getJWT(cfg.AuthURL, playerID)
+	if err != nil {
+		fatalf("[!] Auth failed: %v", err)
+	}
+	fmt.Printf("[+] Authenticated as: %s\n", username)
+	return jwtToken, username
+}
+
+// signOutRequested reports whether the player asked to switch accounts, via
+// --sign-out on the command line or DN_SIGN_OUT in the environment.
+func signOutRequested() bool {
+	if strings.TrimSpace(os.Getenv("DN_SIGN_OUT")) != "" {
+		return true
+	}
+	for _, arg := range os.Args[1:] {
+		switch strings.ToLower(strings.TrimSpace(arg)) {
+		case "--sign-out", "-sign-out", "/signout", "--logout":
+			return true
+		}
+	}
+	return false
 }
 
 func fatalf(format string, args ...any) {

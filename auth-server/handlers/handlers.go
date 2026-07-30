@@ -211,11 +211,18 @@ func (h *Handler) loginSteam(w http.ResponseWriter, ticket string, rpcID interfa
 }
 
 // loginPassword handles classic username/password login (our custom /auth/register accounts).
-func (h *Handler) loginPassword(w http.ResponseWriter, username, password string) {
+// loginPassword authenticates by username OR email.
+//
+// It used to match on username only, which made an account unreachable for
+// anyone who remembered the address they signed up with rather than the name --
+// and the launcher's own sign-in asks for an email. Both columns are UNIQUE, so
+// accepting either is unambiguous.
+func (h *Handler) loginPassword(w http.ResponseWriter, identifier, password string) {
 	var user models.User
 	err := h.DB.QueryRow(
-		`SELECT id, username, email, password_hash FROM users WHERE username=? AND banned_at IS NULL`,
-		username,
+		`SELECT id, username, email, password_hash FROM users
+		 WHERE (username=? OR email=?) AND banned_at IS NULL`,
+		identifier, identifier,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash)
 	if err == sql.ErrNoRows {
 		writeGreyboxError(w, http.StatusUnauthorized, -32006, "Invalid username or password")
