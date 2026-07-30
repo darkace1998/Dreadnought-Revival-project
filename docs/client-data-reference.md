@@ -192,7 +192,12 @@ pointless — the client may read a differently-named field for the same purpose
   inventory. 0 unresolvable, 0 miscategorised.
 - All four starter loadouts' weapons and abilities match their precast blueprint's own
   references exactly — 8 weapons, 16 abilities, 0 differences.
-- All 14 tech tree Tier values match their asset path. All 14 base `shipClass` values match.
+- All 14 base `shipClass` values match their asset path.
+- ~~All 14 tech tree Tier values match their asset path.~~ **This claim was wrong.** The
+  emitted Tier came from `techTreeRowTier`, which inferred it from `unlockCost` (>0 => 2),
+  not from the seed field the audit compared. Ceres (184484148) is
+  `/Ships/Support/Medium/T3/` and was being announced as tier 2. Fixed by deriving Tier from
+  the asset path; exactly one row changed.
 - All 62 catalog localization keys resolve in `DreadGame.locres`.
 - `TechTrees` blob framing: bare zlib, **no** length prefix, confirmed against the
   decompressor `FUN_142a4c430` (sets `next_in` at offset 0, `inflateInit_` with "1.2.5").
@@ -210,3 +215,23 @@ pointless — the client may read a differently-named field for the same purpose
 - Display names for 34 of 47 hero ships.
 - `Position` and `Wires` semantics in the tech tree document.
 - Vanity item names: 0 of 532 mesh parts and 0 of 197 patterns have authoritative names.
+
+## 10. Resolution status
+
+Fixed in `381e2ed` and the commit that follows it:
+
+| finding | resolution |
+|---|---|
+| §5.1 synthetic bucket ids claim a real category | bases moved to top byte 0 (5000000-16000000) |
+| §5.2 `legacyStarterShipItemAliases` invented ids/names | derived from `ItemIDConversionTable` (OldItemID + Name); hulls absent from that table now get no alias, asserted by test |
+| §6 T2 roster names | Trafalgar/Nav corrected; the four starter hulls now carry Agosta/Simargl/Rurik/Cerberus instead of their class descriptor. `AuthoritativeNameForAssetPath` makes the client's table win over any hand-written map, guarded by a test over every remaining hand-written entry |
+| §7 dead field names | the 8 on the tech tree row removed (-1810 bytes, -13%). The rest are left in place: they cost bytes on payloads that are either already working or belong to the ten requests the client never sends, and absence of a name is weaker evidence than a parser reading. Removing them from a working path is not worth the risk |
+| §8 Tier claim | was wrong; see above |
+
+Two invariants asserted elsewhere in this repo also turned out to be false and were fixed:
+`DataDir()` did not resolve under `go test` (so the `shared` and `legacy-api` suites had been
+dead for their whole existence -- 13 failures and a panic), and display names are **not**
+unique in the client's data, so indexing by name must not panic on duplicates.
+
+Still open from §9: manufacturer id numbering, whether the tech tree loader runs at all, 34
+hero display names, `Position`/`Wires` semantics, and vanity item names.

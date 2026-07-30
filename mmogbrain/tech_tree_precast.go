@@ -2,6 +2,7 @@ package main
 
 import (
 	"regexp"
+	"strconv"
 
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 )
@@ -105,4 +106,22 @@ func shipDisplayName(ship mmogShipSeed) string {
 		return name
 	}
 	return ship.name
+}
+
+// derivedShipTier returns the tier encoded in a ship's registered asset path
+// (/Ships/<Class>/<Size>/T<n>/), which is the game's own statement of it.
+func derivedShipTier(shipID int32) (int, bool) {
+	item, ok := dreadconfig.ItemByID(shipID)
+	if !ok {
+		return 0, false
+	}
+	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return 0, false
+	}
+	tier, err := strconv.Atoi(match[3])
+	if err != nil {
+		return 0, false
+	}
+	return tier, true
 }

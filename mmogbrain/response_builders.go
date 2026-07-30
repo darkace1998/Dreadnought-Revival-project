@@ -1664,10 +1664,18 @@ func compressMmogDocument(document []byte) []byte {
 	return out.Bytes()
 }
 
-// techTreeRowTier returns 1 for T1 nodes (free/default-owned starters) and 2
-// for T2 nodes (researchable, unlockCost > 0), matching the validated
-// t1t2TechTreeShips roster.
+// techTreeRowTier is the tier a tech tree row reports.
+//
+// This used to be inferred from unlockCost -- anything researchable was
+// announced as tier 2 -- which misreported every row whose ship is not
+// actually tier 2. Ceres is a tier-3 SupportMedium and was being sent as
+// tier 2. The ship's registered asset path states its tier outright
+// (/Ships/Support/Medium/T3/), so derive it and keep the cost heuristic only
+// for rows whose id resolves to no tiered ship asset (the hero loadouts).
 func techTreeRowTier(ship mmogShipSeed) int {
+	if tier, ok := derivedShipTier(ship.id); ok {
+		return tier
+	}
 	if ship.unlockCost > 0 {
 		return 2
 	}
