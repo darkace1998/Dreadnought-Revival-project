@@ -668,15 +668,26 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"ImgUrlM": "",
 		"ImgUrlL": "",
 		"Flags":   0,
-		// Exactly one spelling per field. UE resolves these through FNames,
-		// whose comparison is case-insensitive, so "Name"/"name", "ID"/"id",
-		// "Tier"/"tier", "Description"/"description" and "entity_ID"/"entity_id"
-		// were five pairs that collided in the parsed object -- one silently
-		// overwrote the other, with no way to predict which survived. The same
-		// collision is already documented as having corrupted fleet data in
-		// appendMmogPlayerFleetEntry. "name" is kept over "Name" because the
-		// client resolves this one as a localization key and writes the resolved
-		// text back into "Name" itself.
+		// "Name" and "name" are BOTH sent, and are different values.
+		//
+		// An earlier pass here dropped "Name" on the grounds that UE resolves
+		// fields through FNames, whose comparison is case-insensitive, so the
+		// two spellings would collide. That is true of the BINARY mmog protocol
+		// -- FUN_140320910 lowercases both sides -- but not of this JSON
+		// catalog, where lookups are case-sensitive: the client's own item
+		// loader reads "ImgUrlL" and "full_image_url" from the same object and
+		// treats them as different fields.
+		//
+		// Dropping it was what emptied every name in the store. FYItemData::Load
+		// (FUN_142a6d020) looks up "Name"; when the field is absent the reader
+		// (FUN_142a60670) returns its fallback, and the client logged
+		// "Item Id: <id> name: <DNT>[[NotFound]]" for all 62 items. That marker
+		// means the FIELD was missing, not that a localization key failed to
+		// resolve.
+		//
+		// So "Name" carries the display text and "name" the localization key the
+		// client resolves separately.
+		"Name":                seed.displayName,
 		"name":                gatewayMarketLocalizationName(seed),
 		"display_name":        seed.displayName,
 		"entity_id":           entityID,

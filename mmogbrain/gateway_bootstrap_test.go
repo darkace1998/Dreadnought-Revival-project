@@ -387,6 +387,32 @@ func TestGatewayItemCatalogIsPopulatedWithLocalizationKeys(t *testing.T) {
 	}
 }
 
+func TestGatewayMarketEntitiesCarryBothNameFields(t *testing.T) {
+	// "Name" and "name" are two different fields holding two different values,
+	// and the market needs both. Sending only the lowercase localization key
+	// made every item log `Item Id: <id> name: <DNT>[[NotFound]]`: that marker
+	// means a MISSING FIELD, not a failed lookup -- the JSON reader
+	// (FUN_142a60670) returns its fallback when the node is absent, and
+	// FYItemData::Load (FUN_142a6d020) asks for "Name". The binary mmog parser
+	// compares field names case-insensitively, but these JSON catalog lookups
+	// do not, so "name" alone does not answer for "Name".
+	seeds := gatewayItemCatalogSeeds("CR")
+	if len(seeds) == 0 {
+		t.Fatal("market item catalog is empty")
+	}
+	seeds = append(seeds, gatewayBundleCatalogSeeds()...)
+	for _, seed := range seeds {
+		entity := gatewayMarketEntity(seed, true)
+		display, ok := entity["Name"].(string)
+		if !ok || display == "" {
+			t.Fatalf("item %d has no display \"Name\"; the market renders it as <DNT>[[NotFound]]", seed.itemID)
+		}
+		if _, ok := entity["name"]; !ok {
+			t.Fatalf("item %d lost its lowercase localization \"name\"", seed.itemID)
+		}
+	}
+}
+
 func TestGatewayItemCatalogSeedsUseExtractedIdentityMappings(t *testing.T) {
 	seeds := gatewayItemCatalogSeeds("CR")
 
@@ -963,18 +989,25 @@ func TestGatewayMarketOfferCarriesTheFieldsTheClientReads(t *testing.T) {
 		}
 	}
 
-	// UE resolves these through FNames and FName comparison is case-insensitive,
-	// so two spellings of one field collide in the parsed object and one
-	// silently wins. Never send both.
+	// This test used to forbid two spellings of one field, on the theory that
+	// UE resolves them through case-insensitive FNames so one would silently
+	// win. That is true of the BINARY mmog parser (FUN_140320910 lowercases
+	// both sides before comparing) but NOT of these JSON catalog lookups, which
+	// hit the node map with the exact spelling. Acting on it removed "Name" and
+	// left only the localization key "name", after which every item logged
+	// `Item Id: <id> name: <DNT>[[NotFound]]` -- the reader's missing-field
+	// fallback. "Name"/"name" and the image-url pairs are deliberately distinct
+	// fields, so the only rule left is that a duplicate must not be a duplicate
+	// VALUE masquerading as one field.
 	for _, entity := range entities {
 		entry := gatewayJSONMap(t, entity, "offer")
-		seen := map[string]string{}
-		for key := range entry {
-			lower := strings.ToLower(key)
-			if other, clash := seen[lower]; clash {
-				t.Fatalf("offer sends both %q and %q; FName lookups are case-insensitive so one silently overwrites the other", other, key)
-			}
-			seen[lower] = key
+		display, hasDisplay := entry["Name"].(string)
+		key, hasKey := entry["name"].(string)
+		if !hasDisplay || display == "" {
+			t.Fatalf("offer %v has no display \"Name\"", entry["ID"])
+		}
+		if hasKey && key == display {
+			t.Fatalf("offer %v sends the display name as its localization key %q", entry["ID"], key)
 		}
 	}
 
