@@ -70,7 +70,7 @@ func legacyStarterInventorySeedAliases() map[string]inventoryBootstrapSeed {
 				aliases[inventorySeedKey(itemTypeLegacyUI, seed.AssetPath)] = seed
 			}
 		case dreadconfig.ItemTypeShip:
-			for _, aliasID := range legacyStarterShipItemAliases(seed.Name) {
+			for _, aliasID := range legacyStarterShipItemAliases(seed.ItemID) {
 				aliases[inventorySeedKey(seed.ItemType, aliasID)] = seed
 			}
 		}
@@ -115,15 +115,41 @@ func inventoryItemFromSeed(seed inventoryBootstrapSeed, id string, acquiredAt st
 	}
 }
 
-func legacyStarterShipItemAliases(shipName string) []string {
-	switch strings.ToLower(strings.TrimSpace(shipName)) {
-	case "assault medium t1":
-		return []string{"Athos_T1", "16777223"}
-	case "dreadnought medium t1":
-		return []string{"Akula_T1", "16777225"}
-	case "support medium t1":
-		return []string{"Lorica_T1", "16777231"}
-	default:
+// legacyStarterShipItemAliases returns the alternative identifiers a stored
+// inventory row may use for a starter ship, so rows written before ids were
+// normalised still resolve to the seed.
+//
+// This used to be a hand-written switch on the display name returning
+// {"Athos_T1", "16777223"} and friends. None of it was real: the numeric ids
+// (16777216+n, i.e. an ordinal stuffed into the YShipLoadoutPrecast category)
+// appear nowhere in the client's tables, "Akula" is a paint
+// (VAN_PN_Akula_DA), not a ship, and "Lorica" is the tier-4 Dreadnought Light
+// rather than anything a new player owns. The mapping was invented.
+//
+// The client already ships the authoritative answer: ItemIDConversionTable
+// exists to translate a build's old item id to the current one, and carries
+// the item's real name alongside. So both aliases are derived from it —
+// OldItemID is a genuine legacy identifier for exactly this item, and Name is
+// the name the client itself displays. Items absent from the conversion table
+// (the Dreadnought Medium T1 loadout is only in ItemIDRegister) legitimately
+// have no legacy alias, and get none rather than a fabricated one.
+func legacyStarterShipItemAliases(itemID string) []string {
+	parsed, err := strconv.ParseInt(strings.TrimSpace(itemID), 10, 64)
+	if err != nil {
 		return nil
 	}
+	entry, ok := dreadconfig.GetItemIDConversionEntryByNewID(parsed)
+	if !ok {
+		return nil
+	}
+	aliases := make([]string, 0, 2)
+	if entry.OldItemID != 0 && entry.OldItemID != parsed {
+		aliases = append(aliases, strconv.FormatInt(entry.OldItemID, 10))
+	}
+	// Names in the table carry stray padding, including non-breaking spaces
+	// ("Lorica "), which would never match a stored row as-is.
+	if name := strings.TrimSpace(strings.ReplaceAll(entry.Name, " ", " ")); name != "" {
+		aliases = append(aliases, name)
+	}
+	return aliases
 }

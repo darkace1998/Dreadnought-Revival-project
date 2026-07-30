@@ -1,0 +1,187 @@
+package dreadgameconfig
+
+import (
+	"regexp"
+	"strings"
+	"sync"
+)
+
+// This file is the single source of truth for what an item is CALLED.
+//
+// The server's name tables were originally populated from asset FILENAMES,
+// which are not display names, and later filled in by hand. Auditing them
+// against the client's own data found invented entries: "Leipzig" and "Trieste"
+// for the tier-2 medium hulls (the client calls them Trafalgar and Nav),
+// "Skagerrak" for hero 67043329 (Huscarl), and the four starter hulls carrying
+// their class descriptor ("Assault Medium T1") instead of a name at all.
+//
+// ItemIDConversionTable is the authority: the client ships it to translate an
+// older build's item id to the current one, and every row pairs the current id
+// with the name the game displays. Resolving through it means a hand-written
+// table can no longer silently disagree with the game.
+var (
+	// Asset paths encode class, size and tier, so the ship -> loadout mapping is
+	// derived rather than hand-written -- a hand-written one is what routed
+	// ships to Development blueprints:
+	//
+	//	ship:    /Game/Generic/Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP
+	//	loadout: /Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP
+	shipAssetPathPattern    = regexp.MustCompile(`^/Game/Generic/Ships/([A-Za-z]+)/([A-Za-z]+)/T(\d)/`)
+	precastAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Loadouts/Precast/(?:T(\d)/)?VH_([A-Za-z]+)_(?:T(\d)_)?PrecastLoadout_BP$`)
+
+	// These caches are rebuilt while they are still empty rather than being
+	// filled exactly once. The tables they read (ItemIDTable, the item catalog,
+	// ItemIDConversionTable) are mutable package globals loaded at init and
+	// reloadable afterwards, so a first call that lands before or between loads
+	// sees nothing -- and a sync.Once would then cache that emptiness forever,
+	// silently turning every name lookup into a miss. An empty index is never a
+	// legitimate answer here, so treat it as "not built yet".
+	nameCacheMu sync.Mutex
+
+	precastLoadoutByKey      map[string]int32
+	authoritativeNameByID    map[int32]string
+	authoritativeNameByAsset map[string]string
+)
+
+// ensurePrecastLoadoutIndex builds the ship -> loadout index if it is missing.
+func ensurePrecastLoadoutIndex() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(precastLoadoutByKey) == 0 {
+		buildPrecastLoadoutIndex()
+	}
+}
+
+// ensureAuthoritativeNames builds the name indexes if they are missing.
+func ensureAuthoritativeNames() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(authoritativeNameByID) == 0 {
+		buildAuthoritativeNames()
+	}
+}
+
+// buildPrecastLoadoutIndex indexes the player-facing precast loadouts by
+// "<Class><Size>|<tier>". It deliberately matches only loadouts sitting directly
+// under /Loadouts/Precast/, which excludes the Havoc, AI-boss and Development
+// variants that share the category.
+func buildPrecastLoadoutIndex() {
+	precastLoadoutByKey = map[string]int32{}
+	for _, category := range GetAllCategories() {
+		if category.CategoryName != "YShipLoadoutPrecast" {
+			continue
+		}
+		for _, itemID := range category.ItemIDs {
+			item, ok := ItemByID(itemID)
+			if !ok {
+				continue
+			}
+			match := precastAssetPathPattern.FindStringSubmatch(item.AssetPath)
+			if match == nil {
+				continue
+			}
+			tier := match[1]
+			if tier == "" {
+				tier = match[3]
+			}
+			precastLoadoutByKey[match[2]+"|"+tier] = itemID
+		}
+	}
+}
+
+// PrecastLoadoutIDForShip returns the precast-loadout id representing a ship
+// pawn, derived from the two assets' paths.
+//
+// This matters beyond naming: the client's tech-tree gate compares the top byte
+// of an id -- its ItemIDTable category -- against YShipLoadoutPrecast (1) and
+// YShipLoadoutHero (3), so a pawn id (category 10) is always rejected. Rows and
+// lookups have to use the loadout id.
+func PrecastLoadoutIDForShip(shipID int32) (int32, bool) {
+	ensurePrecastLoadoutIndex()
+
+	item, ok := ItemByID(shipID)
+	if !ok {
+		return 0, false
+	}
+	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return 0, false
+	}
+	id, ok := precastLoadoutByKey[match[1]+match[2]+"|"+match[3]]
+	return id, ok
+}
+
+// normalizeAuthoritativeName trims the padding the shipped table carries,
+// including the non-breaking spaces in entries like "Lorica ".
+func normalizeAuthoritativeName(name string) string {
+	return strings.TrimSpace(strings.ReplaceAll(name, " ", " "))
+}
+
+func buildAuthoritativeNames() {
+	authoritativeNameByID = map[int32]string{}
+	authoritativeNameByAsset = map[string]string{}
+	for _, entry := range GetAllItemIDConversionEntries() {
+		name := normalizeAuthoritativeName(entry.Name)
+		if name == "" {
+			continue
+		}
+		id := int32(entry.NewItemID)
+		if _, seen := authoritativeNameByID[id]; !seen {
+			authoritativeNameByID[id] = name
+		}
+		// The table's Asset holds the default-object reference
+		// ("<path>.Default__<name>_C"); the registry uses the bare path.
+		asset := entry.Asset
+		if dot := strings.Index(asset, "."); dot >= 0 {
+			asset = asset[:dot]
+		}
+		if asset == "" {
+			continue
+		}
+		if _, seen := authoritativeNameByAsset[asset]; !seen {
+			authoritativeNameByAsset[asset] = name
+		}
+	}
+}
+
+// AuthoritativeItemName returns the name the client displays for an item id.
+func AuthoritativeItemName(itemID int32) (string, bool) {
+	ensureAuthoritativeNames()
+	name, ok := authoritativeNameByID[itemID]
+	return name, ok
+}
+
+// AuthoritativeShipName is the display name for a ship.
+//
+// Ship PAWN ids carry no name of their own -- the name belongs to the precast
+// loadout representing the ship, which is why the pawn seeds ended up with
+// placeholders. So this resolves the loadout first and falls back to the id's
+// own entry, which is what covers hero loadouts.
+func AuthoritativeShipName(shipID int32) (string, bool) {
+	if loadoutID, ok := PrecastLoadoutIDForShip(shipID); ok {
+		if name, ok := AuthoritativeItemName(loadoutID); ok {
+			return name, true
+		}
+	}
+	return AuthoritativeItemName(shipID)
+}
+
+// AuthoritativeNameForAssetPath resolves a display name straight from an asset
+// path, for callers that have a path but no id yet. Ship pawn paths resolve
+// through the precast loadout that names the ship.
+func AuthoritativeNameForAssetPath(assetPath string) (string, bool) {
+	if assetPath == "" {
+		return "", false
+	}
+	ensureAuthoritativeNames()
+	if name, ok := authoritativeNameByAsset[assetPath]; ok {
+		return name, true
+	}
+	if match := shipAssetPathPattern.FindStringSubmatch(assetPath); match != nil {
+		ensurePrecastLoadoutIndex()
+		if id, ok := precastLoadoutByKey[match[1]+match[2]+"|"+match[3]]; ok {
+			return AuthoritativeItemName(id)
+		}
+	}
+	return "", false
+}

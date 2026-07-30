@@ -507,10 +507,10 @@ var starterShips = []mmogShipSeed{
 }
 
 var lockedT1Ships = []mmogShipSeed{
-	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                     // Jupiter Arms Corvette
-	{id: extractedShipIDLeipzig, name: "Leipzig", classID: 14, shipClass: 4, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDLeipzig, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
-	{id: extractedShipIDTrieste, name: "Trieste", classID: 6, shipClass: 0, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDTrieste, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},    // Akula Vektor Dreadnought T2
-	{id: extractedShipIDCeres, name: "Ceres", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: false, nodeID: extractedShipIDCeres, parentID: extractedShipIDAion, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAion, prereqID2: 0, bIsNew: false},              // Oberon Tactical follow-up
+	{id: extractedShipIDValcour, name: "Valcour", classID: 2, shipClass: 1, weight: 0, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDValcour, parentID: 0, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false},                           // Jupiter Arms Corvette
+	{id: extractedShipIDTrafalgar, name: "Trafalgar", classID: 14, shipClass: 4, weight: 1, manufacturer: "JupiterArms", owned: false, nodeID: extractedShipIDTrafalgar, parentID: extractedShipIDAthos, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAthos, prereqID2: 0, bIsNew: false}, // Jupiter Arms Destroyer T2
+	{id: extractedShipIDNav, name: "Nav", classID: 6, shipClass: 0, weight: 1, manufacturer: "AkulaVektor", owned: false, nodeID: extractedShipIDNav, parentID: extractedShipIDZmey, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDZmey, prereqID2: 0, bIsNew: false},                      // Akula Vektor Dreadnought T2
+	{id: extractedShipIDCeres, name: "Ceres", classID: 12, shipClass: 3, weight: 1, manufacturer: "Oberon", owned: false, nodeID: extractedShipIDCeres, parentID: extractedShipIDAion, nodeType: 0, unlockCost: 5000, prereqID1: extractedShipIDAion, prereqID2: 0, bIsNew: false},                    // Oberon Tactical follow-up
 }
 
 // heroShips are the real named Hero-variant ship loadouts (issue #40),
@@ -533,8 +533,17 @@ var lockedT1Ships = []mmogShipSeed{
 // variants), kept as separate entries rather than guessing which is
 // canonical.
 var heroShips = []mmogShipSeed{
-	{id: 67043329, name: "Skagerrak", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043329, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},       // Hero AssaultHeavy
-	{id: 67043330, name: "FallofTroy", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043330, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero AssaultMedium
+	// Hero names: 13 of the 47 below are confirmed against
+	// ItemIDConversionTable (67043329-67043341); the client's table has no
+	// entry for the rest, so those names are taken from their loadout
+	// blueprint's filename and are NOT confirmed display names -- the "V2" and
+	// "New" suffixes are plainly build artifacts rather than anything a player
+	// would see. shipDisplayName prefers the client's name wherever one exists,
+	// so these only surface for rows the game itself does not name. No second
+	// source in this data set covers them: Module_data_table_v01 names only the
+	// 59 tech-tree hulls.
+	{id: 67043329, name: "Huscarl", classID: 14, shipClass: 4, weight: 2, manufacturer: "", owned: false, nodeID: 67043329, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},         // Hero AssaultHeavy
+	{id: 67043330, name: "Fall of Troy", classID: 14, shipClass: 4, weight: 1, manufacturer: "", owned: false, nodeID: 67043330, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},    // Hero AssaultMedium
 	{id: 67043331, name: "Trident", classID: 6, shipClass: 0, weight: 2, manufacturer: "", owned: false, nodeID: 67043331, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero DreadnoughtHeavy
 	{id: 67043332, name: "Morningstar", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043332, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},      // Hero DreadnoughtMedium
 	{id: 67043333, name: "Ravenswood", classID: 6, shipClass: 0, weight: 1, manufacturer: "", owned: false, nodeID: 67043333, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},       // Hero DreadnoughtMedium
@@ -542,7 +551,7 @@ var heroShips = []mmogShipSeed{
 	{id: 67043335, name: "Outis", classID: 2, shipClass: 1, weight: 1, manufacturer: "", owned: false, nodeID: 67043335, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero ScoutMedium
 	{id: 67043336, name: "Kore", classID: 10, shipClass: 2, weight: 2, manufacturer: "", owned: false, nodeID: 67043336, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero SniperHeavy
 	{id: 67043337, name: "Silesia", classID: 10, shipClass: 2, weight: 0, manufacturer: "", owned: false, nodeID: 67043337, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},         // Hero SniperLight
-	{id: 67043338, name: "JunkyardPrince", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043338, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},  // Hero SniperMedium
+	{id: 67043338, name: "Junkyard Prince", classID: 10, shipClass: 2, weight: 1, manufacturer: "", owned: false, nodeID: 67043338, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false}, // Hero SniperMedium
 	{id: 67043339, name: "Kali", classID: 12, shipClass: 3, weight: 2, manufacturer: "", owned: false, nodeID: 67043339, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},            // Hero SupportHeavy
 	{id: 67043340, name: "Tonder", classID: 12, shipClass: 3, weight: 0, manufacturer: "", owned: false, nodeID: 67043340, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportLight
 	{id: 67043341, name: "Anansi", classID: 12, shipClass: 3, weight: 1, manufacturer: "", owned: false, nodeID: 67043341, parentID: 0, nodeType: 0, unlockCost: 50000, prereqID1: 0, prereqID2: 0, bIsNew: false},          // Hero SupportMedium
@@ -634,17 +643,17 @@ func realShipsOnly(ships []mmogShipSeed) []mmogShipSeed {
 // support -> Oberon, scout -> Jupiter Arms.
 var t1t2TechTreeShips = []mmogShipSeed{
 	// T1 (owned by default)
-	{id: 184483982, name: "Assault Medium T1", classID: 14, shipClass: 4, weight: 1, owned: true, nodeID: 184483982, nodeType: 0, unlockCost: 0, manufacturer: "JupiterArms"},
-	{id: 184484170, name: "Dreadnought Medium T1", classID: 6, shipClass: 0, weight: 1, owned: true, nodeID: 184484170, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
-	{id: 184483950, name: "Sniper Medium T1", classID: 10, shipClass: 2, weight: 1, owned: true, nodeID: 184483950, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
-	{id: 184484202, name: "Support Medium T1", classID: 12, shipClass: 3, weight: 1, owned: true, nodeID: 184484202, nodeType: 0, unlockCost: 0, manufacturer: "Oberon"},
+	{id: 184483982, name: "Agosta", classID: 14, shipClass: 4, weight: 1, owned: true, nodeID: 184483982, nodeType: 0, unlockCost: 0, manufacturer: "JupiterArms"},
+	{id: 184484170, name: "Simargl", classID: 6, shipClass: 0, weight: 1, owned: true, nodeID: 184484170, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
+	{id: 184483950, name: "Rurik", classID: 10, shipClass: 2, weight: 1, owned: true, nodeID: 184483950, nodeType: 0, unlockCost: 0, manufacturer: "AkulaVektor"},
+	{id: 184484202, name: "Cerberus", classID: 12, shipClass: 3, weight: 1, owned: true, nodeID: 184484202, nodeType: 0, unlockCost: 0, manufacturer: "Oberon"},
 	// T2 (researchable; parentID links to the corresponding T1 node)
-	{id: 184483981, name: "Assault Medium T2", classID: 14, shipClass: 4, weight: 1, owned: false, nodeID: 184483981, parentID: 184483982, prereqID1: 184483982, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
-	{id: 184483972, name: "Dreadnought Medium T2", classID: 6, shipClass: 0, weight: 1, owned: false, nodeID: 184483972, parentID: 184484170, prereqID1: 184484170, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
-	{id: 184483949, name: "Sniper Medium T2", classID: 10, shipClass: 2, weight: 1, owned: false, nodeID: 184483949, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
-	{id: 184483954, name: "Sniper Light T2", classID: 10, shipClass: 2, weight: 0, owned: false, nodeID: 184483954, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
-	{id: 184483964, name: "Scout Light T2", classID: 2, shipClass: 1, weight: 0, owned: false, nodeID: 184483964, parentID: 0, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
-	{id: 184484205, name: "Support Medium T2", classID: 12, shipClass: 3, weight: 1, owned: false, nodeID: 184484205, parentID: 184484202, prereqID1: 184484202, nodeType: 0, unlockCost: 5000, manufacturer: "Oberon"},
+	{id: 184483981, name: "Trafalgar", classID: 14, shipClass: 4, weight: 1, owned: false, nodeID: 184483981, parentID: 184483982, prereqID1: 184483982, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
+	{id: 184483972, name: "Nav", classID: 6, shipClass: 0, weight: 1, owned: false, nodeID: 184483972, parentID: 184484170, prereqID1: 184484170, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483949, name: "Tugarin", classID: 10, shipClass: 2, weight: 1, owned: false, nodeID: 184483949, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483954, name: "Furia", classID: 10, shipClass: 2, weight: 0, owned: false, nodeID: 184483954, parentID: 184483950, prereqID1: 184483950, nodeType: 0, unlockCost: 5000, manufacturer: "AkulaVektor"},
+	{id: 184483964, name: "Dover", classID: 2, shipClass: 1, weight: 0, owned: false, nodeID: 184483964, parentID: 0, nodeType: 0, unlockCost: 5000, manufacturer: "JupiterArms"},
+	{id: 184484205, name: "Orcus", classID: 12, shipClass: 3, weight: 1, owned: false, nodeID: 184484205, parentID: 184484202, prereqID1: 184484202, nodeType: 0, unlockCost: 5000, manufacturer: "Oberon"},
 }
 
 func techTreeShips() []mmogShipSeed {
@@ -676,7 +685,7 @@ func techTreeShips() []mmogShipSeed {
 		if _, ok := seen[fleetShipID]; !ok {
 			seen[fleetShipID] = struct{}{}
 			ships = append(ships, mmogShipSeed{
-				id: fleetShipID, name: loadout.ship.name + " fleet entry",
+				id: fleetShipID, name: syntheticRowName(fleetShipID, loadout),
 				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
 				weight: loadout.ship.weight, owned: true, nodeID: fleetShipID, nodeType: 0,
 				// Without the manufacturer these synthetic entries cannot be
@@ -691,7 +700,7 @@ func techTreeShips() []mmogShipSeed {
 		if _, ok := seen[loadoutID]; !ok {
 			seen[loadoutID] = struct{}{}
 			ships = append(ships, mmogShipSeed{
-				id: loadoutID, name: loadout.ship.name + " " + loadout.loadoutName,
+				id: loadoutID, name: syntheticRowName(loadoutID, loadout),
 				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
 				weight: loadout.ship.weight, owned: true, nodeID: loadoutID, nodeType: 0,
 				manufacturer:   loadout.ship.manufacturer,
@@ -1064,4 +1073,21 @@ func shipManufacturerForClassID(classID int32, existing string) string {
 		return "Oberon"
 	}
 	return ""
+}
+
+// syntheticRowName names a synthetic tech tree row after the item it actually
+// represents.
+//
+// These rows used to be labelled by composing strings -- "<ship> fleet entry" and
+// "<ship> <loadout>" -- which put text the game never uses into a field that
+// reaches the client as the market card's ParentCategoryName. Both of these ids
+// are precast loadout ids, so the game has a real name for them.
+func syntheticRowName(id int32, loadout mmogShipLoadoutSeed) string {
+	if name, ok := authoritativeItemName(id); ok {
+		return name
+	}
+	if loadout.loadoutName != "" {
+		return loadout.loadoutName
+	}
+	return loadout.ship.name
 }

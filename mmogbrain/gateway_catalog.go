@@ -291,7 +291,7 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 			if hasExtractedMeta && extractedMeta.catalogBucket != "" {
 				categoryName = extractedMeta.catalogBucket
 			}
-			parentCategoryName = ship.name
+			parentCategoryName = shipDisplayName(ship)
 		}
 	} else if seed.manufacturer != "" {
 		parentCategoryName = gatewayManufacturerDisplayName(seed.manufacturer)
@@ -410,19 +410,35 @@ func realCatalogBucketSeeds(bucketName, itemType, entityType, priceCurrencyID st
 
 // realCatalogBucketIDBase gives each real-catalog bucket a distinct,
 // non-overlapping range of synthetic itemIDs (see realCatalogBucketSeeds).
+//
+// Every base is deliberately below 16777216, i.e. TOP BYTE 0.
+//
+// The top byte of an item id is its ItemIDTable CategoryID -- verified across
+// every id in the extracted tables, 3437 agree and 0 disagree -- so a synthetic
+// id does not merely identify an entry, it CLAIMS a category. The previous bases
+// (19000000 through 31000000) all had top byte 1, which is YShipLoadoutPrecast,
+// so every synthetic bundle and every synthetic Heroships entry announced itself
+// to the client as a precast ship loadout.
+//
+// No category has ID 0, so top byte 0 claims nothing, which is the honest answer
+// for these entries: their real identity travels in Sku/external_id as the
+// original SKU string, and itemID is only an internal handle. Bases are spaced a
+// million apart and the largest bucket holds ~3100 entries, so they cannot
+// collide with each other, and starting at 5000000 keeps them clear of the
+// retired OldItemIDs in ItemIDConversionTable (which begin at 1000001).
 var realCatalogBucketIDBase = map[string]int32{
-	"Bundles":             19000000,
-	"Weapons":             20000000,
-	"Modules":             21000000,
-	"Captain Vanity":      22000000,
-	"Coatings Collection": 24000000,
-	"Decals Collection":   25000000,
-	"Emblems Collection":  26000000,
-	"Patterns Collection": 27000000,
-	"Code Redemptions":    28000000,
-	"Heroships":           29000000,
-	"GP to CR":            30000000,
-	"un_typed":            31000000,
+	"Bundles":             5000000,
+	"Weapons":             6000000,
+	"Modules":             7000000,
+	"Captain Vanity":      8000000,
+	"Coatings Collection": 9000000,
+	"Decals Collection":   10000000,
+	"Emblems Collection":  11000000,
+	"Patterns Collection": 12000000,
+	"Code Redemptions":    13000000,
+	"Heroships":           14000000,
+	"GP to CR":            15000000,
+	"un_typed":            16000000,
 }
 
 // gatewayItemCatalogSeeds returns the market (store) catalog contents.

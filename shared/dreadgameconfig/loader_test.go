@@ -27,8 +27,14 @@ func TestDataDirReturnsDefaultWhenEnvVarEmpty(t *testing.T) {
 	if err := os.Setenv("DATA_DIR", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := DataDir(); got != DefaultDataDir {
-		t.Fatalf("DataDir() = %q, want %q", got, DefaultDataDir)
+	// Without DATA_DIR the resolver must return a directory that actually holds
+	// the extracted assets. It used to return the bare relative default, which
+	// silently resolved to a nonexistent path under `go test` -- every table
+	// loaded empty and the suite died in mustItemByID, so nothing was validating
+	// this data. The contract is "a usable data dir", not a specific string.
+	got := DataDir()
+	if _, err := os.Stat(filepath.Join(got, SubdirAssets)); err != nil {
+		t.Fatalf("DataDir() = %q, which has no %s subdirectory: %v", got, SubdirAssets, err)
 	}
 }
 
@@ -39,8 +45,14 @@ func TestDataDirReturnsDefaultWhenEnvVarUnset(t *testing.T) {
 	if err := os.Unsetenv("DATA_DIR"); err != nil {
 		t.Fatal(err)
 	}
-	if got := DataDir(); got != DefaultDataDir {
-		t.Fatalf("DataDir() = %q, want %q", got, DefaultDataDir)
+	// Without DATA_DIR the resolver must return a directory that actually holds
+	// the extracted assets. It used to return the bare relative default, which
+	// silently resolved to a nonexistent path under `go test` -- every table
+	// loaded empty and the suite died in mustItemByID, so nothing was validating
+	// this data. The contract is "a usable data dir", not a specific string.
+	got := DataDir()
+	if _, err := os.Stat(filepath.Join(got, SubdirAssets)); err != nil {
+		t.Fatalf("DataDir() = %q, which has no %s subdirectory: %v", got, SubdirAssets, err)
 	}
 }
 

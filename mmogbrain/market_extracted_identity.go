@@ -28,8 +28,8 @@ var (
 	extractedShipIDAion    = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Aion").ItemID
 	extractedShipIDValcour = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Valcour").ItemID
 	extractedShipIDSvarog  = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Svarog").ItemID
-	extractedShipIDLeipzig = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Leipzig").ItemID
-	extractedShipIDTrieste = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Trieste").ItemID
+	extractedShipIDTrafalgar = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Trafalgar").ItemID
+	extractedShipIDNav = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Nav").ItemID
 	extractedShipIDCeres   = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Ceres").ItemID
 )
 

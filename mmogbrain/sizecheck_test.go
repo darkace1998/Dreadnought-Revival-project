@@ -45,7 +45,7 @@ var targetSizes = map[string]int{
 	// Now 13768: the four development loadout aliases collapsed into the real
 	// precast ids, leaving 14 items instead of 18 (see
 	// nativeStarterLoadoutClassName).
-	"YA_GetTechTree": 13670,
+	"YA_GetTechTree": 11860,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

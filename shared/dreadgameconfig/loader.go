@@ -17,11 +17,51 @@ const (
 	SubdirLoadouts   = "loadouts"
 )
 
+// DataDir locates the extracted game data.
+//
+// DefaultDataDir is relative ("../data/"), which resolves only when the process
+// runs from a service directory one level below the repo root. `go test` runs
+// each package in its own directory, so under test it resolved to
+// shared/data/ -- which does not exist. Every table then loaded empty and the
+// suites for this package and legacy-api died on startup (13 failures plus a
+// panic in mustItemByID), meaning nothing was validating this data at all. Since
+// hallucinated ids and names are exactly what these tests exist to catch, that
+// silence was the worst possible failure mode.
+//
+// Resolution order: DATA_DIR if set, then the relative default if it exists,
+// then the nearest ancestor directory containing a "data/assets" -- which finds
+// the repo's data directory from any working directory inside the repo.
 func DataDir() string {
 	if dir := os.Getenv("DATA_DIR"); dir != "" {
 		return dir
 	}
+	if _, err := os.Stat(filepath.Join(DefaultDataDir, SubdirAssets)); err == nil {
+		return DefaultDataDir
+	}
+	if dir, ok := findDataDirUpwards(); ok {
+		return dir
+	}
 	return DefaultDataDir
+}
+
+// findDataDirUpwards walks up from the working directory looking for a sibling
+// "data" directory that holds the extracted assets.
+func findDataDirUpwards() (string, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	for {
+		candidate := filepath.Join(dir, "data")
+		if _, err := os.Stat(filepath.Join(candidate, SubdirAssets)); err == nil {
+			return candidate, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 func DatatablesDir() string {
@@ -223,14 +263,14 @@ func loadItemIDRegister() ([]ItemIDRegisterEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read item ID register: %w", err)
 	}
-	
+
 	var register struct {
 		ItemIDRegister []ItemIDRegisterEntry `json:"ItemIDRegister"`
 	}
 	if err := json.Unmarshal(registerData, &register); err != nil {
 		return nil, fmt.Errorf("parse item ID register: %w", err)
 	}
-	
+
 	return register.ItemIDRegister, nil
 }
 
@@ -240,13 +280,13 @@ func loadItemIDRegisterForType(pathType string) (map[string]int32, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	pathToItemID := make(map[string]int32)
 	for _, entry := range entries {
 		if strings.Contains(entry.Path, pathType) {
 			pathToItemID[entry.Path] = entry.ItemID
 		}
 	}
-	
+
 	return pathToItemID, nil
 }

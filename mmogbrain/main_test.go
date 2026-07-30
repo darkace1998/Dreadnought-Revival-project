@@ -382,17 +382,19 @@ func TestTechTreeRowsExposeMinimalIdentityAndUnlock(t *testing.T) {
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(ship.id)))) {
 			t.Fatalf("tech tree row for %q missing ShipID=%d", ship.name, ship.id)
 		}
-		if !bytes.Contains(row, protocol.AppendStringField(nil, "NodeID", strconv.Itoa(int(ship.nodeID)))) {
-			t.Fatalf("tech tree row for %q missing NodeID=%d", ship.name, ship.nodeID)
-		}
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipClass", strconv.Itoa(int(ship.shipClass)))) {
 			t.Fatalf("tech tree row for %q missing ShipClass=%d", ship.name, ship.shipClass)
 		}
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "Weight", strconv.Itoa(int(ship.weight)))) {
 			t.Fatalf("tech tree row for %q missing Weight=%d", ship.name, ship.weight)
 		}
-		if !bytes.Contains(row, protocol.AppendBoolField(nil, "bIsUnlocked", ship.owned)) {
-			t.Fatalf("tech tree row for %q missing bIsUnlocked=%v", ship.name, ship.owned)
+		// These names occur nowhere in the client binary, so the client cannot
+		// read them; they were costing ~180 bytes a row on a payload that has
+		// to fit a 16-bit frame length. Assert they stay gone.
+		for _, dead := range []string{"NodeID", "ParentID", "UnlockCost", "PrereqID1", "PrereqID2", "bIsNew", "bIsUnlocked", "bIsPurchased"} {
+			if bytes.Contains(row, appendFieldMarker(dead, 0x09)) || bytes.Contains(row, appendFieldMarker(dead, 0x05)) {
+				t.Fatalf("tech tree row for %q re-added dead field %s", ship.name, dead)
+			}
 		}
 		// m_shipLoadoutInfo IS required for ships that have a starter loadout —
 		// the client's hangar fleet loader builds each fleet ship from it (see
@@ -1102,7 +1104,7 @@ func TestAliasResponsesEchoRequestRT(t *testing.T) {
 		t.Fatalf("seed currencies: %v", err)
 	}
 
-	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDLeipzig)
+	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDTrafalgar)
 	purchase := buildMmogRequestResponsePayload("YA_BuyItem", playerPID, purchaseRequest)
 	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "RT", "YA_BuyItem")) {
 		t.Fatal("YA_BuyItem response did not echo request RT")
@@ -1126,7 +1128,7 @@ func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
 	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, playerPID); err != nil {
 		t.Fatalf("seed currency: %v", err)
 	}
-	offer := extractedMarketItemExternalID(extractedShipIDLeipzig, "")
+	offer := extractedMarketItemExternalID(extractedShipIDTrafalgar, "")
 	request := protocol.AppendStringField(nil, "offer", offer)
 	request = protocol.AppendInt32Field(request, "quantity", 1)
 	request = protocol.AppendStringField(request, "currency", "CR")
@@ -1137,11 +1139,11 @@ func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
 	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
 		t.Fatalf("offer-shaped purchase did not succeed: %x", purchase)
 	}
-	if !bytes.Contains(purchase, protocol.AppendInt32Field(nil, "itemID", extractedShipIDLeipzig)) {
+	if !bytes.Contains(purchase, protocol.AppendInt32Field(nil, "itemID", extractedShipIDTrafalgar)) {
 		t.Fatal("offer-shaped purchase did not resolve offer to itemID")
 	}
 	var count int
-	if err := database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=? AND currency='CR'`, playerPID, extractedShipIDLeipzig).Scan(&count); err != nil {
+	if err := database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=? AND currency='CR'`, playerPID, extractedShipIDTrafalgar).Scan(&count); err != nil {
 		t.Fatalf("count purchases: %v", err)
 	}
 	if count != 1 {
@@ -1159,38 +1161,34 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 		t.Fatalf("seed currency: %v", err)
 	}
 
-	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDLeipzig)
+	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDTrafalgar)
 	purchase := buildMmogPurchasePayload("YA_BuyItem", playerPID, purchaseRequest)
 	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
 		t.Fatalf("purchase did not succeed: %x", purchase)
 	}
 
 	techTree := buildMmogTechTreePayload(playerPID)
-	marker := bytes.Index(techTree, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(extractedShipIDLeipzig))))
+	marker := bytes.Index(techTree, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(extractedShipIDTrafalgar))))
 	if marker < 0 {
-		t.Fatal("YA_GetTechTree missing purchased Valcour row")
+		t.Fatal("YA_GetTechTree missing purchased Trafalgar row")
 	}
-	rowEnd := marker + 700
-	if rowEnd > len(techTree) {
-		rowEnd = len(techTree)
-	}
-	if !bytes.Contains(techTree[marker:rowEnd], protocol.AppendBoolField(nil, "bIsPurchased", true)) {
-		t.Fatal("YA_GetTechTree does not mark purchased Valcour as purchased")
-	}
+	// Ownership is NOT asserted on the tech tree row: bIsPurchased/bIsUnlocked
+	// are names the client binary does not contain, so they never conveyed it.
+	// The progression payload below carries the flag the client does read.
 
 	// shipID in shipProgressionUiData entries goes through the same
 	// int32-blind parser family — numeric string, not int32.
 	progression := buildMmogPlayerProgressionPayload(playerPID)
-	progressionMarker := bytes.Index(progression, protocol.AppendStringField(nil, "shipID", strconv.Itoa(int(extractedShipIDLeipzig))))
+	progressionMarker := bytes.Index(progression, protocol.AppendStringField(nil, "shipID", strconv.Itoa(int(extractedShipIDTrafalgar))))
 	if progressionMarker < 0 {
-		t.Fatal("YA_GetPlayerProgression missing purchased Valcour row")
+		t.Fatal("YA_GetPlayerProgression missing purchased Trafalgar row")
 	}
 	progressionEnd := progressionMarker + 120
 	if progressionEnd > len(progression) {
 		progressionEnd = len(progression)
 	}
 	if !bytes.Contains(progression[progressionMarker:progressionEnd], protocol.AppendBoolField(nil, "owned", true)) {
-		t.Fatal("YA_GetPlayerProgression does not mark purchased Valcour as owned")
+		t.Fatal("YA_GetPlayerProgression does not mark purchased Trafalgar as owned")
 	}
 }
 
@@ -3590,5 +3588,48 @@ func TestTechTreeClassIDsMatchTheAssetPaths(t *testing.T) {
 	// The specific drift the audit found, pinned by id.
 	if got, ok := derivedShipClassID(184483954); !ok || got != 3 {
 		t.Errorf("Sniper Light T2 derives ClassId %d (ok=%v), want 3 (YSC_SNIPER_LIGHT)", got, ok)
+	}
+}
+
+// TestShipAndHeroNamesMatchTheAuthoritativeTable guards every hardcoded ship and
+// hero name against ItemIDConversionTable, which pairs each item id with the name
+// the game actually displays.
+//
+// The seed tables were populated from ASSET FILENAMES, which are not display
+// names, and the audit found several wrong: hero 67043329 was "Skagerrak" (its
+// filename) where the game calls it Huscarl; "FallofTroy" and "JunkyardPrince"
+// were run together; and the tier-2 roster was named Leipzig and Trieste, neither
+// of which is a string that appears anywhere in the game -- the real ships are
+// Trafalgar and Nav.
+func TestShipAndHeroNamesMatchTheAuthoritativeTable(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	checked := 0
+	for _, ship := range append(techTreeShips(), heroShips...) {
+		want, ok := authoritativeShipName(ship.id)
+		if !ok {
+			continue // no authoritative name for this id
+		}
+		checked++
+		if !strings.EqualFold(strings.ReplaceAll(ship.name, " ", ""), strings.ReplaceAll(want, " ", "")) {
+			t.Errorf("id %d is named %q in the seeds; the game calls it %q", ship.id, ship.name, want)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no names were checked; the authoritative table is not loading")
+	}
+
+	// The specific corrections the audit produced, pinned by id.
+	for id, want := range map[int32]string{
+		67043329:  "Huscarl",         // filename says Skagerrak
+		67043330:  "Fall of Troy",    // filename runs it together
+		67043338:  "Junkyard Prince", // filename runs it together
+		184483981: "Trafalgar",       // was "Leipzig", not a game string
+		184483972: "Nav",             // was "Trieste", not a game string
+	} {
+		got, ok := authoritativeShipName(id)
+		if !ok || got != want {
+			t.Errorf("authoritative name for %d = %q (ok=%v), want %q", id, got, ok, want)
+		}
 	}
 }

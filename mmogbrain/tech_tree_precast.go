@@ -2,7 +2,6 @@ package main
 
 import (
 	"regexp"
-	"sync"
 
 	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
 )
@@ -27,57 +26,16 @@ import (
 // replaces, so the derivation is validated instead: it reproduces all four
 // starter loadout ids that were already known independently (33489262, 33489423,
 // 33489263, 33489264) and fills in the six T2 ships that had none.
-var (
-	shipAssetPathPattern    = regexp.MustCompile(`^/Game/Generic/Ships/([A-Za-z]+)/([A-Za-z]+)/T(\d)/`)
-	precastAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Loadouts/Precast/(?:T(\d)/)?VH_([A-Za-z]+)_(?:T(\d)_)?PrecastLoadout_BP$`)
-
-	precastLoadoutOnce  sync.Once
-	precastLoadoutByKey map[string]int32
-)
-
-// buildPrecastLoadoutIndex indexes the player-facing precast loadouts by
-// "<Class><Size>|<tier>". It deliberately matches only loadouts sitting directly
-// under /Loadouts/Precast/, which excludes the Havoc, AI-boss and Development
-// variants that share the category.
-func buildPrecastLoadoutIndex() {
-	precastLoadoutByKey = map[string]int32{}
-	for _, category := range dreadconfig.GetAllCategories() {
-		if category.CategoryName != "YShipLoadoutPrecast" {
-			continue
-		}
-		for _, itemID := range category.ItemIDs {
-			item, ok := dreadconfig.ItemByID(itemID)
-			if !ok {
-				continue
-			}
-			match := precastAssetPathPattern.FindStringSubmatch(item.AssetPath)
-			if match == nil {
-				continue
-			}
-			tier := match[1]
-			if tier == "" {
-				tier = match[3]
-			}
-			precastLoadoutByKey[match[2]+"|"+tier] = itemID
-		}
-	}
-}
+// The derivation itself now lives in shared/dreadgameconfig
+// (authoritative_names.go), so legacy-api and the catalog resolve names and
+// loadout ids the same way; these stay as the names the rest of this package
+// uses.
+var shipAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Ships/([A-Za-z]+)/([A-Za-z]+)/T(\d)/`)
 
 // techTreePrecastLoadoutID returns the precast-loadout id that represents a ship
 // in the tech tree, deriving it from the two assets' paths.
 func techTreePrecastLoadoutID(shipID int32) (int32, bool) {
-	precastLoadoutOnce.Do(buildPrecastLoadoutIndex)
-
-	item, ok := dreadconfig.ItemByID(shipID)
-	if !ok {
-		return 0, false
-	}
-	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
-	if match == nil {
-		return 0, false
-	}
-	id, ok := precastLoadoutByKey[match[1]+match[2]+"|"+match[3]]
-	return id, ok
+	return dreadconfig.PrecastLoadoutIDForShip(shipID)
 }
 
 // eyShipClassByKey is EYShipClass from the SDK, keyed by "<Class><Size>" as it
@@ -126,4 +84,25 @@ func techTreeRowID(ship mmogShipSeed) int32 {
 		return id
 	}
 	return ship.id
+}
+
+// authoritativeItemName / authoritativeShipName resolve an item's real display
+// name through the client's ItemIDConversionTable. See
+// shared/dreadgameconfig/authoritative_names.go for why the hardcoded names
+// could not be trusted.
+func authoritativeItemName(itemID int32) (string, bool) {
+	return dreadconfig.AuthoritativeItemName(itemID)
+}
+
+func authoritativeShipName(shipID int32) (string, bool) {
+	return dreadconfig.AuthoritativeShipName(shipID)
+}
+
+// shipDisplayName is the name to show for a ship, preferring the authoritative
+// one and falling back to the seed's own value.
+func shipDisplayName(ship mmogShipSeed) string {
+	if name, ok := authoritativeShipName(ship.id); ok {
+		return name
+	}
+	return ship.name
 }

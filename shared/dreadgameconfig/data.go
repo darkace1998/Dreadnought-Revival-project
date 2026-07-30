@@ -13,10 +13,18 @@ const (
 	ItemTypeAbility = "ability"
 	ItemTypePerk    = "perk"
 
-	starterShipDisplayNameAssaultMediumT1     = "Assault Medium T1"
-	starterShipDisplayNameDreadnoughtMediumT1 = "Dreadnought Medium T1"
-	starterShipDisplayNameSniperMediumT1      = "Sniper Medium T1"
-	starterShipDisplayNameSupportMediumT1     = "Support Medium T1"
+	// The four starter hulls' names, from ItemIDConversionTable via the precast
+	// loadout that names each ship (see authoritative_names.go). These used to
+	// hold the class descriptor -- "Assault Medium T1" -- which is not a name
+	// the game ever shows and which the localization tables cannot resolve.
+	// Simargl's loadout (33489423) is the one starter hull absent from the
+	// conversion table; its name comes from the shipped localization data and
+	// from Module_data_table_v01, where its per-ship item names ("Simargl Nav
+	// Repeater Guns") pair it with Nav, the tier-2 hull of the same line.
+	starterShipDisplayNameAssaultMediumT1     = "Agosta"
+	starterShipDisplayNameDreadnoughtMediumT1 = "Simargl"
+	starterShipDisplayNameSniperMediumT1      = "Rurik"
+	starterShipDisplayNameSupportMediumT1     = "Cerberus"
 	sharedVanityDefaultDecalAssetPath         = "/VanityItems/_Shared/Decal/VAN_DCL_Default_DA"
 	sharedVanityDefaultEmblemAssetPath        = "/VanityItems/_Shared/Emblems/Default/VAN_EMB_Default_DA"
 	progressionTableCategoryUnlockCurrency    = "YProgressionUnlockContainerCurrency"
@@ -114,8 +122,8 @@ var itemCatalog = []ItemMetadata{
 	{ItemID: 184484171, DisplayName: "Aion", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/VH_SupportM_Pawn_BP"},
 	{ItemID: 184484180, DisplayName: "Valcour", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Scout/Light/VH_ScoutL_Pawn_BP"},
 	{ItemID: 184484184, DisplayName: "Svarog", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Sniper/Medium/VH_SniperM_Pawn_BP"},
-	{ItemID: 184483981, DisplayName: "Leipzig", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP"},
-	{ItemID: 184483972, DisplayName: "Trieste", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP"},
+	{ItemID: 184483981, DisplayName: "Trafalgar", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP"},
+	{ItemID: 184483972, DisplayName: "Nav", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP"},
 	{ItemID: 184484148, DisplayName: "Ceres", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/T3/VH_SupportM_Pawn_T3_BP"},
 	{ItemID: 184483982, DisplayName: starterShipDisplayNameAssaultMediumT1, ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP"},
 	{ItemID: 184484170, DisplayName: starterShipDisplayNameDreadnoughtMediumT1, ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T1/VH_DreadM_Pawn_T1_BP"},
@@ -376,6 +384,7 @@ var (
 	itemsByID               map[int32]ItemMetadata
 	itemsByAssetPath        map[string]ItemMetadata
 	itemsByTypeAndName      map[string]ItemMetadata
+	duplicateDisplayNames   int
 	starterLoadoutsByShip   map[string]StarterLoadout
 	fleetEligibilityByToken map[string]FleetEligibility
 )
@@ -383,7 +392,7 @@ var (
 func init() {
 	// H5: Use dynamic item catalog if available, otherwise fall back to hardcoded
 	var catalogItems []ItemMetadata
-	
+
 	// Try to build dynamic catalog - this will load all required tables
 	dynamicCatalog := BuildDynamicItemCatalog()
 	if dynamicCatalog != nil && len(dynamicCatalog.AllItems) > 0 {
@@ -427,9 +436,20 @@ func init() {
 			}
 			itemsByAssetPath[key] = item
 		}
+		// Display names are NOT unique in the client's data, so this cannot
+		// panic the way the id and asset-path indexes do. Once names are
+		// resolved from the client's own table instead of from filenames, the
+		// duplicates are obvious and legitimate: "Heavy Torpedo Bay" names 16
+		// distinct per-hull weapon items, "Anti-Missile Lasers" 12, and every
+		// empty vanity slot -- no decal, no pattern, no eyewear -- is genuinely
+		// called "None". Collisions resolve to the lowest item id so the index
+		// does not depend on catalog iteration order.
 		key := itemLookupKey(item.ItemType, item.DisplayName)
-		if _, exists := itemsByTypeAndName[key]; exists {
-			panic(fmt.Sprintf("duplicate dreadgame item key %q", key))
+		if existing, exists := itemsByTypeAndName[key]; exists {
+			duplicateDisplayNames++
+			if existing.ItemID <= item.ItemID {
+				continue
+			}
 		}
 		itemsByTypeAndName[key] = item
 	}

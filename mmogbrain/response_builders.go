@@ -1690,20 +1690,25 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 		b = protocol.AppendStringField(b, "m_manufacturerID", strconv.Itoa(int(manufacturerID)))
 		b = protocol.AppendStringField(b, "manufacturerId", strconv.Itoa(int(manufacturerID)))
 	}
-	b = protocol.AppendStringField(b, "NodeID", strconv.Itoa(int(ship.nodeID)))
+	// NodeID, ParentID, UnlockCost, PrereqID1, PrereqID2, bIsNew, bIsUnlocked
+	// and bIsPurchased used to be emitted here and have been removed: none of
+	// those names occurs anywhere in the shipping client binary, as ASCII or as
+	// UTF-16LE (the same scan that identified the ten request names the client
+	// never sends, run with a known-present control). Field lookup is by name,
+	// so a name the binary does not contain cannot be read -- the tree's
+	// unlock costs and prerequisites come from the TechTrees blob, whose loader
+	// reads XPCost/FPCost/Prereq/Wires.
+	//
+	// This is a size fix, not a tidy-up. Frames carry a 16-bit length, so a
+	// payload has to stay under 65535 bytes, and this response is already
+	// ~13.7KB for the ten rows served today. The roster that belongs here is 51
+	// tiered precast loadouts, which does not fit with dead fields attached.
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
-	b = protocol.AppendStringField(b, "ParentID", strconv.Itoa(int(ship.parentID)))
 	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
-	b = protocol.AppendStringField(b, "UnlockCost", strconv.Itoa(int(ship.unlockCost)))
-	b = protocol.AppendStringField(b, "PrereqID1", strconv.Itoa(int(ship.prereqID1)))
-	b = protocol.AppendStringField(b, "PrereqID2", strconv.Itoa(int(ship.prereqID2)))
 	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(ship.shipClass)))
 	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
-	b = protocol.AppendBoolField(b, "bIsUnlocked", ship.owned)
-	b = protocol.AppendBoolField(b, "bIsPurchased", ship.owned)
-	b = protocol.AppendBoolField(b, "bIsNew", ship.bIsNew)
 	// REGRESSION FIX: for ships that have a starter loadout, emit
 	// m_precastLoadoutID + m_shipLoadoutInfo. The client's hangar fleet loader
 	// (YUIHangarFleetData::Load) builds each fleet ship from the loadout info
@@ -3026,10 +3031,10 @@ func appendMmogPlayerDisplayInfoEntry(b []byte, stack []int, playerPID string, s
 
 var catalogPrices = map[int32]int32{
 	// Ships
-	extractedShipIDValcour: 5000,
-	extractedShipIDLeipzig: 5000,
-	extractedShipIDTrieste: 5000,
-	extractedShipIDCeres:   5000,
+	extractedShipIDValcour:   5000,
+	extractedShipIDTrafalgar: 5000,
+	extractedShipIDNav:       5000,
+	extractedShipIDCeres:     5000,
 	// Weapons
 	100597772: 2000, // Repeater Turrets
 	100598563: 2000, // Laser Turrets

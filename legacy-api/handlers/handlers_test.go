@@ -188,7 +188,7 @@ func TestGetInventoryCreatesProfileBeforeStarterSeeding(t *testing.T) {
 	handler := &Handler{DB: database, Log: logger}
 
 	if _, err := database.Exec(
-		`INSERT INTO player_inventory(id,user_id,item_type,item_id) VALUES('starter-hidden','user-gated','ship','Akula_T1')`,
+		`INSERT INTO player_inventory(id,user_id,item_type,item_id) VALUES('starter-hidden','user-gated','ship','5000235')`,
 	); err != nil {
 		t.Fatalf("insert starter row before readiness: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestGetInventorySeedsCoherentStarterInventory(t *testing.T) {
 	seedLegacyProfile(t, database, "user-1")
 
 	if _, err := database.Exec(
-		`INSERT INTO player_inventory(id,user_id,item_type,item_id) VALUES('legacy-akula','user-1','ship','Akula_T1')`,
+		`INSERT INTO player_inventory(id,user_id,item_type,item_id) VALUES('legacy-agosta','user-1','ship','5000235')`,
 	); err != nil {
 		t.Fatalf("insert legacy placeholder: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestGetInventorySeedsCoherentStarterInventory(t *testing.T) {
 	if counts[itemTypeLegacyUI] != 0 {
 		t.Fatalf("legacy loadout_item count = %d, want 0", counts[itemTypeLegacyUI])
 	}
-	if seen[inventorySeedKey("ship", "Akula_T1")] {
+	if seen[inventorySeedKey("ship", "5000235")] {
 		t.Fatal("legacy placeholder ship should not remain in inventory response")
 	}
 	legacyStarterPrimaryID := strconv.Itoa(int(dreadconfig.StarterInventoryLoadouts()[0].LoadoutID*10 + 1))
@@ -641,17 +641,22 @@ func TestGetInventoryNormalizesLegacyStarterShipAliases(t *testing.T) {
 	handler := &Handler{DB: database, Log: logger}
 	seedLegacyProfile(t, database, "user-4")
 
-	assaultSeed := starterShipSeedByName(t, "Assault Medium T1")
-	dreadSeed := starterShipSeedByName(t, "Dreadnought Medium T1")
-	supportSeed := starterShipSeedByName(t, "Support Medium T1")
+	// These ids are the OldItemID the client's own ItemIDConversionTable pairs
+	// with each starter hull -- the table exists precisely to translate an
+	// older build's id to the current one, so they are the only legacy ids
+	// that were ever real. The previous version of this test used
+	// "16777223"/"Akula_T1"/"Lorica_T1", none of which appear anywhere in the
+	// client: the numbers were an ordinal stuffed into the loadout category,
+	// "Akula" is a paint and "Lorica" a tier-4 hull.
+	assaultSeed := starterShipSeedByName(t, "Agosta")
+	sniperSeed := starterShipSeedByName(t, "Rurik")
 
 	for _, row := range []struct {
 		id     string
 		itemID string
 	}{
-		{id: "legacy-athos-id", itemID: "16777223"},
-		{id: "legacy-zmey-placeholder", itemID: "Akula_T1"},
-		{id: "legacy-aion-placeholder", itemID: "Lorica_T1"},
+		{id: "legacy-agosta-id", itemID: "5000235"},
+		{id: "legacy-rurik-id", itemID: "5000257"},
 	} {
 		if _, err := database.Exec(
 			`INSERT INTO player_inventory(id,user_id,item_type,item_id) VALUES(?,?,?,?)`,
@@ -672,9 +677,18 @@ func TestGetInventoryNormalizesLegacyStarterShipAliases(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	assertStoredInventoryRow(t, database, "legacy-athos-id", assaultSeed.ItemType, assaultSeed.ItemID)
-	assertStoredInventoryRow(t, database, "legacy-zmey-placeholder", dreadSeed.ItemType, dreadSeed.ItemID)
-	assertStoredInventoryRow(t, database, "legacy-aion-placeholder", supportSeed.ItemType, supportSeed.ItemID)
+	assertStoredInventoryRow(t, database, "legacy-agosta-id", assaultSeed.ItemType, assaultSeed.ItemID)
+	assertStoredInventoryRow(t, database, "legacy-rurik-id", sniperSeed.ItemType, sniperSeed.ItemID)
+
+	// The other two starter hulls are absent from the conversion table, so they
+	// have no legacy id to normalise. Asserting that keeps anyone from
+	// "fixing" the gap by inventing one again.
+	for _, name := range []string{"Simargl", "Cerberus"} {
+		seed := starterShipSeedByName(t, name)
+		if aliases := legacyStarterShipItemAliases(seed.ItemID); len(aliases) != 0 {
+			t.Errorf("%s (%s) now has legacy aliases %v; assert them directly instead of exempting it", name, seed.ItemID, aliases)
+		}
+	}
 }
 
 func TestGetInventoryNormalizesAssetLinkedStarterRows(t *testing.T) {
@@ -693,9 +707,14 @@ func TestGetInventoryNormalizesAssetLinkedStarterRows(t *testing.T) {
 	handler := &Handler{DB: database, Log: logger}
 	seedLegacyProfile(t, database, "user-5")
 
-	agostaLoadout := dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeLoadout, "Agosta")
-	cerberusPrimaryAbility := dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeAbility, "Beam Amplifier")
-	agostaPrimaryWeapon := dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeWeapon, "Repeater Turrets")
+	// Picked out of the starter seeds rather than looked up by display name.
+	// Only starter items get an asset-path alias, and display names are not
+	// unique in the client's data -- "Beam Amplifier" and "Repeater Turrets"
+	// each name several per-hull variants, so a name lookup could just as well
+	// return one that is not in the starter inventory at all.
+	starterLoadout := starterSeedOfType(t, dreadconfig.ItemTypeLoadout)
+	starterAbility := starterSeedOfType(t, dreadconfig.ItemTypeAbility)
+	starterWeapon := starterSeedOfType(t, dreadconfig.ItemTypeWeapon)
 
 	for _, row := range []struct {
 		id       string
@@ -705,17 +724,17 @@ func TestGetInventoryNormalizesAssetLinkedStarterRows(t *testing.T) {
 		{
 			id:       "legacy-agosta-loadout-asset",
 			itemType: dreadconfig.ItemTypeLoadout,
-			itemID:   agostaLoadout.AssetPath,
+			itemID:   starterLoadout.AssetPath,
 		},
 		{
 			id:       "legacy-cerberus-ability-asset",
 			itemType: dreadconfig.ItemTypeAbility,
-			itemID:   cerberusPrimaryAbility.AssetPath,
+			itemID:   starterAbility.AssetPath,
 		},
 		{
 			id:       "legacy-agosta-weapon-ui-asset",
 			itemType: itemTypeLegacyUI,
-			itemID:   agostaPrimaryWeapon.AssetPath,
+			itemID:   starterWeapon.AssetPath,
 		},
 	} {
 		if _, err := database.Exec(
@@ -737,9 +756,22 @@ func TestGetInventoryNormalizesAssetLinkedStarterRows(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	assertStoredInventoryRow(t, database, "legacy-agosta-loadout-asset", dreadconfig.ItemTypeLoadout, strconv.Itoa(int(agostaLoadout.ItemID)))
-	assertStoredInventoryRow(t, database, "legacy-cerberus-ability-asset", dreadconfig.ItemTypeAbility, strconv.Itoa(int(cerberusPrimaryAbility.ItemID)))
-	assertStoredInventoryRow(t, database, "legacy-agosta-weapon-ui-asset", dreadconfig.ItemTypeWeapon, strconv.Itoa(int(agostaPrimaryWeapon.ItemID)))
+	assertStoredInventoryRow(t, database, "legacy-agosta-loadout-asset", dreadconfig.ItemTypeLoadout, starterLoadout.ItemID)
+	assertStoredInventoryRow(t, database, "legacy-cerberus-ability-asset", dreadconfig.ItemTypeAbility, starterAbility.ItemID)
+	assertStoredInventoryRow(t, database, "legacy-agosta-weapon-ui-asset", dreadconfig.ItemTypeWeapon, starterWeapon.ItemID)
+}
+
+// starterSeedOfType returns the first starter inventory seed of a given item
+// type, with its asset path populated.
+func starterSeedOfType(t *testing.T, itemType string) inventoryBootstrapSeed {
+	t.Helper()
+	for _, seed := range starterInventoryBootstrapSeeds() {
+		if seed.ItemType == itemType && seed.AssetPath != "" {
+			return seed
+		}
+	}
+	t.Fatalf("no starter seed of type %s carries an asset path", itemType)
+	return inventoryBootstrapSeed{}
 }
 
 func starterShipSeedByName(t *testing.T, shipName string) inventoryBootstrapSeed {

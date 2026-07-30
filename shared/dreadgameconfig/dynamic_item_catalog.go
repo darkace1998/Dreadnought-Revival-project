@@ -11,10 +11,10 @@ import (
 // DynamicItemCatalog represents the item catalog built from loaded asset tables
 // This replaces the hardcoded itemCatalog with data from loaded tables
 type DynamicItemCatalog struct {
-	ItemsByID        map[int32]ItemMetadata
-	ItemsByAssetPath map[string]ItemMetadata
+	ItemsByID          map[int32]ItemMetadata
+	ItemsByAssetPath   map[string]ItemMetadata
 	ItemsByTypeAndName map[string]ItemMetadata
-	AllItems        []ItemMetadata
+	AllItems           []ItemMetadata
 }
 
 var (
@@ -39,18 +39,18 @@ func BuildDynamicItemCatalog() *DynamicItemCatalog {
 
 		// Build the dynamic catalog
 		catalog := &DynamicItemCatalog{
-			ItemsByID:        make(map[int32]ItemMetadata),
-			ItemsByAssetPath: make(map[string]ItemMetadata),
+			ItemsByID:          make(map[int32]ItemMetadata),
+			ItemsByAssetPath:   make(map[string]ItemMetadata),
 			ItemsByTypeAndName: make(map[string]ItemMetadata),
-			AllItems:        make([]ItemMetadata, 0),
+			AllItems:           make([]ItemMetadata, 0),
 		}
 
 		// Get all item IDs and their categories from ItemIDTable
 		allCategories := GetAllCategories()
-		
+
 		// Get all item registry entries for asset paths
 		allRegistryEntries := GetAllRegistryEntries()
-		
+
 		// Create a map of itemID -> category for quick lookup
 		itemIDToCategory := make(map[int32]string)
 		itemIDToCategoryName := make(map[int32]string)
@@ -99,7 +99,7 @@ func BuildDynamicItemCatalog() *DynamicItemCatalog {
 		// Build items from ItemIDRegister entries that have valid categories
 		for _, entry := range allRegistryEntries {
 			itemID := int32(entry.ItemID)
-			
+
 			// Skip if item ID is invalid
 			if itemID <= 0 {
 				continue
@@ -117,10 +117,10 @@ func BuildDynamicItemCatalog() *DynamicItemCatalog {
 
 			// Determine item type from category
 			itemType := determineItemTypeFromCategory(categoryName)
-			
+
 			// Determine table category
 			tableCategory := determineTableCategoryFromItemType(itemType)
-			
+
 			// Get catalog bucket
 			catalogBucket := itemIDToCatalogBucket[itemID]
 			if catalogBucket == "" {
@@ -144,11 +144,11 @@ func BuildDynamicItemCatalog() *DynamicItemCatalog {
 			// Add to catalog
 			catalog.ItemsByID[itemID] = item
 			catalog.ItemsByAssetPath[entry.Path] = item
-			
+
 			// Create key for type+name lookup (lowercase for consistency)
 			typeNameKey := fmt.Sprintf("%s_%s", strings.ToLower(itemType), strings.ToLower(displayName))
 			catalog.ItemsByTypeAndName[typeNameKey] = item
-			
+
 			catalog.AllItems = append(catalog.AllItems, item)
 		}
 
@@ -157,7 +157,7 @@ func BuildDynamicItemCatalog() *DynamicItemCatalog {
 		addHardcodedFallbackItems(catalog)
 
 		dynamicItemCatalog = catalog
-		
+
 		log.Printf("Built dynamic item catalog with %d items from loaded asset tables", len(catalog.AllItems))
 	})
 
@@ -224,7 +224,7 @@ func GetDynamicItemCount() int {
 // determineCategoryFromAssetPath attempts to determine the category from an asset path
 func determineCategoryFromAssetPath(assetPath string) string {
 	lowerPath := strings.ToLower(assetPath)
-	
+
 	if strings.Contains(lowerPath, "/ships/") || strings.Contains(lowerPath, "/pawn") {
 		return "YPawn"
 	}
@@ -240,7 +240,7 @@ func determineCategoryFromAssetPath(assetPath string) string {
 	if strings.Contains(lowerPath, "/perk/") || strings.Contains(lowerPath, "prk_") {
 		return "YPerk"
 	}
-	
+
 	return ""
 }
 
@@ -316,89 +316,96 @@ func determineCatalogBucketFromCategory(categoryName string) string {
 
 // knownShipNames maps asset paths to known display names
 var knownShipNames = map[string]string{
-	"/Game/Generic/Ships/Assault/Medium/VH_AssaultM_Pawn_BP":                    "Athos",
-	"/Game/Generic/Ships/Dreadnought/Medium/VH_DreadM_Pawn_BP":                 "Zmey",
-	"/Game/Generic/Ships/Support/Medium/VH_SupportM_Pawn_BP":                  "Aion",
-	"/Game/Generic/Ships/Scout/Light/VH_ScoutL_Pawn_BP":                       "Valcour",
-	"/Game/Generic/Ships/Sniper/Medium/VH_SniperM_Pawn_BP":                    "Svarog",
-	"/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP":              "Leipzig",
-	"/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP":           "Trieste",
-	"/Game/Generic/Ships/Support/Medium/T3/VH_SupportM_Pawn_T3_BP":            "Ceres",
-	"/Game/Generic/Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP":              "Assault Medium T1",
-	"/Game/Generic/Ships/Dreadnought/Medium/T1/VH_DreadM_Pawn_T1_BP":           "Dreadnought Medium T1",
-	"/Game/Generic/Ships/Sniper/Medium/T1/VH_SniperM_Pawn_T1_BP":                "Sniper Medium T1",
-	"/Game/Generic/Ships/Support/Medium/T1/VH_SupportM_Pawn_T1_BP":              "Support Medium T1",
+	"/Game/Generic/Ships/Assault/Medium/VH_AssaultM_Pawn_BP":         "Athos",
+	"/Game/Generic/Ships/Dreadnought/Medium/VH_DreadM_Pawn_BP":       "Zmey",
+	"/Game/Generic/Ships/Support/Medium/VH_SupportM_Pawn_BP":         "Aion",
+	"/Game/Generic/Ships/Scout/Light/VH_ScoutL_Pawn_BP":              "Valcour",
+	"/Game/Generic/Ships/Sniper/Medium/VH_SniperM_Pawn_BP":           "Svarog",
+	"/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP":   "Trafalgar",
+	"/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP": "Nav",
+	"/Game/Generic/Ships/Support/Medium/T3/VH_SupportM_Pawn_T3_BP":   "Ceres",
+	"/Game/Generic/Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP":   "Agosta",
+	"/Game/Generic/Ships/Dreadnought/Medium/T1/VH_DreadM_Pawn_T1_BP": "Simargl",
+	"/Game/Generic/Ships/Sniper/Medium/T1/VH_SniperM_Pawn_T1_BP":     "Rurik",
+	"/Game/Generic/Ships/Support/Medium/T1/VH_SupportM_Pawn_T1_BP":   "Cerberus",
 }
 
 // knownLoadoutNames maps asset paths to known display names
 var knownLoadoutNames = map[string]string{
-	"/Game/Generic/Loadouts/Precast/VH_AssaultMedium_PrecastLoadout_BP":        "Athos",
-	"/Game/Generic/Loadouts/Precast/VH_DreadnoughtMedium_PrecastLoadout_BP":     "Zmey",
-	"/Game/Generic/Loadouts/Precast/VH_SupportMedium_PrecastLoadout_BP":      "Aion",
-	"/Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP":   "Agosta",
+	"/Game/Generic/Loadouts/Precast/VH_AssaultMedium_PrecastLoadout_BP":           "Athos",
+	"/Game/Generic/Loadouts/Precast/VH_DreadnoughtMedium_PrecastLoadout_BP":       "Zmey",
+	"/Game/Generic/Loadouts/Precast/VH_SupportMedium_PrecastLoadout_BP":           "Aion",
+	"/Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP":     "Agosta",
 	"/Game/Generic/Loadouts/Precast/T1/VH_DreadnoughtMedium_T1_PrecastLoadout_BP": "Simargl",
-	"/Game/Generic/Loadouts/Precast/T1/VH_SniperMedium_T1_PrecastLoadout_BP":    "Rurik",
-	"/Game/Generic/Loadouts/Precast/T1/VH_SupportMedium_T1_PrecastLoadout_BP":  "Cerberus",
+	"/Game/Generic/Loadouts/Precast/T1/VH_SniperMedium_T1_PrecastLoadout_BP":      "Rurik",
+	"/Game/Generic/Loadouts/Precast/T1/VH_SupportMedium_T1_PrecastLoadout_BP":     "Cerberus",
 }
 
 // knownWeaponNames maps asset paths to known display names
 var knownWeaponNames = map[string]string{
-	"/Game/Generic/Weapons/Assault/Medium/BP/T1/WP_AssaultMPri01_weapon01_T1_BP":     "Repeater Turrets",
-	"/Game/Generic/Weapons/Assault/SecShort/BP/T0/WP_AssaultSecShort01_weapon01_T0_BP": "Flak Turrets",
-	"/Game/Generic/Weapons/Dreadnought/Medium/BP/T1/WP_DreadnoughtMPri01_weapon01_T1_BP": "Heavy Plasma Cannons",
+	"/Game/Generic/Weapons/Assault/Medium/BP/T1/WP_AssaultMPri01_weapon01_T1_BP":           "Repeater Turrets",
+	"/Game/Generic/Weapons/Assault/SecShort/BP/T0/WP_AssaultSecShort01_weapon01_T0_BP":     "Flak Turrets",
+	"/Game/Generic/Weapons/Dreadnought/Medium/BP/T1/WP_DreadnoughtMPri01_weapon01_T1_BP":   "Heavy Plasma Cannons",
 	"/Game/Generic/Weapons/Dreadnought/SecMid/BP/T0/WP_DreadnoughtSecMid01_weapon01_T0_BP": "Repeater Guns",
-	"/Game/Generic/Weapons/Sniper/Medium/BP/T1/WP_SniperMPri01_weapon01_T1_BP":      "Heavy Tesla Cannon",
-	"/Game/Generic/Weapons/Sniper/SecShort/BP/T0/WP_SniperSecShort01_weapon01_T0_BP": "Light Flak Turrets",
-	"/Game/Generic/Weapons/Support/Medium/BP/T1/WP_SupportMPri01_weapon01_T1_BP":   "Medium Beam Turrets",
-	"/Game/Generic/Weapons/Support/SecShort/BP/T0/WP_SupportSecShort01_weapon01_T0_BP": "Tesla Turrets",
-	"/Game/Generic/Weapons/Support/Heavy/BP/WP_SupportHPri01_weapon01_BP":          "Heavy Repair Beam",
-	"/Game/Generic/Weapons/Support/SecMid/BP/WP_SupportSecMid01_weapon01_BP":     "Light Machine Guns",
+	"/Game/Generic/Weapons/Sniper/Medium/BP/T1/WP_SniperMPri01_weapon01_T1_BP":             "Heavy Tesla Cannon",
+	"/Game/Generic/Weapons/Sniper/SecShort/BP/T0/WP_SniperSecShort01_weapon01_T0_BP":       "Light Flak Turrets",
+	"/Game/Generic/Weapons/Support/Medium/BP/T1/WP_SupportMPri01_weapon01_T1_BP":           "Medium Beam Turrets",
+	"/Game/Generic/Weapons/Support/SecShort/BP/T0/WP_SupportSecShort01_weapon01_T0_BP":     "Tesla Turrets",
+	"/Game/Generic/Weapons/Support/Heavy/BP/WP_SupportHPri01_weapon01_BP":                  "Heavy Repair Beam",
+	"/Game/Generic/Weapons/Support/SecMid/BP/WP_SupportSecMid01_weapon01_BP":               "Light Machine Guns",
 }
 
 // knownAbilityNames maps asset paths to known display names
 var knownAbilityNames = map[string]string{
-	"/Game/Generic/Abilities/Assault/Pri_Missile_Super/T0/AB_AS_Pri_Missile_Super_Ability_T0_BP": "Tempest Missiles",
-	"/Game/Generic/Abilities/Assault/Sec_TorpedoM_Dmg/T0/AB_AS_Sec_TrpM_Ability_T0_BP": "Torpedo Salvo",
-	"/Game/Generic/Abilities/Assault/Per_Turret_Off/T0/AB_AS_Per_Tur_Off_Ability_T0_BP": "Protean Autoguns",
-	"/Game/Generic/Abilities/Assault/Int_Buff_AbInc/T0/AB_AS_Int_Buff_AbInc_Ability_T0_BP": "Module Reboot",
-	"/Game/Generic/Abilities/Assault/Sec_Missile_FireDec/AB_AS_Sec_Msl_PwrDec_Ability_BP": "Weaponbreaker Missile",
-	"/Game/Generic/Abilities/Assault/Per_Turret_DefH/AB_AS_Per_Tur_DefH_Ability_BP": "Hell Lasers",
-	"/Game/Generic/Abilities/Assault/Int_Warp/AB_AS_Int_Warp_Ability": "Jump Drive",
-	"/Game/Generic/Abilities/Dreadnought/Pri_BS_Plasma/T0/AB_DN_Pri_BS_Plasma_Ability_T0_BP": "Plasma Broadside",
-	"/Game/Generic/Abilities/Dreadnought/Sec_MissileH_Dmg/T0/AB_DN_Sec_MslH_Dmg_Ability_T0_BP": "Vulture Missiles",
-	"/Game/Generic/Abilities/Dreadnought/Per_Turret_Def/T0/AB_DN_Per_Tur_Def_Ability_T0_BP": "Flyswatter AML",
-	"/Game/Generic/Abilities/Dreadnought/Int_Warp/T0/AB_DN_Int_Warp_Ability_T0_BP": "Warp Jump",
-	"/Game/Generic/Abilities/Support/Pri_Drone_HealEsc/AB_SU_Pri_Drone_HealEsc_Ability_BP": "Repair Drones",
-	"/Game/Generic/Abilities/Support/Pri_BeamAmp_Dmg/T0/AB_SU_Pri_BeamAmp_Dmg_Ability_T0_BP": "Beam Amplifier",
-	"/Game/Generic/Abilities/Support/Sec_Depl_Heal/T0/AB_SU_Sec_Depl_HPInc_Ability_T0_BP": "Repair Pod",
-	"/Game/Generic/Abilities/Support/Per_Turret_Heal/T0/AB_SU_Per_Tur_HPInc_Ability_T0_BP": "Repair Autobeams",
-	"/Game/Generic/Abilities/Support/Int_HealthIncrease/T0/AB_SU_Int_HPinc_Ability_T0_BP": "Autorepair",
+	"/Game/Generic/Abilities/Assault/Pri_Missile_Super/T0/AB_AS_Pri_Missile_Super_Ability_T0_BP":          "Tempest Missiles",
+	"/Game/Generic/Abilities/Assault/Sec_TorpedoM_Dmg/T0/AB_AS_Sec_TrpM_Ability_T0_BP":                    "Torpedo Salvo",
+	"/Game/Generic/Abilities/Assault/Per_Turret_Off/T0/AB_AS_Per_Tur_Off_Ability_T0_BP":                   "Protean Autoguns",
+	"/Game/Generic/Abilities/Assault/Int_Buff_AbInc/T0/AB_AS_Int_Buff_AbInc_Ability_T0_BP":                "Module Reboot",
+	"/Game/Generic/Abilities/Assault/Sec_Missile_FireDec/AB_AS_Sec_Msl_PwrDec_Ability_BP":                 "Weaponbreaker Missile",
+	"/Game/Generic/Abilities/Assault/Per_Turret_DefH/AB_AS_Per_Tur_DefH_Ability_BP":                       "Hell Lasers",
+	"/Game/Generic/Abilities/Assault/Int_Warp/AB_AS_Int_Warp_Ability":                                     "Jump Drive",
+	"/Game/Generic/Abilities/Dreadnought/Pri_BS_Plasma/T0/AB_DN_Pri_BS_Plasma_Ability_T0_BP":              "Plasma Broadside",
+	"/Game/Generic/Abilities/Dreadnought/Sec_MissileH_Dmg/T0/AB_DN_Sec_MslH_Dmg_Ability_T0_BP":            "Vulture Missiles",
+	"/Game/Generic/Abilities/Dreadnought/Per_Turret_Def/T0/AB_DN_Per_Tur_Def_Ability_T0_BP":               "Flyswatter AML",
+	"/Game/Generic/Abilities/Dreadnought/Int_Warp/T0/AB_DN_Int_Warp_Ability_T0_BP":                        "Warp Jump",
+	"/Game/Generic/Abilities/Support/Pri_Drone_HealEsc/AB_SU_Pri_Drone_HealEsc_Ability_BP":                "Repair Drones",
+	"/Game/Generic/Abilities/Support/Pri_BeamAmp_Dmg/T0/AB_SU_Pri_BeamAmp_Dmg_Ability_T0_BP":              "Beam Amplifier",
+	"/Game/Generic/Abilities/Support/Sec_Depl_Heal/T0/AB_SU_Sec_Depl_HPInc_Ability_T0_BP":                 "Repair Pod",
+	"/Game/Generic/Abilities/Support/Per_Turret_Heal/T0/AB_SU_Per_Tur_HPInc_Ability_T0_BP":                "Repair Autobeams",
+	"/Game/Generic/Abilities/Support/Int_HealthIncrease/T0/AB_SU_Int_HPinc_Ability_T0_BP":                 "Autorepair",
 	"/Game/Generic/Abilities/Sniper/Pri_FireMode_Artillery/T0/AB_SN_Pri_Firemode_Artillery_Ability_T0_BP": "Siege Mode",
-	"/Game/Generic/Abilities/Sniper/Sec_MissileL_Dmg/T0/AB_SN_Sec_MslL_Dmg_Ability_T0_BP": "Flechette Missiles",
-	"/Game/Generic/Abilities/Sniper/Per_Turret_DefL/T0/AB_SN_Per_Tur_DefL_Ability_T0_BP": "Anti-Missile Lasers",
-	"/Game/Generic/Abilities/Sniper/Int_Cloak_Static/T0/AB_SN_Int_Cloak_Static_Ability_T0_BP": "Stationary Cloak",
+	"/Game/Generic/Abilities/Sniper/Sec_MissileL_Dmg/T0/AB_SN_Sec_MslL_Dmg_Ability_T0_BP":                 "Flechette Missiles",
+	"/Game/Generic/Abilities/Sniper/Per_Turret_DefL/T0/AB_SN_Per_Tur_DefL_Ability_T0_BP":                  "Anti-Missile Lasers",
+	"/Game/Generic/Abilities/Sniper/Int_Cloak_Static/T0/AB_SN_Int_Cloak_Static_Ability_T0_BP":             "Stationary Cloak",
 }
 
 // knownPerkNames maps asset paths to known display names
 var knownPerkNames = map[string]string{
-	"/Game/Generic/Officer/Perk/PRK_COM_AbiInc_Passive_BP":       "Communications 101",
-	"/Game/Generic/Officer/Perk/PRK_WPN_RldInc_HPLow_BP":          "Survival Instinct",
-	"/Game/Generic/Officer/Perk/PRK_NAV_SpdInc_Passive_BP":         "Navigation 101",
-	"/Game/Generic/Officer/Perk/PRK_ENG_DmgResInc_Passive_BP":      "Engineering 101",
-	"/Game/Generic/Officer/Perk/PRK_COM_AbiInc_AbiKill_BP":        "Module Recycler",
-	"/Game/Generic/Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP":     "Module Amper",
-	"/Game/Generic/Officer/Perk/PRK_NAV_EnInc_EWThruster_BP":       "Navigation Expert",
-	"/Game/Generic/Officer/Perk/PRK_ENG_HPInc_EWOff_BP":           "Mr. Fixit",
-	"/Game/Generic/Officer/Perk/PRK_COM_EnInc_AbiUse_BP":          "Feedback Loop",
-	"/Game/Generic/Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP":         "Glass Cannon",
+	"/Game/Generic/Officer/Perk/PRK_COM_AbiInc_Passive_BP":          "Communications 101",
+	"/Game/Generic/Officer/Perk/PRK_WPN_RldInc_HPLow_BP":            "Survival Instinct",
+	"/Game/Generic/Officer/Perk/PRK_NAV_SpdInc_Passive_BP":          "Navigation 101",
+	"/Game/Generic/Officer/Perk/PRK_ENG_DmgResInc_Passive_BP":       "Engineering 101",
+	"/Game/Generic/Officer/Perk/PRK_COM_AbiInc_AbiKill_BP":          "Module Recycler",
+	"/Game/Generic/Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP":      "Module Amper",
+	"/Game/Generic/Officer/Perk/PRK_NAV_EnInc_EWThruster_BP":        "Navigation Expert",
+	"/Game/Generic/Officer/Perk/PRK_ENG_HPInc_EWOff_BP":             "Mr. Fixit",
+	"/Game/Generic/Officer/Perk/PRK_COM_EnInc_AbiUse_BP":            "Feedback Loop",
+	"/Game/Generic/Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP":           "Glass Cannon",
 	"/Game/Generic/Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP": "Slow and Steady",
-	"/Game/Generic/Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP":   "Reinforced",
+	"/Game/Generic/Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP":     "Reinforced",
 }
 
 // extractDisplayNameFromAssetPath extracts a display name from an asset path
 func extractDisplayNameFromAssetPath(assetPath string) string {
 	if assetPath == "" {
 		return "Unknown"
+	}
+
+	// The client's own conversion table wins over any table maintained here --
+	// that is what keeps an invented name (see authoritative_names.go) from
+	// reaching the player.
+	if displayName, ok := AuthoritativeNameForAssetPath(assetPath); ok {
+		return displayName
 	}
 
 	// Check if this is a known item with a specific display name
@@ -421,7 +428,7 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 	// Default extraction for unknown items
 	// Remove the leading "/Game/Generic/" part
 	name := strings.TrimPrefix(assetPath, "/Game/Generic/")
-	
+
 	// Remove common prefixes
 	prefixes := []string{
 		"Ships/",
@@ -431,7 +438,7 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 		"Officer/Perk/",
 		"VanityItems/",
 	}
-	
+
 	for _, prefix := range prefixes {
 		name = strings.TrimPrefix(name, prefix)
 	}
@@ -441,16 +448,16 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 	name = strings.TrimSuffix(name, ".Default__")
 	name = strings.TrimSuffix(name, "_C")
 	name = strings.TrimSuffix(name, "_DA")
-	
+
 	// Remove path separators and underscores
 	name = strings.ReplaceAll(name, "/", " ")
 	name = strings.ReplaceAll(name, "_", " ")
-	
+
 	// Clean up multiple spaces
 	for strings.Contains(name, "  ") {
 		name = strings.ReplaceAll(name, "  ", " ")
 	}
-	
+
 	// Trim and capitalize
 	name = strings.TrimSpace(name)
 	if name != "" {
@@ -463,7 +470,7 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 		}
 		name = strings.Join(parts, " ")
 	}
-	
+
 	// Fallback to original filename if we ended up with something too short
 	if len(name) <= 2 {
 		// Extract the last part of the path
@@ -473,7 +480,7 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 		base = strings.TrimSuffix(base, "_C")
 		base = strings.TrimSuffix(base, "_DA")
 		base = strings.ReplaceAll(base, "_", " ")
-		
+
 		// Convert to title case
 		parts := strings.Split(base, " ")
 		for i, part := range parts {
@@ -483,7 +490,7 @@ func extractDisplayNameFromAssetPath(assetPath string) string {
 		}
 		name = strings.Join(parts, " ")
 	}
-	
+
 	return name
 }
 
@@ -498,23 +505,23 @@ func addHardcodedFallbackItems(catalog *DynamicItemCatalog) {
 		{ItemID: 184484171, DisplayName: "Aion", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/VH_SupportM_Pawn_BP"},
 		{ItemID: 184484180, DisplayName: "Valcour", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Scout/Light/VH_ScoutL_Pawn_BP"},
 		{ItemID: 184484184, DisplayName: "Svarog", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Sniper/Medium/VH_SniperM_Pawn_BP"},
-		{ItemID: 184483981, DisplayName: "Leipzig", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP"},
-		{ItemID: 184483972, DisplayName: "Trieste", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP"},
+		{ItemID: 184483981, DisplayName: "Trafalgar", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Assault/Medium/T2/VH_AssaultM_Pawn_T2_BP"},
+		{ItemID: 184483972, DisplayName: "Nav", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Dreadnought/Medium/T2/VH_DreadM_Pawn_T2_BP"},
 		{ItemID: 184484148, DisplayName: "Ceres", ItemType: ItemTypeShip, TableCategory: TableCategoryShip, CatalogBucket: CatalogBucketShips, AssetPath: "/Game/Generic/Ships/Support/Medium/T3/VH_SupportM_Pawn_T3_BP"},
 
 		// Loadouts
 		{ItemID: 33489315, DisplayName: "Athos", ItemType: ItemTypeLoadout, TableCategory: TableCategoryLoadout, AssetPath: "/Game/Generic/Loadouts/Precast/VH_AssaultMedium_PrecastLoadout_BP"},
 		{ItemID: 33489318, DisplayName: "Zmey", ItemType: ItemTypeLoadout, TableCategory: TableCategoryLoadout, AssetPath: "/Game/Generic/Loadouts/Precast/VH_DreadnoughtMedium_PrecastLoadout_BP"},
 		{ItemID: 33489331, DisplayName: "Aion", ItemType: ItemTypeLoadout, TableCategory: TableCategoryLoadout, AssetPath: "/Game/Generic/Loadouts/Precast/VH_SupportMedium_PrecastLoadout_BP"},
-		
+
 		// Weapons
 		{ItemID: 100597772, DisplayName: "Repeater Turrets", ItemType: ItemTypeWeapon, TableCategory: TableCategoryWeapon, CatalogBucket: CatalogBucketWeapons, AssetPath: "/Game/Generic/Weapons/Assault/Medium/BP/T1/WP_AssaultMPri01_weapon01_T1_BP"},
 		{ItemID: 100598563, DisplayName: "Flak Turrets", ItemType: ItemTypeWeapon, TableCategory: TableCategoryWeapon, CatalogBucket: CatalogBucketWeapons, AssetPath: "/Game/Generic/Weapons/Assault/SecShort/BP/T0/WP_AssaultSecShort01_weapon01_T0_BP"},
-		
+
 		// Abilities
 		{ItemID: 83820574, DisplayName: "Tempest Missiles", ItemType: ItemTypeAbility, TableCategory: TableCategoryAbility, CatalogBucket: CatalogBucketModules, AssetPath: "/Game/Generic/Abilities/Assault/Pri_Missile_Super/T0/AB_AS_Pri_Missile_Super_Ability_T0_BP"},
 		{ItemID: 83820606, DisplayName: "Torpedo Salvo", ItemType: ItemTypeAbility, TableCategory: TableCategoryAbility, CatalogBucket: CatalogBucketModules, AssetPath: "/Game/Generic/Abilities/Assault/Sec_TorpedoM_Dmg/T0/AB_AS_Sec_TrpM_Ability_T0_BP"},
-		
+
 		// Perks
 		{ItemID: 117374979, DisplayName: "Communications 101", ItemType: ItemTypePerk, TableCategory: TableCategoryPerk, CatalogBucket: CatalogBucketPerks, AssetPath: "/Game/Generic/Officer/Perk/PRK_COM_AbiInc_Passive_BP"},
 		{ItemID: 117374997, DisplayName: "Survival Instinct", ItemType: ItemTypePerk, TableCategory: TableCategoryPerk, CatalogBucket: CatalogBucketPerks, AssetPath: "/Game/Generic/Officer/Perk/PRK_WPN_RldInc_HPLow_BP"},
