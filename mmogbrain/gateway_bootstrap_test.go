@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dreadnought-ps/mmogbrain/protocol"
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 )

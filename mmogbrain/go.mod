@@ -1,4 +1,4 @@
-module github.com/dreadnought-ps/mmogbrain
+module github.com/darkace1998/Dreadnought-Revival-project/mmogbrain
 
 go 1.24.0
 
@@ -23,9 +23,9 @@ require (
 )
 
 require (
-	github.com/dreadnought-ps/shared v0.0.0
+	github.com/darkace1998/Dreadnought-Revival-project/shared v0.0.0
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/sys v0.44.0 // indirect
 )
 
-replace github.com/dreadnought-ps/shared => ../shared
+replace github.com/darkace1998/Dreadnought-Revival-project/shared => ../shared

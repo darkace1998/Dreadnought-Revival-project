@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/dreadnought-ps/mmogbrain/protocol"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 func TestDumpFleetHex(t *testing.T) {

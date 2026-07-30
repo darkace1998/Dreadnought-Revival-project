@@ -1,4 +1,4 @@
-module dreadnought-launcher
+module github.com/darkace1998/Dreadnought-Revival-project/dn-launcher
 
 go 1.21
 

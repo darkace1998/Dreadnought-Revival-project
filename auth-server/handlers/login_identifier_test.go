@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dreadnought-ps/auth-server/db"
+	"github.com/darkace1998/Dreadnought-Revival-project/auth-server/db"
 	"github.com/sirupsen/logrus"
 )
 

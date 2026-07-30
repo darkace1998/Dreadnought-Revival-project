@@ -1,4 +1,4 @@
-module github.com/dreadnought-ps/game-manager
+module github.com/darkace1998/Dreadnought-Revival-project/game-manager
 
 go 1.24
 

@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
 const fieldStatus = "status"

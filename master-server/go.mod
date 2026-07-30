@@ -1,4 +1,4 @@
-module github.com/dreadnought-ps/master-server
+module github.com/darkace1998/Dreadnought-Revival-project/master-server
 
 go 1.24
 

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/dreadnought-ps/mmogbrain/protocol"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 func TestLoadPlayerRibbons(t *testing.T) {

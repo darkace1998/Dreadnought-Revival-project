@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/dreadnought-ps/mmogbrain/matchmaker"
-	"github.com/dreadnought-ps/mmogbrain/protocol"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // realEnterMatchmakingRequest is a verbatim capture of the client's quick-play

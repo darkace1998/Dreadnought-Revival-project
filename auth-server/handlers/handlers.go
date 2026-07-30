@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dreadnought-ps/auth-server/jwt"
-	"github.com/dreadnought-ps/auth-server/models"
+	"github.com/darkace1998/Dreadnought-Revival-project/auth-server/jwt"
+	"github.com/darkace1998/Dreadnought-Revival-project/auth-server/models"
 	"github.com/google/uuid"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"

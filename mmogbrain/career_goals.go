@@ -3,7 +3,7 @@ package main
 import (
 	"strconv"
 
-	"github.com/dreadnought-ps/mmogbrain/protocol"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // Career progression is a GOALS system, not the progression-item taxonomy we

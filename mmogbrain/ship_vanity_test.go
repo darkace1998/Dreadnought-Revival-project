@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
 // The client reads every slot of m_displayInfo as an item id and async-loads it,

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
 // Tier used to be inferred from unlockCost, so every researchable row claimed

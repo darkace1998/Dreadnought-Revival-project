@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dreadnought-ps/mmogbrain/handlers"
-	"github.com/dreadnought-ps/mmogbrain/matchmaker"
-	"github.com/dreadnought-ps/mmogbrain/protocol"
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/handlers"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )

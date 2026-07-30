@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
-	"github.com/dreadnought-ps/mmogbrain/matchmaker"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"

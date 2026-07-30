@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/dreadnought-ps/mmogbrain/protocol"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 var (

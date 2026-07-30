@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dreadnought-ps/legacy-api/db"
-	"github.com/dreadnought-ps/legacy-api/handlers"
-	"github.com/dreadnought-ps/shared/middleware"
+	"github.com/darkace1998/Dreadnought-Revival-project/legacy-api/db"
+	"github.com/darkace1998/Dreadnought-Revival-project/legacy-api/handlers"
+	"github.com/darkace1998/Dreadnought-Revival-project/shared/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"

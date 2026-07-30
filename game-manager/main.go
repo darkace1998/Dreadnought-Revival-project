@@ -14,8 +14,8 @@ import (
 
 	"strings"
 
-	"github.com/dreadnought-ps/game-manager/portpool"
-	"github.com/dreadnought-ps/game-manager/spawner"
+	"github.com/darkace1998/Dreadnought-Revival-project/game-manager/portpool"
+	"github.com/darkace1998/Dreadnought-Revival-project/game-manager/spawner"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"

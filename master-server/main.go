@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dreadnought-ps/master-server/db"
-	"github.com/dreadnought-ps/master-server/handlers"
+	"github.com/darkace1998/Dreadnought-Revival-project/master-server/db"
+	"github.com/darkace1998/Dreadnought-Revival-project/master-server/handlers"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"

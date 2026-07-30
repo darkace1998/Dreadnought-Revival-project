@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	dreadconfig "github.com/dreadnought-ps/shared/dreadgameconfig"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
 // The generated roster is only usable because every id in it was resolved
