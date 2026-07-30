@@ -1505,7 +1505,7 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	// are then handed to the ordinary mmog document parser -- it dispatches on
 	// the same wire tags we already emit (0x09 string, 0x56 int32) -- so the
 	// payload inside is just another mmog document.
-	b = protocol.AppendBytesField(b, "TechTrees", compressMmogDocument(buildMmogTechTreeDocument(ships)))
+	b = protocol.AppendBytesField(b, "TechTrees", compressMmogDocument(buildMmogTechTreeDocument()))
 	return b
 }
 
@@ -1540,27 +1540,90 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 // An empty manager is why the hangar's fleet and loadout screens do nothing:
 // they compose FUIShipData through the tech-tree interpreter, so with no items
 // every ship entry comes back with an empty m_loadouts and m_shipId 0.
-func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
-	// Rows are keyed by PRECAST LOADOUT id, not ship-pawn id -- see
-	// techTreeRowID. Mapping collapses each T1 ship onto the same id as the
-	// fleet row that already carried it, so duplicates are dropped here.
-	byManufacturer := map[int32][]techTreeRow{}
-	order := []int32{}
-	emitted := map[int32]bool{}
-	for _, ship := range ships {
-		id := shipManufacturerID(shipManufacturer(ship))
-		if id < 0 {
+// techTreeItem is one node of the tech tree document.
+type techTreeItem struct {
+	id           int32
+	classID      int32
+	manufacturer int32
+	tier         int32
+	xpCost       int32
+	prereq       []int32
+}
+
+// techTreeXPCostByTier is what a hull costs to research.
+//
+// This is server-authored: no client asset states it, and the community
+// reference does not carry costs either. Tier 1 must be free (the four starter
+// hulls are owned from the start); the rest is a progression we choose. Flagged
+// rather than dressed up as recovered data -- the previous code sent a flat
+// 5000 for everything researchable, which at least was consistent, and this is
+// the same kind of guess with a shape.
+var techTreeXPCostByTier = map[int32]int32{1: 0, 2: 5000, 3: 15000, 4: 40000, 5: 100000}
+
+// techTreeBaseItems turns the base hull roster into tech tree nodes.
+//
+// Prerequisites follow the hull line: T(n) requires T(n-1) of the same
+// <Class><Size>. That is the one progression the data actually supports, and it
+// reproduces the links the hand-written seeds already had (Trafalgar after
+// Agosta, Nav after Simargl, and so on).
+//
+// The 11 lines that start above tier 1 -- the Light and Heavy variants opening
+// at T2/T3/T4 -- get NO prerequisite. In the real game they must branch off
+// some earlier hull, but neither the client's data nor the reference says which,
+// so they are left unlinked rather than wired to a guess. That is also why the
+// old seed for Furia pointed at Rurik: a plausible-looking cross-line link
+// somebody invented. Wires are empty for the same reason.
+func techTreeBaseItems() []techTreeItem {
+	byLine := map[string]map[int32]int32{}
+	for _, hull := range baseShipLoadouts {
+		if byLine[hull.hullLine] == nil {
+			byLine[hull.hullLine] = map[int32]int32{}
+		}
+		byLine[hull.hullLine][hull.tier] = hull.loadoutID
+	}
+
+	items := make([]techTreeItem, 0, len(baseShipLoadouts))
+	for _, hull := range baseShipLoadouts {
+		manufacturerID := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
+		if manufacturerID < 0 {
+			logrus.WithField("hull_line", hull.hullLine).Warn("mmog: tech tree hull line has no manufacturer")
 			continue
 		}
-		rowID := techTreeRowID(ship)
-		if emitted[rowID] {
-			continue
+		var prereq []int32
+		if previous, ok := byLine[hull.hullLine][hull.tier-1]; ok {
+			prereq = []int32{previous}
 		}
-		emitted[rowID] = true
-		if _, seen := byManufacturer[id]; !seen {
-			order = append(order, id)
-		}
-		byManufacturer[id] = append(byManufacturer[id], techTreeRow{id: rowID, ship: ship})
+		items = append(items, techTreeItem{
+			id:           hull.loadoutID,
+			classID:      eyShipClassByKey[hull.hullLine],
+			manufacturer: manufacturerID,
+			tier:         hull.tier,
+			xpCost:       techTreeXPCostByTier[hull.tier],
+			prereq:       prereq,
+		})
+	}
+	return items
+}
+
+// buildMmogTechTreeDocument emits the tech tree the client actually reads.
+//
+// It is built from the base hull roster rather than from the response's ship
+// rows. Those rows exist for the hangar fleet loader, which looks a fleet's
+// ships up by loadout id; the tree is a separate, static thing -- the whole
+// buyable roster -- and tying it to the four ships a player happens to own is
+// what limited it to ten nodes.
+//
+// Nodes are grouped by manufacturer because the client indexes the groups that
+// way (GetManufacturerData(0/1/2)), and ordered by hull line then tier inside a
+// group so Position increases along each line.
+func buildMmogTechTreeDocument() []byte {
+	byManufacturer := map[int32][]techTreeItem{}
+	for _, item := range techTreeBaseItems() {
+		byManufacturer[item.manufacturer] = append(byManufacturer[item.manufacturer], item)
+	}
+	order := make([]int32, 0, len(byManufacturer))
+	for manufacturerID := range byManufacturer {
+		order = append(order, manufacturerID)
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
 
@@ -1568,8 +1631,8 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	var stack []int
 	for _, manufacturerID := range order {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
-		for position, row := range byManufacturer[manufacturerID] {
-			b, stack = appendMmogTechTreeItem(b, stack, row, manufacturerID, int32(position), emitted)
+		for position, item := range byManufacturer[manufacturerID] {
+			b, stack = appendMmogTechTreeItem(b, stack, item, int32(position))
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -1616,13 +1679,12 @@ func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
 	return prereqs
 }
 
-func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturerID int32, position int32, rowIDs map[int32]bool) ([]byte, []int) {
-	ship := row.ship
+func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem, position int32) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(row.id)))
-	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(techTreeRowClassID(ship))))
-	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(manufacturerID)))
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
+	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(item.id)))
+	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(item.classID)))
+	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(item.manufacturer)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(position)))
 	// Visible gates the whole item: a falsy value makes the loader jump past the
 	// rest of the entry, so the item is never stored, no manufacturer group is
@@ -1645,23 +1707,21 @@ func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturer
 	// value of length 2 or more is true. "01" is also still numeric, so nothing
 	// that parses it as a number gets a surprise.
 	b = protocol.AppendStringField(b, "Visible", "01")
-	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(ship.unlockCost)))
+	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
-	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(len(item.prereq)))
 	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeShip))
 	// Prereq is an array the loader copies into the item's TArray<int32>, and
-	// the entries are matched against other items' Id -- so they have to be in
-	// the same id space the rows are keyed on.
-	//
-	// They were not. The seeds carry prereqID1/prereqID2 as ship-PAWN ids while
-	// Id is the precast LOADOUT id, so every prerequisite pointed at a value
-	// that appears nowhere in the tree. Worse, a pawn id could not be admitted
-	// even in principle: the gate compares the top byte against
-	// YShipLoadoutPrecast (1) and YShipLoadoutHero (3), and a pawn is 10. So
-	// resolve each one through the same mapping the row id uses, and keep only
-	// those that name a row actually present in this document -- a dangling
-	// prerequisite is what the pawn ids already were.
-	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", techTreeRowPrereqs(ship, rowIDs))
+	// the entries are matched against other items' Id -- so they are loadout
+	// ids, like Id itself. They used to be ship-PAWN ids, which named nothing
+	// in the document and could not be admitted anyway: the gate compares the
+	// top byte against YShipLoadoutPrecast (1) and YShipLoadoutHero (3), and a
+	// pawn is 10.
+	prereqs := make([]string, 0, len(item.prereq))
+	for _, id := range item.prereq {
+		prereqs = append(prereqs, strconv.Itoa(int(id)))
+	}
+	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
 	// nodes still render, just without the joining lines -- and the real
 	// coordinates are a layout concern to solve once nodes appear at all.

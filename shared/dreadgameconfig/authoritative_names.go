@@ -26,8 +26,16 @@ var (
 	//
 	//	ship:    /Game/Generic/Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP
 	//	loadout: /Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP
+	//
+	// The tier appears in up to three places and one hull puts it in an odd one:
+	// AssaultLight T5 is VH_AssaultLight_PrecastLoadout_T5_BP, with the suffix
+	// after "PrecastLoadout" instead of before it. It is the only player-facing
+	// loadout that does, and matching only the usual shape silently dropped it
+	// -- 66 hulls resolved instead of 67, so Brutus had no name and no
+	// pawn -> loadout mapping. Every other odd path under /Precast/ is Havoc,
+	// PVE, Special, TM or Tutorial content, which stays excluded on purpose.
 	shipAssetPathPattern    = regexp.MustCompile(`^/Game/Generic/Ships/([A-Za-z]+)/([A-Za-z]+)/T(\d)/`)
-	precastAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Loadouts/Precast/(?:T(\d)/)?VH_([A-Za-z]+)_(?:T(\d)_)?PrecastLoadout_BP$`)
+	precastAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Loadouts/Precast/(?:T(\d)/)?VH_([A-Za-z]+)_(?:T(\d)_)?PrecastLoadout(?:_T(\d))?_BP$`)
 
 	// These caches are rebuilt while they are still empty rather than being
 	// filled exactly once. The tables they read (ItemIDTable, the item catalog,
@@ -83,6 +91,9 @@ func buildPrecastLoadoutIndex() {
 			tier := match[1]
 			if tier == "" {
 				tier = match[3]
+			}
+			if tier == "" {
+				tier = match[4]
 			}
 			precastLoadoutByKey[match[2]+"|"+tier] = itemID
 		}
