@@ -13,9 +13,28 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// maps available in the game (from /src Documents/game_modes/maps.md references)
-var availableMaps = []string{
-	"Charon", "Medusa", "Procyon", "DS-75", "Onyx", "Vesta", "Kylo", "Spree",
+// GameMap is a playable map: the name the server records and the package path
+// the engine actually loads.
+type GameMap struct {
+	Name string
+	Path string
+}
+
+// availableMaps is the multiplayer rotation, taken from the client's own
+// GlobalUI.uasset (UYUIData::m_multiplayerMaps), which pairs each m_mapName with
+// the m_mapPath the engine loads.
+//
+// The previous list -- Charon, Medusa, Procyon, DS-75, Onyx, Vesta, Kylo, Spree
+// -- was invented. None of those names appears anywhere in the game, so every
+// match was formed against a map that does not exist. Only the five flagged
+// m_avaliableTM are used here; the rest of the table is night variants, Havoc
+// maps and the tutorial.
+var availableMaps = []GameMap{
+	{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"},
+	{Name: "Glacier", Path: "/Game/Maps/MP/Glacier/MP_Glacier_P"},
+	{Name: "Gorge", Path: "/Game/Maps/MP/Gorge/MP_Gorge_P"},
+	{Name: "Space", Path: "/Game/Maps/MP/Space01/MP_Space01_P"},
+	{Name: "Skybridge", Path: "/Game/Maps/MP/Skybridge/MP_Skybridge_P"},
 }
 
 // GameModeConfig is the mmogbrain game-mode row shape consumed by the client.
@@ -88,9 +107,12 @@ func NormalizeGameMode(mode string) string {
 	return mode
 }
 
-// pveMaps lists maps available for PvE modes.
-var pveMaps = []string{
-	"Amirani", "Derelict", "Iapetus", "Kalyke",
+// pveMaps lists maps available for PvE modes. Amirani and Derelict are real
+// entries in the same client table; "Iapetus" and "Kalyke", which used to sit
+// beside them here, are not maps this game has.
+var pveMaps = []GameMap{
+	{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"},
+	{Name: "Derelict", Path: "/Game/Maps/MP/Derelict/MP_Derelict_P"},
 }
 
 // ValidGameMode returns true if the given mode is supported.
@@ -261,14 +283,15 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 			break
 		}
 	}
-	mapName := maps[time.Now().UnixNano()%int64(len(maps))]
+	chosen := maps[time.Now().UnixNano()%int64(len(maps))]
+	mapName := chosen.Name
 
 	// Request a game instance from the game manager
 	playerIDs := make([]string, len(entries))
 	for i, e := range entries {
 		playerIDs[i] = e.UserID
 	}
-	serverIP, serverPort, instanceID, err := m.requestGameInstance(gameMode, mapName, playerIDs)
+	serverIP, serverPort, instanceID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs)
 	if err != nil {
 		// Rollback queue entries on failure
 		for _, e := range entries {
@@ -318,10 +341,11 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	return nil
 }
 
-func (m *Matchmaker) requestGameInstance(gameMode, mapName string, players []string) (string, int, string, error) {
+func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string) (string, int, string, error) {
 	body, err := json.Marshal(map[string]interface{}{
 		"game_mode": gameMode,
 		"map":       mapName,
+		"map_path":  mapPath,
 		"players":   players,
 	})
 	if err != nil {

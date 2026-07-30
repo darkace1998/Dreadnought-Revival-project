@@ -84,7 +84,7 @@ func New(gameBinary, wineExe, masterURL, serverIP, internalKey string, log *logr
 }
 
 // Launch spawns a new dedicated game server instance and registers it with the master server.
-func (s *Spawner) Launch(gameMode, mapName string, port int, players []string) (*Instance, error) {
+func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []string) (*Instance, error) {
 	instID := uuid.New().String()
 	configDir := filepath.Join(os.TempDir(), "dn-instance-"+instID)
 	if err := os.MkdirAll(configDir, 0o750); err != nil {
@@ -103,19 +103,43 @@ func (s *Spawner) Launch(gameMode, mapName string, port int, players []string) (
 		stopCh:    make(chan struct{}),
 	}
 
+	// How the engine is actually told to host, verified by running it by hand:
+	//
+	//	wine <exe> "<mapPath>?listen" -server -port=N -nullrhi -unattended ...
+	//	-> LogGameMode: Match State Changed from EnteringMap to WaitingToStart
+	//	-> WaitingToStart to InProgress
+	//	-> UDP 0.0.0.0:7777 open, owned by DreadGame-Win64
+	//
+	// The previous argv could not have worked:
+	//   * the map went as "-Map=<name>", which the engine ignores. A map is a
+	//     POSITIONAL URL, and "?listen" on it is what starts the net driver.
+	//   * "-dedicatedserver" is not a switch this build has -- the string does
+	//     not occur in the executable at all. UE's switch is "-server", and true
+	//     dedicated mode would need a Server target binary, which does not exist
+	//     here. A listen server out of the normal build is what works.
+	//   * without "-nullrhi" it needs a GPU and died during early init.
+	//   * "-log=<unix path>" is meaningless to a Windows binary under Wine,
+	//     which is why the instance log never appeared. The engine writes to its
+	//     own Saved/Logs directory instead.
+	mapURL := mapPath
+	if mapURL == "" {
+		mapURL = mapName
+	}
 	args := []string{
 		s.gameBinary,
-		"-dedicatedserver",
+		mapURL + "?listen",
+		"-server",
 		fmt.Sprintf("-port=%d", port),
 		"-maxplayers=10",
 		fmt.Sprintf("-GameMode=%s", gameMode),
-		fmt.Sprintf("-Map=%s", mapName),
 		fmt.Sprintf("-MatchID=%s", inst.MatchID),
+		"-nullrhi",
+		"-unattended",
+		"-nosplash",
 		"-nop4",
 		"-nosound",
 		"-noeac",
 		"-NoSteam",
-		fmt.Sprintf("-log=%s", filepath.Join(configDir, "server.log")),
 	}
 
 	var cmd *exec.Cmd

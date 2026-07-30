@@ -74,6 +74,7 @@ func main() {
 		var req struct {
 			GameMode string   `json:"game_mode"`
 			Map      string   `json:"map"`
+			MapPath  string   `json:"map_path"`
 			Players  []string `json:"players"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -129,7 +130,7 @@ func main() {
 			http.Error(w, `{"error":"no ports available"}`, http.StatusServiceUnavailable)
 			return
 		}
-		inst, err := sp.Launch(req.GameMode, req.Map, port, req.Players)
+		inst, err := sp.Launch(req.GameMode, req.Map, req.MapPath, port, req.Players)
 		if err != nil {
 			pool.Release(port)
 			http.Error(w, `{"error":"launch failed"}`, http.StatusInternalServerError)
