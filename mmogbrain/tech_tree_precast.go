@@ -183,3 +183,17 @@ func shipManufacturer(ship mmogShipSeed) string {
 	}
 	return ship.manufacturer
 }
+
+// shipHullLine returns a ship's "<Class><Size>" key from its registered asset
+// path, e.g. AssaultMedium for /Game/Generic/Ships/Assault/Medium/T1/...
+func shipHullLine(shipID int32) (string, bool) {
+	item, ok := dreadconfig.ItemByID(shipID)
+	if !ok {
+		return "", false
+	}
+	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return "", false
+	}
+	return match[1] + match[2], true
+}

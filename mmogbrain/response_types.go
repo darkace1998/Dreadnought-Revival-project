@@ -100,11 +100,25 @@ func (loadout mmogShipLoadoutSeed) entryID() string {
 // ObjectToIDCachedVanity asks for.
 const noShipVanityDisplayInfo = "-1#-1#-1#-1;-1;-1;-1;-1"
 
-// displayInfo is the ship's cosmetic-customisation string. Starter ships ship
-// with no vanity applied, and this server does not yet persist per-ship vanity,
-// so every loadout reports the empty-but-well-formed form.
+// displayInfo is the ship's cosmetic-customisation string.
+//
+// Sending -1 in all eight slots is well-formed but not free: the client does not
+// read -1 as "nothing", it reads it as an item id and tries to async-load it,
+// logging "UYItemIDList::LoadItemsAsync | Asset with ID -1 has no valid
+// FStringReference" for each. Agosta's loadout requested 18 assets and eight of
+// them were these.
+//
+// The emblem, pattern and decal slots now carry the client's own defaults, which
+// its data states unambiguously (one shared "_Default_DA" emblem and decal, one
+// pattern per hull line). Paint and the four mesh parts stay -1 deliberately --
+// see shared/dreadgameconfig/ship_vanity.go for why neither has a default that
+// can be derived rather than guessed.
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
-	return noShipVanityDisplayInfo
+	hullLine, ok := shipHullLine(loadout.ship.id)
+	if !ok {
+		return noShipVanityDisplayInfo
+	}
+	return dreadconfig.DefaultShipDisplayInfo(hullLine)
 }
 
 // nativeStarterLoadoutClassName is the blueprint class the client instantiates
