@@ -40,12 +40,23 @@ func buildMmogRequestResponseFrame(requestID [16]byte, requestType uint16, reque
 // streak bonus, so the reward doesn't grow unbounded.
 const dailyLoginStreakCap = 7
 
-// applyDailyLoginStreak advances a player's login-streak counter at most
-// once per calendar day (UTC) and returns that day's streak count plus the
-// bonus reward to grant on the FIRST login of the day. On any subsequent
-// login the same day, the streak count is still returned (so the client's
-// popup can show it) but the reward fields are 0 — the bonus is granted
-// once per day, not once per connection.
+// applyDailyLoginStreak advances a player's login-streak counter at most once
+// per calendar day (UTC) and returns that day's streak plus the bonus to grant
+// on the FIRST login of the day. On any later login the same day it returns all
+// zeros.
+//
+// Returning zero for the streak is deliberate and is what stops the daily-bonus
+// screen appearing on every launch. The client's YA_UserLogin handler
+// (FUN_142a3af90) does:
+//
+//	streak = LoginStreak.loginstreak
+//	if (0 < streak) { read credits/freexp/gp; *(byte*)(this+0x4148) = 1 }
+//
+// and that byte is the "show the login bonus" flag. It is set purely on the
+// streak being positive -- the reward values are not consulted. So the earlier
+// behaviour of returning the stored streak with zeroed rewards, on the theory
+// that the popup could then show the count harmlessly, still armed the flag and
+// showed the bonus again on every connection. Only a zero streak suppresses it.
 func applyDailyLoginStreak(db *sql.DB, pid string) (streak, creditsBonus, freeXPBonus, gpBonus int32) {
 	if db == nil {
 		return 0, 0, 0, 0
@@ -57,7 +68,9 @@ func applyDailyLoginStreak(db *sql.DB, pid string) (streak, creditsBonus, freeXP
 		return 0, 0, 0, 0
 	}
 	if lastLogin == today {
-		return lastStreak, 0, 0, 0
+		// Already claimed today: report nothing, or the client re-shows the
+		// bonus screen. The stored streak is untouched.
+		return 0, 0, 0, 0
 	}
 	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
 	newStreak := int32(1)

@@ -852,8 +852,12 @@ func TestUserLoginPayloadGrantsStreakBonusOncePerDay(t *testing.T) {
 
 	second := extractNamedMmogObject(t, buildMmogLoginSuccessPayload(playerPID), "result")
 	secondStreak := extractNamedMmogObject(t, second, "LoginStreak")
-	if !bytes.Contains(secondStreak, protocol.AppendInt32Field(nil, "loginstreak", 1)) {
-		t.Fatal("second login same day should keep loginstreak=1")
+	// Zero, not the stored streak. The client's handler (FUN_142a3af90) sets
+	// its "show the login bonus" flag on `0 < loginstreak` alone, without
+	// looking at the reward values, so reporting the streak again here is what
+	// made the daily bonus appear on every launch.
+	if !bytes.Contains(secondStreak, protocol.AppendInt32Field(nil, "loginstreak", 0)) {
+		t.Fatal("second login same day must report loginstreak=0 or the bonus screen re-appears")
 	}
 	if !bytes.Contains(secondStreak, protocol.AppendInt32Field(nil, "credits", 0)) {
 		t.Fatal("second login same day should not grant another credits bonus")
