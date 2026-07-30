@@ -59,3 +59,64 @@ func keysOf(m map[string]bool) []string {
 	}
 	return out
 }
+
+// TestTechTreeClassIdsPassTheManagerStoreGate pins the invariant that made the
+// tech tree screen empty for months.
+//
+// UYTechTreeManager's loader only stores an item when its ClassId survives
+//
+//	MOVSXD R15,[RBP-0x78]   ; ClassId, parsed at 140400006
+//	TEST R15D,R15D / JLE skip
+//	CALL FUN_1405483e0      ; (ClassId >> 24) & 0xff in {1, 3}?
+//	JZ skip
+//
+// where FUN_1405483e0 compares FUN_1402cf640(ClassId) -- the top byte -- against
+// the registered category ids for YShipLoadoutPrecast (1) and YShipLoadoutHero
+// (3). ClassId used to carry the 1..15 EYShipClass ordinal, whose top byte is 0,
+// so every node was dropped before it reached a manufacturer group. The screen
+// then reported "GetManufacturerData Could not find a manufacturer with id
+// 0/1/2" and "Attempted to access index 0 from array TreeWidgetList of length
+// 0!" -- symptoms that look like a missing response but were a rejected field.
+func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
+	items := append(techTreeBaseItems(), techTreeHeroItems()...)
+	if len(items) == 0 {
+		t.Fatal("tech tree carries no items")
+	}
+	rows := map[int32]bool{}
+	for _, item := range items {
+		rows[item.id] = true
+	}
+	for _, item := range items {
+		if item.classID <= 0 {
+			t.Fatalf("item %d has ClassId %d; the gate rejects anything <= 0", item.id, item.classID)
+		}
+		if category := (item.classID >> 24) & 0xff; category != 1 && category != 3 {
+			t.Fatalf("item %d has ClassId %d (category %d); only 1 (precast) and 3 (hero) are stored",
+				item.id, item.classID, category)
+		}
+		// The class root is a node in this same document -- a column has to
+		// point at a row that exists, or the UI groups against nothing.
+		if !rows[item.classID] {
+			t.Errorf("item %d has ClassId %d, which names no row in the document", item.id, item.classID)
+		}
+	}
+
+	// Every tier of one hull line shares a ClassId: that is what makes them a
+	// single column rather than N one-node columns.
+	classesPerLine := map[int32]map[int32]bool{}
+	for _, item := range techTreeBaseItems() {
+		if classesPerLine[item.classID] == nil {
+			classesPerLine[item.classID] = map[int32]bool{}
+		}
+		classesPerLine[item.classID][item.tier] = true
+	}
+	multiTier := 0
+	for _, tiers := range classesPerLine {
+		if len(tiers) > 1 {
+			multiTier++
+		}
+	}
+	if multiTier == 0 {
+		t.Error("no hull line shares a ClassId across tiers; the tree would render as single-node columns")
+	}
+}

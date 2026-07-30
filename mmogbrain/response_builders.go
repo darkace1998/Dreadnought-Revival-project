@@ -1597,6 +1597,19 @@ var techTreeXPCostByTier = map[int32]int32{1: 0, 2: 5000, 3: 15000, 4: 40000, 5:
 // so they are left unlinked rather than wired to a guess. That is also why the
 // old seed for Furia pointed at Rurik: a plausible-looking cross-line link
 // somebody invented. Wires are empty for the same reason.
+// lineRootLoadoutID returns the loadout id of the lowest tier present in a hull
+// line. It is the line's identity, and therefore the ClassId every node in the
+// line reports; see the store gate documented in techTreeBaseItems.
+func lineRootLoadoutID(line map[int32]int32) int32 {
+	var rootTier, rootID int32
+	for tier, loadoutID := range line {
+		if rootTier == 0 || tier < rootTier {
+			rootTier, rootID = tier, loadoutID
+		}
+	}
+	return rootID
+}
+
 func techTreeBaseItems() []techTreeItem {
 	byLine := map[string]map[int32]int32{}
 	for _, hull := range baseShipLoadouts {
@@ -1618,8 +1631,28 @@ func techTreeBaseItems() []techTreeItem {
 			prereq = []int32{previous}
 		}
 		items = append(items, techTreeItem{
-			id:           hull.loadoutID,
-			classID:      eyShipClassByKey[hull.hullLine],
+			id: hull.loadoutID,
+			// ClassId is an ITEM ID, not the 1..15 EYShipClass enum. The
+			// manager's store gate is
+			//
+			//	MOVSXD R15,[RBP-0x78]   ; ClassId
+			//	TEST R15D,R15D / JLE skip
+			//	CALL FUN_1405483e0      ; (ClassId >> 24) & 0xff in {1, 3}?
+			//	JZ skip
+			//
+			// where FUN_1405483e0 resolves the registered category ids for
+			// YShipLoadoutPrecast (1) and YShipLoadoutHero (3) and compares
+			// them against FUN_1402cf640(ClassId) = the top byte. Sending the
+			// EYShipClass ordinal put a 0 in that byte, so the gate rejected
+			// EVERY item, nothing was ever added to a manufacturer group, and
+			// the tech tree screen reported "Could not find a manufacturer with
+			// id 0/1/2" with an empty TreeWidgetList.
+			//
+			// The value is the line's own root -- the lowest tier present in
+			// that <Class><Size> line -- so every tier of a line shares one
+			// ClassId, which is what makes them one column. Lines that open
+			// above tier 1 use their own first entry.
+			classID:      lineRootLoadoutID(byLine[hull.hullLine]),
 			manufacturer: manufacturerID,
 			tier:         hull.tier,
 			xpCost:       techTreeXPCostByTier[hull.tier],
@@ -1654,8 +1687,11 @@ func techTreeHeroItems() []techTreeItem {
 			continue
 		}
 		items = append(items, techTreeItem{
-			id:           hero.loadoutID,
-			classID:      eyShipClassByKey[hero.hullLine],
+			id: hero.loadoutID,
+			// A hero is its own column -- nothing researches into or out of it
+			// -- so it is its own class root. Its id is category 3, which the
+			// store gate accepts alongside category 1; see techTreeBaseItems.
+			classID:      hero.loadoutID,
 			manufacturer: manufacturerID,
 			tier:         hero.tier,
 			// Heroes are bought in the store, not researched, and nothing in

@@ -45,7 +45,15 @@ var targetSizes = map[string]int{
 	// Now 13768: the four development loadout aliases collapsed into the real
 	// precast ids, leaving 14 items instead of 18 (see
 	// nativeStarterLoadoutClassName).
-	"YA_GetTechTree": 14250,
+	// Now 14461: +211 for ClassId becoming a real item id. It used to be the
+	// 1..15 EYShipClass ordinal (1-2 characters), whose top byte is 0 -- and
+	// the manager's store gate admits an item only when (ClassId >> 24) & 0xff
+	// is 1 (precast) or 3 (hero), so every node was silently dropped and the
+	// tech tree screen had no manufacturers at all. The value is now the hull
+	// line's root loadout id, 8 characters, across ~100 nodes; the document is
+	// zlib'd, so the frame grows by a fraction of the raw difference and stays
+	// far under the client's 32KB receive ring buffer.
+	"YA_GetTechTree": 14461,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
