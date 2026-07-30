@@ -125,3 +125,61 @@ func derivedShipTier(shipID int32) (int, bool) {
 	}
 	return tier, true
 }
+
+// baseShipManufacturerByClassSize is the manufacturer that builds each
+// <Class><Size> hull line.
+//
+// The manufacturer is NOT recoverable from the client: no ship asset carries
+// the property, and the only mentions anywhere in the shipped data are vanity
+// coating names ("Akula Industries Coating", "House Oberon Coating") and PvE
+// season prose. It is genuinely server-authored, which is why it was
+// hand-assigned per ship and why one entry had drifted.
+//
+// This table comes from a community loadout reference, corroborated as far as
+// the client allows: all 100 loadout paths in that document resolve in
+// ItemIDRegister, and 58 of the 64 names it gives that the client also names
+// match exactly (the six that differ are filename-derived on the document's
+// side, e.g. it calls 67043329 "Skagerrak" after its blueprint while the game
+// displays "Huscarl" -- so where they disagree, the client wins).
+//
+// The structural evidence is what makes it usable: across the ~60 base
+// loadouts, manufacturer is a total function of <Class><Size> with zero
+// exceptions. Our own per-ship values agreed with it 13 times out of 14. The
+// exception was Sniper Light T2 (Furia), assigned AkulaVektor where every
+// other SniperLight hull is Oberon.
+//
+// Hero loadouts deliberately do NOT go through this: the same document shows
+// heroes breaking the rule (Kore is Oberon and Tunmen JupiterArms, both
+// SniperHeavy), and their ids resolve to /Loadouts/Hero/ paths that carry no
+// class/size anyway, so they keep their seed value.
+var baseShipManufacturerByClassSize = map[string]string{
+	"AssaultLight": "Oberon", "AssaultMedium": "JupiterArms", "AssaultHeavy": "AkulaVektor",
+	"DreadnoughtLight": "Oberon", "DreadnoughtMedium": "AkulaVektor", "DreadnoughtHeavy": "JupiterArms",
+	"ScoutLight": "JupiterArms", "ScoutMedium": "Oberon", "ScoutHeavy": "AkulaVektor",
+	"SniperLight": "Oberon", "SniperMedium": "AkulaVektor", "SniperHeavy": "JupiterArms",
+	"SupportLight": "JupiterArms", "SupportMedium": "Oberon", "SupportHeavy": "AkulaVektor",
+}
+
+// derivedShipManufacturer returns the manufacturer for a base ship hull from
+// its registered asset path, which encodes class and size.
+func derivedShipManufacturer(shipID int32) (string, bool) {
+	item, ok := dreadconfig.ItemByID(shipID)
+	if !ok {
+		return "", false
+	}
+	match := shipAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return "", false
+	}
+	manufacturer, ok := baseShipManufacturerByClassSize[match[1]+match[2]]
+	return manufacturer, ok
+}
+
+// shipManufacturer is the manufacturer to report for a ship: derived from the
+// hull line where possible, and otherwise the seed's own value.
+func shipManufacturer(ship mmogShipSeed) string {
+	if manufacturer, ok := derivedShipManufacturer(ship.id); ok {
+		return manufacturer
+	}
+	return ship.manufacturer
+}

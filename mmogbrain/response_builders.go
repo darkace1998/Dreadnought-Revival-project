@@ -1548,7 +1548,7 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	order := []int32{}
 	emitted := map[int32]bool{}
 	for _, ship := range ships {
-		id := shipManufacturerID(ship.manufacturer)
+		id := shipManufacturerID(shipManufacturer(ship))
 		if id < 0 {
 			continue
 		}
@@ -1719,7 +1719,7 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	// The client groups the tech tree by manufacturer and looks the groups up
 	// by numeric id (see shipManufacturerID); a row without one cannot be
 	// placed under any maker, which left every manufacturer page empty.
-	if manufacturerID := shipManufacturerID(ship.manufacturer); manufacturerID >= 0 {
+	if manufacturerID := shipManufacturerID(shipManufacturer(ship)); manufacturerID >= 0 {
 		b = protocol.AppendStringField(b, "m_manufacturerID", strconv.Itoa(int(manufacturerID)))
 		b = protocol.AppendStringField(b, "manufacturerId", strconv.Itoa(int(manufacturerID)))
 	}

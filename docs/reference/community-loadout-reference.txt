@@ -1,0 +1,1330 @@
+    /// Named list of all known working loadouts currently available with their code (/Game/Generic/Loadouts/...), Weapons ('P'rimary/'S'econdary), 'M'odules and 'B'riefings. ///
+
+You will have to decipher what the W/M/B actually are from the path and names. 
+
+Ship tiers: T1, T2, T3, T4, T5;
+Ship classes: Destroyer (dps), Dreadnought (tank), Corvette (rogue), Artillery Cruiser (sniper), Tactical Cruiser (healer);
+Ship manufacturers: Akula Vector (military green and orange-red engines), Jupiter Arms (metal gray and light blue engines), Oberon (white and light green engines);
+
+---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---
+
+            /// Hero Ships ///
+
+T3 Akula Vector Destroyer, Jarilo: /Game/Generic/Loadouts/Hero/VH_AssaultHeavy_Jarilo_HeroLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T3/WP_AssaultHPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T3/WP_AssaultSecShort01_weapon01_T3_Hero_BP.0"
+    M1: "Abilities/Assault/Pri_Torpedo_Ultra/T3/AB_AS_Pri_Torpedo_Ultra_Ability_T3_Hero_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireDec/T3/AB_AS_Sec_Msl_PwrDec_Ability_T3_Hero_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_Scramble/T3/AB_AS_Per_Pls_Scr_T3_Hero_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T3/AB_AS_Int_Buff_AbInc_Ability_T3_Hero_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_AbiKill_Hero_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_Hero_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_Hero_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_Hero_BP.0"
+
+T4 Akula Vector Destroyer, Skagerrak: /Game/Generic/Loadouts/Hero/VH_AssaultHeavy_Skagerrak_HeroLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T4/WP_AssaultHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/AB_AS_Pri_Missile_Super_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireDec/AB_AS_Sec_Msl_PwrDec_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/AB_AS_Per_Pls_FireInc_BP.0"
+    M4: "Abilities/Assault/Int_Buff_PwrInc/AB_AS_Int_Buff_PwrInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T4 Akula Vector Destroyer, Skagerrak Mk.2: /Game/Generic/Loadouts/Hero/VH_AssaultHeavy_SkagerrakV2_HeroLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T4/WP_AssaultHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Torpedo_Super/AB_AS_Pri_Torpedo_Super_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/AB_AS_Sec_TrpM_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/AB_AS_Per_Pls_FireInc_BP.0"
+    M4: "Abilities/Assault/Int_Buff_PwrInc/AB_AS_Int_Buff_PwrInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_AbiKill_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T4 Oberon Destroyer, Minotaurus: /Game/Generic/Loadouts/Hero/VH_AssaultLight_Minotaurus_HeroLoadout_BP
+    PW: "Weapons/Assault/Light/BP/T4/WP_AssaultLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Ram_Weaken/AB_AS_Pri_Ram_Weaken_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_AbiDec/AB_AS_Sec_Msl_AbiDec_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Turret_Off/AB_AS_Per_Tur_Off_Ability_BP.0"
+    M4: "Abilities/Assault/Int_Buff_SpdInc/AB_AS_Int_Buff_SpdInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_EnInc_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T4 Oberon Destroyer, Minotaurus Mk.2: /Game/Generic/Loadouts/Hero/VH_AssaultLight_MinotaurusV2_HeroLoadout_BP
+    PW: "Weapons/Assault/Light/BP/T4/WP_AssaultLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Ram_Dmg/AB_AS_Pri_Ram_Dmg_Ability_BP.36"
+    M2: "Abilities/Assault/Sec_Missile_AbiDec/AB_AS_Sec_Msl_AbiDec_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_EnDec/AB_AS_Per_Pls_EnDec_BP.0"
+    M4: "Abilities/Assault/Int_Buff_EnInc/AB_AS_Int_Buff_EnInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_AbiKill_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Oberon Destroyer, Wolf Head: /Game/Generic/Loadouts/Hero/VH_AssaultLight_WolfHead_HeroLoadout_BP
+    PW: "Weapons/Assault/Light/BP/T4/WP_AssaultLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Barrage/AB_AS_Pri_Missile_Barrage_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_AbiDec/AB_AS_Sec_Msl_AbiDec_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/AB_AS_Per_Pls_FireInc_BP.0"
+    M4: "Abilities/Assault/Int_AltFire_SpdDec/AB_AS_Int_AltFire_SpdDec_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_Hero_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Jupiter Arms Destroyer, Fall of Troy: /Game/Generic/Loadouts/Hero/VH_AssaultMedium_FallofTroy_HeroLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T4/WP_AssaultMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/WP_AssaultSecShort01_weapon01_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Barrage/AB_AS_Pri_Missile_Barrage_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_AbiDec/AB_AS_Sec_Msl_AbiDec_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_EnDec/AB_AS_Per_Pls_EnDec_BP.0"
+    M4: "Abilities/Assault/Int_Buff_SpdInc/AB_AS_Int_Buff_SpdInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_AbiKill_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP.0"
+
+T3 Jupiter Arms Destroyer, Flight School: /Game/Generic/Loadouts/Hero/VH_AssaultMedium_FlightSchool_HeroLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T3/WP_AssaultMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Assault/SecLong/BP/T3/WP_AssaultSecLong01_weapon01_T3_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T3/AB_AS_Pri_Missile_Super_Ability_T3_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireDec/T3/AB_AS_Sec_Msl_PwrDec_Ability_T3_Hero_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/T3/AB_AS_Per_Pls_FireInc_T3_BP.0"
+    M4: "Abilities/Assault/Int_Warp/T3/AB_AS_Int_Warp_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_Hero_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_Hero_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_Hero_BP.0"
+
+T4 Jupiter Arms Destroyer, Hammerhead: /Game/Generic/Loadouts/Hero/VH_AssaultMedium_Hammerhead_HeroLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T4/WP_AssaultMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecLong/BP/T4/WP_AssaultSecLong01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Barrage/AB_AS_Pri_Missile_Barrage_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_MissileL_Dmg/AB_AS_Sec_MslL_Dmg_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_EnDec/AB_AS_Per_Pls_EnDec_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/AB_AS_Int_Buff_AbInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T2 Jupiter Arms Destroyer, Orion: /Game/Generic/Loadouts/Hero/VH_AssaultMedium_Orion_HeroLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T2/WP_AssaultMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T2/WP_AssaultSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T2/AB_AS_Pri_Missile_Super_Ability_T2_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoH_EnergyDec/T2/AB_AS_Sec_TrpH_EnDec_Ability_T2_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/T2/AB_AS_Per_Pls_FireInc_T2_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T2/AB_AS_Int_Buff_AbInc_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T4 Jupiter Arms Destroyer, Samar: /Game/Generic/Loadouts/Hero/VH_AssaultMedium_Samar_HeroLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T4/WP_AssaultMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecLong/BP/T4/WP_AssaultSecLong01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Repeater/AB_AS_Pri_Missile_Repeater_Abi_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/AB_AS_Sec_TrpM_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_EnDec/AB_AS_Per_Pls_EnDec_BP.0"
+    M4: "Abilities/Assault/Int_Warp/AB_AS_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_RldInc_HPLow_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Dreadnought, Trident: /Game/Generic/Loadouts/Hero/VH_DreadnoughtHeavy_Trident_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Heavy/BP/T4/WP_DreadnoughtHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T4/WP_DreadnoughtSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_WarpM_Dmg/AB_DN_Pri_WarpM_Dmg_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_Depl_TurretH/AB_DN_Sec_TurretH_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_OffH/AB_DN_Per_Tur_OffH_Ability_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_HPInc/AB_DN_Int_Buff_HPInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_RldInc_HPLow_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP.0"
+
+T4 Jupiter Arms Dreadnought, Trident Mk.2: /Game/Generic/Loadouts/Hero/VH_DreadnoughtHeavy_TridentV2_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Heavy/BP/T4/WP_DreadnoughtHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T4/WP_DreadnoughtSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_WarpM_Dmg/AB_DN_Pri_WarpM_Dmg_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileM_Dmg/AB_DN_Sec_MslM_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/AB_DN_Per_Tur_Def_Ability_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/AB_DN_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T4 Oberon Dreadnought, Dragon: /Game/Generic/Loadouts/Hero/VH_DreadnoughtLight_Dragon_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T4/WP_DreadnoughtLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecLong/BP/WP_DreadSecLong01_weapon01_BP.0"
+    M1: "Abilities/Dreadnought/Pri_Jet_Bomber/AB_DN_Pri_Jet_Bomber_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_Depl_TurretH/AB_DN_Sec_TurretH_Ability_Hero_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/AB_DN_Per_Tur_Def_Ability_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_HPInc/AB_DN_Int_Buff_HPInc_Ability_Hero_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_Hero_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_Hero_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_Hero_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_Hero_BP.0"
+
+T4 Oberon Dreadnought, Leviathan: /Game/Generic/Loadouts/Hero/VH_DreadnoughtLight_Leviathan_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T4/WP_DreadnoughtLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T4/WP_DreadnoughtSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_MG/AB_DN_Pri_BS_MG_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_Depl_TurretH/AB_DN_Sec_TurretH_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_SpdDec/AB_DN_Per_Pls_SpdDec_BP.0"
+    M4: "Abilities/Dreadnought/Int_Move_Afterburner/AB_DN_Int_Mov_Afterburner_Ability_BP.34"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Dreadnought, Nimbus: /Game/Generic/Loadouts/Hero/VH_DreadnoughtLight_Nimbus_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T3/WP_DreadnoughtLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T3/WP_DreadnoughtSecMid01_weapon01_T3_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T3/AB_DN_Pri_BS_Plasma_Ability_T3_BP.0"
+    M2: "Abilities/Dreadnought/Sec_TorpedoH_Dmg/T3/AB_DN_Sec_TrpH_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_SpdDec/T3/AB_DN_Per_Pls_SpdDec_T3_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_ArInc/T3/AB_DN_Int_Buff_ArInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Dreadnought, Morningstar: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_Morningstar_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T4/WP_DreadnoughtMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T4/WP_DreadSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Scatter/AB_DN_Pri_BS_Scatter_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileL_Dmg/AB_DN_Sec_MslL_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Phys/AB_DN_Per_Turret_Phys_Ability_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/AB_DN_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_RldInc_HPLow_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T2 Akula Vector Dreadnought, (new) Morningstar: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_MorningstarNew_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T2/WP_DreadnoughtMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T2/WP_DreadSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Scatter/T2/AB_DN_Pri_BS_Scatter_Ability_T2_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileL_Dmg/T2/AB_DN_Sec_MslL_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Phys/T2/AB_DN_Per_Turret_Phys_Ability_T2_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T2/AB_DN_Int_Warp_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Akula Vector Dreadnought, (new) Morningstar Mk.2: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_MorningstarNewV2_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T2/WP_DreadnoughtMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T2/WP_DreadSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T2/AB_DN_Pri_BS_Plasma_Ability_T2_BP.0"
+    M2: "Abilities/Dreadnought/Sec_TorpedoH_Dmg/T2/AB_DN_Sec_TrpH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T2/AB_DN_Per_Tur_Def_Ability_T2_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T2/AB_DN_Int_Warp_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T4 Akula Vector Dreadnought, Morningstar Mk.2: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_MorningstarV2_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T4/WP_DreadnoughtMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T4/WP_DreadSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_MG/AB_DN_Pri_BS_MG_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_TorpedoH_Dmg/AB_DN_Sec_TrpH_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_ArInc/AB_DN_Per_Pls_ArInc_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/AB_DN_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Akula Vector Dreadnought, Ravenswood: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_Ravenswood_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T4/WP_DreadnoughtMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecLong/BP/WP_DreadSecLong01_weapon01_BP.0"
+    M1: "Abilities/Dreadnought/Pri_Jet_Interceptor/AB_DN_Pri_Jet_Interceptor_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_Depl_TurretH/AB_DN_Sec_TurretH_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_ArInc/AB_DN_Per_Pls_ArInc_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_PwrInc/AB_DN_Int_Buff_PwrInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP.0"
+
+T2 T4 Akula Vector Dreadnought, Zilant: /Game/Generic/Loadouts/Hero/VH_DreadnoughtMedium_Zilant_HeroLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T2/WP_DreadnoughtMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T2/WP_DreadnoughtSecMid01_weapon01_T2_BP.0"
+    M1: "Abilities/Dreadnought/Pri_WarpM_Dmg/T2/AB_DN_Pri_WarpM_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T2/AB_DN_Sec_MslH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T2/AB_DN_Per_Tur_Def_Ability_T2_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_ArInc/T2/AB_DN_Int_Buff_ArInc_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T4 Akula Vector Corvette, Demeter: /Game/Generic/Loadouts/Hero/VH_ScoutHeavy_Demeter_HeroLoadout_BP
+    PW: "Weapons/Scout/Heavy/BP/T4/WP_ScoutHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecMid/BP/T4/WP_ScoutSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Focus_Weapon/AB_SC_Pri_Focus_Weapon_Ability_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_FireDec/AB_SC_Sec_TrpH_PwrDec_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Turret_DefL/AB_SC_Per_Tur_DefL_Ability_BP.0"
+    M4: "Abilities/Scout/Int_AltFire_SpeedDec/AB_SC_Int_AltFire_SpeedDec_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_RldInc_HPLow_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Corvette, Aquila: /Game/Generic/Loadouts/Hero/VH_ScoutLight_Aquila_HeroLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T4/WP_ScoutLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecLong/BP/WP_ScoutSecLong01_weapon_BP.0"
+    M1: "Abilities/Scout/Pri_Blink_Dmg/AB_SC_Pri_Blink_Dmg_Ability_BP.38"
+    M2: "Abilities/Scout/Sec_TorpedoL_Dmg/AB_SC_Sec_TrpL_Dmg_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Dmg/AB_SC_Per_Pls_Dmg_BP.0"
+    M4: "Abilities/Scout/Int_Move_Turn180/AB_SC_Int_Mov_Turn180_Ability_BP.25"
+    B1: "Officer/Perk/PRK_COM_AbiInc_AbiKill_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_EnInc_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T3 Jupiter Arms Corvette, Hermes: /Game/Generic/Loadouts/Hero/VH_ScoutLight_Hermes_HeroLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T3/WP_ScoutLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T3/WP_ScoutSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Scout/Pri_Blink/T3/AB_SC_Pri_Blink_Ability_T3_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_Dmg/T3/AB_SC_Sec_TrpH_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/T3/AB_SC_Per_Pls_AbiDec_T3_BP.0"
+    M4: "Abilities/Scout/int_Move_Afterburner/T3/AB_SC_Int_Mov_Fwd_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_Hero_BP.0"
+
+T3 Jupiter Arms Corvette, Viper: /Game/Generic/Loadouts/Hero/VH_ScoutLight_Viper_HeroLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T3/WP_ScoutLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T3/WP_ScoutSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Scout/Pri_Focus_Movement/T3/AB_SC_Pri_Focus_Movement_Ability_T3_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/T3/AB_SC_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/T3/AB_SC_Per_Pls_AbiDec_T3_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T3/AB_SC_Int_HPinc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_Hero_BP.0"
+
+T4 Jupiter Arms Corvette, Outis: /Game/Generic/Loadouts/Hero/VH_ScoutMedium_Outis_HeroLoadout_BP
+    PW: "Weapons/Scout/Medium/BP/T4/WP_ScoutMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecMid/BP/T4/WP_ScoutSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Cloak_H/AB_SC_Pri_CloakH_Ability_BP.0"
+    M2: "Abilities/Scout/Sec_Mine_Dmg/AB_SC_Sec_Mine_Dmg_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/AB_SC_Per_Pls_AbiDec_BP.0"
+    M4: "Abilities/Scout/int_Move_Afterburner/AB_SC_Int_Mov_Fwd_Ability_BP.28"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Jupiter Arms Corvette, Outis Mk.2: /Game/Generic/Loadouts/Hero/VH_ScoutMedium_OutisV2_HeroLoadout_BP
+    PW: "Weapons/Scout/Medium/BP/T4/WP_ScoutMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecMid/BP/T4/WP_ScoutSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Blink/AB_SC_Pri_Blink_Ability_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/AB_SC_Sec_TrpH_EnDec_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Turret_DefL/AB_SC_Per_Tur_DefL_Ability_BP.0"
+    M4: "Abilities/Scout/int_Move_Afterburner/AB_SC_Int_Mov_Fwd_Ability_BP.28"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_EnInc_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Oberon Corvette, Phoenix: /Game/Generic/Loadouts/Hero/VH_ScoutMedium_Phoenix_Heroloadout_BP
+    PW: "Weapons/Scout/Medium/BP/T4/WP_ScoutMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T4/WP_ScoutSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Blink_Dmg/AB_SC_Pri_Blink_Dmg_Ability_BP.38"
+    M2: "Abilities/Scout/Sec_TorpedoL_Dmg/AB_SC_Sec_TrpL_Dmg_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Dmg/AB_SC_Per_Pls_Dmg_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/AB_SC_Int_HPinc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T4 Oberon Corvette, Kore: /Game/Generic/Loadouts/Hero/VH_SniperHeavy_Kore_HeroLoadout_BP
+    PW: "Weapons/Sniper/Heavy/BP/T4/WP_SniperHPri01_weapon01_T4_BP.10"
+    SW: "Weapons/Sniper/SecShort/BP/T4/WP_SniperSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Turret_AbiDec/AB_SN_Pri_Turret_AbiDec_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Mine_Dmg/AB_SN_Sec_Mine_Dmg_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_SpdDec/AB_SN_Per_Pls_SpdDec_BP.0"
+    M4: "Abilities/Sniper/Int_Buff_SpdInc/AB_SN_Int_Buff_SpdInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Artillery Cruiser, Tunmen: /Game/Generic/Loadouts/Hero/VH_SniperHeavy_Tunmen_HeroLoadout_BP
+    PW: "Weapons/Sniper/Heavy/BP/T4/WP_SniperHPri01_weapon01_T4_BP.10"
+    SW: "Weapons/Sniper/SecShort/BP/T4/WP_SniperSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Catapult_Mine/AB_SN_Pri_Catapult_Mine_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/AB_SN_Sec_Msl_EnDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/AB_SN_Per_Tur_DefL_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Move_Side/AB_SN_Int_Mov_Side_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Oberon Artillery Cruiser, Hasta: /Game/Generic/Loadouts/Hero/VH_SniperLight_Hasta_HeroLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T3/WP_SniperLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T3/WP_SniperSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T3/AB_SN_Pri_Firemode_Artillery_Ability_T3_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T3/AB_SN_Sec_MslL_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/T3/AB_SN_Per_Tur_Off_Ability_T3_BP.0"
+    M4: "Abilities/Sniper/Int_Move_Drop/T3/AB_SN_Int_Mov_Down_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Artillery Cruiser, Silesia: /Game/Generic/Loadouts/Hero/VH_SniperLight_Silesia_HeroLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T4/WP_SniperLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T4/WP_SniperSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Rapid/AB_SN_Pri_FireMode_Rapid_Ability_BP.40"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/AB_SN_Sec_Msl_EnDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_AbiDec/AB_SN_Per_Pls_AbiDec_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Buff_ArInc/AB_SN_Int_Buff_ArInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Kill_BP.0"
+    B3: "Officer/Perk/PRK_NAV_EnInc_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncAbiDec_Passive_BP.0"
+
+T2 Oberon Artillery Cruiser, (new) Silesia: /Game/Generic/Loadouts/Hero/VH_SniperLight_SilesiaNew_HeroLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T2/WP_SniperLPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T2/WP_SniperSecMid01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Rapid/T2/AB_SN_Pri_FireMode_Rapid_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/T2/AB_SN_Sec_Msl_EnDec_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_AbiDec/T2/AB_SN_Per_Pls_AbiDec_Ability_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Buff_ArInc/T2/AB_SN_Int_Buff_ArInc_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Oberon Artillery Cruiser, (new) Silesia Mk.2: /Game/Generic/Loadouts/Hero/VH_SniperLight_SilesiaNewV2_HeroLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T2/WP_SniperLPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T2/WP_SniperSecMid01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Rapid/T2/AB_SN_Pri_FireMode_Rapid_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_SpeedDec/T2/AB_SN_Sec_Msl_SpdDec_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/T2/AB_SN_Per_Tur_DefL_Ability_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T2/AB_SN_Int_Cloak_Move_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T4 Oberon Artillery Cruiser, Silesia Mk.2: /Game/Generic/Loadouts/Hero/VH_SniperLight_SilesiaV2_HeroLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T4/WP_SniperLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T4/WP_SniperSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Rapid/AB_SN_Pri_FireMode_Rapid_Ability_BP.40"
+    M2: "Abilities/Sniper/Sec_Missile_SpeedDec/AB_SN_Sec_Msl_SpdDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/AB_SN_Per_Tur_DefL_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/AB_SN_Int_Cloak_Move_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_EnInc_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_HPIncEnDec_Passive_BP.0"
+
+T4 Akula Vector Artillery Cruiser, Artemis: /Game/Generic/Loadouts/Hero/VH_SniperMedium_Artemis_HeroLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T4/WP_SniperMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T4/WP_SniperSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Catapult_Dmg/AB_SN_Pri_Catapult_Dmg_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Mine_SpeedDec/AB_SN_Sec_Mine_SpeedDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_AbiDec/AB_SN_Per_Pls_AbiDec_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/AB_SN_Int_Cloak_Move_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_RldInc_HPLow_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Artillery Cruiser, Jerina: /Game/Generic/Loadouts/Hero/VH_SniperMedium_Jerina_HeroLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T4/WP_SniperMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T4/WP_SniperSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/AB_SN_Pri_Firemode_Artillery_Ability_BP.40"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/AB_SN_Sec_Msl_EnDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/AB_SN_Per_Tur_DefL_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/AB_SN_Int_Cloak_Static_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T2 Akula Vector Artillery Cruiser, Junkyard Prince: /Game/Generic/Loadouts/Hero/VH_SniperMedium_JunkyardPrince_HeroLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T2/WP_SniperMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T2/WP_SniperSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T2/AB_SN_Pri_Firemode_Artillery_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/T2/AB_SN_Sec_Msl_EnDec_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_Def/T2/AB_SN_Per_Pls_Def_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T2/AB_SN_Int_Cloak_Move_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T4 Akula Vector Tactical Cruiser, Indrik: /Game/Generic/Loadouts/Hero/VH_SupportHeavy_Indrik_HeroLoadout_BP
+    PW: "Weapons/Support/Heavy/BP/T4/WP_SupportHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_Drone_HealEsc/AB_SU_Pri_Drone_HealEsc_Ability_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/AB_SU_Sec_MslL_Dmg_Ability_BP.0"
+    M3: "Abilities/Support/Per_Turret_DefH/AB_SU_Per_Tur_DefH_Ability_BP.0"
+    M4: "Abilities/Support/Int_Buff_ArInc/AB_SU_Int_Buff_ArInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T4 Akula Vector Tactical Cruiser, Kali: /Game/Generic/Loadouts/Hero/VH_SupportHeavy_Kali_HeroLoadout_BP
+    PW: "Weapons/Support/Heavy/BP/T4/WP_SupportHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_BeamAmp_SpdDec/AB_SU_Pri_BeamAmp_SpdDec_Ability_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/AB_SU_Sec_Depl_HPInc_Ability_BP.0"
+    M3: "Abilities/Support/Per_Pulse_AbiInc/AB_SU_Per_Pls_AbiInc_BP.0"
+    M4: "Abilities/Support/Int_Move_Cloak/AB_SU_Int_Mov_Cloak_Ability_BP.25"
+    B1: "Officer/Perk/PRK_COM_AbiInc_EWShield_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T4 Akula Vector Tactical Cruiser, Kali Mk.2: /Game/Generic/Loadouts/Hero/VH_SupportHeavy_KaliV2_HeroLoadout_BP
+    PW: "Weapons/Support/Heavy/BP/T4/WP_SupportHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/AB_SU_Pri_BeamAmp_Dmg_Ability_BP.0"
+    M2: "Abilities/Support/Sec_Missile_EnInc/AB_SU_Sec_Msl_EnInc_Ability_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/AB_SU_Per_Tur_HPInc_Ability_BP.0"
+    M4: "Abilities/Support/Int_Warp_Trg/AB_SU_Int_Warp_Trg_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T2 Jupiter Arms Tactical Cruiser, Jester: /Game/Generic/Loadouts/Hero/VH_SupportLight_Jester_HeroLoadout_BP
+    PW: "Weapons/Support/Light/BP/T2/WP_SupportLPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T2/WP_SupportSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T2/AB_SU_Pri_BeamAmp_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/T2/AB_SU_Sec_MslL_Dmg_Ability_T2_Hero_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/T2/AB_SU_Per_Pls_Dmg_T2_Hero_BP.0"
+    M4: "Abilities/Support/Int_Buff_EnInc/T2/AB_SU_Int_Buff_EnInc_Ability_T2_Hero_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T3 Jupiter Arms Tactical Cruiser, Strix: /Game/Generic/Loadouts/Hero/VH_SupportLight_Strix_HeroLoadout_BP
+    PW: "Weapons/Support/Light/BP/T3/WP_SupportLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T3/WP_SupportSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T3/AB_SU_Pri_BeamAmp_Dmg_Ability_T3_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/T3/AB_SU_Sec_MslL_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/T3/AB_SU_Per_Pls_Dmg_T3_BP.0"
+    M4: "Abilities/Support/Int_Buff_EnInc/T3/AB_SU_Int_Buff_EnInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_HPHigh_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Jupiter Arms Tactical Cruiser, Tonder: /Game/Generic/Loadouts/Hero/VH_SupportLight_Tonder_HeroLoadout_BP
+    PW: "Weapons/Support/Light/BP/T4/WP_SupportLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T4/WP_SupportSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Support/Pri_Drone_EnIncEsc/AB_SU_Pri_Drone_EnIncEsc_Ability_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/AB_SU_Sec_MslL_Dmg_Ability_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/AB_SU_Per_Pls_Dmg_BP.0"
+    M4: "Abilities/Support/Int_Buff_AbiInc/AB_SU_Int_Buff_AbiInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_EWThrusterBeHit_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_BeHitBehind_BP.0"
+
+T4 Oberon Tactical Cruiser, Akkoro: /Game/Generic/Loadouts/Hero/VH_SupportMedium_Akkoro_HeroLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T4/WP_SupportMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_BeamAmp_Weaken/AB_SU_Pri_BeamAmp_Weaken_Ability_BP.42"
+    M2: "Abilities/Support/Sec_Missile_EnInc/AB_SU_Sec_Msl_EnInc_Ability_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/AB_SU_Per_Tur_HPInc_Ability_BP.0"
+    M4: "Abilities/Support/Int_Buff_EnInc/AB_SU_Int_Buff_EnInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnInc_AbiUse_BP.0"
+    B2: "Officer/Perk/PRK_WPN_AbiDmgInc_EWWeapon_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdIncEnDec_EWThruster_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T4 Oberon Tactical Cruiser, Anasi: /Game/Generic/Loadouts/Hero/VH_SupportMedium_Anansi_HeroLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T4/WP_SupportMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecShort/BP/WP_SupportSecShort01_weapon01_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/AB_SU_Pri_BeamAmp_Dmg_Ability_BP.0"
+    M2: "Abilities/Support/Sec_Mine_Dmg/AB_SU_Sec_Mine_Dmg_Ability_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/AB_SU_Per_Tur_HPInc_Ability_BP.0"
+    M4: "Abilities/Support/Int_Warp_Trg/AB_SU_Int_Warp_Trg_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_EnIncAbiInc_HPLow_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_DmgResIncSpdDec_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_EnInc_Heal_BP.0"
+
+T2 Oberon Tactical Cruiser, Nereid: /Game/Generic/Loadouts/Hero/VH_SupportMedium_Nereid_HeroLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T2/WP_SupportMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T2/WP_SupportSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T2/AB_SU_Pri_BeamAmp_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T2/AB_SU_Sec_Depl_HPInc_Ability_T2_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/T2/AB_SU_Per_Tur_HPInc_Ability_T2_BP.0"
+    M4: "Abilities/Support/Int_Buff_EnInc/T2/AB_SU_Int_Buff_EnInc_Ability_T2_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---
+
+            /// Base Ships ///
+
+--/--/--/--/--/--/--/--/--/--/--/--/--/--/--
+
+        // Tier I //
+
+T1 Jupiter Arms Destroyer, Agosta: /Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T1/WP_AssaultMPri01_weapon01_T1_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T0/WP_AssaultSecShort01_weapon01_T0_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T0/AB_AS_Pri_Missile_Super_Ability_T0_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/T0/AB_AS_Sec_TrpM_Ability_T0_BP.0"
+    M3: "Abilities/Assault/Per_Turret_Off/T0/AB_AS_Per_Tur_Off_Ability_T0_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T0/AB_AS_Int_Buff_AbInc_Ability_T0_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T1 Akula Vector Dreadnought, Simargl: /Game/Generic/Loadouts/Precast/T1/VH_DreadnoughtMedium_T1_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T1/WP_DreadnoughtMPri01_weapon01_T1_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T0/WP_DreadnoughtSecMid01_weapon01_T0_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T0/AB_DN_Pri_BS_Plasma_Ability_T0_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T0/AB_DN_Sec_MslH_Dmg_Ability_T0_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T0/AB_DN_Per_Tur_Def_Ability_T0_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T0/AB_DN_Int_Warp_Ability_T0_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T1 Akula Vector Artillery Cruiser, Rurik: /Game/Generic/Loadouts/Precast/T1/VH_SniperMedium_T1_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T1/WP_SniperMPri01_weapon01_T1_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T0/WP_SniperSecShort01_weapon01_T0_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T0/AB_SN_Pri_Firemode_Artillery_Ability_T0_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T0/AB_SN_Sec_MslL_Dmg_Ability_T0_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/T0/AB_SN_Per_Tur_DefL_Ability_T0_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/T0/AB_SN_Int_Cloak_Static_Ability_T0_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T1 Oberon Tactical Cruiser, Cerberus: /Game/Generic/Loadouts/Precast/T1/VH_SupportMedium_T1_PrecastLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T1/WP_SupportMPri01_weapon01_T1_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T0/WP_SupportSecShort01_weapon01_T0_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T0/AB_SU_Pri_BeamAmp_Dmg_Ability_T0_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T0/AB_SU_Sec_Depl_HPInc_Ability_T0_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/T0/AB_SU_Per_Tur_HPInc_Ability_T0_BP.0"
+    M4: "Abilities/Support/Int_HealthIncrease/T0/AB_SU_Int_HPinc_Ability_T0_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+            // Tier II //
+
+T2 Jupiter Arms Destroyer, Trafalgar: /Game/Generic/Loadouts/Precast/T2/VH_AssaultMedium_T2_PrecastLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T2/WP_AssaultMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T1/WP_AssaultSecShort01_weapon01_T1_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T1/AB_AS_Pri_Missile_Super_Ability_T1_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/T1/AB_AS_Sec_TrpM_Ability_T1_BP.0"
+    M3: "Abilities/Assault/Per_Turret_Off/T1/AB_AS_Per_Tur_Off_Ability_T1_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T1/AB_AS_Int_Buff_AbInc_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Akula Vector Dreadnought, Nav: /Game/Generic/Loadouts/Precast/T2/VH_DreadnoughtMedium_T2_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T2/WP_DreadnoughtMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T1/WP_DreadnoughtSecMid01_weapon01_T1_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T1/AB_DN_Pri_BS_Plasma_Ability_T1_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T1/AB_DN_Sec_MslH_Dmg_Ability_T1_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T1/AB_DN_Per_Tur_Def_Ability_T1_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T1/AB_DN_Int_Warp_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Jupiter Arms Corvette, Dover: /Game/Generic/Loadouts/Precast/T2/VH_ScoutLight_T2_PrecastLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T2/WP_ScoutLPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T1/WP_ScoutSecShort01_weapon_T1_BP.0"
+    M1: "Abilities/Scout/Pri_Focus_Movement/T1/AB_SC_Pri_Focus_Movement_Ability_T1_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_Dmg/T1/AB_SC_Sec_TrpH_Dmg_Ability_T1_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Def/T1/AB_SC_Per_Pls_Def_T1_BP.0"
+    M4: "Abilities/Scout/int_Move_Afterburner/T1/AB_SC_Int_Mov_Fwd_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Oberon Artillery Cruiser, Furia: /Game/Generic/Loadouts/Precast/T2/VH_SniperLight_T2_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T2/WP_SniperLPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T1/WP_SniperSecShort01_weapon01_T1_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T1/AB_SN_Pri_Firemode_Artillery_Ability_T1_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T1/AB_SN_Sec_MslL_Dmg_Ability_T1_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/T1/AB_SN_Per_Tur_DefL_Ability_T1_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T1/AB_SN_Int_Cloak_Move_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Akula Vector Artillery Cruiser, Tugarin: /Game/Generic/Loadouts/Precast/T2/VH_SniperMedium_T2_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T2/WP_SniperMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T1/WP_SniperSecShort01_weapon01_T1_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T1/AB_SN_Pri_Firemode_Artillery_Ability_T1_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T1/AB_SN_Sec_MslL_Dmg_Ability_T1_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefL/T1/AB_SN_Per_Tur_DefL_Ability_T1_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/T1/AB_SN_Int_Cloak_Static_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+T2 Oberon Tactical Cruiser, Orcus: /Game/Generic/Loadouts/Precast/T2/VH_SupportMedium_T2_PrecastLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T2/WP_SupportMPri01_weapon01_T2_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T1/WP_SupportSecShort01_weapon01_T1_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T1/AB_SU_Pri_BeamAmp_Dmg_Ability_T1_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T1/AB_SU_Sec_Depl_HPInc_Ability_T1_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/T1/AB_SU_Per_Tur_HPInc_Ability_T1_BP.0"
+    M4: "Abilities/Support/Int_HealthIncrease/T1/AB_SU_Int_HPinc_Ability_T1_BP.0"
+    B1: n/a
+    B2: n/a
+    B3: n/a
+    B4: n/a
+
+        // Tier III //
+
+T3 Akula Vector Destroyer, Dola: /Game/Generic/Loadouts/Precast/T3/VH_AssaultHeavy_T3_PrecastLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T3/WP_AssaultHPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T2/WP_AssaultSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T2/AB_AS_Pri_Missile_Super_Ability_T2_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/T2/AB_AS_Sec_TrpM_Ability_T2_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/T2/AB_AS_Per_Pls_FireInc_T2_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T2/AB_AS_Int_Buff_AbInc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Jupiter Arms Destroyer, Otranto: /Game/Generic/Loadouts/Precast/T3/VH_AssaultMedium_T3_PrecastLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T3/WP_AssaultMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T2/WP_AssaultSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T2/AB_AS_Pri_Missile_Super_Ability_T2_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoM_Dmg/T2/AB_AS_Sec_TrpM_Ability_T2_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/T2/AB_AS_Per_Pls_FireInc_T2_BP.0"
+    M4: "Abilities/Assault/Int_Warp/T2/AB_AS_Int_Warp_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Oberon Dreadnought, Gravis: /Game/Generic/Loadouts/Precast/T3/VH_DreadnoughtLight_T3_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T3/WP_DreadnoughtLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T2/WP_DreadnoughtSecMid01_weapon01_T2_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T2/AB_DN_Pri_BS_Plasma_Ability_T2_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T2/AB_DN_Sec_MslH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T2/AB_DN_Per_Tur_Def_Ability_T2_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T2/AB_DN_Int_Warp_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Akula Vector Dreadnought, Chernobog: /Game/Generic/Loadouts/Precast/T3/VH_DreadnoughtMedium_T3_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T3/WP_DreadnoughtMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T2/WP_DreadnoughtSecMid01_weapon01_T2_BP.0"
+    M1: "Abilities/Dreadnought/Pri_WarpM_Dmg/T2/AB_DN_Pri_WarpM_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T2/AB_DN_Sec_MslH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_OffH/T2/AB_DN_Per_Tur_OffH_Ability_T2_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_ArInc/T2/AB_DN_Int_Buff_ArInc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Akula Vector Corvette, Kreshnik: /Game/Generic/Loadouts/Precast/T3/VH_ScoutHeavy_T3_PrecastLoadout_BP
+    PW: "Weapons/Scout/Heavy/BP/T3/WP_ScoutHPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T2/WP_ScoutSecShort01_weapon_T2_BP.0"
+    M1: "Abilities/Scout/Pri_Blink/T2/AB_SC_Pri_Blink_Ability_T2_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_Dmg/T2/AB_SC_Sec_TrpH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/T2/AB_SC_Per_Pls_AbiDec_T2_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T2/AB_SC_Int_HPinc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Jupiter Arms Corvette, Machias: /Game/Generic/Loadouts/Precast/T3/VH_ScoutLight_T3_PrecastLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T3/WP_ScoutLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T2/WP_ScoutSecShort01_weapon_T2_BP.0"
+    M1: "Abilities/Scout/Pri_Blink/T2/AB_SC_Pri_Blink_Ability_T2_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_Dmg/T2/AB_SC_Sec_TrpH_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Def/T2/AB_SC_Per_Pls_Def_T2_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T2/AB_SC_Int_HPinc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Oberon Corvette, Fulgora: /Game/Generic/Loadouts/Precast/T3/VH_ScoutMedium_T3_PrecastLoadout_BP
+    PW: "Weapons/Scout/Medium/BP/T3/WP_ScoutMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T2/WP_ScoutSecShort01_weapon_T2_BP.0"
+    M1: "Abilities/Scout/Pri_Blink/T2/AB_SC_Pri_Blink_Ability_T2_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/T2/AB_SC_Sec_TrpH_EnDec_Ability_T2_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/T2/AB_SC_Per_Pls_AbiDec_T2_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T2/AB_SC_Int_HPinc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Jupiter Arms Artillery Cruiser, Ballista: /Game/Generic/Loadouts/Precast/T3/VH_SniperHeavy_T3_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Heavy/BP/T3/WP_SniperHPri01_weapon01_T3_BP.10"
+    SW: "Weapons/Sniper/SecShort/BP/T2/WP_SniperSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T2/AB_SN_Pri_Firemode_Artillery_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T2/AB_SN_Sec_MslL_Dmg_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/T2/AB_SN_Per_Tur_Off_Ability_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/T2/AB_SN_Int_Cloak_Static_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Oberon Artillery Cruiser, Virtus: /Game/Generic/Loadouts/Precast/T3/VH_SniperLight_T3_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T3/WP_SniperLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T2/WP_SniperSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_Catapult_Dmg/T2/AB_SN_Pri_Catapult_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_SpeedDec/T2/AB_SN_Sec_Msl_SpdDec_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/T2/AB_SN_Per_Tur_Off_Ability_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T2/AB_SN_Int_Cloak_Move_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Akula Vector Artillery Cruiser, Vucari: /Game/Generic/Loadouts/Precast/T3/VH_SniperMedium_T3_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T3/WP_SniperMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T2/WP_SniperSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Sniper/Pri_Catapult_Dmg/T2/AB_SN_Pri_Catapult_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_SpeedDec/T2/AB_SN_Sec_Msl_SpdDec_Ability_T2_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/T2/AB_SN_Per_Tur_Off_Ability_T2_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/T2/AB_SN_Int_Cloak_Static_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Jupiter Arms Tactical Cruiser, Palos: /Game/Generic/Loadouts/Precast/T3/VH_SupportLight_T3_PrecastLoadout_BP
+    PW: "Weapons/Support/Light/BP/T3/WP_SupportLPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T2/WP_SupportSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T2/AB_SU_Pri_BeamAmp_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T2/AB_SU_Sec_Depl_HPInc_Ability_T2_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/T2/AB_SU_Per_Pls_Dmg_T2_BP.0"
+    M4: "Abilities/Support/Int_HealthIncrease/T2/AB_SU_Int_HPinc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T3 Oberon Tactical Cruiser, Ceres: /Game/Generic/Loadouts/Precast/T3/VH_SupportMedium_T3_PrecastLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T3/WP_SupportMPri01_weapon01_T3_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T2/WP_SupportSecShort01_weapon01_T2_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T2/AB_SU_Pri_BeamAmp_Dmg_Ability_T2_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T2/AB_SU_Sec_Depl_HPInc_Ability_T2_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/T2/AB_SU_Per_Pls_Dmg_T2_BP.0"
+    M4: "Abilities/Support/Int_HealthIncrease/T2/AB_SU_Int_HPinc_Ability_T2_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+        // Tier IV //
+
+T4 Akula Vector Destroyer, Blud: /Game/Generic/Loadouts/Precast/T4/VH_AssaultHeavy_T4_PrecastLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T4/WP_AssaultHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T3/WP_AssaultSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T3/AB_AS_Pri_Missile_Super_Ability_T3_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoH_EnergyDec/T3/AB_AS_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Assault/Per_Turret_Off/T3/AB_AS_Per_Tur_Off_Ability_T3_BP.0"
+    M4: "Abilities/Assault/Int_Buff_EnInc/T3/AB_AS_Int_Buff_EnInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Destroyer, Vindicta: /Game/Generic/Loadouts/Precast/T4/VH_AssaultLight_T4_PrecastLoadout_BP
+    PW: "Weapons/Assault/Light/BP/T4/WP_AssaultLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T3/WP_AssaultSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Assault/Pri_Torpedo_Ultra/T3/AB_AS_Pri_Torpedo_Ultra_Ability_T3_BP.0"
+    M2: "Abilities/Assault/Sec_TorpedoH_EnergyDec/T3/AB_AS_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_Scramble/T3/AB_AS_Per_Pls_Scr_T3_BP.0"
+    M4: "Abilities/Assault/Int_Warp/T3/AB_AS_Int_Warp_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Destroyer, Vigo: /Game/Generic/Loadouts/Precast/T4/VH_AssaultMedium_T4_PrecastLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T4/WP_AssaultMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T3/WP_AssaultSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Super/T3/AB_AS_Pri_Missile_Super_Ability_T3_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireDec/T3/AB_AS_Sec_Msl_PwrDec_Ability_T3_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_FireInc/T3/AB_AS_Per_Pls_FireInc_T3_BP.0"
+    M4: "Abilities/Assault/Int_Buff_AbInc/T3/AB_AS_Int_Buff_AbInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Dreadnought, Jutland: /Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtHeavy_T4_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Heavy/BP/T4/WP_DreadnoughtHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T3/WP_DreadnoughtSecMid01_weapon01_T3_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Plasma/T3/AB_DN_Pri_BS_Plasma_Ability_T3_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T3/AB_DN_Sec_MslH_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Def/T3/AB_DN_Per_Tur_Def_Ability_T3_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/T3/AB_DN_Int_Warp_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Dreadnought, Lorica: /Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtLight_T4_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T4/WP_DreadnoughtLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T3/WP_DreadnoughtSecMid01_weapon01_T3_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Scatter/T3/AB_DN_Pri_BS_Scatter_Ability_T3_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileH_Dmg/T3/AB_DN_Sec_MslH_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_Phys/T3/AB_DN_Per_Turret_Phys_Ability_T3_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_ArInc/T3/AB_DN_Int_Buff_ArInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Dreadnought, Voronezh: /Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtMedium_T4_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T4/WP_DreadnoughtMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Dreadnought/SecMid/BP/T3/WP_DreadnoughtSecMid01_weapon01_T3_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Scatter/T3/AB_DN_Pri_BS_Scatter_Ability_T3_BP.0"
+    M2: "Abilities/Dreadnought/Sec_TorpedoH_Dmg/T3/AB_DN_Sec_TrpH_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_OffH/T3/AB_DN_Per_Tur_OffH_Ability_T3_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_ArInc/T3/AB_DN_Int_Buff_ArInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Corvette, Stribog: /Game/Generic/Loadouts/Precast/T4/VH_ScoutHeavy_T4_PrecastLoadout_BP
+    PW: "Weapons/Scout/Heavy/BP/T4/WP_ScoutHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T3/WP_ScoutSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Scout/Pri_Focus_Weapon/T3/AB_SC_Pri_Focus_Weapon_Ability_T3_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/T3/AB_SC_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Scout/Per_Turret_Off/T3/AB_SC_Per_Tur_Off_Ability_T3_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T3/AB_SC_Int_HPinc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Corvette, Valcour: /Game/Generic/Loadouts/Precast/T4/VH_ScoutLight_T4_PrecastLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T4/WP_ScoutLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T3/WP_ScoutSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Scout/Pri_Focus_Weapon/T3/AB_SC_Pri_Focus_Weapon_Ability_T3_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/T3/AB_SC_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Scout/Per_Turret_Off/T3/AB_SC_Per_Tur_Off_Ability_T3_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/T3/AB_SC_Int_HPinc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Corvette, Medusa: /Game/Generic/Loadouts/Precast/T4/VH_ScoutMedium_T4_PrecastLoadout_BP
+    PW: "Weapons/Scout/Medium/BP/T4/WP_ScoutMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T3/WP_ScoutSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Scout/Pri_Cloak_L/T3/AB_SC_Pri_CloakL_Ability_T3_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoH_EnergyDec/T3/AB_SC_Sec_TrpH_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Scout/Per_Turret_Off/T3/AB_SC_Per_Tur_Off_Ability_T3_BP.0"
+    M4: "Abilities/Scout/int_Move_Afterburner/T3/AB_SC_Int_Mov_Fwd_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Artillery Cruiser, Onager: /Game/Generic/Loadouts/Precast/T4/VH_SniperHeavy_T4_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Heavy/BP/T4/WP_SniperHPri01_weapon01_T4_BP.10"
+    SW: "Weapons/Sniper/SecShort/BP/T3/WP_SniperSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T3/AB_SN_Pri_Firemode_Artillery_Ability_T3_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/T3/AB_SN_Sec_Msl_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefH/T3/AB_SN_Per_Tur_DefH_Ability_T3_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T3/AB_SN_Int_Cloak_Move_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Artillery Cruiser, Nox: /Game/Generic/Loadouts/Precast/T4/VH_SniperLight_T4_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T4/WP_SniperLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T3/WP_SniperSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T3/AB_SN_Pri_Firemode_Artillery_Ability_T3_BP.0"
+    M2: "Abilities/Sniper/Sec_MissileL_Dmg/T3/AB_SN_Sec_MslL_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_AbiDec/T3/AB_SN_Per_Pls_AbiDec_Ability_T3_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Static/T3/AB_SN_Int_Cloak_Static_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Artillery Cruiser, Murometz: /Game/Generic/Loadouts/Precast/T4/VH_SniperMedium_T4_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T4/WP_SniperMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T3/WP_SniperSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Sniper/Pri_FireMode_Artillery/T3/AB_SN_Pri_Firemode_Artillery_Ability_T3_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_EnDec/T3/AB_SN_Sec_Msl_EnDec_Ability_T3_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_DefH/T3/AB_SN_Per_Tur_DefH_Ability_T3_BP.0"
+    M4: "Abilities/Sniper/Int_Cloak_Move/T3/AB_SN_Int_Cloak_Move_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Akula Vector Tactical Cruiser, Koschei: /Game/Generic/Loadouts/Precast/T4/VH_SupportHeavy_T4_PrecastLoadout_BP
+    PW: "Weapons/Support/Heavy/BP/T4/WP_SupportHPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T3/WP_SupportSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/T3/AB_SU_Pri_BeamAmp_Dmg_Ability_T3_BP.0"
+    M2: "Abilities/Support/Sec_Depl_Heal/T3/AB_SU_Sec_Depl_HPInc_Ability_T3_BP.0"
+    M3: "Abilities/Support/Per_Pulse_AbiInc/T3/AB_SU_Per_Pls_AbiInc_T3_BP.0"
+    M4: "Abilities/Support/Int_Buff_EnInc/T3/AB_SU_Int_Buff_EnInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Jupiter Arms Tactical Cruiser, Harwich: /Game/Generic/Loadouts/Precast/T4/VH_SupportLight_T4_PrecastLoadout_BP
+    PW: "Weapons/Support/Light/BP/T4/WP_SupportLPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T3/WP_SupportSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Support/Pri_Depl_TurretL/T3/AB_SU_Pri_TurretL_Ability_T3_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/T3/AB_SU_Sec_MslL_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/T3/AB_SU_Per_Tur_HPInc_Ability_T3_BP.0"
+    M4: "Abilities/Support/Int_Buff_ArInc/T3/AB_SU_Int_Buff_ArInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T4 Oberon Tactical Cruiser, Aion: /Game/Generic/Loadouts/Precast/T4/VH_SupportMedium_T4_PrecastLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T4/WP_SupportMPri01_weapon01_T4_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T3/WP_SupportSecShort01_weapon01_T3_BP.0"
+    M1: "Abilities/Support/Pri_Depl_TurretL/T3/AB_SU_Pri_TurretL_Ability_T3_BP.0"
+    M2: "Abilities/Support/Sec_MissileL_Dmg/T3/AB_SU_Sec_MslL_Dmg_Ability_T3_BP.0"
+    M3: "Abilities/Support/Per_Turret_Heal/T3/AB_SU_Per_Tur_HPInc_Ability_T3_BP.0"
+    M4: "Abilities/Support/Int_Buff_ArInc/T3/AB_SU_Int_Buff_ArInc_Ability_T3_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+        // Tier V //
+
+T5 Akula Vector Destroyer, Gora: /Game/Generic/Loadouts/Precast/T5/VH_AssaultHeavy_T5_PrecastLoadout_BP
+    PW: "Weapons/Assault/Heavy/BP/T5/WP_AssaultHPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Assault/SecLong/BP/T4/WP_AssaultSecLong01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Torpedo_Swarm/AB_AS_Pri_Torpedo_Swarm_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireInc/AB_AS_Sec_Msl_PwrInc_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Turret_DefH/AB_AS_Per_Tur_DefH_Ability_BP.0"
+    M4: "Abilities/Assault/Int_Warp/AB_AS_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Oberon Destroyer, Brutus: /Game/Generic/Loadouts/Precast/T5/VH_AssaultLight_PrecastLoadout_T5_BP
+    PW: "Weapons/Assault/Light/BP/T5/WP_AssaultLPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Assault/SecLong/BP/T4/WP_AssaultSecLong01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Torpedo_Super/AB_AS_Pri_Torpedo_Super_Ability_BP.0"
+    M2: "Abilities/Assault/Sec_MissileL_Dmg/AB_AS_Sec_MslL_Dmg_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_EnDec/AB_AS_Per_Pls_EnDec_BP.0"
+    M4: "Abilities/Assault/Int_AltFire_SpdDec/AB_AS_Int_AltFire_SpdDec_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Jupiter Arms Destroyer, Athos: /Game/Generic/Loadouts/Precast/T5/VH_AssaultMedium_T5_PrecastLoadout_BP
+    PW: "Weapons/Assault/Medium/BP/T5/WP_AssaultMPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Assault/SecShort/BP/T4/WP_AssaultSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Assault/Pri_Missile_Repeater/AB_AS_Pri_Missile_Repeater_Abi_BP.0"
+    M2: "Abilities/Assault/Sec_Missile_FireInc/AB_AS_Sec_Msl_PwrInc_Ability_BP.0"
+    M3: "Abilities/Assault/Per_Pulse_Scramble/AB_AS_Per_Pls_Scr_BP.0"
+    M4: "Abilities/Assault/Int_Buff_PwrInc/AB_AS_Int_Buff_PwrInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Jupiter Arms Dreadnought, Monarch: /Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtHeavy_T5_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Heavy/BP/T5/WP_DreadnoughtHPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T4/WP_DreadSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_BS_Scatter/AB_DN_Pri_BS_Scatter_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileM_Dmg/AB_DN_Sec_MslM_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_SpdDec/AB_DN_Per_Pls_SpdDec_BP.0"
+    M4: "Abilities/Dreadnought/Int_Warp/AB_DN_Int_Warp_Ability.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Oberon Dreadnought, Invictus: /Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtLight_T5_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Light/BP/T5/WP_DreadnoughtLPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T4/WP_DreadSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_WarpM_Weaken/AB_DN_Pri_WarpM_Weaken_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_TorpedoM_Dmg/AB_DN_Sec_TrpM_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Turret_OffM/AB_DN_Per_Tur_OffM_Ability_BP.0"
+    M4: "Abilities/Dreadnought/Int_AltFire_ArDec/AB_DN_Int_AltFire_ArDec_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Akula Vector Dreadnought, Zmey: /Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtMedium_T5_PrecastLoadout_BP
+    PW: "Weapons/Dreadnought/Medium/BP/T5/WP_DreadnoughtMPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Dreadnought/SecShort/BP/T4/WP_DreadSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Dreadnought/Pri_Jet_Bomber/AB_DN_Pri_Jet_Bomber_Ability_BP.0"
+    M2: "Abilities/Dreadnought/Sec_MissileM_Dmg/AB_DN_Sec_MslM_Dmg_Ability_BP.0"
+    M3: "Abilities/Dreadnought/Per_Pulse_SpdDec/AB_DN_Per_Pls_SpdDec_BP.0"
+    M4: "Abilities/Dreadnought/Int_Buff_HPInc/AB_DN_Int_Buff_HPInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Akula Vector Corvette, Netron: /Game/Generic/Loadouts/Precast/T5/VH_ScoutHeavy_T5_PrecastLoadout_BP
+    PW: "Weapons/Scout/Heavy/BP/T5/WP_ScoutHPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T4/WP_ScoutSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Blink_Dmg/AB_SC_Pri_Blink_Dmg_Ability_BP.38"
+    M2: "Abilities/Scout/Sec_TorpedoH_FireDec/AB_SC_Sec_TrpH_PwrDec_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Def/AB_SC_Per_Pls_Def_BP.0"
+    M4: "Abilities/Scout/Int_Buff_ClearFeats/AB_SC_Int_Buff_ClearFeats_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Jupiter Arms Corvette, Nevis: /Game/Generic/Loadouts/Precast/T5/VH_ScoutLight_T5_PrecastLoadout_BP
+    PW: "Weapons/Scout/Light/BP/T5/WP_ScoutLPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T4/WP_ScoutSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Cloak_H/AB_SC_Pri_CloakH_Ability_BP.0"
+    M2: "Abilities/Scout/Sec_Mine_Scramble/AB_SC_Sec_Mine_Scr_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_AbiDec/AB_SC_Per_Pls_AbiDec_BP.0"
+    M4: "Abilities/Scout/Int_AltFire_SpeedDec/AB_SC_Int_AltFire_SpeedDec_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Oberon Corvette, Mithras: /Game/Generic/Loadouts/Precast/T5/VH_ScoutMedium_T5_PrecastLoadout_BP
+    PW: "Weapons/Scout/Medium/BP/T5/WP_ScoutMPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Scout/SecShort/BP/T4/WP_ScoutSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Scout/Pri_Blink_Target/AB_SC_Pri_Blink_Target_Ability_BP.0"
+    M2: "Abilities/Scout/Sec_TorpedoL_Dmg/AB_SC_Sec_TrpL_Dmg_Ability_BP.0"
+    M3: "Abilities/Scout/Per_Pulse_Dmg/AB_SC_Per_Pls_Dmg_BP.0"
+    M4: "Abilities/Scout/Int_Buff_HPInc/AB_SC_Int_HPinc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Jupiter Arms Artillery Cruiser, Grenada: /Game/Generic/Loadouts/Precast/T5/VH_SniperHeavy_T5_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Heavy/BP/T5/WP_SniperHPri01_weapon01_T5_BP.10"
+    SW: "Weapons/Sniper/SecShort/BP/T4/WP_SniperSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Turret_Dmg/AB_SN_Pri_Turret_Dmg_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_Scramble/AB_SN_Sec_Msl_Scr_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/AB_SN_Per_Tur_Off_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Buff_ArInc/AB_SN_Int_Buff_ArInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Oberon Artillery Cruiser, Stabia: /Game/Generic/Loadouts/Precast/T5/VH_SniperLight_T5_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Light/BP/T5/WP_SniperLPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Sniper/SecMid/BP/T4/WP_SniperSecMid01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Turret_Dmg/AB_SN_Pri_Turret_Dmg_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Missile_SpeedDec/AB_SN_Sec_Msl_SpdDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Turret_Off/AB_SN_Per_Tur_Off_Ability_BP.0"
+    M4: "Abilities/Sniper/Int_Buff_ArInc/AB_SN_Int_Buff_ArInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Akula Vector Artillery Cruiser, Svarog: /Game/Generic/Loadouts/Precast/T5/VH_SniperMedium_T5_PrecastLoadout_BP
+    PW: "Weapons/Sniper/Medium/BP/T5/WP_SniperMPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Sniper/SecShort/BP/T4/WP_SniperSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Sniper/Pri_Catapult_Turret/AB_SN_Pri_Catapult_Turret_Ability_BP.0"
+    M2: "Abilities/Sniper/Sec_Mine_SpeedDec/AB_SN_Sec_Mine_SpeedDec_Ability_BP.0"
+    M3: "Abilities/Sniper/Per_Pulse_Def/AB_SN_Per_Pls_Def_BP.0"
+    M4: "Abilities/Sniper/Int_Move_Drop/AB_SN_Int_Mov_Down_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Akula Vector Tactical Cruiser, Ohkta: /Game/Generic/Loadouts/Precast/T5/VH_SupportHeavy_T5_PrecastLoadout_BP
+    PW: "Weapons/Support/Heavy/BP/T5/WP_SupportHPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_BeamAmp_Weaken/AB_SU_Pri_BeamAmp_Weaken_Ability_BP.42"
+    M2: "Abilities/Support/Sec_Mine_Dmg/AB_SU_Sec_Mine_Dmg_Ability_BP.0"
+    M3: "Abilities/Support/Per_Pulse_AbiInc/AB_SU_Per_Pls_AbiInc_BP.0"
+    M4: "Abilities/Support/Int_Buff_AbiInc/AB_SU_Int_Buff_AbiInc_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Jupiter Arms Tactical Cruiser, Cattaro: /Game/Generic/Loadouts/Precast/T5/VH_SupportLight_T5_PrecastLoadout_BP
+    PW: "Weapons/Support/Light/BP/T5/WP_SupportLPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Support/SecMid/BP/T4/WP_SupportSecMid01_weapon01_T4_BP.3"
+    M1: "Abilities/Support/Pri_Drone_EnDecEsc/AB_SU_Pri_Drone_EnDecEsc_Ability_BP.0"
+    M2: "Abilities/Support/Sec_Missile_EnInc/AB_SU_Sec_Msl_EnInc_Ability_BP.0"
+    M3: "Abilities/Support/Per_Pulse_Dmg/AB_SU_Per_Pls_Dmg_BP.0"
+    M4: "Abilities/Support/Int_Warp_Trg/AB_SU_Int_Warp_Trg_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+T5 Oberon Tactical Cruiser, Feronia: /Game/Generic/Loadouts/Precast/T5/VH_SupportMedium_T5_PrecastLoadout_BP
+    PW: "Weapons/Support/Medium/BP/T5/WP_SupportMPri01_weapon01_T5_BP.0"
+    SW: "Weapons/Support/SecShort/BP/T4/WP_SupportSecShort01_weapon01_T4_BP.0"
+    M1: "Abilities/Support/Pri_BeamAmp_Dmg/AB_SU_Pri_BeamAmp_Dmg_Ability_BP.0"
+    M2: "Abilities/Support/Sec_Missile_EnInc/AB_SU_Sec_Msl_EnInc_Ability_BP.0"
+    M3: "Abilities/Support/Per_Pulse_AbiInc/AB_SU_Per_Pls_AbiInc_BP.0"
+    M4: "Abilities/Support/Int_Warp_Trg/AB_SU_Int_Warp_Trg_Ability_BP.0"
+    B1: "Officer/Perk/PRK_COM_AbiInc_Passive_BP.0"
+    B2: "Officer/Perk/PRK_WPN_DmgInc_Passive_BP.0"
+    B3: "Officer/Perk/PRK_NAV_SpdInc_Passive_BP.0"
+    B4: "Officer/Perk/PRK_ENG_DmgResInc_Passive_BP.0"
+
+---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---
+
+            /// Limited Time Bargain Bin Offer!!! All *InDev* and *Special* loadouts, may or may not be functional. Try your luck out today, for the low low price of *FREE*!!! ///
+
+/Game/Generic/Loadouts/Precast/Development/Hero/_VH_ScoutLight_PIEStarterShip_DevLoadout_BP2
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultHeavy_Jarilo_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultHeavy_Skagerrak_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultLight_Minotaurus_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultLight_Minotaurus2_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultLight_ZaratanV2_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultMedium_FallofTroy_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultMedium_Orion_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_AssaultMedium_Samar_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtHeavy_Trident_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtHeavy_TridentV2_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtLight_Nimbus_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtMedium_Morningstar_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtMedium_MorningstarNew_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtMedium_Ravenswood_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_DreadnoughtMedium_Zilant_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_ScoutLight_Aquila_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_ScoutLight_Viper_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_ScoutMedium_Outis_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_ScoutMedium_Phoenix_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperHeavy_Kore_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperHeavy_Tunmen_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperLight_Hasta_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperLight_Silesia_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperLight_SilesiaNew_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperMedium_Artemis_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperMedium_Jerina_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SniperMedium_JunkyardPrince_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SupportHeavy_Indrik_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SupportHeavy_Kali_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SupportLight_Tonder_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SupportMedium_Akkoro_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/Hero/VH_SupportMedium_Anansi_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/T1/VH_AssaultMedium_T1_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T1/VH_DreadnoughtMedium_T1_DevLoadout_BP
+/Game/Generic/Loadouts/Precast/Development/T1/VH_SniperMedium_T1_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T1/VH_SupportMedium_T1_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_AssaultMedium_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_DreadnoughtMedium_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_ScoutLight_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_SniperLight_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_SniperMedium_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T2/VH_SupportMedium_T2_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_AssaultHeavy_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_AssaultMedium_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_DreadnoughtLight_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_DreadnoughtMedium_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_ScoutHeavy_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_ScoutLight_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_ScoutMedium_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_SniperHeavy_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_SniperLight_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_SniperMedium_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_SupportLight_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T3/VH_SupportMedium_T3_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_AssaultHeavy_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_AssaultLight_Loadout_T5_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_AssaultMedium_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_DreadnoughtHeavy_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_DreadnoughtLight_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_DreadnoughtMedium_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_ScoutHeavy_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_ScoutLight_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_ScoutMedium_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SniperHeavy_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SniperLight_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SniperMedium_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SupportHeavy_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SupportLight_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Development/T5/VH_SupportMedium_T5_Loadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_AssaultM01_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_AssaultM02_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_AssaultMRavenswood_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_DreadnoughtM01_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_DreadnoughtM02_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_DreadnoughtMorningStar_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_DreadnoughtRavenswood_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_ScoutL01_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_ScoutL02_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_SniperM01_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_SniperM02_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_SupportM01_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_SupportM02_PAX_PrecastLoadout_BP
+/Game/Generic/Loadouts/Precast/Special/VH_Tutorial_101_PrecastLoadout_BP
+
+---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---/---
+
+continuation (if needed)
+    PW: 
+    SW: 
+    M1: 
+    M2: 
+    M3: 
+    M4: 
+    B1: 
+    B2: 
+    B3: 
+    B4: 

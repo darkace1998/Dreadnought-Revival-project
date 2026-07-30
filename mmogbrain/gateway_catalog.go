@@ -286,7 +286,7 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 			if shipClassName := gatewayShipClassDisplayName(ship.shipClass); shipClassName != "" {
 				categoryName = shipClassName
 			}
-			parentCategoryName = gatewayManufacturerDisplayName(ship.manufacturer)
+			parentCategoryName = gatewayManufacturerDisplayName(shipManufacturer(ship))
 		} else {
 			if hasExtractedMeta && extractedMeta.catalogBucket != "" {
 				categoryName = extractedMeta.catalogBucket
@@ -520,7 +520,7 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 				seed.shipID = itemID
 			}
 			if ship, found := gatewayShipByID(itemID); found {
-				seed.manufacturer = ship.manufacturer
+				seed.manufacturer = shipManufacturer(ship)
 			}
 			if seed.manufacturer == "" {
 				// Fleet-alias ids live only in the tech tree, not in the ship
@@ -831,7 +831,7 @@ func fleetShipCatalogIDs() map[int32]bool {
 func techTreeShipManufacturer(shipID int32) string {
 	for _, ship := range techTreeShips() {
 		if ship.id == shipID {
-			return ship.manufacturer
+			return shipManufacturer(ship)
 		}
 	}
 	return ""
