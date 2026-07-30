@@ -85,14 +85,18 @@ curl http://127.0.0.1:8085/health  # game-manager
 
 ## Key Files
 
-- `progress.md` — Task tracker (READ FIRST every session)
-- `issues.md` — Known bugs and blockers
-- `go.work` — Workspace file (8 modules)
-- `run/start.sh` — Service launcher script
+- `go.work` — Workspace file (9 modules, all under
+  `github.com/darkace1998/Dreadnought-Revival-project/<service>`)
+- `scripts/setup.sh` — Build + certs + secrets, one shot
+- `scripts/start-services.sh` / `scripts/stop-services.sh` — Service launcher and stopper
+- `scripts/secrets.env.example` — Annotated configuration template
 - `run/secrets.env` — Runtime secrets (gitignored)
-- `docs/PROTOCOL.md` — UE4 wire protocol reference
-- `docs/API.md` — REST API documentation
+- `docs/client-data-reference.md` — Extracted item/ship id maps and naming rules
+- `docs/client-data-validation.md` — Audit of every id the server emits
 - `.github/copilot-instructions.md` — Architectural context
+
+(`progress.md`, `issues.md`, `docs/PROTOCOL.md` and `docs/API.md` were listed here
+for a long time but have never existed in this repository.)
 
 ## Conventions
 

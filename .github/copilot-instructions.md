@@ -122,6 +122,10 @@ Set `WINE_EXE=none` (or omit the game binary) to run without Wine. game-manager 
 
 ## docs/ Reference
 
-- `docs/PROTOCOL.md` — UE4 wire protocol (17-byte packet header), YMmogbrain endpoint table, JWT format, known unknowns
-- `docs/ARCHITECTURE.md` — full data-flow diagram (Login → Match → Stats), security model, port reference
-- `docs/API.md` — REST API documentation for all services
+- `docs/client-data-reference.md` — extracted item/ship id maps, category rules, naming authority
+- `docs/client-data-validation.md` — audit of every id the server emits against the client's own tables
+- `docs/reference/` — third-party reference material
+
+The architecture diagram, port reference and configuration table live in `README.md`.
+(`docs/PROTOCOL.md`, `docs/ARCHITECTURE.md` and `docs/API.md` were listed here for a
+long time but have never existed in this repository.)

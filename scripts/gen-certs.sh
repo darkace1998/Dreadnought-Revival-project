@@ -6,6 +6,16 @@ set -euo pipefail
 CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/certs"
 mkdir -p "$CERT_DIR"
 
+# The client validates the certificate against the address it dials, and for the
+# mmog/firmament sockets that address is an IP, not a hostname -- so this host's
+# LAN IP has to be in the SAN or the client drops the connection. It used to be
+# hardcoded to one machine's 10.0.0.73, which made the generated certificate
+# useless on any other host. Override with SERVER_IP=<addr> if the guess is
+# wrong (multi-homed hosts, or when clients reach you through a router).
+SERVER_IP="${SERVER_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
+SERVER_IP="${SERVER_IP:-127.0.0.1}"
+echo "[*] Certificate will be valid for IP: $SERVER_IP (override with SERVER_IP=...)"
+
 echo "[*] Generating CA key and certificate..."
 openssl genrsa -out "$CERT_DIR/ca.key" 4096
 openssl req -new -x509 -days 3650 -key "$CERT_DIR/ca.key" \
@@ -21,9 +31,9 @@ openssl req -new -key "$CERT_DIR/server.key" \
   -subj "/C=US/ST=Private/L=Server/O=Dreadnought Private Server/CN=profile-api.prod.greybox.sixfoot.live"
 
 echo "[*] Creating SAN extension file..."
-cat > "$CERT_DIR/san.ext" << 'EOF'
+cat > "$CERT_DIR/san.ext" << EOF
 [SAN]
-subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:10.0.0.73,IP:127.0.0.1
+subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:${SERVER_IP},IP:127.0.0.1
 EOF
 
 echo "[*] Signing server certificate with CA..."
