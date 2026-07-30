@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 	"unicode"
 
@@ -1660,7 +1662,29 @@ func techTreeHeroItems() []techTreeItem {
 // Nodes are grouped by manufacturer because the client indexes the groups that
 // way (GetManufacturerData(0/1/2)), and ordered by hull line then tier inside a
 // group so Position increases along each line.
+// techTreeItemLimit caps how many items the document carries, per manufacturer
+// group, when DN_TECHTREE_LIMIT is set. 0 (the default) means no cap.
+//
+// This exists to bisect a client-side failure that no field value explains. The
+// client's field lookup (FUN_1402c3bf0) has a fallback: when a node has children
+// but NO stored names, it treats the requested field name as an array INDEX --
+// _wtoi("ProxyType") is 0, so it returns child[0], which is Id. That is exactly
+// what the client logged, "Invalid tech tree item type: 33489262" and eleven
+// more, each value being that item's own Id. The other 88 items resolved their
+// names correctly. Since the 12 are scattered rather than contiguous and share
+// no field value, the suspicion is scale -- so being able to serve a smaller
+// document and see whether the fallback stops firing is the cheapest way to
+// find out. Unset the variable to go back to the full roster.
+func techTreeItemLimit() int {
+	limit, err := strconv.Atoi(strings.TrimSpace(os.Getenv("DN_TECHTREE_LIMIT")))
+	if err != nil || limit < 0 {
+		return 0
+	}
+	return limit
+}
+
 func buildMmogTechTreeDocument() []byte {
+	limit := techTreeItemLimit()
 	byManufacturer := map[int32][]techTreeItem{}
 	nextPosition := map[int32]map[bool]int32{}
 	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
@@ -1681,7 +1705,10 @@ func buildMmogTechTreeDocument() []byte {
 	var stack []int
 	for _, manufacturerID := range order {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
-		for _, item := range byManufacturer[manufacturerID] {
+		for n, item := range byManufacturer[manufacturerID] {
+			if limit > 0 && n >= limit {
+				break
+			}
 			b, stack = appendMmogTechTreeItem(b, stack, item)
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
