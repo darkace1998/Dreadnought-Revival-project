@@ -138,8 +138,18 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 	// selection as "GameType" (single mode) or "GameTypes" (multi-mode) —
 	// confirmed via decompile, neither of which was previously checked here.
 	gameMode := protocol.FirstNonEmptyString(payload, "GameType", "GameTypes", "GameMode", "gameMode", "Mode", "mode", "matchmaking")
-	if gameMode == "" || gameMode == "*matchmaking" {
-		gameMode = "TDM"
+	// The client's quick-play button sends GameType="ANY" (and MapName="ANY"),
+	// captured verbatim from a real request:
+	//
+	//	RT=YA_EnterMatchmaking Name="*matchmaking" MapName="ANY" GameType="ANY"
+	//	FleetID=<guid> Cluster="" FMPeerID=<16 bytes> MaintenanceCost=<int32>
+	//
+	// "ANY" was not treated as a wildcard, so ValidGameMode rejected it and the
+	// server answered "unsupported game mode" -- the player could never join the
+	// queue at all. It means "any mode", so it resolves to the default like the
+	// other wildcards do.
+	if matchmaker.IsWildcardGameMode(gameMode) {
+		gameMode = matchmaker.DefaultGameMode
 	}
 	if !matchmaker.ValidGameMode(gameMode) {
 		return buildMmogMatchmakingErrorPayload(requestName, 2, "unsupported game mode")

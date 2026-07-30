@@ -60,7 +60,16 @@ func main() {
 
 	h := &handlers.Handler{DB: database, Log: log}
 
-	mm := matchmaker.New(database, log, gameMgrURL, playersPerMatch)
+	// game-manager's /instances route requires the shared secret; without it
+	// every formed match came back 403 and rolled straight back into the queue.
+	internalKey := os.Getenv("INTERNAL_API_KEY")
+	if internalKey == "" {
+		internalKey = os.Getenv("ADMIN_KEY")
+	}
+	if internalKey == "" {
+		log.Warn("neither INTERNAL_API_KEY nor ADMIN_KEY is set; game-manager will reject match requests with 403")
+	}
+	mm := matchmaker.New(database, log, gameMgrURL, internalKey, playersPerMatch)
 	mm.Start()
 	defer mm.Stop()
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,21 @@ func buildValidGameModes() map[string]bool {
 	return modes
 }
 
+// DefaultGameMode is what a wildcard request resolves to. The queue groups by
+// exact mode, so a request for "any" has to land on a concrete one.
+const DefaultGameMode = "TDM"
+
+// IsWildcardGameMode reports whether the client asked for no particular mode.
+// The quick-play button sends "ANY"; the mode field can also arrive empty or as
+// the request's own name, "*matchmaking".
+func IsWildcardGameMode(mode string) bool {
+	switch strings.ToUpper(strings.TrimSpace(mode)) {
+	case "", "ANY", "*MATCHMAKING", "ALL":
+		return true
+	}
+	return false
+}
+
 // NormalizeGameMode returns the client-config alias used by the dedicated server.
 func NormalizeGameMode(mode string) string {
 	if canonical, ok := gameModeAliases[mode]; ok {
@@ -98,16 +114,22 @@ func GameModeConfigs() []GameModeConfig {
 
 // Matchmaker polls the queue and fires match creation when enough players are present.
 type Matchmaker struct {
-	DB              *sql.DB
-	Log             *logrus.Logger
-	GameMgrURL      string // e.g. http://127.0.0.1:8085
+	DB         *sql.DB
+	Log        *logrus.Logger
+	GameMgrURL string // e.g. http://127.0.0.1:8085
+	// InternalKey authenticates to game-manager. Its /instances route sits
+	// behind internalKeyMiddleware and answers 403 without the X-Internal-Key
+	// header, which is exactly what happened: every tick formed a match, got a
+	// 403, rolled the queue entries back to 'waiting' and tried again three
+	// seconds later, forever.
+	InternalKey     string
 	PlayersPerMatch int
 	ticker          *time.Ticker
 	stop            chan struct{}
 }
 
 // New creates a Matchmaker.
-func New(db *sql.DB, log *logrus.Logger, gameMgrURL string, playersPerMatch int) *Matchmaker {
+func New(db *sql.DB, log *logrus.Logger, gameMgrURL, internalKey string, playersPerMatch int) *Matchmaker {
 	if playersPerMatch < 1 {
 		playersPerMatch = 2 // minimum for testing; production is 10
 	}
@@ -115,6 +137,7 @@ func New(db *sql.DB, log *logrus.Logger, gameMgrURL string, playersPerMatch int)
 		DB:              db,
 		Log:             log,
 		GameMgrURL:      gameMgrURL,
+		InternalKey:     internalKey,
 		PlayersPerMatch: playersPerMatch,
 		stop:            make(chan struct{}),
 	}
@@ -304,11 +327,13 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName string, players []str
 	if err != nil {
 		return "", 0, "", fmt.Errorf("marshal game manager request: %w", err)
 	}
-	resp, err := http.Post(
-		fmt.Sprintf("%s/instances", m.GameMgrURL),
-		"application/json",
-		bytes.NewReader(body),
-	)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/instances", m.GameMgrURL), bytes.NewReader(body))
+	if err != nil {
+		return "", 0, "", fmt.Errorf("build game manager request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", m.InternalKey)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", 0, "", err
 	}
@@ -316,6 +341,9 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName string, players []str
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode == http.StatusForbidden {
+			return "", 0, "", fmt.Errorf("game manager returned 403: INTERNAL_API_KEY (or ADMIN_KEY) must match game-manager's")
+		}
 		return "", 0, "", fmt.Errorf("game manager returned %d", resp.StatusCode)
 	}
 	var result map[string]interface{}
