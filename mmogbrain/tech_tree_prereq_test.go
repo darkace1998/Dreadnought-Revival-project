@@ -28,8 +28,11 @@ func TestTechTreePrereqsNameRowsInTheSameDocument(t *testing.T) {
 
 	// Every id in the document, prereq or row, must be a loadout or hero id.
 	prereqs := 0
-	for _, match := range regexp.MustCompile(`\x06Prereq\x0d.{4}(.{0,64})`).FindAllStringSubmatch(string(document), -1) {
-		for _, candidate := range regexp.MustCompile(`\x00\x09.{4}(\d+)`).FindAllStringSubmatch(match[1], -1) {
+	// Prereq is an object (0x0c) whose children are named "0", "1", ... so the
+	// client keeps a name table for it; see appendMmogTechTreeItem for why an
+	// array (0x0d) made the loader index the container by position instead.
+	for _, match := range regexp.MustCompile(`\x06Prereq\x0c.{4}(.{0,64})`).FindAllStringSubmatch(string(document), -1) {
+		for _, candidate := range regexp.MustCompile(`\x01\d\x09.{4}(\d+)`).FindAllStringSubmatch(match[1], -1) {
 			prereqs++
 			id, err := strconv.Atoi(candidate[1])
 			if err != nil {

@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"strconv"
 )
 
 func AppendObjectStart(b []byte, stack []int, name string) ([]byte, []int) {
@@ -169,6 +170,41 @@ func AppendStringArrayField(b []byte, stack []int, name string, values []string)
 	b, stack = AppendArrayStart(b, stack, name)
 	for _, value := range values {
 		b = AppendUnnamedStringField(b, value)
+	}
+	b, stack = AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+// AppendIndexedStringListField writes a list the client can also do a NAMED
+// lookup on: an object (0x0c) whose children are the values, named "0", "1", ...
+//
+// The difference from AppendStringArrayField is not cosmetic. The parser
+// (FUN_142a3e450) types a 0x0d container as 6 and a 0x0c container as 5, and
+// only a type-5 container stores its children's names -- a type-6 container
+// appends them positionally and throws the names away. The client's field
+// lookup (FUN_1402c3bf0) then has a fallback that fires on exactly that shape:
+//
+//	if (childCount > 0) {
+//	    if (nameCount < 1) index = _wtoi(fieldName);   // <-- names discarded
+//	    else                index = findByName(...);
+//	}
+//
+// so a lookup for any non-numeric field name on a name-less container resolves
+// to _wtoi(name) == 0, i.e. child[0]. That is what made the tech tree log
+// "Invalid tech tree item type: 33489262" twelve times -- once per item that
+// carries a Prereq, each value being that item's own first prereq id, which
+// then failed the loader's [-1, 9] range check on ProxyType.
+//
+// Children keep their positions, so anything reading the list by index (the
+// loader walks them at stride 0x50 and converts each to an int32) is
+// unaffected; the only change is that the name table is no longer empty, so the
+// index fallback cannot fire. A lookup for a field that genuinely is not there
+// now takes the not-found path instead, which appends an empty type-0 node --
+// and a type-0 node is the "field absent" case every reader already handles.
+func AppendIndexedStringListField(b []byte, stack []int, name string, values []string) ([]byte, []int) {
+	b, stack = AppendObjectStart(b, stack, name)
+	for i, value := range values {
+		b = AppendStringField(b, strconv.Itoa(i), value)
 	}
 	b, stack = AppendObjectEnd(b, stack)
 	return b, stack

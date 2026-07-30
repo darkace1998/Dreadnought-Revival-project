@@ -1815,12 +1815,27 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	for _, id := range item.prereq {
 		prereqs = append(prereqs, strconv.Itoa(int(id)))
 	}
-	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
+	// Prereq goes out as a NAMED list, not a bare array. A bare array (0x0d)
+	// parses to a container that keeps its children but discards their names,
+	// and the client's field lookup treats a name-less container as indexable:
+	// it resolves any field name to _wtoi(name), which is 0 for every
+	// non-numeric name, and hands back child[0]. The loader read ProxyType off
+	// this container once per prereq and got the prereq id, which then failed
+	// its [-1, 9] range check -- "Invalid tech tree item type: 33489262" and
+	// eleven more, which are exactly the twelve prereq ids of the twelve items
+	// that carry one. Items with an empty Prereq never logged it, because the
+	// fallback is guarded on childCount > 0.
+	//
+	// See AppendIndexedStringListField for the full mechanism. Positions are
+	// unchanged, so the loader's stride-0x50 walk over the children still reads
+	// the same ids in the same order.
+	b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
 	// nodes still render, just without the joining lines -- and the real
-	// coordinates are a layout concern to solve once nodes appear at all.
-	b, stack = protocol.AppendArrayStart(b, stack, "Wires")
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	// coordinates are a layout concern to solve once nodes appear at all. It
+	// carries no children, so the name-less-container fallback above cannot
+	// fire on it either way, but it is written the same way for consistency.
+	b, stack = protocol.AppendIndexedStringListField(b, stack, "Wires", nil)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
