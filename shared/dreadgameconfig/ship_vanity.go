@@ -39,9 +39,19 @@ import (
 // art lives. Slots are filled in item-id order; all four are that hull's
 // defaults, so a permutation would look the same either way.
 //
-// Only paint stays at -1. The one "_Default_DA" paint is VAN_PN_JupA_Default_DA,
-// Jupiter Arms specific with no Akula or Oberon counterpart, so choosing for the
-// other two makers would be a guess rather than a derivation.
+// Paint is the ship maker's own base coating. Only Jupiter Arms' asset is named
+// "_Default_DA", which is why this looked unresolvable at first, but the client's
+// names show the set is symmetric -- exactly one plain coating per maker:
+// "Jupiter Arms Coating (Default)", "Akula Industries Coating", "House Oberon
+// Coating". The Renter/Scrapyard variants are separate items and the
+// Manufacturer_*/00_BASE assets carry no name at all, so they are not
+// player-facing.
+//
+// Nothing is spelled as "" or "0". GetItemIDsFromDisplayInfoString treats any
+// group shorter than TWO characters as empty: it logs "Using -1 for empty entriy
+// in string %s" and substitutes -1 regardless. So an empty slot costs that
+// warning plus the -1 one it becomes, and "0" is a single character so it does
+// the same. "-1" is the quietest way to say "unset".
 const (
 	sharedVanityDefaultEmblemPath = "/Game/Generic/VanityItems/_Shared/Emblems/Default/VAN_EMB_Default_DA"
 	sharedVanityDefaultDecalPath  = "/Game/Generic/VanityItems/_Shared/Decal/VAN_DCL_Default_DA"
@@ -67,6 +77,14 @@ var patternDirectoryClassNames = map[string]string{
 // meshDefaultPathPattern matches the per-hull default mesh parts. Part names
 // vary across hulls (Bridge on some, Quarterdeck on others, and one asset spells
 // it "Quaterdeck"), so the name is not parsed -- only the hull line is.
+// defaultPaintPathByManufacturer maps a maker to its base coating asset. Keyed
+// on the same manufacturer strings the ship seeds use.
+var defaultPaintPathByManufacturer = map[string]string{
+	"JupiterArms": "/Game/Generic/VanityItems/_Shared/Paints/VAN_PN_JupA_Default_DA",
+	"AkulaVektor": "/Game/Generic/VanityItems/_Shared/Paints/VAN_PN_Akula_DA",
+	"Oberon":      "/Game/Generic/VanityItems/_Shared/Paints/VAN_PN_Ober_DA",
+}
+
 var meshDefaultPathPattern = regexp.MustCompile(
 	`^/Game/Generic/VanityItems/Heroships/([A-Za-z]+)/([A-Za-z]+)/Default/VAN_H_[A-Za-z]+_[A-Za-z]+_Default_DA$`)
 
@@ -76,6 +94,7 @@ var (
 	defaultPatternByHull   map[string]int32
 	defaultEmblemItemID    int32
 	defaultDecalItemID     int32
+	defaultPaintByMaker    map[string]int32
 	vanityCategoryItemName = map[string]string{
 		"YShipVanityEmblem":   sharedVanityDefaultEmblemPath,
 		"YShipVanityDecal":    sharedVanityDefaultDecalPath,
@@ -87,6 +106,12 @@ var (
 func buildDefaultShipVanity() {
 	defaultPatternByHull = map[string]int32{}
 	defaultMeshByHull = map[string][]int32{}
+	defaultPaintByMaker = map[string]int32{}
+	for manufacturer, path := range defaultPaintPathByManufacturer {
+		if item, ok := ItemByAssetPath(path); ok {
+			defaultPaintByMaker[manufacturer] = item.ItemID
+		}
+	}
 	for _, category := range GetAllCategories() {
 		wanted, relevant := vanityCategoryItemName[category.CategoryName]
 		if !relevant {
@@ -137,11 +162,10 @@ func buildDefaultShipVanity() {
 	}
 }
 
-// DefaultShipDisplayInfo returns the m_displayInfo string for a standard hull,
-// filling the slots whose default the client's own data states unambiguously.
-// An unknown hull line still yields a well-formed string, just with the pattern
-// slot unset.
-func DefaultShipDisplayInfo(hullLine string) string {
+// DefaultShipDisplayInfo returns the m_displayInfo string for a ship, filling
+// every slot from the client's own defaults. An unknown hull line or maker still
+// yields a well-formed string, just with those slots unset.
+func DefaultShipDisplayInfo(hullLine, manufacturer string) string {
 	vanityOnce.Do(buildDefaultShipVanity)
 
 	slot := func(id int32) string {
@@ -161,7 +185,7 @@ func DefaultShipDisplayInfo(hullLine string) string {
 	return strings.Join([]string{
 		strings.Join(mesh[:meshSlotCount], "#"),
 		slot(defaultEmblemItemID),
-		VanityUnsetSlot, // paint: no unambiguous default, see above
+		slot(defaultPaintByMaker[manufacturer]),
 		slot(defaultPatternByHull[hullLine]),
 		slot(defaultDecalItemID),
 	}, ";")
@@ -172,6 +196,12 @@ func DefaultShipDisplayInfo(hullLine string) string {
 func DefaultShipVanityItemIDs(hullLine string) (emblem, pattern, decal int32) {
 	vanityOnce.Do(buildDefaultShipVanity)
 	return defaultEmblemItemID, defaultPatternByHull[hullLine], defaultDecalItemID
+}
+
+// DefaultShipPaintID reports a maker's base coating.
+func DefaultShipPaintID(manufacturer string) int32 {
+	vanityOnce.Do(buildDefaultShipVanity)
+	return defaultPaintByMaker[manufacturer]
 }
 
 // DefaultShipMeshPartIDs reports the hull's four default mesh parts, in the

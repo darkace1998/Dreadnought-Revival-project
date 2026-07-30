@@ -110,3 +110,69 @@ func TestEveryHullLineHasFourDefaultMeshParts(t *testing.T) {
 		}
 	}
 }
+
+// Every ship in the roster -- all 52 hulls and all 48 heroes -- must produce a
+// fully-filled appearance, not just the four starters. An unset slot is not
+// free: the client reads it as an item id and logs a warning per ship per
+// refresh, and a slot shorter than two characters ("" or "0") costs a second
+// warning because GetItemIDsFromDisplayInfoString substitutes -1 for it anyway.
+func TestEveryShipGetsACompleteAppearance(t *testing.T) {
+	categoryOfSlot := []int32{20, 20, 20, 20, 21, 22, 23, 24}
+
+	check := func(t *testing.T, label, hullLine, manufacturer string) {
+		t.Helper()
+		info := dreadconfig.DefaultShipDisplayInfo(hullLine, manufacturer)
+		groups := strings.Split(info, ";")
+		if len(groups) != 5 {
+			t.Errorf("%s: %q is not five groups", label, info)
+			return
+		}
+		slots := append(strings.Split(groups[0], "#"), groups[1:]...)
+		if len(slots) != len(categoryOfSlot) {
+			t.Errorf("%s: %q yields %d slots, want %d", label, info, len(slots), len(categoryOfSlot))
+			return
+		}
+		for i, value := range slots {
+			if value == dreadconfig.VanityUnsetSlot {
+				t.Errorf("%s: slot %d (category %d) is unset", label, i, categoryOfSlot[i])
+				continue
+			}
+			id, err := strconv.Atoi(value)
+			if err != nil {
+				t.Errorf("%s: slot %d is %q, not numeric", label, i, value)
+				continue
+			}
+			if got := int32((id >> 24) & 0xff); got != categoryOfSlot[i] {
+				t.Errorf("%s: slot %d is category %d, want %d", label, i, got, categoryOfSlot[i])
+			}
+			if _, ok := dreadconfig.ItemByID(int32(id)); !ok {
+				t.Errorf("%s: slot %d id %d resolves to no item", label, i, id)
+			}
+		}
+	}
+
+	for _, hull := range baseShipLoadouts {
+		check(t, hull.name, hull.hullLine, baseShipManufacturerByClassSize[hull.hullLine])
+	}
+	for _, hero := range heroShipLoadouts {
+		check(t, hero.name, hero.hullLine, hero.manufacturer)
+	}
+	t.Logf("checked %d hulls + %d heroes", len(baseShipLoadouts), len(heroShipLoadouts))
+}
+
+// Each maker's ships wear that maker's coating.
+func TestPaintFollowsTheManufacturer(t *testing.T) {
+	for _, manufacturer := range []string{"JupiterArms", "AkulaVektor", "Oberon"} {
+		id := dreadconfig.DefaultShipPaintID(manufacturer)
+		if id == 0 {
+			t.Errorf("%s has no base coating", manufacturer)
+			continue
+		}
+		if got := (id >> 24) & 0xff; got != 22 {
+			t.Errorf("%s coating %d is category %d, want 22 (YShipVanityPaint)", manufacturer, id, got)
+		}
+	}
+	if dreadconfig.DefaultShipPaintID("JupiterArms") == dreadconfig.DefaultShipPaintID("Oberon") {
+		t.Error("Jupiter Arms and Oberon share a coating")
+	}
+}

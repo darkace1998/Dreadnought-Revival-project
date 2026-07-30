@@ -16,7 +16,7 @@ var targetSizes = map[string]int{
 	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
-	"YA_RequestStaticFleetData": 7088,
+	"YA_RequestStaticFleetData": 7172,
 	"YA_GetFeatureToggle":       111,
 	"YA_GetGameConfigData":      534,
 	"YA_GetStaticCareerData":    2153,
@@ -86,8 +86,8 @@ var targetSizes = map[string]int{
 	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
-	"YA_PlayerGet":             10726,
-	"YA_PlayerFleets":          2060,
+	"YA_PlayerGet":             10810,
+	"YA_PlayerFleets":          2088,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).

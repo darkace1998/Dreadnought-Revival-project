@@ -108,17 +108,15 @@ const noShipVanityDisplayInfo = "-1#-1#-1#-1;-1;-1;-1;-1"
 // FStringReference" for each. Agosta's loadout requested 18 assets and eight of
 // them were these.
 //
-// The emblem, pattern and decal slots now carry the client's own defaults, which
-// its data states unambiguously (one shared "_Default_DA" emblem and decal, one
-// pattern per hull line). Paint and the four mesh parts stay -1 deliberately --
-// see shared/dreadgameconfig/ship_vanity.go for why neither has a default that
-// can be derived rather than guessed.
+// Every slot now carries the client's own default: a shared emblem and decal,
+// one pattern and four hull mesh parts per hull line, and the ship maker's base
+// coating. See shared/dreadgameconfig/ship_vanity.go for where each comes from.
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
 	hullLine, ok := shipHullLine(loadout.ship.id)
 	if !ok {
 		return noShipVanityDisplayInfo
 	}
-	return dreadconfig.DefaultShipDisplayInfo(hullLine)
+	return dreadconfig.DefaultShipDisplayInfo(hullLine, shipManufacturer(loadout.ship))
 }
 
 // nativeStarterLoadoutClassName is the blueprint class the client instantiates
