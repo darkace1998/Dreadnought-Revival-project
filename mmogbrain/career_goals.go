@@ -221,14 +221,72 @@ func appendCareerGoalProgress(b []byte, stack []int, playerPID string) ([]byte, 
 	return protocol.AppendObjectEnd(b, stack)
 }
 
-// careerGoalProgressForPlayer returns the player's raw counter value for a
-// goal. There is no per-goal progress persistence yet, so a new player starts
-// every goal at zero.
-func careerGoalProgressForPlayer(_ string, goalID string) int32 {
+// careerGoalProgressForPlayer returns the player's current amount for a goal.
+//
+// This is the number the client actually uses. UYGoalManager::GetCurrentAmount
+// (YGoalManager.cpp:0x193) looks the GOAL ID up in the map the dynamic career
+// response fills and reads the amount straight out of it -- it does not resolve
+// m_counterID itself. So whatever is reported here is the goal's progress, and
+// while this returned a constant zero no goal could ever advance.
+//
+// Two sources feed it, both real:
+//
+//   - counters the CLIENT reports through YA_IncrementPlayerStatsCounter, which
+//     carries counterId/counterSubId as strings ("Customize"/"Captain"). Those
+//     names are the client's own, so a goal keyed on one progresses exactly when
+//     the client says it should.
+//   - match results this server recorded itself, for the goals the client has no
+//     counter for. matchesPlayedByPlayer counts finished matches the player held
+//     a slot in.
+func careerGoalProgressForPlayer(playerPID string, goalID string) int32 {
 	if goalID == "UnlockAllModes" {
 		// Must meet the goal's final-stage amount, or UYGoalManager reports
 		// game modes as locked. See the goal's definition above.
 		return 1
 	}
+
+	for _, goal := range careerGoalsConfig() {
+		if goal.id != goalID {
+			continue
+		}
+		// A counter the client reports wins: it is the client's own count.
+		if value := playerStatsCounterValue(playerPID, goal.counterID, goal.counterSubID); value > 0 {
+			return value
+		}
+		// Otherwise fall back to what this server observed. Only matches
+		// PLAYED is derivable: nothing records who won a match yet -- the
+		// matches table has no result column at all -- so a wins goal stays at
+		// zero rather than being fabricated from something else.
+		if goal.counterID == counterMatchesPlayed {
+			return matchesPlayedByPlayer(playerPID)
+		}
+		return 0
+	}
 	return 0
+}
+
+// counterMatchesPlayed is the one counter this server can satisfy from its own
+// records. There is deliberately no counterMatchesWon: nothing writes a match
+// result anywhere, so a wins goal has no honest source and stays at zero until
+// one exists.
+const counterMatchesPlayed = "MatchesPlayed"
+
+// matchesPlayedByPlayer counts finished matches the player held a slot in. A
+// match counts once it has an ended_at; the matchmaker writes rows as 'active'
+// and nothing has ended one yet, so today this is zero for everyone -- it will
+// start moving as soon as match completion is recorded.
+func matchesPlayedByPlayer(playerPID string) int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return 0
+	}
+	var count int32
+	if err := database.QueryRow(`
+		SELECT COUNT(*) FROM match_slots ms
+		JOIN matches m ON ms.match_id = m.id
+		WHERE ms.user_id = ? AND m.ended_at IS NOT NULL
+	`, normalizedPlayerStatePID(playerPID)).Scan(&count); err != nil {
+		return 0
+	}
+	return count
 }

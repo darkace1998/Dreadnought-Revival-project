@@ -56,7 +56,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetRibbons":
 		return buildMmogRibbonsPayload(playerPID)
 	case "YA_GetPlayerStatsCounterData":
-		return buildMmogPlayerStatsCounterDataPayload()
+		return buildMmogPlayerStatsCounterDataPayload(playerPID)
 	case "YA_GetPlayerProgression":
 		return buildMmogPlayerProgressionPayload(playerPID)
 	case "YA_GetTechTree":

@@ -299,19 +299,29 @@ func TestPlayerDataResponsesUseHexPlayerPID(t *testing.T) {
 }
 
 func TestPlayerStatsCounterDataUsesArray(t *testing.T) {
-	payload := buildMmogPlayerStatsCounterDataPayload()
-	counterDataArrayField := appendFieldMarker("counterData", 0x0d)
-	counterDataObjectField := appendFieldMarker("counterData", 0x0c)
-	counterIDField := protocol.AppendInt32Field(nil, "counterId", 0)
+	useTempMmogPlayerStateDB(t)
+	const playerPID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := persistMmogPlayerMutation(playerPID, "YA_IncrementPlayerStatsCounter",
+		realIncrementRequest("Customize", "Captain", 1)); err != nil {
+		t.Fatal(err)
+	}
+	payload := buildMmogPlayerStatsCounterDataPayload(playerPID)
 
-	if !bytes.Contains(payload, counterDataArrayField) {
+	if !bytes.Contains(payload, appendFieldMarker("counterData", 0x0d)) {
 		t.Fatalf("stats counter response does not expose counterData as an array")
 	}
-	if bytes.Contains(payload, counterDataObjectField) {
+	if bytes.Contains(payload, appendFieldMarker("counterData", 0x0c)) {
 		t.Fatalf("stats counter response still exposes counterData as an object")
 	}
-	if bytes.Count(payload, counterIDField) < 2 {
-		t.Fatalf("stats counter response should include non-empty root and result counterData rows")
+	// Both the root and the result copy carry the rows. This used to assert an
+	// int32 counterId, which was the bug: the client sends counterId and
+	// counterSubId as STRINGS ("Customize"/"Captain"), and an int32 reads back
+	// as 0 through its value accessors anyway.
+	if got := bytes.Count(payload, protocol.AppendStringField(nil, "counterId", "Customize")); got < 2 {
+		t.Fatalf("counterId appears %d times, want it in both the root and result arrays", got)
+	}
+	if bytes.Contains(payload, protocol.AppendInt32Field(nil, "counterId", 0)) {
+		t.Fatal("the hardcoded int32 counterId row is back")
 	}
 }
 
@@ -2375,7 +2385,7 @@ func TestCriticalPayloadsMaintainValidMmogNesting(t *testing.T) {
 		"YA_RequestStaticFleetData":    buildMmogStaticFleetDataPayload,
 		"YA_GetSeasonData":             buildMmogSeasonDataPayload,
 		"YA_GetSeasonProgress":         buildMmogSeasonProgressPayload,
-		"YA_GetPlayerStatsCounterData": buildMmogPlayerStatsCounterDataPayload,
+		"YA_GetPlayerStatsCounterData": func() []byte { return buildMmogPlayerStatsCounterDataPayload() },
 		"YA_GetPlayerProgression":      func() []byte { return buildMmogPlayerProgressionPayload(pid) },
 		"YA_GetTechTree":               func() []byte { return buildMmogTechTreePayload(pid) },
 		"YA_GetPlayerPurchases":        buildMmogPlayerPurchasesPayload,

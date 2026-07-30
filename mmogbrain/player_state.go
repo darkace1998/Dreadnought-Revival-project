@@ -503,6 +503,8 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 	switch requestName {
 	case "YA_SavePlayerDisplayInformation":
 		return persistSavePlayerDisplayInformation(database, pid, payload)
+	case "YA_IncrementPlayerStatsCounter":
+		return persistIncrementPlayerStatsCounter(database, pid, payload)
 	case "YA_UpdateShipLoadout":
 		return persistUpdateShipLoadout(database, pid, payload)
 	case "YA_RenameShipLoadout":

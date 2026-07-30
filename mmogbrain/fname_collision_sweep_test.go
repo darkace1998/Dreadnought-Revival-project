@@ -18,7 +18,7 @@ func TestAllSimplePayloadsHaveNoFNameCollisions(t *testing.T) {
 		"YA_StaticFleetData":       buildMmogStaticFleetDataPayload,
 		"YA_GetSeasonData":         buildMmogSeasonDataPayload,
 		"YA_GetSeasonProgress":     buildMmogSeasonProgressPayload,
-		"YA_PlayerStatsCounter":    buildMmogPlayerStatsCounterDataPayload,
+		"YA_PlayerStatsCounter":    func() []byte { return buildMmogPlayerStatsCounterDataPayload() },
 		"YA_GetProgressionData":    buildMmogProgressionDataPayload,
 		"YA_GetTechTree":           func() []byte { return buildMmogTechTreePayload() },
 		"YA_GetCareerProgression":  func() []byte { return buildMmogCareerProgressionPayload(defaultMmogPlayerPID) },

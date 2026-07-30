@@ -1389,32 +1389,26 @@ func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoad
 
 // --- Stats / Progression ---
 
-func buildMmogPlayerStatsCounterDataPayload() []byte {
+func buildMmogPlayerStatsCounterDataPayload(playerPID ...string) []byte {
 	var b []byte
 	var stack []int
 
+	pid := defaultMmogPlayerPID
+	if len(playerPID) > 0 {
+		pid = playerPID[0]
+	}
+	counters := playerStatsCounters(pid)
+
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerStatsCounterData")
 	b, stack = protocol.AppendArrayStart(b, stack, "counterData")
-	b, stack = appendMmogStatsCounterEntry(b, stack)
+	b, stack = appendMmogStatsCounterEntries(b, stack, counters)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b, stack = protocol.AppendArrayStart(b, stack, "counterData")
-	b, stack = appendMmogStatsCounterEntry(b, stack)
+	b, stack = appendMmogStatsCounterEntries(b, stack, counters)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
-}
-
-func appendMmogStatsCounterEntry(b []byte, stack []int) ([]byte, []int) {
-	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendInt32Field(b, "counterId", 0)
-	b = protocol.AppendInt32Field(b, "subId", 0)
-	b = protocol.AppendInt32Field(b, "counterSubId", 0)
-	b = protocol.AppendInt32Field(b, "m_counterSubId", 0)
-	b = protocol.AppendInt32Field(b, "counterValue", 0)
-	b = protocol.AppendInt32Field(b, "value", 0)
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	return b, stack
 }
 
 func buildMmogPlayerProgressionPayload(playerPID string) []byte {

@@ -95,7 +95,7 @@ var targetSizes = map[string]int{
 	"YA_AnalyticsBeginTransaction": 124,
 	"YA_AnalyticsEvent":            85,
 	"YA_SaveCtAData":               82,
-	"YA_GetPlayerStatsCounterData": 338,
+	"YA_GetPlayerStatsCounterData": 128,
 }
 
 var preTrimTargetSizes = map[string]int{

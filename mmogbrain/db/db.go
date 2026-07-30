@@ -126,6 +126,20 @@ var migrations = []string{
 	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE,
 	    CHECK (progress >= 0 AND progress <= 100)  -- Progress as percentage
 	)`,
+	// Goal counters the CLIENT reports. It sends YA_IncrementPlayerStatsCounter
+	// with counterId/counterSubId as STRINGS plus an increment -- captured
+	// verbatim: counterId="Customize" counterSubId="Captain"/"Ship". Those names
+	// are the client's, so storing what it sends is the only way to have the
+	// real ones rather than guesses.
+	`CREATE TABLE IF NOT EXISTS player_stats_counters (
+	    user_id        TEXT NOT NULL,
+	    counter_id     TEXT NOT NULL,
+	    counter_sub_id TEXT NOT NULL DEFAULT '',
+	    value          INTEGER NOT NULL DEFAULT 0,
+	    updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+	    PRIMARY KEY (user_id, counter_id, counter_sub_id),
+	    FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
+	)`,
 	`CREATE TABLE IF NOT EXISTS player_ribbons (
 		user_id     TEXT NOT NULL,
 		ribbon_type TEXT NOT NULL,
