@@ -1569,7 +1569,7 @@ func buildMmogTechTreeDocument(ships []mmogShipSeed) []byte {
 	for _, manufacturerID := range order {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
 		for position, row := range byManufacturer[manufacturerID] {
-			b, stack = appendMmogTechTreeItem(b, stack, row, manufacturerID, int32(position))
+			b, stack = appendMmogTechTreeItem(b, stack, row, manufacturerID, int32(position), emitted)
 		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
@@ -1596,7 +1596,27 @@ type techTreeRow struct {
 	ship mmogShipSeed
 }
 
-func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturerID int32, position int32) ([]byte, []int) {
+// techTreeRowPrereqs maps a seed's prerequisite ship ids into the row id space
+// and drops any that no row in the document carries.
+func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
+	prereqs := []string{}
+	for _, id := range []int32{ship.prereqID1, ship.prereqID2} {
+		if id == 0 {
+			continue
+		}
+		resolved := id
+		if loadoutID, ok := dreadconfig.PrecastLoadoutIDForShip(id); ok {
+			resolved = loadoutID
+		}
+		if !rowIDs[resolved] {
+			continue
+		}
+		prereqs = append(prereqs, strconv.Itoa(int(resolved)))
+	}
+	return prereqs
+}
+
+func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturerID int32, position int32, rowIDs map[int32]bool) ([]byte, []int) {
 	ship := row.ship
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(row.id)))
@@ -1629,14 +1649,19 @@ func appendMmogTechTreeItem(b []byte, stack []int, row techTreeRow, manufacturer
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
 	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeShip))
-	// Prereq is an array the loader copies into the item's TArray<int32>.
-	prereqs := []string{}
-	for _, id := range []int32{ship.prereqID1, ship.prereqID2} {
-		if id != 0 {
-			prereqs = append(prereqs, strconv.Itoa(int(id)))
-		}
-	}
-	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
+	// Prereq is an array the loader copies into the item's TArray<int32>, and
+	// the entries are matched against other items' Id -- so they have to be in
+	// the same id space the rows are keyed on.
+	//
+	// They were not. The seeds carry prereqID1/prereqID2 as ship-PAWN ids while
+	// Id is the precast LOADOUT id, so every prerequisite pointed at a value
+	// that appears nowhere in the tree. Worse, a pawn id could not be admitted
+	// even in principle: the gate compares the top byte against
+	// YShipLoadoutPrecast (1) and YShipLoadoutHero (3), and a pawn is 10. So
+	// resolve each one through the same mapping the row id uses, and keep only
+	// those that name a row actually present in this document -- a dangling
+	// prerequisite is what the pawn ids already were.
+	b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", techTreeRowPrereqs(ship, rowIDs))
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
 	// nodes still render, just without the joining lines -- and the real
 	// coordinates are a layout concern to solve once nodes appear at all.
