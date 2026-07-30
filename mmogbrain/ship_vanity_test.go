@@ -24,8 +24,28 @@ func TestShipDisplayInfoIsWellFormedAndResolves(t *testing.T) {
 		if len(groups) != 5 {
 			t.Fatalf("%s: display info %q has %d groups, the importer demands 5", loadout.loadoutName, info, len(groups))
 		}
-		if mesh := strings.Split(groups[0], "#"); len(mesh) != 4 {
+		mesh := strings.Split(groups[0], "#")
+		if len(mesh) != 4 {
 			t.Fatalf("%s: mesh group %q has %d entries, the importer demands 4", loadout.loadoutName, groups[0], len(mesh))
+		}
+		// Slot types 4-7 are UI_Category_APPEARANCE_HULL, a slot every ship has,
+		// and each hull line ships exactly four defaults for it.
+		for _, value := range mesh {
+			if value == dreadconfig.VanityUnsetSlot {
+				t.Errorf("%s: a mesh slot is unset; every hull line has four defaults", loadout.loadoutName)
+				continue
+			}
+			id, err := strconv.Atoi(value)
+			if err != nil {
+				t.Fatalf("%s: mesh slot %q is not numeric", loadout.loadoutName, value)
+			}
+			if got := int32((id >> 24) & 0xff); got != 20 {
+				t.Errorf("%s: mesh slot %d is category %d, want 20 (YShipVanityMeshPart)", loadout.loadoutName, id, got)
+			}
+			if _, ok := dreadconfig.ItemByID(int32(id)); !ok {
+				t.Errorf("%s: mesh slot %d resolves to no item", loadout.loadoutName, id)
+			}
+			checked++
 		}
 
 		// Every slot that is not deliberately unset must name a real item.
@@ -78,4 +98,15 @@ func TestEveryHullLineHasItsOwnDefaultPattern(t *testing.T) {
 		seen[pattern] = hull.hullLine
 	}
 	t.Logf("%d distinct default patterns", len(seen))
+}
+
+// Every hull line must have exactly four default mesh parts, since the importer
+// demands a four-entry mesh group and padding one with -1 costs a warning per
+// ship per refresh.
+func TestEveryHullLineHasFourDefaultMeshParts(t *testing.T) {
+	for _, hull := range baseShipLoadouts {
+		if parts := dreadconfig.DefaultShipMeshPartIDs(hull.hullLine); len(parts) != 4 {
+			t.Errorf("hull line %s has %d default mesh parts, want 4", hull.hullLine, len(parts))
+		}
+	}
 }
