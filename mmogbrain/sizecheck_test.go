@@ -53,7 +53,12 @@ var targetSizes = map[string]int{
 	// line's root loadout id, 8 characters, across ~100 nodes; the document is
 	// zlib'd, so the frame grows by a fraction of the raw difference and stays
 	// far under the client's 32KB receive ring buffer.
-	"YA_GetTechTree": 14461,
+	// Now 14550: +89 for ClassId becoming each item's OWN id rather than the
+	// hull line's root id. ClassId is the key of the array at manager+0x48,
+	// which the client looks up by SHIP ID (FUN_1403f5050, called by
+	// ComposeModuleUiDataForShip), so sharing a line root left every tier above
+	// it unable to resolve its modules.
+	"YA_GetTechTree": 14550,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

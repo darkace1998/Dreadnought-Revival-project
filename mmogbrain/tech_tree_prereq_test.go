@@ -101,22 +101,16 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 		}
 	}
 
-	// Every tier of one hull line shares a ClassId: that is what makes them a
-	// single column rather than N one-node columns.
-	classesPerLine := map[int32]map[int32]bool{}
-	for _, item := range techTreeBaseItems() {
-		if classesPerLine[item.classID] == nil {
-			classesPerLine[item.classID] = map[int32]bool{}
+	// ClassId must equal the item's OWN id, for every item. The loader keys the
+	// array at manager+0x48 on ClassId, and the client looks that array up by
+	// SHIP ID (FUN_1403f5050, called by ComposeModuleUiDataForShip), so any
+	// ship whose ClassId is not its own id cannot resolve its modules. A
+	// previous version shared the hull line's root id across the line, which
+	// left every tier above the root logging "Modules not found for ship id".
+	for _, item := range items {
+		if item.classID != item.id {
+			t.Fatalf("item %d has ClassId %d; it must be the item's own id or "+
+				"ComposeModuleUiDataForShip cannot find its modules", item.id, item.classID)
 		}
-		classesPerLine[item.classID][item.tier] = true
-	}
-	multiTier := 0
-	for _, tiers := range classesPerLine {
-		if len(tiers) > 1 {
-			multiTier++
-		}
-	}
-	if multiTier == 0 {
-		t.Error("no hull line shares a ClassId across tiers; the tree would render as single-node columns")
 	}
 }

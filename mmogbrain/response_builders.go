@@ -1597,19 +1597,6 @@ var techTreeXPCostByTier = map[int32]int32{1: 0, 2: 5000, 3: 15000, 4: 40000, 5:
 // so they are left unlinked rather than wired to a guess. That is also why the
 // old seed for Furia pointed at Rurik: a plausible-looking cross-line link
 // somebody invented. Wires are empty for the same reason.
-// lineRootLoadoutID returns the loadout id of the lowest tier present in a hull
-// line. It is the line's identity, and therefore the ClassId every node in the
-// line reports; see the store gate documented in techTreeBaseItems.
-func lineRootLoadoutID(line map[int32]int32) int32 {
-	var rootTier, rootID int32
-	for tier, loadoutID := range line {
-		if rootTier == 0 || tier < rootTier {
-			rootTier, rootID = tier, loadoutID
-		}
-	}
-	return rootID
-}
-
 func techTreeBaseItems() []techTreeItem {
 	byLine := map[string]map[int32]int32{}
 	for _, hull := range baseShipLoadouts {
@@ -1648,11 +1635,23 @@ func techTreeBaseItems() []techTreeItem {
 			// the tech tree screen reported "Could not find a manufacturer with
 			// id 0/1/2" with an empty TreeWidgetList.
 			//
-			// The value is the line's own root -- the lowest tier present in
-			// that <Class><Size> line -- so every tier of a line shares one
-			// ClassId, which is what makes them one column. Lines that open
-			// above tier 1 use their own first entry.
-			classID:      lineRootLoadoutID(byLine[hull.hullLine]),
+			// The value is the item's OWN id. That is not a grouping key: the
+			// array the loader builds at manager+0x48 is keyed on ClassId
+			// (140401426 compares entry[0] against it), and the client looks
+			// that array up by SHIP ID --
+			//
+			//	FUN_1403f5050(manager, shipId): scan manager+0x48 stride 0x28
+			//	                                for entry[0] == shipId
+			//
+			// which is what UTechTreeInterpreter::ComposeModuleUiDataForShip
+			// calls. So a ship's modules resolve only when its ClassId equals
+			// its own id. An earlier version of this used the hull line's root
+			// loadout id, on the theory that a shared ClassId is what makes a
+			// line one column; that was wrong twice over -- the column grouping
+			// is the separate manufacturer-keyed array at manager+0x38, and a
+			// shared ClassId left every tier above the line root unable to find
+			// its modules ("Modules not found for ship id %d").
+			classID:      hull.loadoutID,
 			manufacturer: manufacturerID,
 			tier:         hull.tier,
 			xpCost:       techTreeXPCostByTier[hull.tier],
