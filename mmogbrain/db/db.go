@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -271,31 +272,45 @@ func migrate(db *sql.DB) error {
 	var current int
 	_ = db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_versions`).Scan(&current)
 
-	// Every statement in migrations is CREATE ... IF NOT EXISTS, so running
-	// them all on every start is safe and self-repairing. It used to skip any
-	// index <= the recorded version, which made the list's ORDER load-bearing
-	// and silently lost work: this database recorded versions 1..23 while only
-	// 21 migrations were declared, so player_stats_counters -- sitting at index
-	// 11 after the list was edited -- was treated as long since applied and was
-	// never created. The table's absence then surfaced only as a per-request
-	// "mmog: read stats counters ... no such table" warning, and every career
-	// goal keyed on a counter silently read 0.
+	// Migrations are keyed by INDEX, which makes the list's ORDER load-bearing:
+	// editing it shifts every later version number. That has already bitten us
+	// once -- this database recorded versions 1..23 while only 21 migrations
+	// were declared, so player_stats_counters, sitting at index 11 after an
+	// edit, was treated as long since applied and was never created. Its
+	// absence surfaced only as a "mmog: read stats counters ... no such table"
+	// warning, but playerStatsCounters() returns nothing on error, so every
+	// career goal keyed on a counter silently read 0.
 	//
-	// Skipping is not worth the fragility here: the whole set is idempotent and
-	// tiny. If a non-idempotent migration is ever added, this has to become a
-	// real versioned runner again -- and then inserting into the middle of the
-	// list is what must be forbidden, not merely discouraged.
+	// So already-applied entries are re-run when, and only when, they are safe
+	// to re-run: CREATE ... IF NOT EXISTS is, ALTER TABLE ... ADD COLUMN is
+	// NOT. Re-running everything unconditionally looked tempting and took the
+	// server down with "migration 20: duplicate column name: login_streak".
 	for i, ddl := range migrations {
-		if _, err := db.Exec(ddl); err != nil {
-			return fmt.Errorf("migration %d: %w", i+1, err)
-		}
-	}
-	if len(migrations) > current {
-		for v := current + 1; v <= len(migrations); v++ {
-			if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, v); err != nil {
-				return fmt.Errorf("record schema version %d: %w", v, err)
+		v := i + 1
+		if v <= current {
+			if repeatableDDL(ddl) {
+				if _, err := db.Exec(ddl); err != nil {
+					return fmt.Errorf("re-apply migration %d: %w", v, err)
+				}
 			}
+			continue
+		}
+		if _, err := db.Exec(ddl); err != nil {
+			return fmt.Errorf("migration %d: %w", v, err)
+		}
+		if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, v); err != nil {
+			return fmt.Errorf("record schema version %d: %w", v, err)
 		}
 	}
 	return nil
+}
+
+// repeatableDDL reports whether a migration can be executed again on a database
+// that already has it. Only guarded CREATEs qualify; anything that mutates an
+// existing table (ALTER TABLE ... ADD COLUMN) fails the second time.
+func repeatableDDL(ddl string) bool {
+	if strings.Contains(strings.ToUpper(ddl), "ALTER TABLE") {
+		return false
+	}
+	return strings.Contains(strings.ToUpper(ddl), "IF NOT EXISTS")
 }
