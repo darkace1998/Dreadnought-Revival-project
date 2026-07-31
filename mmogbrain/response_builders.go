@@ -1753,18 +1753,51 @@ func buildMmogTechTreeDocument() []byte {
 	}
 	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
 
+	// ONE outer array holding every item, not one per manufacturer.
+	//
+	// The blob field is called "TechTrees" -- plural -- and the outer array is
+	// the list of TECH TREES, of which the client loads one. It is not the
+	// manufacturer split; that is derived client-side from each item's own
+	// Manufacturer field, which is why the loader reads Manufacturer per item
+	// and keys its groups on it (1404015b6/1404015c0).
+	//
+	// Emitting one outer array per manufacturer meant the loader walked the
+	// first and stopped. Proven from the client log: with a ProxyType canary
+	// firing once per item that carries a prereq, all 12 reported values were
+	// manufacturer 0's prereqs, and NONE of manufacturer 1's 13 or
+	// manufacturer 2's 12 appeared. Two thirds of the roster was never parsed,
+	// and only one manufacturer group could ever be created -- so
+	// GetManufacturerData(0/1/2) had at most one key to match and generally
+	// none, leaving TreeWidgetList empty and the tech tree screen blank.
+	//
+	// DN_TECHTREE_SPLIT_GROUPS=1 restores the old per-manufacturer split.
 	var b []byte
 	var stack []int
+	if techTreeSplitGroups {
+		for _, manufacturerID := range order {
+			b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+			for n, item := range byManufacturer[manufacturerID] {
+				if limit > 0 && n >= limit {
+					break
+				}
+				b, stack = appendMmogTechTreeItem(b, stack, item)
+			}
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
+		return protocol.AppendRootEnd(b)
+	}
+	b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+	emitted := 0
 	for _, manufacturerID := range order {
-		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
-		for n, item := range byManufacturer[manufacturerID] {
-			if limit > 0 && n >= limit {
+		for _, item := range byManufacturer[manufacturerID] {
+			if limit > 0 && emitted >= limit {
 				break
 			}
 			b, stack = appendMmogTechTreeItem(b, stack, item)
+			emitted++
 		}
-		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	return protocol.AppendRootEnd(b)
 }
 
@@ -1794,6 +1827,10 @@ var techTreePrereqNamed = os.Getenv("DN_TECHTREE_NAMED_PREREQ") == "1"
 // techTreeProbeFirst emits the child[0] sentinel described in
 // appendMmogTechTreeItem.
 var techTreeProbeFirst = os.Getenv("DN_TECHTREE_PROBE_FIRST") == "1"
+
+// techTreeSplitGroups restores the old one-outer-array-per-manufacturer shape;
+// see buildMmogTechTreeDocument for why that only ever loaded one third.
+var techTreeSplitGroups = os.Getenv("DN_TECHTREE_SPLIT_GROUPS") == "1"
 
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
