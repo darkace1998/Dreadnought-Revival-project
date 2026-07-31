@@ -1736,6 +1736,7 @@ func techTreeItemLimit() int {
 }
 
 func buildMmogTechTreeDocument() []byte {
+	techTreeCanaryUsed = false
 	limit := techTreeItemLimit()
 	byManufacturer := map[int32][]techTreeItem{}
 	nextPosition := map[int32]map[bool]int32{}
@@ -1781,6 +1782,12 @@ func buildMmogTechTreeDocument() []byte {
 // FindItemForShipId, and did not fix the "Could not find item for ship id"
 // family of failures it was expected to.
 const techTreeProxyTypeShip = -1
+
+// techTreeCanaryEnabled arms the ProxyType canary described in
+// appendMmogTechTreeItem. techTreeCanaryUsed keeps it to a single node per
+// document build.
+var techTreeCanaryEnabled = os.Getenv("DN_TECHTREE_CANARY") == "1"
+var techTreeCanaryUsed bool
 
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
@@ -1839,7 +1846,29 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(len(item.prereq)))
-	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeShip))
+	// DIAGNOSTIC (DN_TECHTREE_CANARY=1): give the FIRST item an out-of-range
+	// ProxyType so the loader is forced to announce itself. UYTechTreeManager's
+	// only log line is "Invalid tech tree item type: %d", emitted when the
+	// parsed ProxyType falls outside [-1, 9] (140401394), so a silent load and
+	// a load that never happened are indistinguishable in the client log. This
+	// makes them distinguishable, three ways:
+	//
+	//   "Invalid tech tree item type: 999"  -> loader RAN and resolved the
+	//                                          field BY NAME. Items are being
+	//                                          rejected by a later gate.
+	//   "Invalid tech tree item type: <id>" -> loader ran but fell back to
+	//                                          index lookup, returning child[0]
+	//                                          (the Id). Names are being lost.
+	//   nothing at all                      -> the loader never ran; the
+	//                                          document is not reaching it.
+	//
+	// Costs one rejected node while enabled. Off by default.
+	proxyType := strconv.Itoa(techTreeProxyTypeShip)
+	if techTreeCanaryEnabled && !techTreeCanaryUsed {
+		techTreeCanaryUsed = true
+		proxyType = "999"
+	}
+	b = protocol.AppendStringField(b, "ProxyType", proxyType)
 	// Prereq is an array the loader copies into the item's TArray<int32>, and
 	// the entries are matched against other items' Id -- so they are loadout
 	// ids, like Id itself. They used to be ship-PAWN ids, which named nothing
