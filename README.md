@@ -251,7 +251,18 @@ Regenerate with `SERVER_IP=<ip>` if it does not.
 
 **Everything says "already running"** — that is the double-start guard. Run `bash scripts/stop-services.sh` first.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: this is a server for a client we cannot change and did not write, so **never invent data** — everything the server sends must be traceable to the client's own tables or to its binary. Read the client's parsers before forming a theory about a payload.
+
 ## Documentation
 
+- [Contributing guide](CONTRIBUTING.md) — working rules, protocol invariants, testing
 - [Client data reference](docs/client-data-reference.md) — extracted item and ship id maps, naming rules
 - [Client data validation](docs/client-data-validation.md) — audit of every id the server emits
+
+## Licence
+
+Apache License 2.0 — see [LICENSE](LICENSE).
+
+This covers the server code in this repository. It does **not** cover the contents of `data/`, which are extracted from the game and belong to their original owner; they are included on a fan-preservation basis. No game code or assets are distributed here — you need your own copy of Dreadnought.
