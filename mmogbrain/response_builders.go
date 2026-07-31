@@ -1791,6 +1791,10 @@ var techTreeCanaryEnabled = os.Getenv("DN_TECHTREE_CANARY") == "1"
 // encoding broke the tech tree; see appendMmogTechTreeItem. Escape hatch only.
 var techTreePrereqNamed = os.Getenv("DN_TECHTREE_NAMED_PREREQ") == "1"
 
+// techTreeProbeFirst emits the child[0] sentinel described in
+// appendMmogTechTreeItem.
+var techTreeProbeFirst = os.Getenv("DN_TECHTREE_PROBE_FIRST") == "1"
+
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
 	id   int32
@@ -1819,6 +1823,26 @@ func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
 
 func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	// DIAGNOSTIC (DN_TECHTREE_PROBE_FIRST=1): a sentinel emitted BEFORE Id, so
+	// it becomes child[0] of the item object.
+	//
+	// The loader's ProxyType/Manufacturer reads (1404012c9, 140401316, both on
+	// R12) never see the item's own values -- a ProxyType canary of 999 was
+	// never reported. Two things produce that, and they need different fixes:
+	//
+	//   A. R12 is the PREREQ container. Index fallback there returns the first
+	//      prereq id, which is what gets logged.
+	//   B. R12 IS the item, but the item's name table is empty, so the lookup
+	//      falls back to index 0 and returns child[0] -- which today is Id.
+	//
+	// Both currently yield the same numbers, because every prereq id is also
+	// some item's id. Putting a value that is NEITHER at child[0] separates
+	// them: if the loader now reports 7777777 it is reading the item
+	// positionally (B); if it still reports a loadout id it is reading the
+	// prereq container (A).
+	if techTreeProbeFirst {
+		b = protocol.AppendStringField(b, "AProbe", "7777777")
+	}
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(item.id)))
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(item.classID)))
 	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(item.manufacturer)))
