@@ -1789,6 +1789,19 @@ func buildMmogTechTreeDocument() []byte {
 	b, stack = protocol.AppendUnnamedArrayStart(b, stack)
 	emitted := 0
 	for _, manufacturerID := range order {
+		// DN_TECHTREE_ONLY_MANUFACTURER=<n> emits only that maker's items.
+		//
+		// A bisect: every gate on the path has been read and each one says our
+		// items should be stored and the group created, yet
+		// FindManufacturerById(0/1/2) still misses. Narrowing to a single
+		// manufacturer separates "the data is wrong" from "something about
+		// having three of them is wrong" -- if one maker alone populates, the
+		// shape is right and the problem is in how multiple groups are built;
+		// if it still misses, the problem is in the item data and applies to
+		// the smallest possible case, which is far cheaper to reason about.
+		if techTreeOnlyManufacturer >= 0 && manufacturerID != int32(techTreeOnlyManufacturer) {
+			continue
+		}
 		for _, item := range byManufacturer[manufacturerID] {
 			if limit > 0 && emitted >= limit {
 				break
@@ -1838,6 +1851,20 @@ var techTreeBareManufacturer = os.Getenv("DN_TECHTREE_BARE_MANUFACTURER") == "1"
 
 // techTreeNoPrereq omits the Prereq container; see appendMmogTechTreeItem.
 var techTreeNoPrereq = os.Getenv("DN_TECHTREE_NO_PREREQ") == "1"
+
+// techTreeOnlyManufacturer restricts the document to one maker, or -1 for all;
+// see buildMmogTechTreeDocument.
+var techTreeOnlyManufacturer = func() int {
+	v := strings.TrimSpace(os.Getenv("DN_TECHTREE_ONLY_MANUFACTURER"))
+	if v == "" {
+		return -1
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return -1
+	}
+	return n
+}()
 
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
