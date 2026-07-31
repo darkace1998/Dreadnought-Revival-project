@@ -392,8 +392,15 @@ func TestTechTreeRowsExposeMinimalIdentityAndUnlock(t *testing.T) {
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(ship.id)))) {
 			t.Fatalf("tech tree row for %q missing ShipID=%d", ship.name, ship.id)
 		}
-		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipClass", strconv.Itoa(int(ship.shipClass)))) {
-			t.Fatalf("tech tree row for %q missing ShipClass=%d", ship.name, ship.shipClass)
+		// ShipClass goes out ONE-BASED (0 means "no class"), not as the raw
+		// internal ordinal. Established from what the client rendered for the
+		// starter fleet: Rurik (ArtilleryCruiser, sent 2) showed as "Corvette",
+		// Cerberus (TacticalCruiser, sent 3) showed as "Artillery Cruiser", and
+		// Simargl (Dreadnought, sent 0) showed no class at all -- i.e.
+		// displayed = table[sent-1]. See mmogShipClassWire.
+		wireClass := mmogShipClassWire(ship.shipClass)
+		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipClass", strconv.Itoa(int(wireClass)))) {
+			t.Fatalf("tech tree row for %q missing ShipClass=%d (internal %d)", ship.name, wireClass, ship.shipClass)
 		}
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "Weight", strconv.Itoa(int(ship.weight)))) {
 			t.Fatalf("tech tree row for %q missing Weight=%d", ship.name, ship.weight)

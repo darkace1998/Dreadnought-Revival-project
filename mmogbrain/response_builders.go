@@ -542,7 +542,7 @@ func appendMmogFleetBackendFields(b []byte, stack []int, playerPID string, fleet
 		b = protocol.AppendStringField(b, "m_pid", playerPID)
 		b = protocol.AppendInt32Field(b, "m_precastLoadoutID", lo.precastLoadoutID)
 		b = protocol.AppendStringField(b, "m_name", lo.loadoutName)
-		b = protocol.AppendInt32Field(b, "m_shipClass", lo.ship.shipClass)
+		b = protocol.AppendInt32Field(b, "m_shipClass", mmogShipClassWire(lo.ship.shipClass))
 		b = protocol.AppendStringField(b, "m_displayInfo", lo.displayInfo())
 		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_weaponIDs", lo.weaponIDs())
 		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityIDs", lo.abilityItemIDs())
@@ -1330,9 +1330,9 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	// comment) — plain int32 silently defaults every one of these to 0.
 	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
-	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(loadout.ship.shipClass)))
+	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
 	b = protocol.AppendStringField(b, "m_name", loadout.loadoutName)
-	b = protocol.AppendInt32Field(b, "m_shipClass", loadout.ship.shipClass)
+	b = protocol.AppendInt32Field(b, "m_shipClass", mmogShipClassWire(loadout.ship.shipClass))
 	b = protocol.AppendStringField(b, "displayInfo", loadout.displayInfo())
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
 	b = protocol.AppendInt32Field(b, "m_loadoutTier", 1)
@@ -1384,7 +1384,7 @@ func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoad
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendStringField(b, "loadoutIndex", strconv.Itoa(int(loadout.loadoutIndex)))
-	b = protocol.AppendStringField(b, "m_shipClass", strconv.Itoa(int(loadout.ship.shipClass)))
+	b = protocol.AppendStringField(b, "m_shipClass", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
 	b = protocol.AppendStringField(b, "m_loadoutTier", strconv.Itoa(1))
 	b = protocol.AppendBoolField(b, "m_loadoutComplete", loadout.complete())
@@ -1961,6 +1961,27 @@ func techTreeRowTier(ship mmogShipSeed) int {
 	return 1
 }
 
+// mmogShipClassWire converts an internal base-class ordinal (0=Dreadnought,
+// 1=Corvette, 2=ArtilleryCruiser, 3=TacticalCruiser, 4=Destroyer) into the
+// value the client expects on the wire, which is ONE-BASED with 0 meaning "no
+// class".
+//
+// Established from what the client actually renders for the starter fleet.
+// Sending the raw ordinal produced, in the fleet overview:
+//
+//	Rurik    (ArtilleryCruiser, sent 2) -> displayed "Corvette"
+//	Cerberus (TacticalCruiser,  sent 3) -> displayed "Artillery Cruiser"
+//	Simargl  (Dreadnought,      sent 0) -> displayed NO class at all
+//
+// i.e. displayed = table[sent - 1], with 0 falling off the bottom into blank.
+// So every value was one too low. FUN_140303fb0's switch reads 0 as
+// Dreadnought, which is what made the raw ordinal look right on paper -- but
+// that function is not what the fleet overview feeds, and three independent
+// observations beat one inferred mapping.
+func mmogShipClassWire(shipClass int32) int32 {
+	return shipClass + 1
+}
+
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// Identity + structure the client uses to match this node against its
@@ -1994,7 +2015,7 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
-	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(ship.shipClass)))
+	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(mmogShipClassWire(ship.shipClass))))
 	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
 	// REGRESSION FIX: for ships that have a starter loadout, emit
 	// m_precastLoadoutID + m_shipLoadoutInfo. The client's hangar fleet loader
