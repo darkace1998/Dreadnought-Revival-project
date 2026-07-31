@@ -96,6 +96,11 @@ start() {
         echo "missing binary: run/$name -- run scripts/setup.sh" >&2
         return
     fi
+    # NOTE: run/<name>.log only captures stdout/stderr. mmogbrain ALSO opens its
+    # own "mmogbrain.log" relative to the working directory (main.go), and that
+    # is where the detailed JSON request log goes -- so the mmog frame log lives
+    # at <repo>/mmogbrain.log, not run/mmogbrain.log. Grep the former when
+    # tracing client requests.
     DB_PATH="$(db_for "$name")" "$@" >>"$RUN_DIR/$name.log" 2>&1 &
     echo $! >"$RUN_DIR/$name.pid"
     echo "started $name $(cat "$RUN_DIR/$name.pid")"

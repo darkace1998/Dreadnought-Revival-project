@@ -64,6 +64,11 @@ var dailyContractsResponseDisabled = os.Getenv("DN_ANSWER_DAILY_CONTRACTS") != "
 // only; see the deferral site below for why deferring is the default.
 var deferPlayerFleetsDisabled = os.Getenv("DN_NO_DEFER_PLAYER_FLEETS") == "1"
 
+// deferTechTreeDisabled restores answering YA_GetTechTree immediately
+// (DN_NO_DEFER_TECHTREE=1). Escape hatch only; see the deferral site for why
+// deferring is the default.
+var deferTechTreeDisabled = os.Getenv("DN_NO_DEFER_TECHTREE") == "1"
+
 // maxMmogConnIdleDuration bounds how long a connection may go without
 // sending any data before it's closed. Generous relative to the client's
 // normal ping cadence (observed ~5s) so legitimate idle players aren't
@@ -248,6 +253,8 @@ type mmogConnState struct {
 	pendingDailyContracts    []protocol.AppFrame // delayed until YA_PlayerGet avoids early quest-cycle recursion
 	pendingPlayerFleets      []protocol.AppFrame // delayed until YA_PlayerGet fleet config is loaded
 	pendingStaticFleetData   []protocol.AppFrame // delayed until YA_PlayerGet fleet config is loaded
+	pendingTechTree          []protocol.AppFrame // delayed so its document is the LAST one stored
+	tuneResponded            bool
 	staticFleetDataReceived  bool
 	fleetEligibilityReceived bool
 	playerFleetsReceived     bool
@@ -283,6 +290,23 @@ func syntheticRequestID(tag byte) [16]byte {
 	synthID[1] = 0xee
 	synthID[2] = 0x77
 	return synthID
+}
+
+// flushPendingTechTree writes any tech tree response held back by the deferral
+// in processMmogAppFrames. It is a no-op when nothing is pending.
+func flushPendingTechTree(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {
+	if len(state.pendingTechTree) == 0 {
+		return nil
+	}
+	pending := state.pendingTechTree
+	state.pendingTechTree = nil
+	for _, tt := range pending {
+		ttResp := buildMmogRequestResponseFrame(tt.RequestID, tt.MsgType, "YA_GetTechTree", state.playerPID, tt.Payload)
+		if err := writeMmogAppResponse(log, conn, remote, tt.RequestID, "YA_GetTechTree", ttResp, appEncoder, encryptResponses, "pending tech tree response failed", "sent pending YA_GetTechTree response"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
@@ -328,6 +352,10 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 				return err
 			}
 		}
+	}
+	// Backstop: if YA_Tune never arrives, do not sit on the tech tree forever.
+	if err := flushPendingTechTree(log, conn, remote, appEncoder, encryptResponses, state); err != nil {
+		return err
 	}
 	log.WithFields(logrus.Fields{
 		"remote": remote,
@@ -480,6 +508,28 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			// only its ~44s timeout broke the deadlock. Live testing disproved
 			// it: with YA_PlayerFleets left entirely unanswered the client still
 			// sent YA_PlayerGet ~6s after login, with no stall.
+			// Defer the tech tree so its document is the LAST one stored.
+			//
+			// Every blob the client parses this way lands in ONE shared slot at
+			// mmogbrain+0x40a0 (FUN_142a14420), and each store broadcasts the
+			// delegate at +0x1230. UYTechTreeManager subscribes to that delegate
+			// (FUN_140403d60 -> FUN_140401900), and its loader FUN_1403ffde0
+			// begins with FUN_140404e70 -- clear all tables -- then reads
+			// whatever document is in the slot. So any later document silently
+			// WIPES the tech tree, with nothing logged.
+			//
+			// Four fields write that slot: CatalogData (response slot 0x3660),
+			// TechTrees (0x36b0), "packed" (YA_TuneReturn) and CatalogData
+			// (YA_GetOffers). The client asks for the tech tree EARLY --
+			// observed order is YA_GetTechTree ... YA_PlayerFleets, YA_Tune,
+			// YA_GetSeasonData, YA_PlayerGet -- so YA_Tune is answered after it.
+			// Holding the tech tree until YA_PlayerGet puts it after every one
+			// of those, making ours the document the manager finally loads.
+			if requestName == "YA_GetTechTree" && !deferTechTreeDisabled && !state.tuneResponded {
+				state.pendingTechTree = append(state.pendingTechTree, frame)
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: deferring YA_GetTechTree until YA_PlayerGet is answered")
+				continue
+			}
 			if requestName == "YA_PlayerFleets" && !deferPlayerFleetsDisabled && !state.playerGetResponded {
 				state.pendingPlayerFleets = append(state.pendingPlayerFleets, frame)
 				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: deferring YA_PlayerFleets until YA_PlayerGet is answered")
@@ -539,6 +589,20 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 					return err
 				}
 				if err := handlePlayerGetSatisfied(log, conn, remote, appEncoder, encryptResponses, state, "client-request"); err != nil {
+					return err
+				}
+			}
+			if requestName == "YA_Tune" {
+				// YA_Tune's response carries the "packed" blob, which the client
+				// parses into the SAME shared document slot the tech tree uses
+				// (mmogbrain+0x40a0) and which re-fires the delegate that makes
+				// UYTechTreeManager reload -- clearing its tables first. So the
+				// tech tree has to land after this. Release it now rather than
+				// waiting for YA_PlayerGet: the client is known to block on some
+				// bootstrap responses before sending YA_PlayerGet, and a shorter
+				// hold is less likely to trip that mutual wait.
+				state.tuneResponded = true
+				if err := flushPendingTechTree(log, conn, remote, appEncoder, encryptResponses, state); err != nil {
 					return err
 				}
 			}
