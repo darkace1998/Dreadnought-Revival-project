@@ -1786,6 +1786,10 @@ const techTreeProxyTypeShip = -1
 // appendMmogTechTreeItem.
 var techTreeCanaryEnabled = os.Getenv("DN_TECHTREE_CANARY") == "1"
 
+// techTreePrereqArray restores the pre-3d66dce bare-array encoding of Prereq
+// and Wires; see appendMmogTechTreeItem.
+var techTreePrereqArray = os.Getenv("DN_TECHTREE_PREREQ_ARRAY") == "1"
+
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
 	id   int32
@@ -1893,13 +1897,30 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// See AppendIndexedStringListField for the full mechanism. Positions are
 	// unchanged, so the loader's stride-0x50 walk over the children still reads
 	// the same ids in the same order.
-	b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
+	// DN_TECHTREE_PREREQ_ARRAY=1 restores the ORIGINAL bare-array encoding.
+	//
+	// This exists to settle a suspicious correlation: the loader demonstrably
+	// RAN before this field became a named object (it logged 12 "Invalid tech
+	// tree item type" errors, one per item carrying a prereq), and it has been
+	// silent in every log since -- including logs predating the response
+	// reorder, so the reorder is not the variable. If flipping this back makes
+	// the loader speak again, the named-object encoding is what stopped it.
+	if techTreePrereqArray {
+		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
+	} else {
+		b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
+	}
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
 	// nodes still render, just without the joining lines -- and the real
 	// coordinates are a layout concern to solve once nodes appear at all. It
 	// carries no children, so the name-less-container fallback above cannot
 	// fire on it either way, but it is written the same way for consistency.
-	b, stack = protocol.AppendIndexedStringListField(b, stack, "Wires", nil)
+	if techTreePrereqArray {
+		b, stack = protocol.AppendArrayStart(b, stack, "Wires")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	} else {
+		b, stack = protocol.AppendIndexedStringListField(b, stack, "Wires", nil)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
