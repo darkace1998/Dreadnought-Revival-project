@@ -1832,6 +1832,10 @@ var techTreeProbeFirst = os.Getenv("DN_TECHTREE_PROBE_FIRST") == "1"
 // see buildMmogTechTreeDocument for why that only ever loaded one third.
 var techTreeSplitGroups = os.Getenv("DN_TECHTREE_SPLIT_GROUPS") == "1"
 
+// techTreeBareManufacturer sends Manufacturer unpadded; see
+// appendMmogTechTreeItem.
+var techTreeBareManufacturer = os.Getenv("DN_TECHTREE_BARE_MANUFACTURER") == "1"
+
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
 	id   int32
@@ -1882,7 +1886,23 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	}
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(item.id)))
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(item.classID)))
-	b = protocol.AppendStringField(b, "Manufacturer", strconv.Itoa(int(item.manufacturer)))
+	// Manufacturer is zero-padded to two characters ("00"/"01"/"02"), not sent
+	// as a bare "0"/"1"/"2".
+	//
+	// This client has a documented one-character-string quirk: Visible has to
+	// be "01" rather than "1" because its truthiness test is (len - 1) > 0, so
+	// a single character reads as false. Manufacturer values are all one
+	// character, and they are the group key that FindManufacturerById
+	// (FUN_1403f4c70) matches on -- the one lookup still failing. Padding costs
+	// nothing (_wtoi("02") == 2) and removes the shortest string in the item
+	// from suspicion.
+	//
+	// DN_TECHTREE_BARE_MANUFACTURER=1 sends the unpadded form.
+	manufacturer := strconv.Itoa(int(item.manufacturer))
+	if !techTreeBareManufacturer && len(manufacturer) < 2 {
+		manufacturer = "0" + manufacturer
+	}
+	b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(item.position)))
 	// Visible gates the whole item: a falsy value makes the loader jump past the
