@@ -1836,6 +1836,9 @@ var techTreeSplitGroups = os.Getenv("DN_TECHTREE_SPLIT_GROUPS") == "1"
 // appendMmogTechTreeItem.
 var techTreeBareManufacturer = os.Getenv("DN_TECHTREE_BARE_MANUFACTURER") == "1"
 
+// techTreeNoPrereq omits the Prereq container; see appendMmogTechTreeItem.
+var techTreeNoPrereq = os.Getenv("DN_TECHTREE_NO_PREREQ") == "1"
+
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
 	id   int32
@@ -1928,7 +1931,11 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	b = protocol.AppendStringField(b, "Visible", "01")
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
-	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(len(item.prereq)))
+	numRequired := len(item.prereq)
+	if techTreeNoPrereq {
+		numRequired = 0
+	}
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(numRequired))
 	// DIAGNOSTIC (DN_TECHTREE_CANARY=1): give the FIRST item an out-of-range
 	// ProxyType so the loader is forced to announce itself. UYTechTreeManager's
 	// only log line is "Invalid tech tree item type: %d", emitted when the
@@ -2003,9 +2010,27 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// it reports nothing, and in neither case does it report 999.
 	//
 	// DN_TECHTREE_NAMED_PREREQ=1 restores the broken encoding for comparison.
-	if techTreePrereqNamed {
+	// DN_TECHTREE_NO_PREREQ=1 omits Prereq entirely.
+	//
+	// Every misread points at this container. The loader reads Prereq, FPCost,
+	// XPCost, Manufacturer and ProxyType from the SAME register (R12, never
+	// reloaded between 140401189 and 14040131d), and the ProxyType canary
+	// proves that read lands on the Prereq container rather than the item: with
+	// the canary on, all 37 reported values are prereq VALUES, including the
+	// tier-1 ids 33489262/63/64 which have no prereq of their own and so cannot
+	// be the ids of items that have one.
+	//
+	// If Manufacturer is being captured the same way, the group key is garbage
+	// and FindManufacturerById can never match 0/1/2 -- which is the only
+	// failure left. Dropping Prereq tests that directly: prereqs are cosmetic
+	// (they draw the dependency lines between nodes), so the cost of being
+	// wrong is lines, and the payoff of being right is the whole screen.
+	switch {
+	case techTreeNoPrereq:
+		// nothing
+	case techTreePrereqNamed:
 		b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
-	} else {
+	default:
 		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
 	}
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
