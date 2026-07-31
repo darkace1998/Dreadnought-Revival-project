@@ -3443,19 +3443,17 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 		t.Error("ProxyType must be -1 or ships land in the sub-array FindItemForShipId never reads")
 	}
 
-	// Prereq and Wires are containers, not scalars -- and specifically OBJECT
-	// containers (0x0c), not arrays (0x0d). An array's children are stored
-	// positionally with their names discarded, and the client's field lookup
-	// treats a name-less container as indexable: it resolves any field name to
-	// _wtoi(name) == 0 and returns child[0]. The loader read ProxyType off the
-	// Prereq container that way and got the prereq id, failing its [-1, 9]
-	// range check once per item that carries a prereq.
+	// Prereq and Wires are bare ARRAYS (0x0d). An earlier version of this test
+	// demanded objects (0x0c), to stop the loader indexing the name-less Prereq
+	// container by position and logging 12 "Invalid tech tree item type"
+	// errors. Those errors are cosmetic, and the named-object encoding BROKE
+	// the tech tree: A/B'd across three client sessions with the ship detail
+	// open, named objects produced 6 "Modules not found" and 4
+	// "ComposeShipManufacturerDataForId Could not find", bare arrays produced 0
+	// of each. See appendMmogTechTreeItem.
 	for _, field := range []string{"Prereq", "Wires"} {
-		if !bytes.Contains(document, appendFieldMarker(field, 0x0c)) {
-			t.Errorf("%q must be an object field; an array loses its child names", field)
-		}
-		if bytes.Contains(document, appendFieldMarker(field, 0x0d)) {
-			t.Errorf("%q is still an array; that is what made the loader index it by position", field)
+		if !bytes.Contains(document, appendFieldMarker(field, 0x0d)) {
+			t.Errorf("%q must be a bare array; the named-object form breaks the loader", field)
 		}
 	}
 }

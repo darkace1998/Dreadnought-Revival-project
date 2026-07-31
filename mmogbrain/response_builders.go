@@ -1786,9 +1786,10 @@ const techTreeProxyTypeShip = -1
 // appendMmogTechTreeItem.
 var techTreeCanaryEnabled = os.Getenv("DN_TECHTREE_CANARY") == "1"
 
-// techTreePrereqArray restores the pre-3d66dce bare-array encoding of Prereq
-// and Wires; see appendMmogTechTreeItem.
-var techTreePrereqArray = os.Getenv("DN_TECHTREE_PREREQ_ARRAY") == "1"
+// techTreePrereqNamed opts back in to the named-object encoding of Prereq and
+// Wires that 3d66dce made the default. It is OFF by default because that
+// encoding broke the tech tree; see appendMmogTechTreeItem. Escape hatch only.
+var techTreePrereqNamed = os.Getenv("DN_TECHTREE_NAMED_PREREQ") == "1"
 
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
@@ -1897,29 +1898,45 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// See AppendIndexedStringListField for the full mechanism. Positions are
 	// unchanged, so the loader's stride-0x50 walk over the children still reads
 	// the same ids in the same order.
-	// DN_TECHTREE_PREREQ_ARRAY=1 restores the ORIGINAL bare-array encoding.
+	// Prereq and Wires are BARE ARRAYS. This reverts 3d66dce, which made them
+	// named objects to silence 12 "Invalid tech tree item type" errors -- and
+	// broke the tech tree doing it.
 	//
-	// This exists to settle a suspicious correlation: the loader demonstrably
-	// RAN before this field became a named object (it logged 12 "Invalid tech
-	// tree item type" errors, one per item carrying a prereq), and it has been
-	// silent in every log since -- including logs predating the response
-	// reorder, so the reorder is not the variable. If flipping this back makes
-	// the loader speak again, the named-object encoding is what stopped it.
-	if techTreePrereqArray {
-		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
-	} else {
+	// A/B across three client sessions, all with the ship detail screen opened:
+	//
+	//	encoding          canary  "Modules not found"  "ComposeShipManuf...Id"
+	//	named object          0                    6                        4
+	//	bare array (this)    12                    0                        0
+	//	bare array (this)    24                    0                        0
+	//
+	// So those 12 errors were cosmetic. They come from the loader reading
+	// ProxyType off the PREREQ container rather than the item: with a bare
+	// array the container has no stored names, so the lookup falls back to
+	// index 0 and returns the first prereq id, which fails the [-1, 9] range
+	// check and logs. The value it would have used, -1, is also the default
+	// already sitting in the slot, so nothing downstream changes -- the log
+	// line is the entire effect.
+	//
+	// A ProxyType canary (999) on every item proved the read never touches the
+	// item node: with arrays it always reports a prereq id, with named objects
+	// it reports nothing, and in neither case does it report 999.
+	//
+	// DN_TECHTREE_NAMED_PREREQ=1 restores the broken encoding for comparison.
+	if techTreePrereqNamed {
 		b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
+	} else {
+		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
 	}
 	// Wires are the connector lines drawn between nodes. Empty is valid -- the
 	// nodes still render, just without the joining lines -- and the real
 	// coordinates are a layout concern to solve once nodes appear at all. It
 	// carries no children, so the name-less-container fallback above cannot
 	// fire on it either way, but it is written the same way for consistency.
-	if techTreePrereqArray {
+	if techTreePrereqNamed {
+		b, stack = protocol.AppendIndexedStringListField(b, stack, "Wires", nil)
+	} else {
 		b, stack = protocol.AppendArrayStart(b, stack, "Wires")
 		b, stack = protocol.AppendObjectEnd(b, stack)
-	} else {
-		b, stack = protocol.AppendIndexedStringListField(b, stack, "Wires", nil)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
