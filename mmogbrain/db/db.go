@@ -270,16 +270,31 @@ func migrate(db *sql.DB) error {
 	}
 	var current int
 	_ = db.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_versions`).Scan(&current)
+
+	// Every statement in migrations is CREATE ... IF NOT EXISTS, so running
+	// them all on every start is safe and self-repairing. It used to skip any
+	// index <= the recorded version, which made the list's ORDER load-bearing
+	// and silently lost work: this database recorded versions 1..23 while only
+	// 21 migrations were declared, so player_stats_counters -- sitting at index
+	// 11 after the list was edited -- was treated as long since applied and was
+	// never created. The table's absence then surfaced only as a per-request
+	// "mmog: read stats counters ... no such table" warning, and every career
+	// goal keyed on a counter silently read 0.
+	//
+	// Skipping is not worth the fragility here: the whole set is idempotent and
+	// tiny. If a non-idempotent migration is ever added, this has to become a
+	// real versioned runner again -- and then inserting into the middle of the
+	// list is what must be forbidden, not merely discouraged.
 	for i, ddl := range migrations {
-		v := i + 1
-		if v <= current {
-			continue
-		}
 		if _, err := db.Exec(ddl); err != nil {
-			return fmt.Errorf("migration %d: %w", v, err)
+			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
-		if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, v); err != nil {
-			return fmt.Errorf("record schema version %d: %w", v, err)
+	}
+	if len(migrations) > current {
+		for v := current + 1; v <= len(migrations); v++ {
+			if _, err := db.Exec(`INSERT INTO schema_versions(version) VALUES(?)`, v); err != nil {
+				return fmt.Errorf("record schema version %d: %w", v, err)
+			}
 		}
 	}
 	return nil
