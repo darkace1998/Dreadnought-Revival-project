@@ -1736,7 +1736,6 @@ func techTreeItemLimit() int {
 }
 
 func buildMmogTechTreeDocument() []byte {
-	techTreeCanaryUsed = false
 	limit := techTreeItemLimit()
 	byManufacturer := map[int32][]techTreeItem{}
 	nextPosition := map[int32]map[bool]int32{}
@@ -1784,10 +1783,8 @@ func buildMmogTechTreeDocument() []byte {
 const techTreeProxyTypeShip = -1
 
 // techTreeCanaryEnabled arms the ProxyType canary described in
-// appendMmogTechTreeItem. techTreeCanaryUsed keeps it to a single node per
-// document build.
+// appendMmogTechTreeItem.
 var techTreeCanaryEnabled = os.Getenv("DN_TECHTREE_CANARY") == "1"
-var techTreeCanaryUsed bool
 
 // techTreeRow pairs a ship with the id its tech tree row is keyed on.
 type techTreeRow struct {
@@ -1863,9 +1860,12 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	//                                          document is not reaching it.
 	//
 	// Costs one rejected node while enabled. Off by default.
+	// Applied to EVERY item, not just the first: a canary on one node only
+	// answers "did the loader reach THAT node", and leaves open that it bailed
+	// somewhere earlier in the walk. On every node, any log line at all proves
+	// the loader reached an item, and silence rules the whole per-item path out.
 	proxyType := strconv.Itoa(techTreeProxyTypeShip)
-	if techTreeCanaryEnabled && !techTreeCanaryUsed {
-		techTreeCanaryUsed = true
+	if techTreeCanaryEnabled {
 		proxyType = "999"
 	}
 	b = protocol.AppendStringField(b, "ProxyType", proxyType)
