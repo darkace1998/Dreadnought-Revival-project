@@ -301,6 +301,28 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 				"client_id":         peerID,
 				"recipient_peer":    peerID,
 				"created_timestamp": now,
+				// The client's OWN identity. Without it _OnChatChannelMessage
+				// and _OnChatUserMessage both warn "user profile was not
+				// setup!" and drop the message: the check is
+				// FUN_142a65f80(this + 0x3a8), which is true when those 16
+				// bytes are all zero, and nothing else we send fills them.
+				// client_id/recipient_peer are this CONNECTION's peer id, which
+				// is not the player.
+				//
+				// Sent under several names because which one the client reads
+				// is not established; they all carry the same value, so unlike
+				// a sentinel probe there is no ambiguity to resolve later.
+				"pid":          dashedPlayerGUID(playerID),
+				"PID":          dashedPlayerGUID(playerID),
+				"user_id":      dashedPlayerGUID(playerID),
+				"user_guid":    dashedPlayerGUID(playerID),
+				"guid":         dashedPlayerGUID(playerID),
+				"profile_id":   dashedPlayerGUID(playerID),
+				"player_id":    dashedPlayerGUID(playerID),
+				"peer_id":      peerID,
+				"user":         firmamentSelfProfile(playerID, peerID),
+				"profile":      firmamentSelfProfile(playerID, peerID),
+				"user_profile": firmamentSelfProfile(playerID, peerID),
 			},
 		},
 	})

@@ -709,3 +709,26 @@ func chatMessageNotice(method string, channel string, sender map[string]any, bod
 		"timestamp":    time.Now().Unix(),
 	})
 }
+
+// firmamentSelfProfile describes the connected player to themselves.
+//
+// The client keeps its own profile GUID at chat+0x3a8 and refuses to render an
+// incoming chat line without it -- "_OnChatChannelMessage: user profile was not
+// setup!" -- because the guard is FUN_142a65f80(this + 0x3a8), an all-zeros
+// test. The peer id we send in client_id is the CONNECTION's identity, not the
+// player's, so it never filled that slot.
+func firmamentSelfProfile(playerID, peerID string) map[string]any {
+	guid := dashedPlayerGUID(playerID)
+	return map[string]any{
+		"pid":      guid,
+		"PID":      guid,
+		"guid":     guid,
+		"user_id":  guid,
+		"peer_id":  peerID,
+		"name":     "",
+		"nickname": "",
+		"status":   "online",
+		"message":  "",
+		"online":   true,
+	}
+}
