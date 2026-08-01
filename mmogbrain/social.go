@@ -565,35 +565,71 @@ func firmamentNotice(action string, fields map[string]any) map[string]any {
 //	else "SendChat to MatchAll failed: channel name is empty"
 //
 // Those slots are only ever written by OnUserJoinedChannel (FUN_142a377d0),
-// which classifies the name it is given (FUN_142a1f6d0) and files it under the
-// matching room type. So the client cannot chat until the server has NAMED the
-// channels for it -- it never asks, it waits. Observed live as
-// "Send chat to Global failed: channel name is empty" once per keystroke.
+// bound to the Firmament delegate at +0x100. The client never asks -- it creates
+// its Global and English room types at startup and waits.
+//
+// SHAPE, from the inbound dispatcher FUN_142a8dfa0. It routes on the frame's
+// METHOD, compared against four runtime-built globals which resolve to
+// chat.channel.notice, chat.channel.info, chat.channel.message and
+// chat.user.message. For chat.channel.notice it then switches on a value
+// compared against the literals "join" (DAT_1438cdba4) and "leave":
+//
+//	if (method == chat.channel.notice) {
+//	    if (value == "join")  { store the channel; add the user }
+//	    else if (value == "leave") { remove the user }
+//	}
+//
+// So a join is NOT method "chat.channel.join" -- that is only the name of the
+// request a client sends. The event is a chat.channel.NOTICE whose value is
+// "join". An earlier attempt used the server.notice envelope that carries our
+// auth success; the client logged the frame in !!IN!! and did nothing with it,
+// because that envelope has no method for this dispatcher to route on.
 func chatJoinNotice(channel string, user map[string]any) map[string]any {
+	return chatChannelNotice(channel, "join", user)
+}
+
+// chatChannelNotice builds a join/leave membership event.
+func chatChannelNotice(channel string, event string, user map[string]any) map[string]any {
 	channelType, _ := chatChannelType(channel)
-	return firmamentNotice("chat.channel.join", map[string]any{
-		"channel":      channel,
-		"channel_name": channel,
-		"name":         channel,
-		"room":         channel,
-		"type":         channelType,
-		"user":         user,
-		"users":        []any{user},
-	})
+	return map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "chat.channel.notice",
+		"params": map[string]any{
+			// The dispatcher's "join"/"leave" comparison. Which key carries it
+			// is not established -- the value is read from an already-parsed
+			// structure rather than by name -- so the ones a notice plausibly
+			// uses all carry it.
+			"notice":  event,
+			"event":   event,
+			"action":  event,
+			"state":   event,
+			"channel": channel, "channel_name": channel, "name": channel, "room": channel,
+			"type":  channelType,
+			"user":  user,
+			"users": []any{user},
+		},
+	}
 }
 
 // chatMessageNotice is the server-initiated delivery of one chat line.
+// chatMessageNotice is the server-initiated delivery of one chat line. Same
+// envelope as the membership notice: the dispatcher routes chat.channel.message
+// and chat.user.message the same way it routes chat.channel.notice.
 func chatMessageNotice(method string, channel string, sender map[string]any, body string) map[string]any {
-	return firmamentNotice(method, map[string]any{
-		"channel":      channel,
-		"channel_name": channel,
-		"name":         channel,
-		"message":      body,
-		"content":      body,
-		"text":         body,
-		"sender":       sender,
-		"from":         sender,
-		"user":         sender,
-		"timestamp":    time.Now().Unix(),
-	})
+	return map[string]any{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params": map[string]any{
+			"channel":      channel,
+			"channel_name": channel,
+			"name":         channel,
+			"message":      body,
+			"content":      body,
+			"text":         body,
+			"sender":       sender,
+			"from":         sender,
+			"user":         sender,
+			"timestamp":    time.Now().Unix(),
+		},
+	}
 }

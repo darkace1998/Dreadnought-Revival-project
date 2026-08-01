@@ -66,22 +66,24 @@ func readPush(t *testing.T, r *bufio.Reader) map[string]any {
 	}
 }
 
-// readNotice unwraps the {"id","type":"server.notice","data":{"notice":{...}}}
-// envelope the client actually accepts. Incoming frames are NOT JSON-RPC; the
-// only server-initiated shape this client is known to act on is the one our auth
-// success already uses.
-func readNotice(t *testing.T, r *bufio.Reader) map[string]any {
+// readNotice unwraps a chat event and returns its params.
+//
+// Chat events are routed by the client's inbound dispatcher (FUN_142a8dfa0) on
+// the frame's METHOD, so they must carry one -- the server.notice envelope our
+// auth success uses has no method and the client logged such a frame in !!IN!!
+// and did nothing with it.
+func readNotice(t *testing.T, r *bufio.Reader) (string, map[string]any) {
 	t.Helper()
 	msg := readPush(t, r)
-	if msg["type"] != "server.notice" {
-		t.Fatalf("push type = %v, want server.notice", msg["type"])
+	method, _ := msg["method"].(string)
+	if method == "" {
+		t.Fatalf("chat event has no method, so the client cannot route it: %v", msg)
 	}
-	data, _ := msg["data"].(map[string]any)
-	notice, _ := data["notice"].(map[string]any)
-	if notice == nil {
-		t.Fatalf("push has no data.notice: %v", msg)
+	params, _ := msg["params"].(map[string]any)
+	if params == nil {
+		t.Fatalf("chat event has no params: %v", msg)
 	}
-	return notice
+	return method, params
 }
 
 // A channel type the client's classifier does not know must be refused, not
@@ -142,15 +144,15 @@ func TestChatMessageReachesOtherMembers(t *testing.T) {
 		peer:   sender, hub: hub,
 	})
 
-	notice := readNotice(t, listenerRead)
-	if notice["action"] != "chat.channel.message" {
-		t.Errorf("notice action = %v, want chat.channel.message", notice["action"])
+	method, params := readNotice(t, listenerRead)
+	if method != "chat.channel.message" {
+		t.Errorf("event method = %v, want chat.channel.message", method)
 	}
-	if notice["message"] != "hello" {
-		t.Errorf("notice message = %v, want hello", notice["message"])
+	if params["message"] != "hello" {
+		t.Errorf("event message = %v, want hello", params["message"])
 	}
-	if notice["channel"] != "global" {
-		t.Errorf("notice channel = %v, want global", notice["channel"])
+	if params["channel"] != "global" {
+		t.Errorf("event channel = %v, want global", params["channel"])
 	}
 }
 
@@ -279,4 +281,38 @@ func TestReconnectReplacesThePreviousPeer(t *testing.T) {
 		t.Errorf("global has %d members after a reconnect, want 1", len(members))
 	}
 	_ = first
+}
+
+// A channel-join event must be a chat.channel.NOTICE carrying "join", not a
+// frame whose method is chat.channel.join.
+//
+// The inbound dispatcher (FUN_142a8dfa0) routes on the method, comparing it
+// against globals that resolve to chat.channel.notice / .info / .message and
+// chat.user.message. Only for chat.channel.notice does it then switch on a value
+// compared against "join" (DAT_1438cdba4) and "leave". "chat.channel.join" is
+// the name of the REQUEST a client sends; no inbound frame is routed by it, and
+// sending one is why the client received our join in !!IN!! and still reported
+// "channel name is empty".
+func TestChatJoinEventUsesTheNoticeMethod(t *testing.T) {
+	notice := chatJoinNotice("global", map[string]any{"pid": "player-a"})
+
+	if notice["method"] != "chat.channel.notice" {
+		t.Errorf("join event method = %v, want chat.channel.notice", notice["method"])
+	}
+	params, _ := notice["params"].(map[string]any)
+	if params == nil {
+		t.Fatal("join event has no params")
+	}
+	joins := 0
+	for _, key := range []string{"notice", "event", "action", "state"} {
+		if params[key] == "join" {
+			joins++
+		}
+	}
+	if joins == 0 {
+		t.Errorf(`join event carries no "join" value the dispatcher can match: %v`, params)
+	}
+	if params["channel"] != "global" {
+		t.Errorf("join event channel = %v, want global", params["channel"])
+	}
 }
