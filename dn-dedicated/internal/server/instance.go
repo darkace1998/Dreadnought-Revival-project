@@ -147,9 +147,32 @@ var ErrNoBinary = errors.New("game binary not found")
 func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	mapURL := cfg.MapPathOrName()
 	mapURL += "?listen"
+	explicitGame := false
 	for _, opt := range cfg.URLOptions {
 		if opt = strings.TrimSpace(opt); opt != "" {
+			if strings.HasPrefix(strings.ToLower(opt), "game=") {
+				explicitGame = true
+			}
 			mapURL += "?" + opt
+		}
+	}
+	// The game mode has to be a URL option. "-GameMode=X" below is NOT read by
+	// UE4 -- it selects the mode from the URL's "game" option and otherwise
+	// falls back to the map's World Settings default. Confirmed live: a match
+	// requested as BC ran Derelict's own default, GameMode_Turbo_TDM_BP.
+	//
+	// The short name suffices. DefaultGame.ini's [/Script/Engine.GameMode]
+	// registers GameModeClassAliases for the names used here (TDM, PodTDM, TE,
+	// TM, Onslaught, Territory, TER, Bootcamp, BC, TMBasic, TurboTDM, plus
+	// Benchmark/Tutorial/Demo/VisualAttraction); "GameModeClassAliases" is in
+	// the shipping binary, so the table is live at runtime, and every target
+	// blueprint is cooked. BC and Bootcamp both map to
+	// /Game/Generic/GameModes/BC/GameInfo_BC_BP.GameInfo_BC_BP_C.
+	//
+	// An explicit game= in URLOptions wins, so an operator can still override.
+	if !explicitGame {
+		if mode := strings.TrimSpace(cfg.GameMode); mode != "" {
+			mapURL += "?game=" + mode
 		}
 	}
 

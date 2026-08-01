@@ -122,13 +122,9 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 	//   * "-log=<unix path>" is meaningless to a Windows binary under Wine,
 	//     which is why the instance log never appeared. The engine writes to its
 	//     own Saved/Logs directory instead.
-	mapURL := mapPath
-	if mapURL == "" {
-		mapURL = mapName
-	}
 	args := []string{
 		s.gameBinary,
-		mapURL + "?listen",
+		battleServerMapURL(mapPath, mapName, gameMode),
 		"-server",
 		fmt.Sprintf("-port=%d", port),
 		"-maxplayers=10",
@@ -390,6 +386,39 @@ func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 // the exact set the working client harness uses, and each is only added when the
 // environment does not already set it, so an operator with real hardware or a
 // different driver can override any of them.
+// battleServerMapURL builds the positional map URL the engine is launched with.
+//
+// The game mode belongs HERE, not on the command line. "-GameMode=X" is not
+// something UE4 reads: it selects the mode from the URL's "game" option and
+// otherwise falls back to the map's World Settings default. Confirmed live -- a
+// match requested as BC came up running Derelict's own default:
+//
+//	LogNet: Welcomed by server (Level: /Game/Maps/MP/Derelict/MP_Derelict_P,
+//	        Game: /Game/Generic/GameModes/TurboTDM/GameMode_Turbo_TDM_BP...)
+//
+// The short name is all that is needed. DefaultGame.ini's
+// [/Script/Engine.GameMode] section registers GameModeClassAliases for exactly
+// the names the matchmaker uses -- TDM, PodTDM, TE, TM, Onslaught, Territory,
+// TER, Bootcamp, BC, TMBasic, TurboTDM, plus Benchmark/Tutorial/Demo/
+// VisualAttraction. "GameModeClassAliases" is present in the shipping binary,
+// so the table is live at runtime, and every target blueprint is cooked into
+// the paks. BC and Bootcamp both resolve to
+// /Game/Generic/GameModes/BC/GameInfo_BC_BP.GameInfo_BC_BP_C.
+//
+// gameMode is already constrained to ^[A-Za-z0-9_]+$ by game-manager's request
+// validation, so it cannot smuggle in further URL options.
+func battleServerMapURL(mapPath, mapName, gameMode string) string {
+	mapURL := mapPath
+	if mapURL == "" {
+		mapURL = mapName
+	}
+	mapURL += "?listen"
+	if gameMode != "" {
+		mapURL += "?game=" + gameMode
+	}
+	return mapURL
+}
+
 func battleServerEnv(configDir string) []string {
 	env := os.Environ()
 

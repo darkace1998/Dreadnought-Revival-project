@@ -49,3 +49,29 @@ func TestBattleServerEnvGameDisplayOverridesInherited(t *testing.T) {
 		t.Fatalf("DISPLAY = %q, want the GAME_DISPLAY override :42", got)
 	}
 }
+
+// UE4 does not read "-GameMode=X"; it takes the mode from the URL's "game"
+// option and otherwise falls back to the map's World Settings default. That is
+// how a match requested as BC came up running Derelict's GameMode_Turbo_TDM_BP.
+// DefaultGame.ini registers GameModeClassAliases for the matchmaker's names, so
+// the short name is all the URL needs.
+func TestMapURLCarriesTheGameModeOption(t *testing.T) {
+	url := battleServerMapURL("/Game/Maps/MP/Derelict/MP_Derelict_P", "Derelict", "BC")
+
+	if url != "/Game/Maps/MP/Derelict/MP_Derelict_P?listen?game=BC" {
+		t.Fatalf("map URL = %q, want the path with ?listen and ?game=BC", url)
+	}
+}
+
+func TestMapURLFallsBackToTheBareMapName(t *testing.T) {
+	if url := battleServerMapURL("", "Derelict", "TDM"); url != "Derelict?listen?game=TDM" {
+		t.Fatalf("map URL = %q, want the bare name with the options", url)
+	}
+}
+
+// No mode must not produce a dangling "?game=".
+func TestMapURLOmitsAnEmptyGameMode(t *testing.T) {
+	if url := battleServerMapURL("/Game/Maps/MP/Derelict/MP_Derelict_P", "Derelict", ""); url != "/Game/Maps/MP/Derelict/MP_Derelict_P?listen" {
+		t.Fatalf("map URL = %q, want no game= option at all", url)
+	}
+}
