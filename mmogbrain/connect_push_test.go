@@ -99,10 +99,28 @@ func TestConnectPushIdentifiesTheInstance(t *testing.T) {
 // YA_Connect makes the client travel immediately. Firing it the moment the
 // match row appears points the client at a process still loading its map.
 func TestConnectPushDelayIsLongEnoughForTheEngineToLoad(t *testing.T) {
+	// Asserts the DEFAULT, not the package var, which DN_CONNECT_PUSH_DELAY can
+	// legitimately override to anything an operator wants.
+	t.Setenv("DN_CONNECT_PUSH_DELAY", "")
 	// Observed under Wine: launch to "Match State Changed from EnteringMap to
-	// WaitingToStart" takes roughly a minute on this hardware.
-	if mmogConnectPushDelay < 60*time.Second {
-		t.Errorf("mmogConnectPushDelay = %s, too short for the engine to reach WaitingToStart",
-			mmogConnectPushDelay)
+	// WaitingToStart" takes roughly a minute cold on this hardware.
+	if got := connectPushDelayFromEnv(); got < 60*time.Second {
+		t.Errorf("default connect push delay = %s, too short for the engine to reach WaitingToStart", got)
+	}
+}
+
+func TestConnectPushDelayIsOverridableFromTheEnvironment(t *testing.T) {
+	t.Setenv("DN_CONNECT_PUSH_DELAY", "20s")
+	if got := connectPushDelayFromEnv(); got != 20*time.Second {
+		t.Errorf("delay = %s, want the 20s override", got)
+	}
+}
+
+// A malformed value must not silently become zero, which would push YA_Connect
+// instantly and travel the client into a server that has not loaded.
+func TestConnectPushDelayIgnoresGarbage(t *testing.T) {
+	t.Setenv("DN_CONNECT_PUSH_DELAY", "soon")
+	if got := connectPushDelayFromEnv(); got != 75*time.Second {
+		t.Errorf("delay = %s, want the 75s default when the value does not parse", got)
 	}
 }

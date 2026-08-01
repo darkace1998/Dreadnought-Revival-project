@@ -438,6 +438,19 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, requestName, response, appEncoder, encryptResponses, "ping response failed", "sent application ping response"); err != nil {
 				return err
 			}
+			// The ping is the ONLY thing a queued client reliably sends, and it
+			// is what makes the match pushes timely. Measured: the client pings
+			// every 5s (1 byte, 0x10, type 0x0300) while sitting in the queue
+			// and sends no named request at all, so a match formed at 01:02:17
+			// was not announced until 01:03:12 -- 55s -- because this branch
+			// continued past the push and the ping simultaneously kept resetting
+			// the read deadline, so the idle-tick path never fired either. Both
+			// escape routes were closed by the same one-byte frame.
+			state.lastMsgType = frame.MsgType
+			state.lastEncrypted = encryptResponses
+			if err := pushMatchProgress(log, conn, remote, frame.MsgType, appEncoder, encryptResponses, state); err != nil {
+				return err
+			}
 			continue
 		}
 		if state.loginResponseSent && requestName != "" && requestName != "YA_UserLogin" {

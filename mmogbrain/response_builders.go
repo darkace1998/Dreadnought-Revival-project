@@ -368,7 +368,21 @@ func buildMmogServerStartingPayload(status mmogMatchmakingStatus) []byte {
 // though dn-dedicated already detects it internally (its WaitReady watches for
 // "Match State Changed from EnteringMap to WaitingToStart"). Once the control
 // plane exposes that, gate on it and delete this.
-var mmogConnectPushDelay = 75 * time.Second
+var mmogConnectPushDelay = connectPushDelayFromEnv()
+
+// connectPushDelayFromEnv reads DN_CONNECT_PUSH_DELAY (a Go duration such as
+// "20s"). Tunable without a rebuild because the right value is entirely a
+// property of the host: the same map reached WaitingToStart in 4s with a warm
+// page cache and in about a minute cold. Lower it once battle servers on your
+// box are consistently quick, or to test; raise it if clients arrive too early.
+func connectPushDelayFromEnv() time.Duration {
+	if raw := os.Getenv("DN_CONNECT_PUSH_DELAY"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d >= 0 {
+			return d
+		}
+	}
+	return 75 * time.Second
+}
 
 // buildMmogConnectPayload is the push that actually sends the client to the
 // battle server. YA_ServerStarting only moves the UI to "Battle server
