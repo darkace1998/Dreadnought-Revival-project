@@ -167,3 +167,53 @@ func TestProvingGroundModeIsOfferedAndSolo(t *testing.T) {
 		t.Error("BC is not accepted by the matchmaker, so entering its queue would be rejected")
 	}
 }
+
+// The queue response must tell the client it SUCCEEDED, or the client treats
+// registration as failed and drops straight back to Idle.
+//
+// Live evidence: "Failed to register for matchmaking. Reason: []" followed by
+// SetMatchmakingState | Idle, for every mode tried. The empty bracket is the
+// tell -- the interpreter maps a reason token onto a UI message and had nothing
+// to map, because neither Success nor Reason was being sent.
+func TestMatchmakingResponseReportsSuccess(t *testing.T) {
+	payload := buildMmogMatchmakingPayload("YA_EnterMatchmaking", mmogMatchmakingStatus{
+		entryID:  "q-1",
+		state:    "waiting",
+		gameMode: "BC",
+	})
+
+	// Numeric string, not a bool: both readers this client uses accept that
+	// form, and where a bool node keeps its payload is not established.
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "Success", "1")) {
+		t.Error("queue response does not report Success=1; the client will treat it as a failed registration")
+	}
+	if !bytes.Contains(payload, appendFieldMarker("Reason", 0x09)) {
+		t.Error("queue response has no Reason field")
+	}
+	if !bytes.Contains(payload, appendFieldMarker("WaitTime", 0x09)) {
+		t.Error("queue response has no WaitTime field")
+	}
+}
+
+// A refusal must name a reason the client understands, or the player is shown a
+// generic error that tells them nothing.
+func TestMatchmakingErrorUsesAKnownReasonToken(t *testing.T) {
+	known := map[string]bool{
+		"invalid_version": true, "invalid_player": true, "invalid_fleet": true,
+		"invalid_gametype": true, "fleet_on_maintenance": true, "map_unavailable": true,
+	}
+	payload := buildMmogMatchmakingErrorPayload("YA_EnterMatchmaking", 2, "invalid_gametype", "unsupported game mode")
+
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "Success", "0")) {
+		t.Error("error response does not report Success=0")
+	}
+	found := ""
+	for token := range known {
+		if bytes.Contains(payload, protocol.AppendStringField(nil, "Reason", token)) {
+			found = token
+		}
+	}
+	if found == "" {
+		t.Error("error response carries no reason token the client's interpreter can map")
+	}
+}

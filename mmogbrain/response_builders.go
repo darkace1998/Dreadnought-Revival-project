@@ -167,7 +167,7 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 		gameMode = matchmaker.DefaultGameMode
 	}
 	if !matchmaker.ValidGameMode(gameMode) {
-		return buildMmogMatchmakingErrorPayload(requestName, 2, "unsupported game mode")
+		return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_gametype", "unsupported game mode")
 	}
 	gameMode = matchmaker.NormalizeGameMode(gameMode)
 	tierMin := protocol.FirstInt32Field(payload, 1, "TierMin", "tierMin", "minTier", "MinTier")
@@ -179,7 +179,7 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 		_, _ = database.Exec(`DELETE FROM queue_entries WHERE user_id=? AND status='waiting'`, pid)
 		if _, err := database.Exec(`INSERT INTO queue_entries(id,user_id,game_mode,tier_min,tier_max,status) VALUES(?,?,?,?,?,'waiting')`,
 			entryID, pid, gameMode, tierMin, tierMax); err != nil {
-			return buildMmogMatchmakingErrorPayload(requestName, 2, "queue insert failed")
+			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue insert failed")
 		}
 	}
 
@@ -194,7 +194,7 @@ func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []by
 	pid := normalizedPlayerStatePID(playerPID)
 	if database := currentMmogPlayerStateDB(); database != nil {
 		if _, err := database.Exec(`DELETE FROM queue_entries WHERE user_id=? AND status='waiting'`, pid); err != nil {
-			return buildMmogMatchmakingErrorPayload(requestName, 2, "queue leave failed")
+			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
 		}
 	}
 	return buildMmogMatchmakingPayload(requestName, mmogMatchmakingStatus{state: "left"})
@@ -300,6 +300,30 @@ func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatu
 		status.state = "ok"
 	}
 	b = protocol.AppendStringField(b, "RT", requestName)
+	// Success/Reason/WaitTime are the fields the client's MatchmakingInterpreter
+	// actually reads, and none of them used to be sent -- so every queue attempt
+	// came back as a failure with no explanation:
+	//
+	//	LogYMmogbrain:Warning: Failed to register for matchmaking. Reason: []
+	//	UMatchmakingInterpreter::SetMatchmakingState | Idle
+	//
+	// observed live for both Onslaught and BC. The empty bracket IS the tell:
+	// the interpreter maps a reason token (invalid_version, invalid_player,
+	// invalid_fleet, invalid_gametype, fleet_on_maintenance, map_unavailable --
+	// FUN_140aa7870) onto a UI message, and got nothing to map, because there
+	// was no Reason field at all. With no Success field either it took the
+	// failure path by default.
+	//
+	// Success goes as a NUMERIC STRING rather than a bool. Both readers this
+	// client uses accept that form: the restrictive value union
+	// (FUN_140238000) takes type 4 and runs _wtoi, and the truthiness test used
+	// elsewhere treats a string of length >= 2 as true while reading types 1-3
+	// out of the numeric slot -- where a bool node keeps its payload is NOT
+	// established, and guessing it wrong is silent.
+	b = protocol.AppendStringField(b, "Success", "1")
+	b = protocol.AppendStringField(b, "Reason", "")
+	// WaitTime is the queue estimate the UI shows while searching.
+	b = protocol.AppendStringField(b, "WaitTime", "0")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendStringField(b, "matchmakingStatus", status.state)
@@ -345,10 +369,20 @@ func buildMmogErrorPayload(requestName string, message string) []byte {
 	return b
 }
 
-func buildMmogMatchmakingErrorPayload(requestName string, code int32, message string) []byte {
+// buildMmogMatchmakingErrorPayload refuses a queue request.
+//
+// reason must be one of the tokens the client's interpreter knows
+// (FUN_140aa7870): invalid_version, invalid_player, invalid_fleet,
+// invalid_gametype, fleet_on_maintenance, map_unavailable. Anything else -- or
+// nothing, which is what we used to send -- lands on its generic "Something went
+// wrong when entering matchmaking" with an empty bracket in the log, telling the
+// player nothing about what to change.
+func buildMmogMatchmakingErrorPayload(requestName string, code int32, reason string, message string) []byte {
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", requestName)
+	b = protocol.AppendStringField(b, "Success", "0")
+	b = protocol.AppendStringField(b, "Reason", reason)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "error")
 	b = protocol.AppendInt32Field(b, "Code", code)
