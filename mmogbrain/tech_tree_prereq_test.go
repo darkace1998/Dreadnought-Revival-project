@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"regexp"
 	"strconv"
 	"strings"
@@ -153,5 +155,75 @@ func TestTechTreeDocumentHasTwoWrappingArrays(t *testing.T) {
 	// The first item must then be an unnamed OBJECT, not another array.
 	if document[12] != 0x00 || document[13] != 0x0c {
 		t.Fatalf("expected an unnamed OBJECT item after the two wrappers, got % x", document[12:14])
+	}
+}
+
+// The tech tree screen renders from LAYOUT data, and the layout lives on each
+// item's "UI" field -- not on the item.
+//
+// UYTechTreeManager's loader reads Position, Visible and Wires from the CHILDREN
+// of the item's UI node (1404002b5 indexes the UI node's children pointer, and
+// the loop is bounded by that node's child count at [RBP+0x1c0]). An item with
+// no UI therefore contributes no layout node at all, which is what left the
+// screen empty with "Attempted to access index 0 from array TreeWidgetList of
+// length 0!" long after the manufacturer groups, tiers, costs and ProxyType had
+// all been fixed and verified in memory. Position/Visible sent flat on the item
+// are read by nothing in this loader.
+func TestTechTreeItemsCarryUILayoutNodes(t *testing.T) {
+	document := buildMmogTechTreeDocument()
+
+	for _, field := range []string{"UI", "Position", "x", "y", "Wires"} {
+		if !strings.Contains(string(document), field) {
+			t.Errorf("document has no %q field; the loader reads it for layout", field)
+		}
+	}
+
+	// Position must be an OBJECT of x and y, both numeric. The loader narrows
+	// each to float32 (MOVSS at 140400456/14040050f) after the usual numeric
+	// union, so a string value is fine but it has to parse as a number.
+	// Field layout is <namelen:1><name><tag 0x09><u32 len><value>.
+	marker := append([]byte{1, 'x', 0x09}, 0, 0, 0, 0)
+	idx := bytes.Index(document, marker[:3])
+	if idx < 0 {
+		t.Fatal(`no "x" string field found inside Position`)
+	}
+	n := int(binary.LittleEndian.Uint32(document[idx+3 : idx+7]))
+	value := string(document[idx+7 : idx+7+n])
+	if _, err := strconv.ParseFloat(value, 64); err != nil {
+		t.Errorf("Position.x %q does not parse as a number: %v", value, err)
+	}
+}
+
+// The tier ROW layout table at manager+0x58 is fed by items whose Id falls in a
+// negative sentinel range, and by nothing else.
+//
+//	140400fbc  MOV EAX,dword ptr [RBP + -0x80]  ; Id
+//	140400fbf  ADD EAX,0x1e8480                 ; +2,000,000
+//	140400fc4  CMP EAX,0xf423f                  ; <= 999,999 unsigned
+//	140400fc9  JA  -> treat as a NORMAL item
+//
+// No real item id can satisfy that, so the array was empty in every live
+// measurement -- which read as "this structure is unreachable" and cost a lot of
+// time. It is reachable; it just needs rows of its own.
+func TestTechTreeLayoutRowIdsPassTheClassLookupGate(t *testing.T) {
+	const (
+		lo = -2000000
+		hi = -1000001
+	)
+	for tier := int32(1); tier <= 5; tier++ {
+		id := techTreeLayoutRowID(tier)
+		if id < lo || id > hi {
+			t.Errorf("tier %d layout row id %d is outside the gate range [%d, %d]", tier, id, lo, hi)
+		}
+		// The gate is an unsigned range check on Id+2,000,000, so verify it the
+		// way the binary does rather than trusting the signed comparison above.
+		if uint32(id+2000000) > 999999 {
+			t.Errorf("tier %d layout row id %d fails the unsigned gate", tier, id)
+		}
+	}
+
+	document := buildMmogTechTreeDocument()
+	if !strings.Contains(string(document), strconv.Itoa(int(techTreeLayoutRowID(1)))) {
+		t.Error("document carries no tier-1 layout row; manager+0x58 will stay empty")
 	}
 }

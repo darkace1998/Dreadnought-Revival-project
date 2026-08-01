@@ -58,7 +58,16 @@ var targetSizes = map[string]int{
 	// which the client looks up by SHIP ID (FUN_1403f5050, called by
 	// ComposeModuleUiDataForShip), so sharing a line root left every tier above
 	// it unable to resolve its modules.
-	"YA_GetTechTree": 14550,
+	// Now 16454: +1904 for the layout data the loader actually reads. Each item
+	// gained a "UI" object holding one named child with Position{x,y}, Visible
+	// and an (empty) Wires array -- Position/Visible sent flat on the item were
+	// never read, because FUN_1403ffde0 reads them from UI's CHILDREN
+	// (1404002b5 indexes the UI node's children pointer). Plus one layout-only
+	// tier row per tier, whose Id sits in the negative sentinel range
+	// [-2000000,-1000001] that routes it to the manager+0x58 (x, y, Tier) table
+	// instead of the item store. Document is zlib'd, so this is a fraction of
+	// the raw growth and leaves ~16KB of headroom under the 32KB ring.
+	"YA_GetTechTree": 16454,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

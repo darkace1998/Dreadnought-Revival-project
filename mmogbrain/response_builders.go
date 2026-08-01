@@ -1848,6 +1848,15 @@ func buildMmogTechTreeDocument() []byte {
 			emitted++
 		}
 	}
+	// The tier ROW layout records, one per tier present. These are not items --
+	// the loader diverts them at 140400fc9 and they never reach the item store
+	// -- they only fill the (x, y, Tier) table at manager+0x58, which every
+	// live measurement has found empty. See appendMmogTechTreeLayoutRow.
+	if !techTreeNoLayoutRows {
+		for _, tier := range techTreeTiersPresent(byManufacturer, order) {
+			b, stack = appendMmogTechTreeLayoutRow(b, stack, tier)
+		}
+	}
 	if !techTreeNoWrap {
 		if !techTreeSingleWrap {
 			b, stack = protocol.AppendObjectEnd(b, stack)
@@ -1959,6 +1968,11 @@ var techTreePrereqManufacturer = os.Getenv("DN_TECHTREE_PREREQ_AS_MANUFACTURER")
 // buildMmogTechTreeDocument.
 var techTreeNoWrap = os.Getenv("DN_TECHTREE_NO_WRAP") == "1"
 
+// techTreeNoLayoutRows drops the tier-row records that populate manager+0x58.
+// They are a new, unproven addition; this is the switch that isolates them if
+// the tree regresses.
+var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
+
 // techTreeSingleWrap restores the single wrapping array; see
 // buildMmogTechTreeDocument.
 var techTreeSingleWrap = os.Getenv("DN_TECHTREE_SINGLE_WRAP") == "1"
@@ -2067,6 +2081,21 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// value of length 2 or more is true. "01" is also still numeric, so nothing
 	// that parses it as a number gets a surprise.
 	b = protocol.AppendStringField(b, "Visible", "01")
+	// The layout node. Position/Visible above are read from UI's children, NOT
+	// from the item -- see appendMmogTechTreeUI -- so the two fields just above
+	// are dead weight to this loader. They are kept because nothing proves some
+	// other consumer does not read them, and they cost a few bytes; the live
+	// values are the ones inside UI.
+	//
+	// x comes from the item's position within its tier and y from the tier, so
+	// the tree lays out as tiers in rows. Hero items get their own column band
+	// because they are drawn on a separate grid (HeroShipTechTreeRow0..4 beside
+	// TechTreeRow0..4).
+	uiX := float64(item.position) * techTreeGridX
+	if item.hero {
+		uiX += techTreeHeroColumnOffset
+	}
+	b, stack = appendMmogTechTreeUI(b, stack, uiX, float64(item.tier)*techTreeGridY)
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	numRequired := len(item.prereq)
@@ -2233,6 +2262,146 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 		b, stack = protocol.AppendArrayStart(b, stack, "Wires")
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+// The tech tree's LAYOUT lives on the item's "UI" field, not on the item.
+//
+// UYTechTreeManager's loader (FUN_1403ffde0) reads two disjoint sets of fields.
+// From the ITEM node (RDI, saved to [RBP+0x120]) it reads Id, ClassId,
+// NumTechTreeItemsRequired, UI, and then -- after the UI walk, with R12 reloaded
+// from [RBP+0x120] at 14040117b -- Prereq, FPCost, XPCost, Manufacturer, Tier
+// and ProxyType. From each CHILD of UI it reads Position, Visible and Wires:
+//
+//	1404002ad  LEA RDI,[RAX + RAX*0x4]      ; child index * 0x50 (node stride)
+//	1404002b1  SHL RDI,0x4
+//	1404002b5  ADD RDI,qword ptr [RBP + 0x1b8]   ; UI node's children pointer
+//	1404002bc  MOV RCX,RDI
+//	1404002bf  CALL 0x1402c3bf0                  ; lookup "Position" on the child
+//
+// and the loop is bounded by [RBP+0x1c0], the UI node's CHILD COUNT. So an item
+// with no UI has zero layout nodes and contributes nothing to the screen, no
+// matter how correct the rest of it is. Position/Visible/Wires sent flat on the
+// item -- which is what this file did for months -- are simply never read.
+//
+// Position is an OBJECT of two numbers:
+//
+//	1404003af  LEA RDX,[0x142eeae44]  ; "x"
+//	140400456  MOVSS dword ptr [RSP + 0x40],XMM0
+//	140400468  LEA RDX,[0x142eeaf64]  ; "y"
+//	14040050f  MOVSS dword ptr [RSP + 0x44],XMM0
+//
+// both parsed through the usual numeric union (wcstod for a string node), then
+// narrowed to float32 and packed into an 0x20-byte per-child record laid out as
+// {wires ptr, wires count, wires max, float x, float y, int32 key} -- the key
+// being _wtoi of the child's NAME, which is why UI is written as an object with
+// numeric names rather than a bare array.
+//
+// Visible gates each UI child by the same truthiness test documented on the
+// item's Visible above (type 4 -> length-1 > 0), so it keeps the two-character
+// form.
+const (
+	// techTreeGridX/Y are the spacing between adjacent nodes.
+	//
+	// GUESS: the client stores these coordinates verbatim as float32 and hands
+	// them to Blueprint, so nothing in the binary reveals their unit. The
+	// original server's values are not recoverable from anything we have. These
+	// are a plain grid on the assumption of UMG canvas pixels; if the tree
+	// renders but is spaced wrongly, these two numbers are the only thing to
+	// change.
+	techTreeGridX = 220.0
+	techTreeGridY = 160.0
+	// techTreeHeroColumnOffset pushes the hero grid clear of the ship grid.
+	// Same GUESS caveat as the two above.
+	techTreeHeroColumnOffset = 2000.0
+)
+
+func techTreeCoord(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// appendMmogTechTreeUI writes the item's UI object: one layout child, named "0",
+// carrying the node's position on the tech tree canvas.
+func appendMmogTechTreeUI(b []byte, stack []int, x, y float64) ([]byte, []int) {
+	b, stack = protocol.AppendObjectStart(b, stack, "UI")
+	b, stack = protocol.AppendObjectStart(b, stack, "0")
+	b, stack = protocol.AppendObjectStart(b, stack, "Position")
+	b = protocol.AppendStringField(b, "x", techTreeCoord(x))
+	b = protocol.AppendStringField(b, "y", techTreeCoord(y))
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b = protocol.AppendStringField(b, "Visible", "01")
+	// Wires are the connector polylines between nodes: each entry is an object
+	// of x_start/x_end/y_start/y_end (doubles, same numeric union) plus a "type"
+	// string compared against the ANSI literals "start", "middle" and "end" at
+	// 140400a08/140400a58/140400ab9. They are left empty deliberately -- the
+	// nodes render without their joining lines, and unlike the positions there
+	// is no defensible way to derive segment geometry from what we hold. The
+	// per-child record is appended whether or not any wire was parsed, so an
+	// empty Wires costs nothing structurally.
+	b, stack = protocol.AppendArrayStart(b, stack, "Wires")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+// techTreeLayoutRowID is the Id of the layout-only pseudo-item for a tier row.
+//
+// The loader has a second, mutually exclusive path for items whose Id falls in
+// a negative sentinel range:
+//
+//	140400fbc  MOV EAX,dword ptr [RBP + -0x80]  ; the item's Id
+//	140400fbf  ADD EAX,0x1e8480                 ; +2,000,000
+//	140400fc4  CMP EAX,0xf423f                  ; <= 999,999 unsigned
+//	140400fc9  JA 0x14040117b                   ; out of range -> NORMAL item
+//	140400fcf  TEST R13D,R13D                   ; UI children processed
+//	140400fd2  JLE 0x14040117b
+//	...
+//	140400feb  MOVSD XMM6,qword ptr [RAX + 0x10]  ; child[0]'s packed (x, y)
+//	140401076  MOVSD qword ptr [RDX],XMM6         ; entry+0x00
+//	14040107a  MOV dword ptr [RDX + 0x8],EDI      ; entry+0x08 = Tier
+//	140401176  JMP 0x14040185c                    ; ...and SKIP normal storage
+//
+// i.e. Id in [-2000000, -1000001] with at least one visible UI child stores a
+// 12-byte {float x, float y, int32 Tier} record into the array at manager+0x58
+// and never becomes a tech tree item. That array is the tier ROW layout table.
+// It has been empty in every live measurement because no real item id can reach
+// that range, so we never sent anything that could fill it.
+//
+// The community DLL mod hand-built this array client-side, which is what made it
+// look like a required-but-unreachable structure. It is reachable; it just needs
+// rows of its own.
+func techTreeLayoutRowID(tier int32) int32 { return -1000001 - (tier - 1) }
+
+// techTreeTiersPresent returns the distinct tiers in the emitted roster, sorted.
+func techTreeTiersPresent(byManufacturer map[int32][]techTreeItem, order []int32) []int32 {
+	seen := map[int32]bool{}
+	var tiers []int32
+	for _, manufacturerID := range order {
+		for _, item := range byManufacturer[manufacturerID] {
+			if !seen[item.tier] {
+				seen[item.tier] = true
+				tiers = append(tiers, item.tier)
+			}
+		}
+	}
+	sort.Slice(tiers, func(i, j int) bool { return tiers[i] < tiers[j] })
+	return tiers
+}
+
+// appendMmogTechTreeLayoutRow writes one tier-row record for manager+0x58.
+// Only Id, Tier and UI are read on this path -- it jumps to the cleanup before
+// Manufacturer/ProxyType/Prereq are ever looked at -- but ClassId and
+// NumTechTreeItemsRequired are read earlier in the walk, so they are present.
+func appendMmogTechTreeLayoutRow(b []byte, stack []int, tier int32) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	id := techTreeLayoutRowID(tier)
+	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(id)))
+	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(id)))
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
+	b, stack = appendMmogTechTreeUI(b, stack, 0, float64(tier)*techTreeGridY)
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(tier)))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
