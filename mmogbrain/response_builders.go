@@ -237,6 +237,62 @@ func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {
 	return mmogMatchmakingStatus{state: "idle"}
 }
 
+// buildMmogServerStartingPayload is the unsolicited "your match is ready,
+// connect to this battle server" push (RT YA_ServerStarting).
+//
+// The client's handler (FUN_142a23440's YA_ServerStarting branch) logs "Match
+// has been found, battle server starting" and then hands the payload to a
+// Blueprint delegate that ClientTravels to the battle server. The address and
+// port fields are the ones that matter; they are sent under every name the
+// client's connection struct exposes (Host/Port/GamePort/serverHost/serverPort/
+// ServerIP/IP), because which one the delegate reads is not yet confirmed live
+// and the doubling is cheap. The match/session identifiers ride along under the
+// names the same struct carries (MatchID/SessionID/InstanceId).
+//
+// It reuses mmogMatchmakingStatus for the connection details, which
+// currentMmogMatchmakingStatus fills from the formed match row.
+func buildMmogServerStartingPayload(status mmogMatchmakingStatus) []byte {
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_ServerStarting")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendInt32Field(b, "Code", 0)
+
+	if status.serverIP != "" {
+		for _, name := range []string{"Host", "host", "serverHost", "ServerIP", "serverIP", "IP", "Ip", "Address", "address"} {
+			b = protocol.AppendStringField(b, name, status.serverIP)
+		}
+	}
+	if status.serverPort != 0 {
+		// Ports go out BOTH as numeric strings and as int32: the client's
+		// mmog reader accepts a numeric string through its restrictive union
+		// (double/int64/string), and separate UStruct int properties read the
+		// int32 form. Sending only int32 has burned this codebase before.
+		port := strconv.Itoa(int(status.serverPort))
+		for _, name := range []string{"Port", "port", "GamePort", "gamePort", "serverPort", "ServerPort"} {
+			b = protocol.AppendStringField(b, name, port)
+		}
+		b = protocol.AppendInt32Field(b, "PortNumber", status.serverPort)
+	}
+	if status.matchID != "" {
+		for _, name := range []string{"MatchID", "matchId", "MatchId", "SessionID", "SessionId", "sessionId", "InstanceId", "InstanceID"} {
+			b = protocol.AppendStringField(b, name, status.matchID)
+		}
+	}
+	if status.gameMode != "" {
+		b = protocol.AppendStringField(b, "GameMode", status.gameMode)
+		b = protocol.AppendStringField(b, "gameMode", status.gameMode)
+	}
+	if status.mapName != "" {
+		b = protocol.AppendStringField(b, "Map", status.mapName)
+		b = protocol.AppendStringField(b, "map", status.mapName)
+		b = protocol.AppendStringField(b, "MapName", status.mapName)
+	}
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
 func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatus) []byte {
 	var b []byte
 	var stack []int

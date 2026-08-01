@@ -269,6 +269,12 @@ type mmogConnState struct {
 	// player-data frame.
 	gatewayReadySignalled bool
 	playerPID             string
+	// queuedForMatch is set while this player has an outstanding matchmaking
+	// entry, so the frame loop polls for a formed match only during that
+	// window rather than querying the DB on every one of the client's many
+	// frames. serverStartingPushed makes the match-ready push fire once.
+	queuedForMatch       bool
+	serverStartingPushed bool
 }
 
 // mmogJWTSecretValue is set once at startup by setMmogJWTSecret, after
@@ -417,6 +423,18 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			}
 			if requestName == "YA_PlayerFleets" {
 				state.playerFleetsReceived = true
+			}
+			// Matchmaking queue tracking. Entering the queue arms the
+			// match-ready poll below; leaving it (or being told there is no
+			// match) disarms it. The match itself is formed asynchronously by
+			// the background matchmaker, so the connection cannot know it is
+			// ready at request time -- it discovers it on a later frame.
+			if requestName == "YA_EnterMatchmaking" || requestName == "YA_SquadEnterMatchmaking" {
+				state.queuedForMatch = true
+				state.serverStartingPushed = false
+			}
+			if requestName == "YA_LeaveMatchmaking" {
+				state.queuedForMatch = false
 			}
 			// These bootstrap reads (YA_RequestStaticFleetData, YA_PlayerFleets,
 			// YA_GetPlayerPurchases, YA_GetDailyContractsData) were previously
@@ -617,6 +635,40 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				gameModesFrame := protocol.BuildResponseFrame(frame.RequestID, frame.MsgType, gameModes)
 				if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, "YA_UpdateGameModes", gameModesFrame, appEncoder, encryptResponses, "game modes update failed", "sent YA_UpdateGameModes push"); err != nil {
 					return err
+				}
+			}
+			// Match-ready push. While this player is queued, every frame is a
+			// chance to notice the background matchmaker has formed their match
+			// and to tell the client where to connect. The client is chatty
+			// enough (analytics, status polls) that this lands within a second
+			// or two of the match forming, and the queuedForMatch gate keeps the
+			// DB query out of the hot path for everyone not in a queue.
+			//
+			// The client never learned a match was ready before this: the
+			// matchmaker recorded the match in the DB and requested a battle
+			// server, but nothing pushed YA_ServerStarting, so the player sat in
+			// the queue forever. Pushed with a fresh id, as an unsolicited
+			// server message, the same way YA_FleetUpdate is.
+			if state.queuedForMatch && !state.serverStartingPushed {
+				status := currentMmogMatchmakingStatus(state.playerPID)
+				if status.state == "matched" && status.serverIP != "" {
+					pushID, err := uuid.NewRandom()
+					if err != nil {
+						log.WithError(err).Warn("mmog: failed to generate server-starting push id")
+					} else {
+						payload := buildMmogServerStartingPayload(status)
+						pushFrame := protocol.BuildResponseFrame(pushID, frame.MsgType, payload)
+						if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_ServerStarting", pushFrame, appEncoder, encryptResponses, "server starting push failed", "sent YA_ServerStarting push"); err != nil {
+							return err
+						}
+						state.serverStartingPushed = true
+						state.queuedForMatch = false
+						log.WithFields(logrus.Fields{
+							"remote": remote, "pid": state.playerPID,
+							"server": fmt.Sprintf("%s:%d", status.serverIP, status.serverPort),
+							"match":  status.matchID, "mode": status.gameMode, "map": status.mapName,
+						}).Info("mmog: match ready, pushed battle server address to client")
+					}
 				}
 			}
 		}
