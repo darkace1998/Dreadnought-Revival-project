@@ -122,8 +122,23 @@ func TestTechTreeDocumentCoversEveryBaseHull(t *testing.T) {
 			t.Errorf("tech tree document is missing hero %s (%d)", hero.name, hero.loadoutID)
 		}
 	}
-	if want := len(baseShipLoadouts) + len(heroShipLoadouts); len(emitted) != want {
-		t.Errorf("document carries %d ids, roster has %d hulls + %d heroes = %d", len(emitted), len(baseShipLoadouts), len(heroShipLoadouts), want)
+	// The document carries the hulls and heroes PLUS each hull's module
+	// entries, which are filed under the hull by ClassId and land in the
+	// separate modules array of the same per-ship record (see techTreeItem's
+	// module field). An earlier version of this test asserted the id count was
+	// exactly hulls+heroes; that was correct only while the document was hull
+	// nodes alone, and it is what "0/0 modules available" looked like from the
+	// server side -- the modules array had nothing in it.
+	hullsAndHeroes := len(baseShipLoadouts) + len(heroShipLoadouts)
+	if len(emitted) < hullsAndHeroes {
+		t.Errorf("document carries %d ids, fewer than the %d hulls + heroes", len(emitted), hullsAndHeroes)
+	}
+	modules := 0
+	for _, hull := range baseShipLoadouts {
+		modules += len(techTreeModuleItems(hull, 0))
+	}
+	if modules == 0 {
+		t.Error("no module entries emitted; every ship will report 0/0 modules available")
 	}
 
 	// Position must increase inside each manufacturer group, or nodes stack on

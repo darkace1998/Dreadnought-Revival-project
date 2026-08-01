@@ -1572,6 +1572,109 @@ type techTreeItem struct {
 	// (HeroShipTechTreeRow0..4 alongside TechTreeRow0..4), so their Position
 	// counts from zero independently of the ships'.
 	hero bool
+	// module marks an entry that belongs in the per-ship MODULES array rather
+	// than the tree-shape one. UYTechTreeManager::FindShipTechTreeData
+	// (RVA 0x3F5050) scans TTM+0x48 with stride 0x28, and each record is
+	//
+	//	+0x00  int64   shipItemID     (matched against the query id)
+	//	+0x08  TArray  modules        <- every module consumer reads THIS
+	//	+0x18  TArray  proxyItems     <- the tree widget reads this
+	//
+	// and the loader picks between them purely on ProxyType:
+	//
+	//	140401436  LEA RBX,[RDX + 0x18]   ; ProxyType != -1 -> proxyItems
+	//	14040143d  CMP R14B,0xff
+	//	140401443  LEA RBX,[RDX + 0x8]    ; ProxyType == -1 -> modules
+	//
+	// So the two arrays need entries with DIFFERENT ProxyTypes, and an entry
+	// cannot be in both. Hull nodes carry 9 (see techTreeProxyTypeShip) and
+	// land in proxyItems, which is what makes the tree draw. Modules carry -1
+	// and land in modules, which is what "M/N modules available"
+	// (m_modulesAvailableOnTechTree, RVA 0xAA9570) counts.
+	//
+	// Sending 9 on everything is why the tree started rendering AND why every
+	// ship then read 0/0: proxyItems full, modules empty.
+	module bool
+}
+
+// techTreeProxyTypeModule is the ProxyType that files an entry under a ship's
+// modules array. It is the loader's own default (it seeds the slot with 0xff),
+// and unlike the hull case that is exactly what is wanted here.
+const techTreeProxyTypeModule = -1
+
+// appendMmogTechTreeModuleItem writes a MINIMAL entry for the modules array.
+//
+// A module entry is not a tree widget, so it needs no layout: it never reaches
+// the UI-children walk, and the loader stores it all the same (the walk is
+// skipped when UI has no children, and control falls through to the normal item
+// path at 14040117b). Of the stored 0x48-byte record only three fields are read
+// by any consumer -- +0x20 the item id, +0x2C the tier, +0x3C the identifier --
+// and the identifier is recovered from the id by the classifier at RVA 0x541CD0
+// rather than from anything we send.
+//
+// Keeping these minimal matters: the full form costs ~10x as much, and ~500
+// module entries in the full form pushed YA_GetTechTree to 35103 bytes, over the
+// client's 32768-byte mmog receive ring. Prereq/Wires/UI/Position/Visible are
+// all deliberately absent.
+func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]byte, []int) {
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(item.id)))
+	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(item.classID)))
+	manufacturer := strconv.Itoa(int(item.manufacturer))
+	if !techTreeBareManufacturer && len(manufacturer) < 2 {
+		manufacturer = "0" + manufacturer
+	}
+	b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
+	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
+	b = protocol.AppendStringField(b, "FPCost", "0")
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
+	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeModule))
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+// techTreeModuleItems returns the module entries for one hull: the items that
+// hull actually equips, keyed to it by ClassId.
+//
+// Each entry's identifier byte is NOT taken from what we send -- the classifier
+// at RVA 0x541CD0 feeds the stored item id (item+0x20) back through
+// UYCachedItemIDData::FindCachedDataEntry to recover its m_loadoutItemType, and
+// that type is the slot tag. Read live out of the client's own cache, the tags
+// are: 1 primary weapon, 2 secondary weapon, 3-6 the four modules, 7-10 the four
+// officer briefings, 11-18 appearance, 19 ship class. So the ONLY thing that has
+// to be right here is the item id -- if it misses the cache everything
+// classifies as 19 (SHIP_CLASS) and the rails render empty with the data present.
+//
+// Perk ids are legitimately absent on tier 1 and 2 hulls (the client's own
+// reference has "B1..B4: n/a" for every T1/T2 precast loadout), so zero entries
+// are skipped rather than filled in.
+func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeItem {
+	ids := make([]int32, 0, 10)
+	ids = append(ids, hull.primary, hull.secondary)
+	ids = append(ids, hull.abilities[:]...)
+	ids = append(ids, hull.perks[:]...)
+
+	items := make([]techTreeItem, 0, len(ids))
+	position := int32(0)
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		items = append(items, techTreeItem{
+			id: id,
+			// ClassId keys the per-ship record, so it is the HULL's id, not the
+			// module's -- that is what files this module under this ship.
+			classID:      hull.loadoutID,
+			manufacturer: manufacturerID,
+			tier:         hull.tier,
+			position:     position,
+			xpCost:       techTreeXPCostByTier[hull.tier],
+			module:       true,
+		})
+		position++
+	}
+	return items
 }
 
 // techTreeXPCostByTier is what a hull costs to research.
@@ -1657,6 +1760,10 @@ func techTreeBaseItems() []techTreeItem {
 			xpCost:       techTreeXPCostByTier[hull.tier],
 			prereq:       prereq,
 		})
+		// ...and its modules, which go into the OTHER array of the same record.
+		if !techTreeNoModules {
+			items = append(items, techTreeModuleItems(hull, manufacturerID)...)
+		}
 	}
 	return items
 }
@@ -1973,6 +2080,10 @@ var techTreeNoWrap = os.Getenv("DN_TECHTREE_NO_WRAP") == "1"
 // the tree regresses.
 var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 
+// techTreeNoModules drops the per-ship module entries, restoring a document of
+// hull nodes only. The switch that isolates them if the tree regresses.
+var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
+
 // techTreeSingleWrap restores the single wrapping array; see
 // buildMmogTechTreeDocument.
 var techTreeSingleWrap = os.Getenv("DN_TECHTREE_SINGLE_WRAP") == "1"
@@ -2018,6 +2129,9 @@ func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
 }
 
 func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, []int) {
+	if item.module {
+		return appendMmogTechTreeModuleItem(b, stack, item)
+	}
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// DIAGNOSTIC (DN_TECHTREE_PROBE_FIRST=1): a sentinel emitted BEFORE Id, so
 	// it becomes child[0] of the item object.
@@ -2125,6 +2239,9 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// somewhere earlier in the walk. On every node, any log line at all proves
 	// the loader reached an item, and silence rules the whole per-item path out.
 	proxyType := strconv.Itoa(techTreeProxyTypeShip)
+	if item.module {
+		proxyType = strconv.Itoa(techTreeProxyTypeModule)
+	}
 	if techTreeCanaryEnabled {
 		proxyType = "999"
 	}

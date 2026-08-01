@@ -102,16 +102,46 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 		}
 	}
 
-	// ClassId must equal the item's OWN id, for every item. The loader keys the
-	// array at manager+0x48 on ClassId, and the client looks that array up by
-	// SHIP ID (FUN_1403f5050, called by ComposeModuleUiDataForShip), so any
-	// ship whose ClassId is not its own id cannot resolve its modules. A
-	// previous version shared the hull line's root id across the line, which
-	// left every tier above the root logging "Modules not found for ship id".
+	// ClassId must equal the item's OWN id -- for SHIP nodes. The loader keys
+	// the array at manager+0x48 on ClassId, and the client looks that array up
+	// by SHIP ID (FUN_1403f5050 / FindShipTechTreeData, called by
+	// ComposeModuleUiDataForShip), so any ship whose ClassId is not its own id
+	// cannot resolve its modules. A previous version shared the hull line's
+	// root id across the line, which left every tier above the root logging
+	// "Modules not found for ship id".
+	//
+	// MODULE entries are the deliberate exception, and they are the reason that
+	// array is keyed this way at all: a module carries the HULL's id as its
+	// ClassId, which is precisely what files it under that ship's record. Its
+	// own id is the module item id, recovered by the classifier at RVA 0x541CD0
+	// to derive the slot identifier. An earlier version of this test asserted
+	// the rule over every item without exception, which is correct only for a
+	// document that has no modules in it -- the state that made every ship
+	// report "0/0 modules available".
 	for _, item := range items {
+		if item.module {
+			if item.classID == item.id {
+				t.Errorf("module %d has ClassId equal to its own id; it must carry its hull's id to be filed under that ship", item.id)
+			}
+			continue
+		}
 		if item.classID != item.id {
-			t.Fatalf("item %d has ClassId %d; it must be the item's own id or "+
+			t.Fatalf("ship node %d has ClassId %d; it must be the item's own id or "+
 				"ComposeModuleUiDataForShip cannot find its modules", item.id, item.classID)
+		}
+	}
+
+	// Every module must name a ship node that exists, or it is filed under a
+	// record no lookup will ever produce.
+	ships := map[int32]bool{}
+	for _, item := range items {
+		if !item.module {
+			ships[item.id] = true
+		}
+	}
+	for _, item := range items {
+		if item.module && !ships[item.classID] {
+			t.Errorf("module %d is filed under ClassId %d, which is not a ship node in the document", item.id, item.classID)
 		}
 	}
 }

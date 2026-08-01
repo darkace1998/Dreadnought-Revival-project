@@ -67,7 +67,17 @@ var targetSizes = map[string]int{
 	// [-2000000,-1000001] that routes it to the manager+0x58 (x, y, Tier) table
 	// instead of the item store. Document is zlib'd, so this is a fraction of
 	// the raw growth and leaves ~16KB of headroom under the 32KB ring.
-	"YA_GetTechTree": 16454,
+	// Now 21505: +5051 for the per-ship MODULE entries. Every consumer of a
+	// ship's modules reads the modules TArray at record+0x08 of
+	// FindShipTechTreeData's array, and the loader files an entry there only
+	// when its ProxyType is -1 (140401443); ProxyType 9 goes to the proxyItems
+	// array at +0x18, which is what draws the tree. Sending 9 on everything
+	// filled the tree and emptied the modules, so every ship read "0/0 modules
+	// available". These entries are deliberately MINIMAL -- no UI, Position,
+	// Visible, Prereq or Wires -- because only +0x20/+0x2C/+0x3C are read off
+	// the stored record; the full form put the frame at 35103 bytes, over the
+	// 32768-byte ring. 21505 leaves ~11KB of headroom.
+	"YA_GetTechTree": 21505,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
