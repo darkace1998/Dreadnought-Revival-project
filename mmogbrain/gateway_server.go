@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -164,6 +165,18 @@ func makeGatewayHandler(log *logrus.Logger, secret []byte, fn func(w http.Respon
 		}
 		claims, err := protocol.VerifiedJWTClaims(tokenStr, secret, "launcher", "dreadnought")
 		if err != nil {
+			// Say WHICH failure it is. An expired launcher token and a wrong
+			// JWT_SECRET both surfaced as a bare "invalid token", and the client
+			// only reports "Could not create session. Error Code: 401" -- so a
+			// token that simply aged out of its 24h window looked identical to a
+			// broken server. Costing an operator that diagnosis is not worth the
+			// two lines it takes to distinguish them; neither message reveals
+			// anything a caller holding the token does not already know.
+			if errors.Is(err, jwt.ErrTokenExpired) {
+				log.WithError(err).Warn("gateway: launcher token has EXPIRED -- re-run dn-launcher.exe to mint a fresh one")
+				http.Error(w, `{"error":"token expired","detail":"re-run the launcher to sign in again"}`, http.StatusUnauthorized)
+				return
+			}
 			log.WithError(err).Warn("gateway: invalid JWT")
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
@@ -439,7 +452,6 @@ func setGatewayPlayerDataReadyState(playerID string, ready bool) {
 	}
 	gatewayPlayerDataReadyMu.Unlock()
 }
-
 
 func waitForGatewayPlayerDataReady(playerID string, timeout time.Duration) bool {
 	key := protocol.GatewayPlayerDataReadyKey(playerID)

@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -215,5 +219,54 @@ func TestMatchmakingErrorUsesAKnownReasonToken(t *testing.T) {
 	}
 	if found == "" {
 		t.Error("error response carries no reason token the client's interpreter can map")
+	}
+}
+
+// An expired launcher token must be reported as EXPIRED, not as a generic
+// invalid token.
+//
+// A token that simply aged out of its 24h window and a genuinely broken server
+// both surfaced as {"error":"invalid token"}, and the client only shows "Could
+// not create session. Error Code: 401" -- so the two were indistinguishable from
+// a log. This asserts the sentinel actually survives VerifiedJWTClaims, which is
+// what the gateway branches on.
+func TestExpiredTokenIsDistinguishableFromInvalid(t *testing.T) {
+	secret := []byte("test-secret-value-for-jwt-checking")
+
+	expired := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"aud":     "dreadnought",
+		"iss":     "launcher",
+		"user_id": "player-1",
+		"exp":     time.Now().Add(-1 * time.Hour).Unix(),
+		"iat":     time.Now().Add(-25 * time.Hour).Unix(),
+	})
+	expiredStr, err := expired.SignedString(secret)
+	if err != nil {
+		t.Fatalf("sign expired token: %v", err)
+	}
+
+	_, err = protocol.VerifiedJWTClaims(expiredStr, secret, "launcher", "dreadnought")
+	if err == nil {
+		t.Fatal("an expired token was accepted")
+	}
+	if !errors.Is(err, jwt.ErrTokenExpired) {
+		t.Errorf("expired token error = %v; the gateway branches on jwt.ErrTokenExpired and will not recognise it", err)
+	}
+
+	// A token signed with the wrong secret must NOT look like an expiry.
+	wrong := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"aud": "dreadnought", "iss": "launcher", "user_id": "player-1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	wrongStr, err := wrong.SignedString([]byte("a-completely-different-secret-value"))
+	if err != nil {
+		t.Fatalf("sign wrong-secret token: %v", err)
+	}
+	_, err = protocol.VerifiedJWTClaims(wrongStr, secret, "launcher", "dreadnought")
+	if err == nil {
+		t.Fatal("a token signed with the wrong secret was accepted")
+	}
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		t.Error("a wrong-secret token reports as expired, which would send the operator chasing the launcher")
 	}
 }
