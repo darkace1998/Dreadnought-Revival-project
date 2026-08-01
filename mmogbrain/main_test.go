@@ -3435,12 +3435,26 @@ func TestTechTreeCarriesZlibBlob(t *testing.T) {
 			t.Errorf("%q is an int32 field; the loader reads that as 0", field)
 		}
 	}
-	// ProxyType must be -1: it selects which sub-array of the manufacturer group
-	// the item is filed under, and FindItemForShipId reads only the -1 one. Any
-	// other value leaves every ship unfindable by ship id even though the
-	// manufacturer groups themselves resolve.
-	if !bytes.Contains(document, protocol.AppendStringField(nil, "ProxyType", "-1")) {
-		t.Error("ProxyType must be -1 or ships land in the sub-array FindItemForShipId never reads")
+	// ProxyType must be 9, the ship-node case.
+	//
+	// This assertion previously demanded -1, on the theory that ProxyType only
+	// picks which sub-array of the manufacturer group the item is filed under
+	// and that FindItemForShipId reads the -1 one. The sub-array part is real
+	// (140401436/140401443 branch on ProxyType == 0xff, choosing group+0x18 vs
+	// group+0x08); the conclusion was not. -1 is the ONE value in the loader's
+	// legal range [-1, 9] that UYTechTreeWidget::PopulateTechTreeItems has no
+	// case for:
+	//
+	//	1404f32be  CMP AL,0x9      ; ==9 -> build the ship node directly
+	//	1404f32e6  CMP ECX,0x9     ; MOVSX'd, so 0xff -> 0xffffffff
+	//	1404f32e9  JA  ...         ; unsigned > 9 -> skip this item entirely
+	//
+	// so every item was silently dropped and the screen rendered nothing, with
+	// no log line to say so ("Invalid tech tree item type" never fires, because
+	// -1 passes the loader's own gate at 140401394). Verified live: with -1,
+	// group[0]+0x08 held all 33 items and +0x18 was empty.
+	if !bytes.Contains(document, protocol.AppendStringField(nil, "ProxyType", "9")) {
+		t.Error("ProxyType must be 9; PopulateTechTreeItems skips every other value a ship node can carry")
 	}
 
 	// Prereq and Wires are bare ARRAYS (0x0d). An earlier version of this test

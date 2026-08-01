@@ -1857,19 +1857,71 @@ func buildMmogTechTreeDocument() []byte {
 	return protocol.AppendRootEnd(b)
 }
 
-// techTreeProxyTypeShip is the ProxyType for a ship node.
+// techTreeProxyTypeShip is the ProxyType for a ship node: 9.
 //
-// -1 is the loader's own default for an absent ProxyType (it seeds the slot with
-// 0xff before parsing), so it is the right value to send. But CORRECTION: an
-// earlier version of this comment claimed -1 was needed because ProxyType picks
-// which sub-array TechTreeManager::FindItemForShipId reads. That is wrong. The
-// two-sub-array split (+0x08 when ProxyType is -1, +0x18 otherwise) is in the
-// array at manager+0x48. The array FindItemForShipId searches is the one at
-// manager+0x38, and its store path has no ProxyType branch at all -- it always
-// uses the sub-array at +0x08. Changing this value did not affect
-// FindItemForShipId, and did not fix the "Could not find item for ship id"
-// family of failures it was expected to.
-const techTreeProxyTypeShip = -1
+// A tech tree node is not "an item". It is a SLOT of the ship whose tree is
+// open, and ProxyType says which slot. UYTechTreeWidget::PopulateTechTreeItems
+// (FUN_1404f3190) makes that explicit -- it looks up the ship's cached slot list
+// (UYCachedItemIDData, FUN_140480f70 -> FUN_14047eab0), an array of 8-byte
+// (tag:u32, itemId:u32) pairs, and then per tech tree item:
+//
+//	1404f32ba  MOVZX EAX,byte ptr [RSI + 0x3c]   ; the item's stored ProxyType
+//	1404f32be  CMP AL,0x9
+//	1404f32c0  JNZ  ...                          ; ==9 -> the DIRECT ship path
+//	1404f32e2  MOVSX RCX,AL
+//	1404f32e6  CMP ECX,0x9
+//	1404f32e9  JA 0x1404f34be                    ; unsigned > 9 -> SKIP the item
+//	1404f32ef  <jump table>                      ; 0..8 -> CL = ProxyType + 2
+//	1404f3332  CMP byte ptr [RBX],CL             ; find the slot with that tag
+//
+// So ProxyType 0..8 select slot tags 2..10, and ProxyType 9 takes the branch
+// that builds a node from the ship id itself. The slot tags are literals
+// assigned in FUN_14047eab0: 1 and 2 are two single items, 3+i and 7+i are two
+// arrays (at blueprint +0x158/+0x160 and +0x168/+0x170), and 11..18 come from a
+// FUN_140347840 loop. Tag 1 is deliberately unreachable through the switch --
+// that is the hull, and ProxyType 9 is how the hull node gets built.
+//
+// CORRECTION, twice over. This constant was -1 because -1 is what the loader
+// seeds the slot with (0xff) before parsing, which was read as "the value for an
+// absent ProxyType, therefore the safe value". It is not: -1 passes the loader's
+// validity gate (140401394, LEA EAX,[RCX+1] / CMP EAX,0xa / JA -> "Invalid tech
+// tree item type"), which is why sending it never logged an error and never
+// looked wrong -- but it is the one value in the legal range [-1, 9] that
+// PopulateTechTreeItems has no case for, so every item was silently skipped and
+// TreeWidgetList stayed at length 0.
+//
+// There IS a ProxyType-driven sub-array branch in the store path:
+//
+//	140401436  LEA RBX,[RDX + 0x18]   ; ProxyType != -1
+//	14040143d  CMP R14B,0xff
+//	140401443  LEA RBX,[RDX + 0x8]    ; ProxyType == -1
+//
+// but do not use it to reason about where items land. Measured live under
+// winedbg both before and after this change, the manufacturer group reached via
+// manager+0x38 keeps its items in the +0x08 array either way (33 items in
+// group[0] with ProxyType -1 AND with ProxyType 9), so RDX above is not that
+// group base. The branch is real; which structure it indexes is not yet
+// established, and nothing here depends on it.
+//
+// What IS confirmed live is the only thing that matters: with ProxyType 9 the
+// stored items read back as
+//
+//	item+0x20 = 33489262  item+0x2c = 1  item+0x3c = 0x09
+//	item+0x20 = 33489265  item+0x2c = 2  item+0x3c = 0x09
+//
+// where item+0x3c was 0xff on every item beforehand -- so the switch in
+// PopulateTechTreeItems now has a case for these items instead of skipping
+// them.
+var techTreeProxyTypeShip = func() int {
+	// DN_TECHTREE_PROXY_MINUS1=1 restores the old -1 for an A/B. Keep it until
+	// a tech tree screen has been confirmed to render AND the fleet screen has
+	// been confirmed intact -- Prereq has burned us once by breaking owned
+	// ships as a side effect of a tech tree change.
+	if os.Getenv("DN_TECHTREE_PROXY_MINUS1") == "1" {
+		return -1
+	}
+	return 9
+}()
 
 // techTreeCanaryEnabled arms the ProxyType canary described in
 // appendMmogTechTreeItem.
