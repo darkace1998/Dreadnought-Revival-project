@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -55,6 +56,9 @@ const (
 	chatTypeLanguage   = "language"
 	chatTypeCustomRoom = "customroom"
 )
+
+// chatKeyProbe arms the join-key diagnostic described in chatChannelNotice.
+var chatKeyProbe = os.Getenv("DN_CHAT_KEY_PROBE") == "1"
 
 var chatChannelTypes = map[string]bool{
 	chatTypeAll:        true,
@@ -606,6 +610,21 @@ func chatJoinNotice(channel string, user map[string]any) map[string]any {
 // "params" are the shape the CLIENT sends, not the shape it reads.
 func chatChannelNotice(channel string, event string, user map[string]any) map[string]any {
 	channelType, _ := chatChannelType(channel)
+	if chatKeyProbe {
+		// DIAGNOSTIC (DN_CHAT_KEY_PROBE=1): a distinct sentinel under every
+		// candidate key, so a breakpoint on the dispatcher's join comparison
+		// (142a8eaf9, which compares the string copied from [RBP+0x408]) reveals
+		// WHICH key the client reads. Guessing this field has already cost
+		// three live test cycles.
+		return firmamentEvent("chat.channel.notice", map[string]any{
+			"notice": "Knotice", "event": "Kevent", "action": "Kaction",
+			"state": "Kstate", "status": "Kstatus", "kind": "Kkind",
+			"op": "Kop", "operation": "Koperation", "change": "Kchange",
+			"reason": "Kreason", "value": "Kvalue", "result": "Kresult",
+			"channel": channel, "channel_name": channel, "name": channel, "room": channel,
+			"user": user, "users": []any{user},
+		})
+	}
 	return firmamentEvent("chat.channel.notice", map[string]any{
 		// The dispatcher's "join"/"leave" comparison. Which key carries it is
 		// not established -- it is read from the parsed object rather than by
