@@ -1038,7 +1038,16 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 	request = protocol.AppendInt32Field(request, "TierMin", 2)
 	request = protocol.AppendInt32Field(request, "TierMax", 4)
 	response := buildMmogRequestResponsePayload("YA_EnterMatchmaking", playerPID, request)
-	result := extractNamedMmogObject(t, response, "result")
+	// "result" is a STRING on this response, not a container, so the queue
+	// fields sit at the message root. An earlier version of this test pulled
+	// them out of a "result" OBJECT -- which is what the response used to send,
+	// and exactly why registration always failed: the client extracts "result"
+	// as a string and requires it to equal "ok", and an object extracts as "",
+	// giving "Failed to register for matchmaking. Reason: []".
+	result := response
+	if !bytes.Contains(response, protocol.AppendStringField(nil, "result", "ok")) {
+		t.Fatal(`YA_EnterMatchmaking must report result="ok" or the client refuses to register`)
+	}
 
 	if !bytes.Contains(result, protocol.AppendStringField(nil, "matchmakingStatus", "waiting")) {
 		t.Fatal("YA_EnterMatchmaking did not report waiting state")
@@ -1058,7 +1067,7 @@ func TestMmogEnterAndLeaveMatchmakingUseQueueDB(t *testing.T) {
 	}
 
 	leave := buildMmogRequestResponsePayload("YA_LeaveMatchmaking", playerPID, nil)
-	if !bytes.Contains(extractNamedMmogObject(t, leave, "result"), protocol.AppendStringField(nil, "matchmakingStatus", "left")) {
+	if !bytes.Contains(leave, protocol.AppendStringField(nil, "matchmakingStatus", "left")) {
 		t.Fatal("YA_LeaveMatchmaking did not report left state")
 	}
 	var queued int
@@ -1354,7 +1363,12 @@ func TestMmogEnterMatchmakingReportsExistingMatch(t *testing.T) {
 		t.Fatalf("insert match slot: %v", err)
 	}
 
-	result := extractNamedMmogObject(t, buildMmogRequestResponsePayload("YA_EnterMatchmaking", playerPID, nil), "result")
+	// See TestMmogEnterAndLeaveMatchmakingUseQueueDB: "result" is the string
+	// "ok" on this response, so the match details are root-level fields.
+	result := buildMmogRequestResponsePayload("YA_EnterMatchmaking", playerPID, nil)
+	if !bytes.Contains(result, protocol.AppendStringField(nil, "result", "ok")) {
+		t.Fatal(`YA_EnterMatchmaking must report result="ok" even when reporting an existing match`)
+	}
 	for _, field := range []struct {
 		name  string
 		value string

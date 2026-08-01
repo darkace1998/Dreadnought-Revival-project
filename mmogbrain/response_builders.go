@@ -295,7 +295,6 @@ func buildMmogServerStartingPayload(status mmogMatchmakingStatus) []byte {
 
 func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatus) []byte {
 	var b []byte
-	var stack []int
 	if status.state == "" {
 		status.state = "ok"
 	}
@@ -320,12 +319,33 @@ func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatu
 	// elsewhere treats a string of length >= 2 as true while reading types 1-3
 	// out of the numeric slot -- where a bool node keeps its payload is NOT
 	// established, and guessing it wrong is silent.
+	// "result" is a STRING here, and it must be exactly "ok".
+	//
+	// This is the single field the client's matchmaking response handler
+	// branches on. It looks "result" up, extracts it AS A STRING, and compares
+	// that against the literal "ok":
+	//
+	//	140237c30(doc, "result")        ; resolve the field
+	//	140237ef0(...)                  ; extract as a string
+	//	14021dba0(value, "ok")          ; compare
+	//	JZ  -> registered                ; equal means success
+	//	else broadcast interface+0x1630 ; failure, with the value as the reason
+	//
+	// Sending "result" as an OBJECT -- which every other response here does --
+	// makes the string extraction yield "", which is not "ok", so the client
+	// reported a failed registration whose reason was the empty string:
+	// "Failed to register for matchmaking. Reason: []". That empty bracket was
+	// the value of this field all along.
+	//
+	// So the queue state cannot live under "result" for this response; it goes
+	// alongside it instead. Success/Reason/WaitTime, added on the previous
+	// attempt, are kept because they are real field names from the client's own
+	// string table, but they are NOT what gates registration.
+	b = protocol.AppendStringField(b, "result", "ok")
 	b = protocol.AppendStringField(b, "Success", "1")
 	b = protocol.AppendStringField(b, "Reason", "")
 	// WaitTime is the queue estimate the UI shows while searching.
 	b = protocol.AppendStringField(b, "WaitTime", "0")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
 	b = protocol.AppendStringField(b, "matchmakingStatus", status.state)
 	b = protocol.AppendStringField(b, "state", status.state)
 	b = protocol.AppendInt32Field(b, "Code", 0)
@@ -352,7 +372,6 @@ func buildMmogMatchmakingPayload(requestName string, status mmogMatchmakingStatu
 		b = protocol.AppendStringField(b, "map", status.mapName)
 		b = protocol.AppendStringField(b, "Map", status.mapName)
 	}
-	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
 
@@ -379,15 +398,16 @@ func buildMmogErrorPayload(requestName string, message string) []byte {
 // player nothing about what to change.
 func buildMmogMatchmakingErrorPayload(requestName string, code int32, reason string, message string) []byte {
 	var b []byte
-	var stack []int
 	b = protocol.AppendStringField(b, "RT", requestName)
+	// The reason travels in "result" itself. The client compares that string
+	// against "ok" and, when it differs, hands the very same string to the
+	// interpreter as the failure reason -- so this IS the token that decides
+	// which message the player sees.
+	b = protocol.AppendStringField(b, "result", reason)
 	b = protocol.AppendStringField(b, "Success", "0")
 	b = protocol.AppendStringField(b, "Reason", reason)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "error")
 	b = protocol.AppendInt32Field(b, "Code", code)
 	b = protocol.AppendStringField(b, "message", message)
-	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
 

@@ -186,10 +186,21 @@ func TestMatchmakingResponseReportsSuccess(t *testing.T) {
 		gameMode: "BC",
 	})
 
-	// Numeric string, not a bool: both readers this client uses accept that
-	// form, and where a bool node keeps its payload is not established.
+	// "result" is a STRING equal to "ok" -- this is the ONLY field that gates
+	// registration. The handler resolves "result" (140237c30), extracts it as a
+	// string (140237ef0) and compares it to the literal "ok" (14021dba0);
+	// anything else is broadcast as a failure with that string as the reason.
+	// Sending "result" as an object -- as every other response here does --
+	// extracts as "", which is precisely the empty bracket in the live log:
+	// "Failed to register for matchmaking. Reason: []".
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "result", "ok")) {
+		t.Error(`queue response does not carry result="ok"; the client refuses to register`)
+	}
+	if bytes.Contains(payload, appendFieldMarker("result", 0x0c)) {
+		t.Error(`"result" is an OBJECT; the client extracts it as a string and will read ""`)
+	}
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "Success", "1")) {
-		t.Error("queue response does not report Success=1; the client will treat it as a failed registration")
+		t.Error("queue response does not report Success=1")
 	}
 	if !bytes.Contains(payload, appendFieldMarker("Reason", 0x09)) {
 		t.Error("queue response has no Reason field")
@@ -208,6 +219,11 @@ func TestMatchmakingErrorUsesAKnownReasonToken(t *testing.T) {
 	}
 	payload := buildMmogMatchmakingErrorPayload("YA_EnterMatchmaking", 2, "invalid_gametype", "unsupported game mode")
 
+	// A refusal puts the token in "result" -- the client hands that same string
+	// to the interpreter as the reason.
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "result", "invalid_gametype")) {
+		t.Error(`error response does not carry the reason token in "result"`)
+	}
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "Success", "0")) {
 		t.Error("error response does not report Success=0")
 	}
