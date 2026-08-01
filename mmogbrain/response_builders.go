@@ -1629,8 +1629,14 @@ func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]b
 	b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
-	b = protocol.AppendStringField(b, "FPCost", "0")
-	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
+	// FPCost and NumTechTreeItemsRequired are omitted. Both parsed to 0 anyway,
+	// and neither survives into the stored record -- of the 0x48-byte module
+	// entry only +0x20 (id), +0x2C (tier) and +0x3C (identifier) are read by any
+	// consumer, plus XPCost for the research total. Manufacturer stays: the
+	// manufacturer groups at manager+0x38 have the same modules/proxyItems split
+	// as the per-ship records, so a module still has to be filed under the right
+	// maker. Dropping the two dead fields is what keeps ~1400 module entries
+	// inside the client's 32768-byte receive ring.
 	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeModule))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -1713,83 +1719,179 @@ func techTreeModuleXPCost(tier int32) int32 {
 	return tier * 1000
 }
 
-// slotVariant is one tier step of a module line.
+// slotVariant is one researchable entry for a slot.
 type slotVariant struct {
 	itemID int32
 	tier   int32
 }
 
-// techTreeSlotTierToken matches the tier token in a registered asset name, e.g.
-// "WP_AssaultMPri01_weapon01_T3_BP" or "..._T3_Hero_BP".
-var techTreeSlotTierToken = regexp.MustCompile(`^(.*)_T(\d+)((?:_Hero)?_BP)$`)
-
-// techTreeSlotUpgrades returns the equipped item plus every higher-tier variant
-// of the same asset line, ordered by tier.
+// techTreeSlotAsset matches a registered slot asset and pulls out the three
+// things that define where it sits: the family GROUP, the LINE within that
+// group, and the tier.
 //
-// Returns just the item itself when its path is not registered or does not carry
-// a tier token -- an unrecognised slot contributes what it always did rather
-// than nothing.
-func techTreeSlotUpgrades(itemID int32, fallbackTier int32) []slotVariant {
-	// Perks carry no tier token (PRK_COM_AbiInc_Passive_BP), so they fall back
-	// to the hull's tier rather than 0 -- the stored tier at item+0x2C is read
-	// by the module consumers and a spurious 0 would rank them below every
-	// weapon and ability.
-	self := []slotVariant{{itemID: itemID, tier: fallbackTier}}
+//	/Game/.../Abilities/Assault/Pri_Missile_Super/T2/AB_AS_Pri_Missile_Super_Ability_T2_BP
+//	                    ^class   ^slot ^line       ^tier
+//	/Game/.../Weapons/Assault/Medium/BP/T3/WP_AssaultMPri01_weapon01_T3_BP
+//	                  ^class   ^size      ^line
+var (
+	techTreeAbilityAsset = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/T(\d+)/`)
+	techTreeWeaponAsset  = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
+)
 
-	path, ok := dreadconfig.GetAssetPathForItemID(itemID)
+// techTreeSlotGroup indexes every registered slot asset by family group, then
+// line, then tier. The group is what makes two assets ALTERNATIVES for the same
+// slot -- Assault's Pri group holds Missile_Super, Ram_Dmg, Torpedo_Ultra and
+// six more, and those are the "some other module" a ship researches next.
+//
+// Weapon groups fold the size dimension in: Light/Medium/Heavy are the PRIMARY
+// families and SecLong/SecMid/SecShort the SECONDARY ones, so a hull's secondary
+// slot really does have three alternative families while its primary has one.
+type techTreeSlotKey struct{ group, line string }
+
+var (
+	techTreeSlotOnce  sync.Once
+	techTreeSlotIndex map[techTreeSlotKey]map[int32]int32 // key -> tier -> item id
+	techTreeSlotLines map[string][]string                 // group -> lines
+	techTreeSlotOf    map[int32]techTreeSlotKey           // item id -> key
+	techTreeSlotTier  map[int32]int32                     // item id -> its tier
+)
+
+func techTreeBuildSlotIndex() {
+	techTreeSlotOnce.Do(func() {
+		techTreeSlotIndex = map[techTreeSlotKey]map[int32]int32{}
+		techTreeSlotLines = map[string][]string{}
+		techTreeSlotOf = map[int32]techTreeSlotKey{}
+		techTreeSlotTier = map[int32]int32{}
+
+		add := func(group, line string, tier int32, id int32) {
+			key := techTreeSlotKey{group: group, line: line}
+			if techTreeSlotIndex[key] == nil {
+				techTreeSlotIndex[key] = map[int32]int32{}
+				techTreeSlotLines[group] = append(techTreeSlotLines[group], line)
+			}
+			techTreeSlotIndex[key][tier] = id
+			techTreeSlotOf[id] = key
+			techTreeSlotTier[id] = tier
+		}
+
+		for _, entry := range dreadconfig.GetAllRegistryEntries() {
+			// A tier directory holds more than the ability itself (projectile
+			// and weapon sub-assets are registered beside it), so the path
+			// alone is not enough -- without this filter a weapon id lands in
+			// an ability line and overwrites the real entry for that tier.
+			// THE CATEGORY LAW settles it: the top byte of an item id IS its
+			// ItemIDTable CategoryID, 4 = YAbility and 5 = YWeapon.
+			category := (entry.ItemID >> 24) & 0xff
+			if m := techTreeAbilityAsset.FindStringSubmatch(entry.Path); m != nil {
+				tier, err := strconv.Atoi(m[4])
+				if err != nil || category != 4 {
+					continue
+				}
+				add(m[1]+"/"+m[2], m[3], int32(tier), entry.ItemID)
+				continue
+			}
+			if m := techTreeWeaponAsset.FindStringSubmatch(entry.Path); m != nil {
+				tier, err := strconv.Atoi(m[3])
+				if err != nil || category != 5 {
+					continue
+				}
+				// Secondary families (SecLong/SecMid/SecShort) ARE genuine
+				// alternatives for one slot -- different range profiles a hull
+				// chooses between -- so they share a group. Primary families
+				// are Light/Medium/Heavy, which is the HULL's own size and not
+				// a choice: merging them offered a medium hull the heavy hull's
+				// weapon. Those stay in per-size groups, where the only
+				// progression is the tier chain.
+				group := m[1] + "/WPri_" + m[2]
+				if strings.HasPrefix(m[2], "Sec") {
+					group = m[1] + "/WSec"
+				}
+				add(group, m[4], int32(tier), entry.ItemID)
+				continue
+			}
+		}
+		for group := range techTreeSlotLines {
+			sort.Strings(techTreeSlotLines[group])
+		}
+	})
+}
+
+// techTreeSlotUpgrades returns what a ship can research in one slot, given the
+// item it currently has there.
+//
+// Two things, because the progression has two dimensions:
+//
+//   - the EQUIPPED line's tier chain up to what this ship can use -- the
+//     "higher version with better stats";
+//   - one entry for every SIBLING line in the same family group, at the best
+//     tier this ship can use -- the "different modules per ship", e.g. the
+//     Vulture missiles plus the other primaries beside them.
+//
+// The cap is the equipped item's own tier, so nothing above what this hull
+// actually fields is offered, and the equipped item is always present exactly
+// once. Emitting the equipped line's HIGHER tiers instead (the previous
+// version) is what showed the same module twice with nothing else beside it.
+//
+// Returns just the item when its path is not registered or carries no tier --
+// perks (PRK_COM_AbiInc_Passive_BP) have no tier token and no siblings to offer.
+func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
+	techTreeBuildSlotIndex()
+
+	self := []slotVariant{{itemID: itemID, tier: hullTier}}
+	key, ok := techTreeSlotOf[itemID]
 	if !ok {
 		return self
 	}
-	slash := strings.LastIndex(path, "/")
-	name := path[slash+1:]
-	match := techTreeSlotTierToken.FindStringSubmatch(name)
-	if match == nil {
-		return self
-	}
-	base, suffix := match[1], match[3]
-	tier, err := strconv.Atoi(match[2])
-	if err != nil {
-		return self
+	// Cap by the HULL's tier, not by the equipped item's. A tier-1 hull equips
+	// a tier-0 ability, and capping at 0 offered it nothing at all -- the
+	// starter ships stayed at exactly their fitted loadout, which is the case
+	// that prompted this. The hull tier is what the ship may research up to.
+	cap := hullTier
+	if equipped := techTreeSlotTier[itemID]; equipped > cap {
+		cap = equipped
 	}
 
-	variants := []slotVariant{}
-	for candidateTier := tier; candidateTier <= techTreeMaxSlotTier; candidateTier++ {
-		candidate := fmt.Sprintf("%s_T%d%s", base, candidateTier, suffix)
-		id, found := techTreeItemIDByAssetName(candidate)
-		if !found {
+	out := []slotVariant{}
+	// The equipped line, every tier up to and including the equipped one.
+	for tier := int32(0); tier <= cap; tier++ {
+		if id, found := techTreeSlotIndex[key][tier]; found {
+			out = append(out, slotVariant{itemID: id, tier: tier})
+		}
+	}
+	// The alternatives, best usable tier each.
+	for _, line := range techTreeSlotLines[key.group] {
+		if line == key.line {
 			continue
 		}
-		variants = append(variants, slotVariant{itemID: id, tier: int32(candidateTier)})
+		sibling := techTreeSlotKey{group: key.group, line: line}
+		best, bestTier := int32(0), int32(-1)
+		for tier, id := range techTreeSlotIndex[sibling] {
+			if tier <= cap && tier > bestTier {
+				best, bestTier = id, tier
+			}
+		}
+		if bestTier >= 0 {
+			out = append(out, slotVariant{itemID: best, tier: bestTier})
+		}
 	}
-	if len(variants) == 0 {
+	if len(out) == 0 {
 		return self
 	}
-	return variants
-}
-
-// techTreeMaxSlotTier is the highest tier token that appears on a slot asset.
-const techTreeMaxSlotTier = 5
-
-// techTreeItemIDByAssetName resolves a registered asset by its FILE NAME rather
-// than its full path, because a line's tiers live in per-tier directories
-// (".../Pri_Missile_Super/T0/AB_..._T0_BP" vs ".../T2/AB_..._T2_BP") and the
-// directory changes with the tier as well as the name.
-func techTreeItemIDByAssetName(name string) (int32, bool) {
-	techTreeAssetNameOnce.Do(func() {
-		techTreeAssetNameIndex = map[string]int32{}
-		for _, entry := range dreadconfig.GetAllRegistryEntries() {
-			slash := strings.LastIndex(entry.Path, "/")
-			techTreeAssetNameIndex[entry.Path[slash+1:]] = entry.ItemID
+	// The equipped item must be in its own list or the screen cannot mark
+	// anything as fitted. It normally falls out of the line chain above; this
+	// covers a line whose equipped tier is not the one the index holds.
+	found := false
+	for _, v := range out {
+		if v.itemID == itemID {
+			found = true
+			break
 		}
-	})
-	id, ok := techTreeAssetNameIndex[name]
-	return id, ok
+	}
+	if !found {
+		out = append(out, slotVariant{itemID: itemID, tier: techTreeSlotTier[itemID]})
+	}
+	return out
 }
-
-var (
-	techTreeAssetNameOnce  sync.Once
-	techTreeAssetNameIndex map[string]int32
-)
 
 // techTreeXPCostByTier is what a hull costs to research.
 //

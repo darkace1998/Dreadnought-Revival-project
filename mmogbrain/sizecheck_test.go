@@ -85,7 +85,15 @@ var targetSizes = map[string]int{
 	// entries across 52 hulls, versus 237 before, which listed the current
 	// loadout back at the player with nothing to research. Still minimal per
 	// entry and ~7KB under the 32768-byte ring.
-	"YA_GetTechTree": 25846,
+	// Now 29554: module entries became a real per-slot tree -- the equipped
+	// line's tier chain up to the hull's tier, PLUS one entry for every sibling
+	// line in the same family group at the best tier that hull can use. 1418
+	// entries across 52 hulls. Only ~3.3KB under the 32768-byte ring now, and
+	// the cost is the unique ids, which do not compress; FPCost and
+	// NumTechTreeItemsRequired were dropped from module entries and bought only
+	// 600 bytes. Adding anything sizeable to this document needs a plan, not
+	// another field.
+	"YA_GetTechTree": 29554,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
