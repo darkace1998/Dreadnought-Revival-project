@@ -201,11 +201,54 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []byte {
 	pid := normalizedPlayerStatePID(playerPID)
 	if database := currentMmogPlayerStateDB(); database != nil {
-		if _, err := database.Exec(`DELETE FROM queue_entries WHERE user_id=? AND status='waiting'`, pid); err != nil {
+		// Every entry, not just the waiting ones. The matchmaker flips an entry
+		// to 'matched' the moment it picks it up, and a leave that only cleared
+		// 'waiting' rows left that behind -- so the player stayed queued from
+		// the server's point of view and could never re-enter cleanly.
+		if _, err := database.Exec(`DELETE FROM queue_entries WHERE user_id=?`, pid); err != nil {
+			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
+		}
+		// Drop any slot they hold in a live match, or currentMmogMatchmakingStatus
+		// keeps reporting "matched" and re-pushes them at a battle server they
+		// just cancelled out of. A match left with no slots is over.
+		if _, err := database.Exec(`DELETE FROM match_slots WHERE user_id=?`, pid); err != nil {
+			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
+		}
+		if _, err := database.Exec(`
+			UPDATE matches SET status='ended', ended_at=?
+			WHERE status='active' AND id NOT IN (SELECT match_id FROM match_slots)`,
+			time.Now().UTC().Format(time.RFC3339)); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
 		}
 	}
 	return buildMmogMatchmakingPayload(requestName, mmogMatchmakingStatus{state: "left"})
+}
+
+// buildMmogLeftQueuePayload is the push that actually takes the client out of
+// matchmaking. Answering YA_LeaveMatchmaking is only an ack: the interpreter
+// sets state 7 ("awaiting a cancellation response") when it sends the request
+// and nothing in the response path clears it, so the UI stays stuck and every
+// further click is swallowed -- observed live as 13 CancelMatchMaking log lines
+// against 2 requests actually reaching the server.
+//
+// The state machine only unwinds through UMatchmakingInterpreter's delegate at
+// YMmogbrain interface +0x2590 (OnLeftMatchmakingQueue, FUN_140ab0880, bound in
+// FUN_140aae0d0), which sets state 1 or 3 -- both log "Idle". The one thing that
+// broadcasts it is the dispatcher's "YA_LeftQueue" arm at 0x142a2dfc8, and the
+// only field that arm reads is PID (0x142a2e037).
+func buildMmogLeftQueuePayload(playerPID string) []byte {
+	pid := normalizedPlayerStatePID(playerPID)
+	var b []byte
+	b = protocol.AppendStringField(b, "RT", "YA_LeftQueue")
+	b = protocol.AppendStringField(b, "PID", pid)
+	// Also inside "result", since which of the two the dispatcher reads is not
+	// established and sending both is what made the other pushes work.
+	var stack []int
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = protocol.AppendStringField(b, "PID", pid)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
 }
 
 func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {

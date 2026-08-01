@@ -458,9 +458,15 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if requestName == "YA_EnterMatchmaking" || requestName == "YA_SquadEnterMatchmaking" {
 				state.queuedForMatch = true
 				state.serverStartingPushed = false
+				// connectPushed has to be rearmed here too, or a player who
+				// queues a second time in one session never gets YA_Connect and
+				// so never travels again.
+				state.connectPushed = false
 			}
 			if requestName == "YA_LeaveMatchmaking" {
 				state.queuedForMatch = false
+				state.serverStartingPushed = false
+				state.connectPushed = false
 			}
 			// These bootstrap reads (YA_RequestStaticFleetData, YA_PlayerFleets,
 			// YA_GetPlayerPurchases, YA_GetDailyContractsData) were previously
@@ -634,6 +640,22 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				}
 				if err := handlePlayerGetSatisfied(log, conn, remote, appEncoder, encryptResponses, state, "client-request"); err != nil {
 					return err
+				}
+			}
+			if requestName == "YA_LeaveMatchmaking" {
+				// The response is only an ack. The client sets matchmaking state
+				// 7 ("awaiting a cancellation response") when it sends the
+				// request, and only the YA_LeftQueue push unwinds it -- see
+				// buildMmogLeftQueuePayload. Without this the cancel button is
+				// dead for the rest of the session.
+				leftID, err := uuid.NewRandom()
+				if err != nil {
+					log.WithError(err).Warn("mmog: failed to generate left-queue push id")
+				} else {
+					leftFrame := protocol.BuildResponseFrame(leftID, frame.MsgType, buildMmogLeftQueuePayload(state.playerPID))
+					if err := writeMmogAppResponse(log, conn, remote, leftID, "YA_LeftQueue", leftFrame, appEncoder, encryptResponses, "left queue push failed", "sent YA_LeftQueue push"); err != nil {
+						return err
+					}
 				}
 			}
 			if requestName == "YA_Tune" {
