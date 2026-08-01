@@ -1786,7 +1786,23 @@ func buildMmogTechTreeDocument() []byte {
 		}
 		return protocol.AppendRootEnd(b)
 	}
-	b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+	// DN_TECHTREE_NO_WRAP=1 emits the item objects as the ROOT's direct
+	// children instead of wrapping them in one array.
+	//
+	// From a full memory dump plus winedbg: manager+0x38 holds 37 groups, each
+	// with exactly ONE item, and every per-item field reads back as that item's
+	// own Id -- key = Id, item+0x20 = Id, item+0x2c (Tier) = Id, and the class
+	// slot is garbage. The node the loader reads those fields from is a type-4
+	// STRING of 8 characters, which is the Id VALUE, carrying 7 children the
+	// loader appended itself on failed lookups.
+	//
+	// So it is reading fields off a string node rather than an item object,
+	// i.e. it walks one level deeper than our document provides. Today the root
+	// has a single child (the wrapping array) and the items sit under it;
+	// dropping the wrapper makes the items the root's own children.
+	if !techTreeNoWrap {
+		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+	}
 	emitted := 0
 	for _, manufacturerID := range order {
 		// DN_TECHTREE_ONLY_MANUFACTURER=<n> emits only that maker's items.
@@ -1810,7 +1826,9 @@ func buildMmogTechTreeDocument() []byte {
 			emitted++
 		}
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	if !techTreeNoWrap {
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	return protocol.AppendRootEnd(b)
 }
 
@@ -1859,6 +1877,10 @@ var techTreePrereqObjects = os.Getenv("DN_TECHTREE_PREREQ_OBJECTS") == "1"
 // techTreePrereqManufacturer makes each Prereq entry carry the manufacturer id
 // as its value; see appendMmogTechTreeItem.
 var techTreePrereqManufacturer = os.Getenv("DN_TECHTREE_PREREQ_AS_MANUFACTURER") == "1"
+
+// techTreeNoWrap emits items as the root's direct children; see
+// buildMmogTechTreeDocument.
+var techTreeNoWrap = os.Getenv("DN_TECHTREE_NO_WRAP") == "1"
 
 // techTreeOnlyManufacturer restricts the document to one maker, or -1 for all;
 // see buildMmogTechTreeDocument.
