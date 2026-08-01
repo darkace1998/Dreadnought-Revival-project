@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -275,6 +276,11 @@ type mmogConnState struct {
 	// frames. serverStartingPushed makes the match-ready push fire once.
 	queuedForMatch       bool
 	serverStartingPushed bool
+	// connectPushed makes the YA_Connect travel push fire once. It is separate
+	// from serverStartingPushed because the two are different phases:
+	// YA_ServerStarting says "a server is coming up", YA_Connect says "go here
+	// now" and makes the client travel immediately.
+	connectPushed bool
 }
 
 // mmogJWTSecretValue is set once at startup by setMmogJWTSecret, after
@@ -677,12 +683,49 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 							return err
 						}
 						state.serverStartingPushed = true
-						state.queuedForMatch = false
 						log.WithFields(logrus.Fields{
 							"remote": remote, "pid": state.playerPID,
 							"server": fmt.Sprintf("%s:%d", status.serverIP, status.serverPort),
 							"match":  status.matchID, "mode": status.gameMode, "map": status.mapName,
 						}).Info("mmog: match ready, pushed battle server address to client")
+					}
+				}
+			}
+
+			// Travel push. YA_ServerStarting alone leaves the client sitting on
+			// "Battle server starting" forever: the client's dispatcher (the
+			// YA_Connect arm at 0x142a271f5) waits for a SECOND push before it
+			// moves, reading Connect/Team/DediID/Room/PVEEvent in that order and
+			// then running the console command
+			//
+			//	TRAVEL <Connect>?TEAM=<Team>
+			//
+			// Deliberately a sibling of the YA_ServerStarting push, not nested
+			// inside it: that push sets serverStartingPushed and so closes its
+			// own gate, and this one has to keep being reachable on later frames
+			// while the delay runs down.
+			if state.serverStartingPushed && !state.connectPushed {
+				status := currentMmogMatchmakingStatus(state.playerPID)
+				ready := status.state == "matched" && status.serverIP != "" &&
+					!status.createdAt.IsZero() &&
+					time.Since(status.createdAt) >= mmogConnectPushDelay
+				if ready {
+					pushID, err := uuid.NewRandom()
+					if err != nil {
+						log.WithError(err).Warn("mmog: failed to generate connect push id")
+					} else {
+						payload := buildMmogConnectPushPayload(status)
+						pushFrame := protocol.BuildResponseFrame(pushID, frame.MsgType, payload)
+						if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_Connect", pushFrame, appEncoder, encryptResponses, "connect push failed", "sent YA_Connect push"); err != nil {
+							return err
+						}
+						state.connectPushed = true
+						state.queuedForMatch = false
+						log.WithFields(logrus.Fields{
+							"remote": remote, "pid": state.playerPID,
+							"connect": net.JoinHostPort(status.serverIP, strconv.Itoa(int(status.serverPort))),
+							"team":    status.team, "match": status.matchID,
+						}).Info("mmog: pushed YA_Connect, client should now travel to the battle server")
 					}
 				}
 			}

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -140,6 +141,13 @@ type mmogMatchmakingStatus struct {
 	matchID    string
 	serverIP   string
 	serverPort int32
+	// team is this player's side, straight from their match_slots row. It is
+	// echoed back in the YA_Connect push because the client appends it to the
+	// travel URL as "?TEAM=<team>".
+	team int32
+	// createdAt is when the match was formed, used to hold YA_Connect back
+	// until the battle server has had time to come up.
+	createdAt time.Time
 }
 
 func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payload []byte) []byte {
@@ -215,16 +223,21 @@ func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {
 	// "Battle server starting" and waits forever for a battle server that has
 	// long since exited. Seen live against a match that was a day old.
 	cutoff := time.Now().UTC().Add(-matchmaker.MaxMatchLifetime).Format(time.RFC3339)
+	var createdAt string
 	err := database.QueryRow(`
-		SELECT m.id,m.server_ip,m.server_port,m.game_mode,m.map
+		SELECT m.id,m.server_ip,m.server_port,m.game_mode,m.map,ms.team,m.created_at
 		FROM match_slots ms
 		JOIN matches m ON ms.match_id=m.id
 		WHERE ms.user_id=? AND m.status='active' AND datetime(m.created_at) >= datetime(?)
 		ORDER BY ms.joined_at DESC
 		LIMIT 1
-	`, playerPID, cutoff).Scan(&matched.matchID, &matched.serverIP, &matched.serverPort, &matched.gameMode, &matched.mapName)
+	`, playerPID, cutoff).Scan(&matched.matchID, &matched.serverIP, &matched.serverPort,
+		&matched.gameMode, &matched.mapName, &matched.team, &createdAt)
 	if err == nil {
 		matched.state = "matched"
+		if parsed, parseErr := time.Parse(time.RFC3339, createdAt); parseErr == nil {
+			matched.createdAt = parsed
+		}
 		return matched
 	}
 	if err != sql.ErrNoRows {
@@ -298,6 +311,70 @@ func buildMmogServerStartingPayload(status mmogMatchmakingStatus) []byte {
 		b = protocol.AppendStringField(b, "MapName", status.mapName)
 	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// mmogConnectPushDelay holds YA_Connect back until the battle server has had a
+// chance to finish loading.
+//
+// YA_Connect makes the client travel IMMEDIATELY, so sending it the instant the
+// match row appears points the client at a process that is still loading its
+// map -- the shipping build takes roughly a minute to reach "WaitingToStart"
+// under Wine. This delay is a stand-in for a real readiness signal: neither
+// game-manager nor dn-dedicated reports instance readiness over HTTP today,
+// though dn-dedicated already detects it internally (its WaitReady watches for
+// "Match State Changed from EnteringMap to WaitingToStart"). Once the control
+// plane exposes that, gate on it and delete this.
+var mmogConnectPushDelay = 75 * time.Second
+
+// buildMmogConnectPayload is the push that actually sends the client to the
+// battle server. YA_ServerStarting only moves the UI to "Battle server
+// starting"; the client then waits for YA_Connect and, on receiving it, runs
+//
+//	TRAVEL <Connect>?TEAM=<Team>
+//
+// Field names are read straight off the client's handler (the YA_Connect arm of
+// the YMmogClient dispatcher at 0x142a271f5): it reads Connect, Team, DediID,
+// Room and PVEEvent in that order, logs
+//
+//	Battle server connect push received: Map: %s; GameType:%s; DediID:%s; Room: %s
+//
+// and then builds the travel URL. That log line is the verification signal --
+// if DediID and Room come through non-empty in the client log, the payload
+// shape is right.
+//
+// Fields go out at the message root AND inside "result": which of the two the
+// dispatcher reads is not established, and sending both is what made GameModes
+// work. Everything is a string, because the client's value union only accepts
+// double/int64/string -- an int32 field reads back as 0.
+func buildMmogConnectPushPayload(status mmogMatchmakingStatus) []byte {
+	var b []byte
+	b = protocol.AppendStringField(b, "RT", "YA_Connect")
+	b = appendMmogConnectFields(b, status)
+	var stack []int
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b = appendMmogConnectFields(b, status)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+func appendMmogConnectFields(b []byte, status mmogMatchmakingStatus) []byte {
+	// Connect is consumed as the travel URL, so it is host:port and nothing
+	// else -- no scheme, no options. The client appends "?TEAM=" itself.
+	connect := ""
+	if status.serverIP != "" && status.serverPort != 0 {
+		connect = net.JoinHostPort(status.serverIP, strconv.Itoa(int(status.serverPort)))
+	}
+	b = protocol.AppendStringField(b, "Connect", connect)
+	b = protocol.AppendStringField(b, "Team", strconv.Itoa(int(status.team)))
+	// DediID and Room are opaque identifiers the client only logs and echoes.
+	// The match id serves as both: it is unique per battle server instance.
+	b = protocol.AppendStringField(b, "DediID", status.matchID)
+	b = protocol.AppendStringField(b, "Room", status.matchID)
+	// PVEEvent is read unconditionally, so it is always present; empty means
+	// "not a PvE event match".
+	b = protocol.AppendStringField(b, "PVEEvent", "")
 	return b
 }
 
