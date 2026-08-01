@@ -472,15 +472,27 @@ func main() {
 		jwtToken string
 		username string
 	)
+	creds, haveCreds := loadCredentials()
+	// A saved token is only worth reusing while it is still alive. It used to be
+	// replayed unconditionally, so once it aged out every restart rewrote the
+	// SAME dead token and the game failed with an opaque 401 -- and restarting
+	// the launcher, the obvious thing to try, changed nothing. There is no
+	// password or refresh token saved, so the only honest recovery is to ask the
+	// player to sign in again.
+	credsUsable := haveCreds && !signOutRequested() && !launcherTokenExpired(creds.Token)
+
 	if strings.TrimSpace(cfg.PlayerID) != "" || os.Getenv("DN_PLAYER_ID") != "" {
 		// An explicitly pinned identity wins, which is how an account is moved
 		// or recovered.
 		jwtToken, username = authenticateWithDerivedIdentity(cfg)
-	} else if creds, ok := loadCredentials(); ok && !signOutRequested() {
+	} else if credsUsable {
 		fmt.Printf("[*] Signed in as %s.\n", creds.Username)
 		jwtToken, username = creds.Token, creds.Username
 	} else {
 		if signOutRequested() {
+			clearCredentials()
+		} else if haveCreds {
+			fmt.Printf("[*] Your saved sign-in for %s has expired; please sign in again.\n", creds.Username)
 			clearCredentials()
 		}
 		fmt.Println("[*] Opening the sign-in window...")

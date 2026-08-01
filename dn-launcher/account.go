@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -230,4 +231,37 @@ func serverMessage(payload []byte, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+// launcherTokenExpired reports whether a stored JWT is past (or within a minute
+// of) its expiry.
+//
+// The launcher cannot VERIFY the token -- it has no signing secret -- but it can
+// read the claim, and that is enough to decide whether reusing it is pointless.
+// A malformed or claim-less token counts as expired: if we cannot tell when it
+// dies, re-authenticating is the safe answer.
+//
+// This exists because the saved-credentials path reused creds.Token verbatim, so
+// once that token aged out every launcher restart rewrote the SAME dead token to
+// the registry. The game then failed with an opaque "Could not create session.
+// Error Code: 401" and restarting the launcher -- the obvious remedy -- changed
+// nothing.
+func launcherTokenExpired(token string) bool {
+	const skew = time.Minute
+
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return true
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return true
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp == 0 {
+		return true
+	}
+	return time.Now().Add(skew).After(time.Unix(claims.Exp, 0))
 }
