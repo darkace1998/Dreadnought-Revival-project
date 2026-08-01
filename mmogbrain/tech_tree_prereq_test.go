@@ -113,3 +113,45 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 		}
 	}
 }
+
+// TestTechTreeDocumentHasTwoWrappingArrays pins the nesting depth that finally
+// made UYTechTreeManager populate its manufacturer groups.
+//
+// The client's parser makes the document's FIRST field the root when that field
+// is unnamed (root type = (nameLen < 1) + 5), so a wrapping array does not
+// become a child of the root -- it BECOMES the root. The loader then walks
+//
+//	outer (1403ffe50)  RCX = docChildren + i*0x50   ; a group
+//	                   FUN_140347e00 -> its children
+//	inner (1403ffe90)  RDI = those + j*0x50         ; an item
+//
+// so with only one wrapper the outer loop iterated our ITEMS and the inner loop
+// their FIELDS. Verified live: breaking at 1403ffec9 gave RDI type 4, names 0,
+// children 0, strLen 9 -- an item's Id VALUE as a bare string. Every field read
+// then returned the Id, which is why manager+0x38 held 37 groups keyed by
+// loadout ids instead of 3 keyed by 0/1/2.
+//
+// With two wrappers RDI is type 5 with 12 names and 12 children, a ProxyType
+// canary reports from all 100 items, and manager+0x38 holds exactly:
+//
+//	key 0 (JupiterArms) 33 items
+//	key 1 (AkulaVektor) 34 items
+//	key 2 (Oberon)      33 items
+func TestTechTreeDocumentHasTwoWrappingArrays(t *testing.T) {
+	document := inflateTechTreeDocument(t, buildMmogTechTreePayload("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+	// Two unnamed array headers (00 0d + u32 length) before the first item.
+	if len(document) < 12 {
+		t.Fatal("tech tree document is too short to carry its wrappers")
+	}
+	if document[0] != 0x00 || document[1] != 0x0d {
+		t.Fatalf("document must open with an unnamed ARRAY, got % x", document[:2])
+	}
+	if document[6] != 0x00 || document[7] != 0x0d {
+		t.Fatalf("document needs a SECOND unnamed array; the outer one becomes the "+
+			"root, so a single wrapper leaves items one level too shallow. got % x", document[6:8])
+	}
+	// The first item must then be an unnamed OBJECT, not another array.
+	if document[12] != 0x00 || document[13] != 0x0c {
+		t.Fatalf("expected an unnamed OBJECT item after the two wrappers, got % x", document[12:14])
+	}
+}

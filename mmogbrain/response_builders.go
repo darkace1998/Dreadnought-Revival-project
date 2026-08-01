@@ -1800,8 +1800,30 @@ func buildMmogTechTreeDocument() []byte {
 	// i.e. it walks one level deeper than our document provides. Today the root
 	// has a single child (the wrapping array) and the items sit under it;
 	// dropping the wrapper makes the items the root's own children.
+	// TWO nested unnamed arrays, then the items.
+	//
+	// The client's parser makes the document's first field the ROOT when that
+	// field is unnamed (root type = (nameLen < 1) + 5), so a single wrapping
+	// array does not become a child of the root -- it BECOMES the root. Our
+	// items then sat one level too shallow for the loader, which walks
+	// doc.child[i] -> that node's children -> items:
+	//
+	//	outer (1403ffe50)  RCX = docChildren + i*0x50   ; a group
+	//	                   FUN_140347e00 -> its children
+	//	inner (1403ffe90)  RDI = those + j*0x50         ; an item
+	//
+	// With one wrapper the outer loop was iterating our ITEMS and the inner
+	// loop their FIELDS. Confirmed live: breaking at 1403ffec9 and dumping RDI
+	// gives type 4, names 0, children 0, strLen 9 -- a bare 8-character string,
+	// i.e. an item's Id VALUE. That is why every field read came back as the
+	// Id and the groups ended up keyed by loadout ids.
+	//
+	// DN_TECHTREE_SINGLE_WRAP=1 restores the single wrapper.
 	if !techTreeNoWrap {
 		b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+		if !techTreeSingleWrap {
+			b, stack = protocol.AppendUnnamedArrayStart(b, stack)
+		}
 	}
 	emitted := 0
 	for _, manufacturerID := range order {
@@ -1827,6 +1849,9 @@ func buildMmogTechTreeDocument() []byte {
 		}
 	}
 	if !techTreeNoWrap {
+		if !techTreeSingleWrap {
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	return protocol.AppendRootEnd(b)
@@ -1881,6 +1906,10 @@ var techTreePrereqManufacturer = os.Getenv("DN_TECHTREE_PREREQ_AS_MANUFACTURER")
 // techTreeNoWrap emits items as the root's direct children; see
 // buildMmogTechTreeDocument.
 var techTreeNoWrap = os.Getenv("DN_TECHTREE_NO_WRAP") == "1"
+
+// techTreeSingleWrap restores the single wrapping array; see
+// buildMmogTechTreeDocument.
+var techTreeSingleWrap = os.Getenv("DN_TECHTREE_SINGLE_WRAP") == "1"
 
 // techTreeOnlyManufacturer restricts the document to one maker, or -1 for all;
 // see buildMmogTechTreeDocument.
