@@ -189,7 +189,83 @@ func (m *Matchmaker) Stop() {
 	close(m.stop)
 }
 
+// MaxMatchLifetime is how long a match may stay 'active' before the sweep ends
+// it.
+//
+// Nothing else ever ends a match. game-manager knows when a battle server exits
+// but does not tell mmogbrain, so every match ever formed stayed 'active'
+// forever -- and currentMmogMatchmakingStatus reports a player with a slot in an
+// active match as already "matched". The effect: once a player had been in ONE
+// match they could never queue again. Their client would go straight from
+// Searching to "Battle server starting" and wait forever for a server that had
+// died, in one observed case, a day earlier.
+//
+// A real match cannot outlive this by any sane margin, so anything older is
+// wreckage.
+const MaxMatchLifetime = 45 * time.Minute
+
+// sweepStaleMatches ends matches that have outlived MaxMatchLifetime and frees
+// the players bound to them.
+func (m *Matchmaker) sweepStaleMatches() error {
+	cutoff := time.Now().UTC().Add(-MaxMatchLifetime).Format(time.RFC3339)
+
+	// Compare through SQLite's datetime() on BOTH sides. created_at is written
+	// in two different formats -- the schema default is datetime('now')
+	// ("2026-08-01 21:33:00") while formMatch writes RFC3339
+	// ("2026-08-01T21:33:00Z") -- and a plain string comparison between them is
+	// meaningless: ' ' sorts before 'T', so every datetime()-format row looked
+	// older than any RFC3339 cutoff and would have been swept immediately,
+	// including live matches. datetime() parses both.
+	rows, err := m.DB.Query(
+		`SELECT id FROM matches WHERE status='active' AND datetime(created_at) < datetime(?)`, cutoff)
+	if err != nil {
+		return fmt.Errorf("query stale matches: %w", err)
+	}
+	var stale []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan stale match: %w", err)
+		}
+		stale = append(stale, id)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate stale matches: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close stale match rows: %w", err)
+	}
+
+	for _, id := range stale {
+		now := time.Now().UTC().Format(time.RFC3339)
+		if _, err := m.DB.Exec(`UPDATE matches SET status='ended', ended_at=? WHERE id=?`, now, id); err != nil {
+			return fmt.Errorf("end stale match %s: %w", id, err)
+		}
+		// The slots must go too: they are what binds a player to the match, and
+		// leaving them behind would keep reporting the player as matched.
+		if _, err := m.DB.Exec(`DELETE FROM match_slots WHERE match_id=?`, id); err != nil {
+			return fmt.Errorf("clear slots for stale match %s: %w", id, err)
+		}
+		m.Log.WithField("match_id", id).Info("ended stale match and freed its players")
+	}
+
+	// Slots whose match row no longer exists at all. These cannot pin a player
+	// -- the status lookup inner-joins matches -- but nothing else ever removes
+	// them, so they would grow without bound.
+	if _, err := m.DB.Exec(
+		`DELETE FROM match_slots WHERE match_id NOT IN (SELECT id FROM matches)`); err != nil {
+		return fmt.Errorf("clear orphaned match slots: %w", err)
+	}
+	return nil
+}
+
 func (m *Matchmaker) tick() error {
+	if err := m.sweepStaleMatches(); err != nil {
+		m.Log.WithError(err).Warn("stale match sweep failed")
+	}
+
 	// Group by game_mode and tier_min to match players within compatible tier ranges.
 	// Players with the same tier_min are treated as compatible for matchmaking.
 	rows, err := m.DB.Query(`

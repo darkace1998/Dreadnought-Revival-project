@@ -286,3 +286,49 @@ func TestExpiredTokenIsDistinguishableFromInvalid(t *testing.T) {
 		t.Error("a wrong-secret token reports as expired, which would send the operator chasing the launcher")
 	}
 }
+
+// A match too old to still be running must not make a player "matched".
+//
+// Nothing used to end a match, so every one ever formed stayed 'active'
+// forever. A player with a slot in one was reported as already matched, and
+// their client went straight from Searching to "Battle server starting" and
+// waited forever for a battle server that had exited -- observed live against a
+// match that was a DAY old, which is why the player could never queue again.
+func TestStaleMatchDoesNotHoldAPlayerHostage(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "player-stale-match"
+
+	old := time.Now().UTC().Add(-matchmaker.MaxMatchLifetime - time.Hour).Format(time.RFC3339)
+	if _, err := database.Exec(
+		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at)
+		 VALUES(?,?,?,?,?,'active',?,?)`,
+		"stale-1", "BC", "Amirani", "10.0.0.73", 7777, old, old); err != nil {
+		t.Fatalf("insert stale match: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO match_slots(match_id,user_id,team) VALUES(?,?,0)`, "stale-1", pid); err != nil {
+		t.Fatalf("insert stale slot: %v", err)
+	}
+
+	if got := currentMmogMatchmakingStatus(pid); got.state == "matched" {
+		t.Errorf("a match older than MaxMatchLifetime still reports the player as matched (%+v); they can never queue again", got)
+	}
+
+	// A match formed just now must still count, or nobody could ever join one.
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := database.Exec(
+		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at)
+		 VALUES(?,?,?,?,?,'active',?,?)`,
+		"fresh-1", "BC", "Derelict", "10.0.0.73", 7778, now, now); err != nil {
+		t.Fatalf("insert fresh match: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO match_slots(match_id,user_id,team) VALUES(?,?,0)`, "fresh-1", pid); err != nil {
+		t.Fatalf("insert fresh slot: %v", err)
+	}
+	got := currentMmogMatchmakingStatus(pid)
+	if got.state != "matched" {
+		t.Fatalf("a freshly formed match reports state %q, want matched", got.state)
+	}
+	if got.serverPort != 7778 {
+		t.Errorf("matched port = %d, want the fresh match's 7778", got.serverPort)
+	}
+}

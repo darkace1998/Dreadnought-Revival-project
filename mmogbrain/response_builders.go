@@ -207,14 +207,22 @@ func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {
 	}
 
 	var matched mmogMatchmakingStatus
+	// Only a match young enough to still be running counts.
+	//
+	// The matchmaker sweeps stale matches every tick, but this query must not
+	// depend on that having happened: a leftover 'active' row makes a player
+	// permanently "matched", and their client jumps from Searching straight to
+	// "Battle server starting" and waits forever for a battle server that has
+	// long since exited. Seen live against a match that was a day old.
+	cutoff := time.Now().UTC().Add(-matchmaker.MaxMatchLifetime).Format(time.RFC3339)
 	err := database.QueryRow(`
 		SELECT m.id,m.server_ip,m.server_port,m.game_mode,m.map
 		FROM match_slots ms
 		JOIN matches m ON ms.match_id=m.id
-		WHERE ms.user_id=? AND m.status='active'
+		WHERE ms.user_id=? AND m.status='active' AND datetime(m.created_at) >= datetime(?)
 		ORDER BY ms.joined_at DESC
 		LIMIT 1
-	`, playerPID).Scan(&matched.matchID, &matched.serverIP, &matched.serverPort, &matched.gameMode, &matched.mapName)
+	`, playerPID, cutoff).Scan(&matched.matchID, &matched.serverIP, &matched.serverPort, &matched.gameMode, &matched.mapName)
 	if err == nil {
 		matched.state = "matched"
 		return matched
