@@ -404,6 +404,18 @@ func battleServerEnv(configDir string) []string {
 
 	env = append(env, "WINEDEBUG=-all")
 
+	// The shipping binary links WebBrowserWidget, so CEF initialises even with
+	// -nullrhi -unattended. CEF creates a real window and aborts the process
+	// ("FATAL:hwnd_util.cc(67): Invalid window handle") when there is no X
+	// display, which surfaces as a libcef.dll call stack and an immediate exit.
+	// GAME_DISPLAY overrides; otherwise an inherited DISPLAY is kept; otherwise
+	// fall back to the Xvfb display the harness runs.
+	if display := os.Getenv("GAME_DISPLAY"); display != "" {
+		env = append(env, "DISPLAY="+display)
+	} else if os.Getenv("DISPLAY") == "" {
+		env = append(env, "DISPLAY=:99")
+	}
+
 	// Proven software-GL defaults, each skipped if already set.
 	defaults := map[string]string{
 		"LIBGL_ALWAYS_SOFTWARE":      "1",

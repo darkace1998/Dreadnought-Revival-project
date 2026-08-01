@@ -74,6 +74,20 @@ export GAME_BINARY="${GAME_BINARY:-}"
 # build needs under Wine with no GPU, so they do not need setting here.
 export GAME_WINEPREFIX="${GAME_WINEPREFIX:-$HOME/.wine}"
 
+# The battle server embeds CEF, which aborts the whole process when it has no X
+# display, so a headless box still needs one. Start Xvfb on demand and hand the
+# display to game-manager; GAME_DISPLAY lets an operator point at their own.
+export GAME_DISPLAY="${GAME_DISPLAY:-${DISPLAY:-:99}}"
+if [ "$GAME_DISPLAY" = ":99" ] && ! pgrep -f "Xvfb :99" >/dev/null 2>&1; then
+    if command -v Xvfb >/dev/null 2>&1; then
+        Xvfb :99 -screen 0 1280x800x24 >"$RUN_DIR/xvfb.log" 2>&1 &
+        sleep 1
+        echo "started Xvfb on :99 for the battle server"
+    else
+        echo "WARNING: Xvfb is not installed; battle servers will crash in libcef.dll" >&2
+    fi
+fi
+
 # One player forms a match, so a single tester can reach a battle server without
 # a second client. Raise it for real play.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
