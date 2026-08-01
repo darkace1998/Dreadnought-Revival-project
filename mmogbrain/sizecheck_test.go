@@ -85,15 +85,14 @@ var targetSizes = map[string]int{
 	// entries across 52 hulls, versus 237 before, which listed the current
 	// loadout back at the player with nothing to research. Still minimal per
 	// entry and ~7KB under the 32768-byte ring.
-	// Now 29554: one entry per LINE, never a tier chain. Emitting the equipped
-	// line's tiers as separate nodes put the SAME module on the rail twice --
-	// T0 and T1 of Missile_Super are two item ids but one module, and the
-	// screen drew "Tempest Missiles N" beside an identical "Tempest Missiles
-	// N". Alternatives are also no longer tier-gated: the sibling lines mostly
-	// have no T0/T1 variant, so capping them at the hull's tier left a tier-1
-	// ship with only its fitted loadout. 1407 entries; ~3.2KB under the 32768
-	// ring, and the cost is the unique ids, which do not compress.
-	"YA_GetTechTree": 29554,
+	// Now 25383: module entries are the ALTERNATIVES only. The client draws a
+	// ship's fitted modules itself from its UYCachedItemIDData slot list (tags
+	// 1..10), so anything sent for a slot is IN ADDITION to what is already on
+	// the rail -- sending the equipped item too is what showed the default
+	// loadout twice, three attempts running. The equipped LINE is excluded
+	// whole, because a module's tier is not a separate node. 937 entries,
+	// ~7.4KB under the 32768 ring.
+	"YA_GetTechTree": 25383,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

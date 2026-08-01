@@ -1663,6 +1663,16 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 	ids = append(ids, hull.abilities[:]...)
 	ids = append(ids, hull.perks[:]...)
 
+	// Nothing the hull already fields may be emitted, from ANY slot -- those
+	// are already on the rail from the client's own cached slot list, and a
+	// second copy is the duplicate the screen showed.
+	equipped := map[int32]bool{}
+	for _, id := range ids {
+		if id != 0 {
+			equipped[id] = true
+		}
+	}
+
 	items := make([]techTreeItem, 0, len(ids)*4)
 	position := int32(0)
 	for _, id := range ids {
@@ -1687,6 +1697,9 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 		// Only STRICTLY higher tiers are added: lower ones are what earlier
 		// hulls fly, not something this ship can research.
 		for _, variant := range techTreeSlotUpgrades(id, hull.tier) {
+			if equipped[variant.itemID] {
+				continue
+			}
 			items = append(items, techTreeItem{
 				id: variant.itemID,
 				// ClassId keys the per-ship record, so it is the HULL's id, not
@@ -1837,29 +1850,28 @@ func techTreeBuildSlotIndex() {
 func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 	techTreeBuildSlotIndex()
 
-	self := []slotVariant{{itemID: itemID, tier: hullTier}}
 	key, ok := techTreeSlotOf[itemID]
 	if !ok {
-		return self
+		// Perks carry no tier token and have no sibling group, so there is
+		// nothing to research beside them. Returning the item itself here is
+		// what put a second copy of it on the rail.
+		return nil
 	}
 
-	// ONE entry per line, never a tier chain.
+	// ONLY the alternatives. The ship's own fitted modules are already on the
+	// rail: the client builds them from its own UYCachedItemIDData slot list
+	// (tags 1..10 = primary weapon, secondary weapon, four abilities, four
+	// briefings), so anything we send for a slot is IN ADDITION to what is
+	// already drawn. Sending the equipped item too is what showed the default
+	// loadout twice -- and the equipped LINE is excluded entirely, because a
+	// module's tier is not a separate node.
 	//
-	// Emitting the equipped line's tiers as separate nodes is what put the
-	// same module on the rail twice: T0 and T1 of Missile_Super are two item
-	// ids but one module, so the screen drew "Tempest Missiles N" beside an
-	// identical "Tempest Missiles N". A slot's rail is a choice BETWEEN
-	// modules; the tier a given module comes at is decided by the ship, not by
-	// a second node next to the first.
-	out := []slotVariant{{itemID: itemID, tier: techTreeSlotTier[itemID]}}
-
-	// Alternatives are NOT tier-gated. The sibling lines mostly have no T0/T1
-	// variant at all (Assault's Pri group: Missile_Super has T0, but Ram_Dmg
-	// and Torpedo_Ultra start at T2 and four more only exist at T5), so capping
-	// them at the hull's tier left a tier-1 ship with exactly its fitted
-	// loadout and nothing to research. Each sibling contributes its LOWEST
-	// available variant and the XP cost does the gating, which is what the
-	// research rail is for.
+	// Alternatives are deliberately not tier-gated: the sibling lines mostly
+	// have no low-tier variant (Assault's Pri group has Missile_Super at T0,
+	// but Ram_Dmg and Torpedo_Ultra start at T2 and four more exist only at
+	// T5), so capping them at the hull's tier left the tier-1 starters with
+	// nothing to research at all. The XP cost does the gating.
+	var out []slotVariant
 	for _, line := range techTreeSlotLines[key.group] {
 		if line == key.line {
 			continue

@@ -258,17 +258,18 @@ func TestTechTreeLayoutRowIdsPassTheClassLookupGate(t *testing.T) {
 	}
 }
 
-// A slot's module entries must offer BOTH kinds of progression: higher tiers of
-// the line the ship already flies, and DIFFERENT modules beside it.
+// A slot's module entries are the ALTERNATIVES only -- never anything the hull
+// already fields.
 //
-// First attempt emitted only the equipped items -- "just the duplicates".
-// Second emitted the equipped line's higher tiers only, which reads as the same
-// module twice: "i have 2 time the basic from the hull ... i know that u have
-// diferent modules per ship so vulture missiles and some other module as next
-// upgrade of the vultures not only vultures". The client's assets group
-// alternatives by family (Assault's Pri group holds Missile_Super, Ram_Dmg,
-// Torpedo_Ultra and six more), and that group is the "some other module".
-func TestTechTreeModulesOfferTiersAndAlternatives(t *testing.T) {
+// The client draws a ship's fitted modules from its own UYCachedItemIDData slot
+// list (tags 1..10 = primary weapon, secondary weapon, four abilities, four
+// briefings), so whatever we send for a slot is IN ADDITION to what is already
+// on the rail. Three separate attempts each put a second copy of the default
+// loadout on screen: emitting the equipped items, emitting the equipped line's
+// tier chain (two ids, one module -- "Tempest Missiles N" beside an identical
+// "Tempest Missiles N"), and finally emitting the equipped item once alongside
+// the alternatives. Only the alternatives belong here.
+func TestTechTreeModulesAreAlternativesOnly(t *testing.T) {
 	var otranto, agosta baseShipLoadout
 	for _, hull := range baseShipLoadouts {
 		switch hull.name {
@@ -281,86 +282,65 @@ func TestTechTreeModulesOfferTiersAndAlternatives(t *testing.T) {
 	if otranto.loadoutID == 0 || agosta.loadoutID == 0 {
 		t.Skip("roster does not carry the sampled hulls")
 	}
+	techTreeBuildSlotIndex()
 
-	// No id may repeat inside one hull -- a repeat is the duplicate symptom.
 	for _, hull := range []baseShipLoadout{agosta, otranto} {
+		fitted := map[int32]bool{hull.primary: true, hull.secondary: true}
+		for _, a := range hull.abilities {
+			if a != 0 {
+				fitted[a] = true
+			}
+		}
+		for _, p := range hull.perks {
+			if p != 0 {
+				fitted[p] = true
+			}
+		}
+
 		seen := map[int32]bool{}
 		for _, m := range techTreeModuleItems(hull, 0) {
+			if fitted[m.id] {
+				t.Errorf("%s re-sends fitted module %d; the client already draws it", hull.name, m.id)
+			}
 			if seen[m.id] {
 				t.Errorf("%s emits module id %d more than once", hull.name, m.id)
 			}
 			seen[m.id] = true
 		}
-	}
 
-	// The equipped item is always present, or nothing can be marked as fitted.
-	ability := techTreeSlotUpgrades(otranto.abilities[0], otranto.tier)
-	equipped := false
-	for _, v := range ability {
-		if v.itemID == otranto.abilities[0] {
-			equipped = true
+		// No two entries may come from the same line either: a module's tier is
+		// not a separate node, so two tiers of one line read as one module
+		// drawn twice.
+		lines := map[techTreeSlotKey]int{}
+		for _, m := range techTreeModuleItems(hull, 0) {
+			if key, ok := techTreeSlotOf[m.id]; ok {
+				lines[key]++
+				if lines[key] > 1 {
+					t.Errorf("%s emits %d entries from line %v; one per line only", hull.name, lines[key], key)
+				}
+			}
 		}
 	}
-	if !equipped {
-		t.Errorf("Otranto ability slot %d does not include its own equipped item: %+v", otranto.abilities[0], ability)
-	}
 
-	// A mid-tier hull must see its own line's tier chain AND other lines.
-	techTreeBuildSlotIndex()
-	own := techTreeSlotOf[otranto.abilities[0]]
-	sameLine, otherLine := 0, 0
-	for _, v := range ability {
-		if techTreeSlotOf[v.itemID] == own {
-			sameLine++
-		} else {
-			otherLine++
-		}
-	}
-	// Exactly ONE entry may come from the equipped line. Two entries of one
-	// line are two item ids but one module, and the screen drew them as
-	// "Tempest Missiles N" beside an identical "Tempest Missiles N" -- the
-	// "default loadout 2 times" this test exists to prevent.
-	if sameLine != 1 {
-		t.Errorf("Otranto ability slot has %d entries on its own line; exactly 1 is allowed or the module appears twice", sameLine)
-	}
-	if otherLine < 4 {
-		t.Errorf("Otranto ability slot offers only %d alternative modules: %+v", otherLine, ability)
-	}
-
-	// And a TIER-1 hull must get the alternatives too. Gating them by hull tier
-	// left the starter ships with exactly their fitted loadout, because the
-	// sibling lines mostly have no T0/T1 variant at all.
+	// A tier-1 hull must still get alternatives -- gating them by hull tier left
+	// the starter ships with nothing to research, because the sibling lines
+	// mostly have no T0/T1 variant.
 	starter := techTreeSlotUpgrades(agosta.abilities[0], agosta.tier)
-	if len(starter) < 5 {
-		t.Errorf("Agosta (tier 1) ability slot offers %d modules; the starter ships need alternatives too: %+v", len(starter), starter)
+	if len(starter) < 4 {
+		t.Errorf("Agosta (tier 1) ability slot offers only %d alternatives: %+v", len(starter), starter)
 	}
-	starterOwn := techTreeSlotOf[agosta.abilities[0]]
-	same := 0
 	for _, v := range starter {
-		if techTreeSlotOf[v.itemID] == starterOwn {
-			same++
+		if v.itemID == agosta.abilities[0] {
+			t.Errorf("Agosta ability slot re-sends its own equipped module %d", v.itemID)
 		}
-	}
-	if same != 1 {
-		t.Errorf("Agosta ability slot has %d entries on its own line; exactly 1 is allowed", same)
-	}
-
-	// Every entry in an ability slot must actually be an ability. A tier
-	// directory holds weapon and projectile sub-assets too, and without the
-	// category filter those overwrote the real entries -- the list came back
-	// with weapon ids in it.
-	for _, v := range ability {
 		if category := (v.itemID >> 24) & 0xff; category != 4 {
 			t.Errorf("ability slot entry %d has category %d, want 4 (YAbility)", v.itemID, category)
 		}
 	}
 
-	// A primary weapon has no alternatives: Light/Medium/Heavy are the hull's
-	// own size, not a choice. Merging them offered a medium hull the heavy
-	// hull's weapon.
-	for _, v := range techTreeSlotUpgrades(otranto.primary, otranto.tier) {
-		if techTreeSlotOf[v.itemID].group != techTreeSlotOf[otranto.primary].group {
-			t.Errorf("primary weapon slot offers %d from another size group", v.itemID)
-		}
+	// A primary weapon family is the hull's own size, not a choice, so it has
+	// no alternatives at all -- and must not fall back to re-sending itself.
+	if got := techTreeSlotUpgrades(otranto.primary, otranto.tier); len(got) != 0 {
+		t.Errorf("primary weapon slot offered %+v; Light/Medium/Heavy are the hull's size, not alternatives", got)
 	}
 }
