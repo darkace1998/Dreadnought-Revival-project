@@ -1922,6 +1922,38 @@ func techTreeBaseItems() []techTreeItem {
 		byLine[hull.hullLine][hull.tier] = hull.loadoutID
 	}
 
+	// Column per hull LINE, within each manufacturer.
+	//
+	// Position was left at its zero value for every ship. That was invisible
+	// while Position sat flat on the item, where UYTechTreeManager's loader
+	// never reads it -- but the node's x coordinate is derived from it, so
+	// every ship of a manufacturer landed on the SAME point and the tree drew
+	// them stacked. Whichever node won the overlap is the hull that rendered,
+	// which is how a slot could show another ship's model entirely.
+	//
+	// A line is a column and a tier is a row, which is the shape the screen
+	// lays out: Rurik and Tugarin are one column (SniperMedium), Furia and
+	// Virtus the next (SniperLight).
+	columnOf := map[string]int32{}
+	{
+		linesByManufacturer := map[int32][]string{}
+		seen := map[string]bool{}
+		for _, hull := range baseShipLoadouts {
+			if seen[hull.hullLine] {
+				continue
+			}
+			seen[hull.hullLine] = true
+			m := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
+			linesByManufacturer[m] = append(linesByManufacturer[m], hull.hullLine)
+		}
+		for _, lines := range linesByManufacturer {
+			sort.Strings(lines)
+			for i, line := range lines {
+				columnOf[line] = int32(i)
+			}
+		}
+	}
+
 	items := make([]techTreeItem, 0, len(baseShipLoadouts))
 	for _, hull := range baseShipLoadouts {
 		manufacturerID := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
@@ -1969,6 +2001,7 @@ func techTreeBaseItems() []techTreeItem {
 			// its modules ("Modules not found for ship id %d").
 			classID:      hull.loadoutID,
 			manufacturer: manufacturerID,
+			position:     columnOf[hull.hullLine],
 			tier:         hull.tier,
 			xpCost:       techTreeXPCostByTier[hull.tier],
 			prereq:       prereq,
@@ -1998,6 +2031,11 @@ func techTreeBaseItems() []techTreeItem {
 // that -- and the response rows are deliberately left alone.
 func techTreeHeroItems() []techTreeItem {
 	items := make([]techTreeItem, 0, len(heroShipLoadouts))
+	// Heroes stack in their own grid, so they need distinct columns for the same
+	// reason the hulls do -- every one of them sat at position 0, which put all
+	// twelve of a tier on one point. They are one-offs rather than lines, so the
+	// column is just a running index within each (manufacturer, tier).
+	heroColumn := map[[2]int32]int32{}
 	for _, hero := range heroShipLoadouts {
 		manufacturerID := shipManufacturerID(hero.manufacturer)
 		if manufacturerID < 0 {
@@ -2013,12 +2051,14 @@ func techTreeHeroItems() []techTreeItem {
 			classID:      hero.loadoutID,
 			manufacturer: manufacturerID,
 			tier:         hero.tier,
+			position:     heroColumn[[2]int32{manufacturerID, hero.tier}],
 			// Heroes are bought in the store, not researched, and nothing in
 			// the client states a research cost for them -- so 0 rather than a
 			// made-up figure. Their real price rides on the market catalog.
 			xpCost: 0,
 			hero:   true,
 		})
+		heroColumn[[2]int32{manufacturerID, hero.tier}]++
 	}
 	return items
 }

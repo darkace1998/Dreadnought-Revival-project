@@ -344,3 +344,53 @@ func TestTechTreeModulesAreAlternativesOnly(t *testing.T) {
 		t.Errorf("primary weapon slot offered %+v; Light/Medium/Heavy are the hull's size, not alternatives", got)
 	}
 }
+
+// No two ship nodes may occupy the same cell of the tech tree grid.
+//
+// Position was left at its zero value for every ship in the roster. That was
+// invisible for as long as Position travelled flat on the item, where
+// UYTechTreeManager's loader never reads it -- but the node's x coordinate is
+// derived from it, so an entire manufacturer's ships landed on one point and
+// the screen drew them stacked. Whichever node won the overlap is the hull that
+// rendered, which is how a tier-1 slot could show a different ship's model
+// (reported as "the rurik is loading the furia").
+//
+// A hull LINE is a column and a tier is a row. Heroes have the same problem in
+// their own grid and get a running column per (manufacturer, tier).
+func TestTechTreeNodesDoNotShareAGridCell(t *testing.T) {
+	type cell struct {
+		manufacturer, tier, position int32
+		hero                         bool
+	}
+	occupied := map[cell][]int32{}
+	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+		if item.module {
+			continue // modules are not drawn on the grid
+		}
+		c := cell{item.manufacturer, item.tier, item.position, item.hero}
+		occupied[c] = append(occupied[c], item.id)
+	}
+	for c, ids := range occupied {
+		if len(ids) > 1 {
+			t.Errorf("manufacturer=%d tier=%d position=%d hero=%v is shared by %v; they will draw on top of each other",
+				c.manufacturer, c.tier, c.position, c.hero, ids)
+		}
+	}
+
+	// One hull line must be one column, or a line zig-zags across the screen.
+	columnOfLine := map[string]int32{}
+	idToLine := map[int32]string{}
+	for _, hull := range baseShipLoadouts {
+		idToLine[hull.loadoutID] = hull.hullLine
+	}
+	for _, item := range techTreeBaseItems() {
+		if item.module {
+			continue
+		}
+		line := idToLine[item.id]
+		if existing, seen := columnOfLine[line]; seen && existing != item.position {
+			t.Errorf("hull line %s spans columns %d and %d; a line must be one column", line, existing, item.position)
+		}
+		columnOfLine[line] = item.position
+	}
+}
