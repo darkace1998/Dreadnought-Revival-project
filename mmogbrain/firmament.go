@@ -333,6 +333,10 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	// is this socket's own identity.
 	socialHubInstance.setLogger(log)
 	peer := newSocialPeer(playerID, peerID, conn)
+	// From here on every write to this socket goes through the peer's queue.
+	// Writing to conn directly alongside the peer's writer goroutine is two
+	// goroutines on one TCP stream.
+	var out firmamentWriter = peerWriter{peer: peer}
 	if playerID != "" {
 		socialHubInstance.join(peer)
 		defer socialHubInstance.leave(peer)
@@ -397,7 +401,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 					data["timeecho"] = timeecho
 				}
 			}
-			if err := writeFirmamentTypedMessage(conn, msg["id"], "pong", data); err != nil {
+			if err := writeFirmamentTypedMessage(out, msg["id"], "pong", data); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write ping result failed")
 				return
 			}
@@ -413,13 +417,13 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 				}
 				peer.mu.Unlock()
 			}
-			if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceResult(method)); err != nil {
+			if err := writeFirmamentResult(out, msg["id"], firmamentPresenceResult(method)); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write presence result failed")
 				return
 			}
 			log.WithField("remote", remote).Debug("firmament: sent presence status result")
 		case "presence.data.list":
-			if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceDataListResult(method)); err != nil {
+			if err := writeFirmamentResult(out, msg["id"], firmamentPresenceDataListResult(method)); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write presence data result failed")
 				return
 			}
@@ -437,7 +441,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 					method: method, params: params, peer: peer, hub: socialHubInstance,
 				}); handled {
 					if msg["id"] != nil {
-						if err := writeFirmamentResult(conn, msg["id"], result); err != nil {
+						if err := writeFirmamentResult(out, msg["id"], result); err != nil {
 							log.WithError(err).WithField("remote", remote).Warn("firmament: write social result failed")
 							return
 						}
@@ -447,7 +451,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 				}
 			}
 			if isFirmamentSocialMethod(method) && msg["id"] != nil {
-				if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceResult(method)); err != nil {
+				if err := writeFirmamentResult(out, msg["id"], firmamentPresenceResult(method)); err != nil {
 					log.WithError(err).WithField("remote", remote).Warn("firmament: write social result failed")
 					return
 				}
@@ -455,7 +459,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 				continue
 			}
 			if method != "" && msg["id"] != nil {
-				if err := writeFirmamentResult(conn, msg["id"], map[string]interface{}{fieldStatus: "success"}); err != nil {
+				if err := writeFirmamentResult(out, msg["id"], map[string]interface{}{fieldStatus: "success"}); err != nil {
 					log.WithError(err).WithField("remote", remote).Warn("firmament: write generic result failed")
 					return
 				}
@@ -497,7 +501,25 @@ func firmamentPresenceDataListResult(method string) map[string]interface{} {
 	return result
 }
 
-func writeFirmamentTypedMessage(conn net.Conn, id interface{}, msgType string, data map[string]interface{}) error {
+// firmamentWriter is whatever serialises writes for this connection. Before the
+// peer exists (the auth handshake) that is the raw socket; afterwards every
+// write must go through the peer's queue, or two goroutines share one stream.
+type firmamentWriter interface {
+	Write(p []byte) (int, error)
+}
+
+type peerWriter struct{ peer *socialPeer }
+
+func (w peerWriter) Write(p []byte) (int, error) {
+	line := make([]byte, len(p))
+	copy(line, p)
+	if err := w.peer.writeRaw(line); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func writeFirmamentTypedMessage(conn firmamentWriter, id interface{}, msgType string, data map[string]interface{}) error {
 	response, _ := json.Marshal(map[string]interface{}{
 		"id":   id,
 		"type": msgType,
@@ -508,7 +530,7 @@ func writeFirmamentTypedMessage(conn net.Conn, id interface{}, msgType string, d
 	return err
 }
 
-func writeFirmamentResult(conn net.Conn, id interface{}, result map[string]interface{}) error {
+func writeFirmamentResult(conn firmamentWriter, id interface{}, result map[string]interface{}) error {
 	response, _ := json.Marshal(map[string]interface{}{
 		"id":      id,
 		"jsonrpc": "2.0",

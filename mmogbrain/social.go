@@ -35,7 +35,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -56,9 +55,6 @@ const (
 	chatTypeLanguage   = "language"
 	chatTypeCustomRoom = "customroom"
 )
-
-// chatKeyProbe arms the join-key diagnostic described in chatChannelNotice.
-var chatKeyProbe = os.Getenv("DN_CHAT_KEY_PROBE") == "1"
 
 var chatChannelTypes = map[string]bool{
 	chatTypeAll:        true,
@@ -133,6 +129,30 @@ func newSocialPeer(playerID, peerID string, conn net.Conn) *socialPeer {
 	return peer
 }
 
+// writeRaw queues an already-encoded line. Every write to a Firmament socket
+// has to go through here.
+//
+// The pong, auth and JSON-RPC result paths used to write to the connection
+// directly while this peer's writer goroutine wrote to the same socket, which is
+// two goroutines on one TCP stream with no shared lock -- interleaved bytes, and
+// a frame the client silently drops. It was invisible for as long as nothing was
+// ever pushed unprompted.
+func (p *socialPeer) writeRaw(line []byte) error {
+	select {
+	case <-p.closed:
+		return errSocialPeerClosed
+	default:
+	}
+	select {
+	case p.out <- line:
+		return nil
+	case <-p.closed:
+		return errSocialPeerClosed
+	default:
+		return errSocialPeerBacklogged
+	}
+}
+
 func (p *socialPeer) writeLoop() {
 	for {
 		select {
@@ -159,19 +179,7 @@ func (p *socialPeer) send(payload any) error {
 		return err
 	}
 	line = append(line, '\r', '\n')
-	select {
-	case <-p.closed:
-		return errSocialPeerClosed
-	default:
-	}
-	select {
-	case p.out <- line:
-		return nil
-	case <-p.closed:
-		return errSocialPeerClosed
-	default:
-		return errSocialPeerBacklogged
-	}
+	return p.writeRaw(line)
 }
 
 var (
@@ -328,6 +336,25 @@ func (h *socialHub) broadcast(channel string, senderID string, payload any) {
 
 // --- friends -----------------------------------------------------------------
 
+// dashedPlayerGUID renders a 32-hex player id in 8-4-4-4-12 form.
+//
+// The client parses these as GUIDs, and an undashed id parses to all zeros: it
+// logged "User 00000000-0000-0000-0000-000000000000 joined channel" for a pid we
+// sent as bare hex. Ids that are not 32 hex characters are passed through
+// unchanged.
+func dashedPlayerGUID(playerID string) string {
+	if len(playerID) != 32 {
+		return playerID
+	}
+	for _, c := range playerID {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return playerID
+		}
+	}
+	return playerID[0:8] + "-" + playerID[8:12] + "-" + playerID[12:16] + "-" +
+		playerID[16:20] + "-" + playerID[20:32]
+}
+
 // friendPairKey orders a pair so one friendship is one row whichever side asks.
 func friendPairKey(a, b string) (string, string) {
 	if a <= b {
@@ -467,9 +494,10 @@ func (h *socialHub) removeIgnore(playerID, otherID string) error {
 // online is derived from the hub rather than stored, so it cannot go stale.
 func (h *socialHub) presenceEntry(playerID string) map[string]any {
 	peer := h.peerFor(playerID)
+	guid := dashedPlayerGUID(playerID)
 	entry := map[string]any{
-		"pid":     playerID,
-		"PID":     playerID,
+		"pid":     guid,
+		"PID":     guid,
 		"peer_id": "",
 		"name":    "",
 		"status":  "offline",
@@ -609,34 +637,25 @@ func chatJoinNotice(channel string, user map[string]any) map[string]any {
 // empty", because the dispatcher never found a type to route on. "method" and
 // "params" are the shape the CLIENT sends, not the shape it reads.
 func chatChannelNotice(channel string, event string, user map[string]any) map[string]any {
-	channelType, _ := chatChannelType(channel)
-	if chatKeyProbe {
-		// DIAGNOSTIC (DN_CHAT_KEY_PROBE=1): a distinct sentinel under every
-		// candidate key, so a breakpoint on the dispatcher's join comparison
-		// (142a8eaf9, which compares the string copied from [RBP+0x408]) reveals
-		// WHICH key the client reads. Guessing this field has already cost
-		// three live test cycles.
-		return firmamentEvent("chat.channel.notice", map[string]any{
-			"notice": "Knotice", "event": "Kevent", "action": "Kaction",
-			"state": "Kstate", "status": "Kstatus", "kind": "Kkind",
-			"op": "Kop", "operation": "Koperation", "change": "Kchange",
-			"reason": "Kreason", "value": "Kvalue", "result": "Kresult",
-			"channel": channel, "channel_name": channel, "name": channel, "room": channel,
-			"user": user, "users": []any{user},
-		})
-	}
 	return firmamentEvent("chat.channel.notice", map[string]any{
-		// The dispatcher's "join"/"leave" comparison. Which key carries it is
-		// not established -- it is read from the parsed object rather than by
-		// name -- so the plausible ones all carry it.
-		"notice":  event,
-		"event":   event,
+		// PROVEN by a runtime probe against the live client, not guessed. A
+		// sentinel was placed under every plausible key at three levels (the
+		// frame, data, and data.notice) and the client named the winners in its
+		// own log: "User <pid> joined channel D_channel", where D_ was the
+		// data-level prefix. So both of these live directly in data.
 		"action":  event,
-		"state":   event,
-		"channel": channel, "channel_name": channel, "name": channel, "room": channel,
-		"type":  channelType,
-		"user":  user,
-		"users": []any{user},
+		"channel": channel,
+		"user":    user,
+		"users":   []any{user},
+		// Kept as a sibling because the join/leave value resolved to the nested
+		// copy in an earlier probe round. Harmless, and cheaper than another
+		// round to decide which of the two the parser prefers.
+		"notice": map[string]any{
+			"action":  event,
+			"channel": channel,
+			"user":    user,
+			"users":   []any{user},
+		},
 	})
 }
 
