@@ -1852,6 +1852,14 @@ var techTreeBareManufacturer = os.Getenv("DN_TECHTREE_BARE_MANUFACTURER") == "1"
 // techTreeNoPrereq omits the Prereq container; see appendMmogTechTreeItem.
 var techTreeNoPrereq = os.Getenv("DN_TECHTREE_NO_PREREQ") == "1"
 
+// techTreePrereqObjects emits Prereq entries as objects carrying the item's
+// fields; see appendMmogTechTreeItem.
+var techTreePrereqObjects = os.Getenv("DN_TECHTREE_PREREQ_OBJECTS") == "1"
+
+// techTreePrereqManufacturer makes each Prereq entry carry the manufacturer id
+// as its value; see appendMmogTechTreeItem.
+var techTreePrereqManufacturer = os.Getenv("DN_TECHTREE_PREREQ_AS_MANUFACTURER") == "1"
+
 // techTreeOnlyManufacturer restricts the document to one maker, or -1 for all;
 // see buildMmogTechTreeDocument.
 var techTreeOnlyManufacturer = func() int {
@@ -2055,6 +2063,57 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	switch {
 	case techTreeNoPrereq:
 		// nothing
+	case techTreePrereqManufacturer:
+		// Prereq entries whose VALUE is the manufacturer id.
+		//
+		// The live client keys its manufacturer groups on the prereq entry's
+		// string parsed as an int -- winedbg showed 37 groups keyed by loadout
+		// ids, exactly the 37 items carrying a prereq. So the key is whatever
+		// that string says. Making it the manufacturer makes the key the
+		// manufacturer, which is what FindManufacturerById(0/1/2) needs.
+		//
+		// Every item gets exactly one entry so every item creates its group.
+		// This sacrifices the prerequisite LINKS (the connector lines between
+		// nodes), which is a cosmetic loss, but keeps the container present --
+		// removing it entirely emptied m_loadouts and broke the fleet.
+		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", []string{manufacturer})
+	case techTreePrereqObjects:
+		// Prereq entries as OBJECTS carrying the item's own fields.
+		//
+		// Read out of the live client with winedbg. The manufacturer group
+		// array at manager+0x38 holds 37 groups keyed by LOADOUT IDS -- the
+		// prereq values -- not 3 keyed by 0/1/2, which is why
+		// FindManufacturerById(0/1/2) can never match. Breaking at the
+		// Manufacturer read (1404012c2) shows R12 is NOT the item node used for
+		// Id (RCX at 1403ffef0): it is a type-4 STRING node of 8 characters --
+		// a loadout id -- carrying 7 named children that the loader appended
+		// itself on failed lookups (Prereq/FPCost/XPCost/Manufacturer/Tier/
+		// ProxyType), name max grown 0 -> 22.
+		//
+		// So those fields are read PER PREREQ ENTRY, and a bare id string has
+		// no Manufacturer to find. The count confirms it: 37 groups is exactly
+		// the number of items carrying a prereq -- items without one never
+		// reach that code and never create a group at all.
+		//
+		// Each entry therefore carries the fields the loader looks for. Every
+		// item gets at least one entry, self-referencing when it has no real
+		// prerequisite, so that every item creates its group.
+		entries := prereqs
+		if len(entries) == 0 {
+			entries = []string{strconv.Itoa(int(item.id))}
+		}
+		b, stack = protocol.AppendArrayStart(b, stack, "Prereq")
+		for _, pid := range entries {
+			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+			b = protocol.AppendStringField(b, "Id", pid)
+			b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
+			b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
+			b = protocol.AppendStringField(b, "ProxyType", proxyType)
+			b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
+			b = protocol.AppendStringField(b, "FPCost", "0")
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
 	case techTreePrereqNamed:
 		b, stack = protocol.AppendIndexedStringListField(b, stack, "Prereq", prereqs)
 	default:
