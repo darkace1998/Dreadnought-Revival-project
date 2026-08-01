@@ -328,6 +328,22 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	// internal buffer is preserved across a timed-out Read, so retrying
 	// Decode() on the same decoder correctly resumes any partially-received
 	// message rather than corrupting/dropping it.
+	// The connection is authenticated from here, so it can take part in chat and
+	// receive friend notifications. playerID comes from the verified JWT; peerID
+	// is this socket's own identity.
+	socialHubInstance.setLogger(log)
+	peer := &socialPeer{
+		playerID: playerID,
+		peerID:   peerID,
+		conn:     conn,
+		channels: map[string]bool{},
+		status:   "online",
+	}
+	if playerID != "" {
+		socialHubInstance.join(peer)
+		defer socialHubInstance.leave(peer)
+	}
+
 	for {
 		var msgRaw json.RawMessage
 		// One deadline covering the whole permitted idle window, and a timeout
@@ -379,6 +395,16 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 			}
 			log.WithField("remote", remote).Info("firmament: sent pong reply")
 		case "presence.status.set", "presence.status.setmessage":
+			if params, _ := msg["params"].(map[string]interface{}); params != nil {
+				peer.mu.Lock()
+				if v, ok := params["status"].(string); ok && v != "" {
+					peer.status = v
+				}
+				if v, ok := params["status_message"].(string); ok {
+					peer.message = v
+				}
+				peer.mu.Unlock()
+			}
 			if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceResult(method)); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write presence result failed")
 				return
@@ -391,6 +417,27 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 			}
 			log.WithFields(logrus.Fields{"remote": remote, fieldMethod: method}).Info("firmament: sent presence data empty-state result")
 		default:
+			// Chat, friends and ignores are real now; see social_handlers.go.
+			// This runs before the empty-state fallbacks below, which remain for
+			// the methods still unimplemented.
+			if playerID != "" {
+				params, _ := msg["params"].(map[string]interface{})
+				if params == nil {
+					params = map[string]interface{}{}
+				}
+				if result, handled := handleSocialMethod(socialRequest{
+					method: method, params: params, peer: peer, hub: socialHubInstance,
+				}); handled {
+					if msg["id"] != nil {
+						if err := writeFirmamentResult(conn, msg["id"], result); err != nil {
+							log.WithError(err).WithField("remote", remote).Warn("firmament: write social result failed")
+							return
+						}
+					}
+					log.WithFields(logrus.Fields{"remote": remote, fieldMethod: method, "pid": playerID}).Info("firmament: handled social method")
+					continue
+				}
+			}
 			if isFirmamentSocialMethod(method) && msg["id"] != nil {
 				if err := writeFirmamentResult(conn, msg["id"], firmamentPresenceResult(method)); err != nil {
 					log.WithError(err).WithField("remote", remote).Warn("firmament: write social result failed")

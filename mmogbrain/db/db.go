@@ -43,6 +43,25 @@ var migrations = []string{
 		content   TEXT NOT NULL,
 		sent_at   TEXT NOT NULL DEFAULT (datetime('now'))
 	)`,
+	// Friendship is stored as ONE row per pair, not two: pid_a is always the
+	// lexicographically smaller id, so a pair cannot end up half-accepted or
+	// duplicated by two clients racing. requester_id records who asked, which is
+	// what decides whether the other side sees a pending REQUEST or a pending
+	// INVITE.
+	`CREATE TABLE IF NOT EXISTS player_friends (
+		pid_a        TEXT NOT NULL,
+		pid_b        TEXT NOT NULL,
+		requester_id TEXT NOT NULL,
+		state        TEXT NOT NULL DEFAULT 'pending',
+		created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (pid_a, pid_b)
+	)`,
+	`CREATE TABLE IF NOT EXISTS player_ignores (
+		pid        TEXT NOT NULL,
+		ignored_id TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (pid, ignored_id)
+	)`,
 	`CREATE TABLE IF NOT EXISTS player_state (
 	    user_id          TEXT PRIMARY KEY,
 	    soft_currency    INTEGER NOT NULL DEFAULT 10000 CHECK (soft_currency >= 0),
