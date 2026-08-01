@@ -32,13 +32,8 @@ func socialTestPeer(t *testing.T, hub *socialHub, playerID string) (*socialPeer,
 	t.Helper()
 	server, client := net.Pipe()
 	t.Cleanup(func() { _ = server.Close(); _ = client.Close() })
-	peer := &socialPeer{
-		playerID: playerID,
-		peerID:   playerID + "-peer",
-		conn:     server,
-		channels: map[string]bool{},
-		status:   "online",
-	}
+	peer := newSocialPeer(playerID, playerID+"-peer", server)
+	t.Cleanup(peer.close)
 	hub.join(peer)
 	return peer, bufio.NewReader(client)
 }
@@ -69,6 +64,24 @@ func readPush(t *testing.T, r *bufio.Reader) map[string]any {
 		t.Fatal("timed out waiting for a push")
 		return nil
 	}
+}
+
+// readNotice unwraps the {"id","type":"server.notice","data":{"notice":{...}}}
+// envelope the client actually accepts. Incoming frames are NOT JSON-RPC; the
+// only server-initiated shape this client is known to act on is the one our auth
+// success already uses.
+func readNotice(t *testing.T, r *bufio.Reader) map[string]any {
+	t.Helper()
+	msg := readPush(t, r)
+	if msg["type"] != "server.notice" {
+		t.Fatalf("push type = %v, want server.notice", msg["type"])
+	}
+	data, _ := msg["data"].(map[string]any)
+	notice, _ := data["notice"].(map[string]any)
+	if notice == nil {
+		t.Fatalf("push has no data.notice: %v", msg)
+	}
+	return notice
 }
 
 // A channel type the client's classifier does not know must be refused, not
@@ -129,16 +142,15 @@ func TestChatMessageReachesOtherMembers(t *testing.T) {
 		peer:   sender, hub: hub,
 	})
 
-	msg := readPush(t, listenerRead)
-	if msg["method"] != "chat.channel.message" {
-		t.Errorf("push method = %v, want chat.channel.message", msg["method"])
+	notice := readNotice(t, listenerRead)
+	if notice["action"] != "chat.channel.message" {
+		t.Errorf("notice action = %v, want chat.channel.message", notice["action"])
 	}
-	params, _ := msg["params"].(map[string]any)
-	if params["message"] != "hello" {
-		t.Errorf("push message = %v, want hello", params["message"])
+	if notice["message"] != "hello" {
+		t.Errorf("notice message = %v, want hello", notice["message"])
 	}
-	if params["channel"] != "global" {
-		t.Errorf("push channel = %v, want global", params["channel"])
+	if notice["channel"] != "global" {
+		t.Errorf("notice channel = %v, want global", notice["channel"])
 	}
 }
 

@@ -33,6 +33,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net"
 	"sort"
 	"strings"
@@ -90,7 +91,18 @@ type socialPeer struct {
 	peerID   string
 	name     string
 	conn     net.Conn
-	writeMu  sync.Mutex
+
+	// out is this connection's outbound queue, drained by one writer goroutine.
+	//
+	// Delivery must NEVER block the sender. A channel broadcast walks every
+	// member from whichever goroutine received the message, so writing straight
+	// to the sockets means the slowest reader in the room decides how long
+	// everyone else waits for their copy -- and a client that has stopped
+	// reading entirely wedges the broadcast permanently. Caught by the tests:
+	// one unread peer hung the whole suite for ten minutes.
+	out    chan []byte
+	closed chan struct{}
+	once   sync.Once
 
 	mu       sync.Mutex
 	channels map[string]bool
@@ -98,17 +110,70 @@ type socialPeer struct {
 	message  string
 }
 
+// socialPeerQueueDepth is how far a connection may fall behind before its
+// messages start being dropped. Chat is not worth unbounded memory, and a peer
+// this far behind is not reading.
+const socialPeerQueueDepth = 64
+
+func newSocialPeer(playerID, peerID string, conn net.Conn) *socialPeer {
+	peer := &socialPeer{
+		playerID: playerID,
+		peerID:   peerID,
+		conn:     conn,
+		out:      make(chan []byte, socialPeerQueueDepth),
+		closed:   make(chan struct{}),
+		channels: map[string]bool{},
+		status:   "online",
+	}
+	go peer.writeLoop()
+	return peer
+}
+
+func (p *socialPeer) writeLoop() {
+	for {
+		select {
+		case line := <-p.out:
+			if _, err := p.conn.Write(line); err != nil {
+				p.close()
+				return
+			}
+		case <-p.closed:
+			return
+		}
+	}
+}
+
+func (p *socialPeer) close() {
+	p.once.Do(func() { close(p.closed) })
+}
+
+// send queues a message. It reports an error only when the peer is gone or so
+// far behind that dropping is the right answer; it never waits on the socket.
 func (p *socialPeer) send(payload any) error {
 	line, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	line = append(line, '\r', '\n')
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	_, err = p.conn.Write(line)
-	return err
+	select {
+	case <-p.closed:
+		return errSocialPeerClosed
+	default:
+	}
+	select {
+	case p.out <- line:
+		return nil
+	case <-p.closed:
+		return errSocialPeerClosed
+	default:
+		return errSocialPeerBacklogged
+	}
 }
+
+var (
+	errSocialPeerClosed     = errors.New("social: peer connection closed")
+	errSocialPeerBacklogged = errors.New("social: peer is not reading, message dropped")
+)
 
 // socialHub tracks who is connected and which channels they are in.
 //
@@ -159,10 +224,17 @@ func (h *socialHub) join(peer *socialPeer) {
 }
 
 func (h *socialHub) leave(peer *socialPeer) {
+	peer.close()
+
 	h.mu.Lock()
-	if h.peers[peer.playerID] == peer {
-		delete(h.peers, peer.playerID)
+	defer h.mu.Unlock()
+	// Channel membership is keyed by PLAYER, not by connection, so a peer that
+	// has already been replaced by a reconnect must not tear down the
+	// replacement's membership on its way out.
+	if h.peers[peer.playerID] != peer {
+		return
 	}
+	delete(h.peers, peer.playerID)
 	for name, members := range h.channels {
 		if members[peer.playerID] {
 			delete(members, peer.playerID)
@@ -171,7 +243,6 @@ func (h *socialHub) leave(peer *socialPeer) {
 			}
 		}
 	}
-	h.mu.Unlock()
 }
 
 func (h *socialHub) joinChannel(peer *socialPeer, name string) bool {
@@ -459,22 +530,70 @@ func (h *socialHub) channelInfo(name string) map[string]any {
 	}
 }
 
-// chatMessageNotice is the server-initiated delivery of one chat line. It is
-// sent with the method name the client uses for the same operation, so the
-// client's own dispatcher routes it.
-func chatMessageNotice(method string, channel string, sender map[string]any, body string) map[string]any {
-	return map[string]any{
-		"jsonrpc": "2.0",
-		"method":  method,
-		"params": map[string]any{
-			"channel":      channel,
-			"channel_name": channel,
-			"message":      body,
-			"content":      body,
-			"sender":       sender,
-			"from":         sender,
-			"timestamp":    time.Now().Unix(),
-			"id":           uuid.New().String(),
-		},
+// firmamentNotice wraps a server-initiated event in the envelope the client
+// actually accepts.
+//
+// Incoming frames are {"id","type","data"} -- NOT JSON-RPC. The two shapes we
+// have watched the client accept are the pong
+// ({"data":{...},"id":...,"type":"pong"}) and our own auth success, which is a
+// "server.notice" whose data.notice carries an "action" naming the method it
+// answers. Events follow the auth one, because that is the only server-initiated
+// message this client is known to act on.
+func firmamentNotice(action string, fields map[string]any) map[string]any {
+	notice := map[string]any{
+		"status": "success",
+		"action": action,
+		"method": action,
 	}
+	for k, v := range fields {
+		notice[k] = v
+	}
+	return map[string]any{
+		"id":   uuid.New().String(),
+		"type": "server.notice",
+		"data": map[string]any{"notice": notice},
+	}
+}
+
+// chatJoinNotice tells a client the NAME of a channel it is now in.
+//
+// This is the message the whole chat window hangs on. UYMmogChat keeps one
+// channel-name string per room type (MatchAll at +0x1a8, MatchTeam at +0x1b8,
+// and so on) and SendChat refuses outright when the slot is empty:
+//
+//	if (1 < *(int *)(param_1 + 0x1b0)) { send using the stored name }
+//	else "SendChat to MatchAll failed: channel name is empty"
+//
+// Those slots are only ever written by OnUserJoinedChannel (FUN_142a377d0),
+// which classifies the name it is given (FUN_142a1f6d0) and files it under the
+// matching room type. So the client cannot chat until the server has NAMED the
+// channels for it -- it never asks, it waits. Observed live as
+// "Send chat to Global failed: channel name is empty" once per keystroke.
+func chatJoinNotice(channel string, user map[string]any) map[string]any {
+	channelType, _ := chatChannelType(channel)
+	return firmamentNotice("chat.channel.join", map[string]any{
+		"channel":      channel,
+		"channel_name": channel,
+		"name":         channel,
+		"room":         channel,
+		"type":         channelType,
+		"user":         user,
+		"users":        []any{user},
+	})
+}
+
+// chatMessageNotice is the server-initiated delivery of one chat line.
+func chatMessageNotice(method string, channel string, sender map[string]any, body string) map[string]any {
+	return firmamentNotice(method, map[string]any{
+		"channel":      channel,
+		"channel_name": channel,
+		"name":         channel,
+		"message":      body,
+		"content":      body,
+		"text":         body,
+		"sender":       sender,
+		"from":         sender,
+		"user":         sender,
+		"timestamp":    time.Now().Unix(),
+	})
 }

@@ -90,6 +90,25 @@ func readFirmamentTestMessage(t *testing.T, conn net.Conn, reader *bufio.Reader,
 	return payload
 }
 
+// readFirmamentTestReply reads until it finds the reply to a specific request.
+//
+// The connection is no longer request/response only: once authenticated the
+// server pushes unsolicited server.notice frames (the chat channel names, friend
+// events), so "the next message is my answer" stopped being true. Matching on the
+// request id is what the real client does too.
+func readFirmamentTestReply(t *testing.T, conn net.Conn, reader *bufio.Reader, id string, timeout time.Duration) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		payload := readFirmamentTestMessage(t, conn, reader, time.Until(deadline))
+		if payload["id"] == id {
+			return payload
+		}
+	}
+	t.Fatalf("no reply for request %q within %s", id, timeout)
+	return nil
+}
+
 func useTempMmogPlayerStateDB(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -2842,7 +2861,7 @@ func TestFirmamentAuthSuccessDoesNotWaitForPlayerDataReady(t *testing.T) {
 		"id":     "friends-1",
 		"method": "presence.friends.listing",
 	})
-	friends := readFirmamentTestMessage(t, clientConn, reader, time.Second)
+	friends := readFirmamentTestReply(t, clientConn, reader, "friends-1", 2*time.Second)
 	friendsResult, ok := friends["result"].(map[string]any)
 	if !ok {
 		t.Fatalf("friends result has unexpected type %T", friends["result"])

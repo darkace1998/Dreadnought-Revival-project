@@ -332,16 +332,24 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	// receive friend notifications. playerID comes from the verified JWT; peerID
 	// is this socket's own identity.
 	socialHubInstance.setLogger(log)
-	peer := &socialPeer{
-		playerID: playerID,
-		peerID:   peerID,
-		conn:     conn,
-		channels: map[string]bool{},
-		status:   "online",
-	}
+	peer := newSocialPeer(playerID, peerID, conn)
 	if playerID != "" {
 		socialHubInstance.join(peer)
 		defer socialHubInstance.leave(peer)
+		// Name the channels for the client. It cannot chat until we do: it keeps
+		// one channel-name string per room type and SendChat bails with
+		// "channel name is empty" when the slot is unset, and the only thing
+		// that ever fills those slots is a channel-join event. The client never
+		// asks -- it creates its Global and English room types at startup and
+		// waits. Observed live as one "Send chat to Global failed: channel name
+		// is empty" per keystroke.
+		for _, name := range defaultChatChannels {
+			if err := peer.send(chatJoinNotice(name, socialHubInstance.presenceEntry(playerID))); err != nil {
+				log.WithError(err).WithField("remote", remote).Warn("firmament: write chat join notice failed")
+				return
+			}
+			log.WithFields(logrus.Fields{"remote": remote, "pid": playerID, "channel": name}).Info("firmament: named chat channel for client")
+		}
 	}
 
 	for {
