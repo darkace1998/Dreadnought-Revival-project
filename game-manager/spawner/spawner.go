@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -151,10 +152,24 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 		//nolint:gosec // Inputs are operator-configured binary paths and explicit argv entries, not shell-expanded.
 		cmd = exec.Command(args[0], args[1:]...)
 	}
-	cmd.Env = append(os.Environ(),
-		"WINEDEBUG=-all",
-		fmt.Sprintf("WINEPREFIX=%s", filepath.Join(configDir, "wine")),
-	)
+	cmd.Env = battleServerEnv(configDir)
+	// Run from the executable's own directory. The engine resolves its
+	// co-located DLLs (libcef.dll and friends) relative to the working
+	// directory, so launching from anywhere else -- e.g. the game-manager's cwd
+	// -- fails with "LogWindows:Error: libcef.dll" and the process exits with
+	// status 3 within seconds. The SAME argv from the binary's directory reaches
+	// "Match State ... InProgress". Wine translates this to the child's Windows
+	// cwd, which is what the loader consults.
+	if s.gameBinary != "" {
+		cmd.Dir = filepath.Dir(s.gameBinary)
+	}
+	// Surface the child's early output. Without this the process's stdout/stderr
+	// go nowhere, so a launch that dies during init -- the libcef case above --
+	// leaves no trace beyond "exit status 3". The engine's own detailed log
+	// still goes to its Saved/Logs directory; this is just enough to see a
+	// startup failure.
+	cmd.Stdout = newInstanceLogWriter(s.log, inst.ID, "stdout")
+	cmd.Stderr = newInstanceLogWriter(s.log, inst.ID, "stderr")
 
 	if err := cmd.Start(); err != nil {
 		s.log.WithError(err).Warn("game binary launch failed (binary may not be present); recording instance as mock")
@@ -354,4 +369,102 @@ func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 		return "", fmt.Errorf("decode register response: %w", err)
 	}
 	return result["id"], nil
+}
+
+// battleServerEnv builds the environment for a spawned battle server.
+//
+// The previous version forced WINEPREFIX to a brand-new per-instance directory
+// (configDir/wine). That never worked: the game needs a CONFIGURED Wine prefix
+// (registry, DLL overrides, the DX11 setup the client relies on), and an empty
+// one makes wine fail before the engine even starts -- observed as the instance
+// exiting with status 3 a few seconds after launch while the SAME argv run by
+// hand against the operator's prefix reaches "Match State ... InProgress".
+//
+// So the prefix is inherited, not manufactured. WINEPREFIX passes straight
+// through from the game-manager's own environment (set it in the service
+// environment, the way the client harness uses /root/.wine); GAME_WINEPREFIX
+// overrides it if the operator wants the battle servers on a different prefix.
+//
+// The software-GL variables matter even with -nullrhi: without them the shipping
+// build page-faults during RHI init under Wine on a box with no GPU. They are
+// the exact set the working client harness uses, and each is only added when the
+// environment does not already set it, so an operator with real hardware or a
+// different driver can override any of them.
+func battleServerEnv(configDir string) []string {
+	env := os.Environ()
+
+	// GAME_WINEPREFIX wins; otherwise WINEPREFIX is inherited as-is. Only when
+	// NEITHER is set do we fall back to a per-instance prefix, which preserves
+	// the old behaviour for a caller that has genuinely configured nothing.
+	if prefix := os.Getenv("GAME_WINEPREFIX"); prefix != "" {
+		env = append(env, "WINEPREFIX="+prefix)
+	} else if os.Getenv("WINEPREFIX") == "" {
+		env = append(env, "WINEPREFIX="+filepath.Join(configDir, "wine"))
+	}
+
+	env = append(env, "WINEDEBUG=-all")
+
+	// Proven software-GL defaults, each skipped if already set.
+	defaults := map[string]string{
+		"LIBGL_ALWAYS_SOFTWARE":      "1",
+		"GALLIUM_DRIVER":             "llvmpipe",
+		"MESA_GL_VERSION_OVERRIDE":   "4.5",
+		"MESA_GLSL_VERSION_OVERRIDE": "450",
+	}
+	for k, v := range defaults {
+		if os.Getenv(k) == "" {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
+}
+
+// instanceLogWriter forwards a spawned battle server's output to the service
+// log, one line at a time, tagged with the instance id and stream. It only logs
+// lines that look like errors or state changes, so a healthy server does not
+// flood the log while a failing one still shows why.
+type instanceLogWriter struct {
+	log        *logrus.Logger
+	instanceID string
+	stream     string
+	buf        []byte
+}
+
+func newInstanceLogWriter(log *logrus.Logger, instanceID, stream string) *instanceLogWriter {
+	return &instanceLogWriter{log: log, instanceID: instanceID, stream: stream}
+}
+
+func (w *instanceLogWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	for {
+		idx := bytes.IndexByte(w.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := string(bytes.TrimRight(w.buf[:idx], "\r"))
+		w.buf = w.buf[idx+1:]
+		if w.interesting(line) {
+			w.log.WithFields(logrus.Fields{
+				"instance_id": w.instanceID,
+				"stream":      w.stream,
+			}).Info("battle server: " + line)
+		}
+	}
+	// Bound the buffer so a stream with no newlines cannot grow without limit.
+	if len(w.buf) > 8192 {
+		w.buf = w.buf[len(w.buf)-8192:]
+	}
+	return len(p), nil
+}
+
+func (w *instanceLogWriter) interesting(line string) bool {
+	for _, marker := range []string{
+		"Error", "error", "Fatal", "Warning: Failed", "Match State",
+		"libcef", "Assertion", "Exception", "UDP", "listen",
+	} {
+		if strings.Contains(line, marker) {
+			return true
+		}
+	}
+	return false
 }

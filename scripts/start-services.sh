@@ -67,6 +67,13 @@ export WINE_EXE="${WINE_EXE:-wine}"
 # separate dedicated-server build. See game-manager/spawner for the argv.
 export GAME_BINARY="${GAME_BINARY:-}"
 
+# The spawned battle server needs a CONFIGURED Wine prefix, not a fresh one:
+# with an empty prefix wine cannot start the game and the instance exits within
+# seconds (status 3). Point this at the same prefix the client harness uses.
+# spawner.battleServerEnv also supplies the software-GL defaults the shipping
+# build needs under Wine with no GPU, so they do not need setting here.
+export GAME_WINEPREFIX="${GAME_WINEPREFIX:-$HOME/.wine}"
+
 # One player forms a match, so a single tester can reach a battle server without
 # a second client. Raise it for real play.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
