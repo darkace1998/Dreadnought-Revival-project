@@ -316,11 +316,33 @@ func TestTechTreeModulesOfferTiersAndAlternatives(t *testing.T) {
 			otherLine++
 		}
 	}
-	if sameLine < 2 {
-		t.Errorf("Otranto ability slot has %d entries on its own line; expected a tier chain", sameLine)
+	// Exactly ONE entry may come from the equipped line. Two entries of one
+	// line are two item ids but one module, and the screen drew them as
+	// "Tempest Missiles N" beside an identical "Tempest Missiles N" -- the
+	// "default loadout 2 times" this test exists to prevent.
+	if sameLine != 1 {
+		t.Errorf("Otranto ability slot has %d entries on its own line; exactly 1 is allowed or the module appears twice", sameLine)
 	}
-	if otherLine < 1 {
-		t.Errorf("Otranto ability slot offers no alternative modules, only its own line: %+v", ability)
+	if otherLine < 4 {
+		t.Errorf("Otranto ability slot offers only %d alternative modules: %+v", otherLine, ability)
+	}
+
+	// And a TIER-1 hull must get the alternatives too. Gating them by hull tier
+	// left the starter ships with exactly their fitted loadout, because the
+	// sibling lines mostly have no T0/T1 variant at all.
+	starter := techTreeSlotUpgrades(agosta.abilities[0], agosta.tier)
+	if len(starter) < 5 {
+		t.Errorf("Agosta (tier 1) ability slot offers %d modules; the starter ships need alternatives too: %+v", len(starter), starter)
+	}
+	starterOwn := techTreeSlotOf[agosta.abilities[0]]
+	same := 0
+	for _, v := range starter {
+		if techTreeSlotOf[v.itemID] == starterOwn {
+			same++
+		}
+	}
+	if same != 1 {
+		t.Errorf("Agosta ability slot has %d entries on its own line; exactly 1 is allowed", same)
 	}
 
 	// Every entry in an ability slot must actually be an ability. A tier

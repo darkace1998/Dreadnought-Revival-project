@@ -1842,23 +1842,24 @@ func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 	if !ok {
 		return self
 	}
-	// Cap by the HULL's tier, not by the equipped item's. A tier-1 hull equips
-	// a tier-0 ability, and capping at 0 offered it nothing at all -- the
-	// starter ships stayed at exactly their fitted loadout, which is the case
-	// that prompted this. The hull tier is what the ship may research up to.
-	cap := hullTier
-	if equipped := techTreeSlotTier[itemID]; equipped > cap {
-		cap = equipped
-	}
 
-	out := []slotVariant{}
-	// The equipped line, every tier up to and including the equipped one.
-	for tier := int32(0); tier <= cap; tier++ {
-		if id, found := techTreeSlotIndex[key][tier]; found {
-			out = append(out, slotVariant{itemID: id, tier: tier})
-		}
-	}
-	// The alternatives, best usable tier each.
+	// ONE entry per line, never a tier chain.
+	//
+	// Emitting the equipped line's tiers as separate nodes is what put the
+	// same module on the rail twice: T0 and T1 of Missile_Super are two item
+	// ids but one module, so the screen drew "Tempest Missiles N" beside an
+	// identical "Tempest Missiles N". A slot's rail is a choice BETWEEN
+	// modules; the tier a given module comes at is decided by the ship, not by
+	// a second node next to the first.
+	out := []slotVariant{{itemID: itemID, tier: techTreeSlotTier[itemID]}}
+
+	// Alternatives are NOT tier-gated. The sibling lines mostly have no T0/T1
+	// variant at all (Assault's Pri group: Missile_Super has T0, but Ram_Dmg
+	// and Torpedo_Ultra start at T2 and four more only exist at T5), so capping
+	// them at the hull's tier left a tier-1 ship with exactly its fitted
+	// loadout and nothing to research. Each sibling contributes its LOWEST
+	// available variant and the XP cost does the gating, which is what the
+	// research rail is for.
 	for _, line := range techTreeSlotLines[key.group] {
 		if line == key.line {
 			continue
@@ -1866,29 +1867,13 @@ func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 		sibling := techTreeSlotKey{group: key.group, line: line}
 		best, bestTier := int32(0), int32(-1)
 		for tier, id := range techTreeSlotIndex[sibling] {
-			if tier <= cap && tier > bestTier {
+			if bestTier < 0 || tier < bestTier {
 				best, bestTier = id, tier
 			}
 		}
 		if bestTier >= 0 {
 			out = append(out, slotVariant{itemID: best, tier: bestTier})
 		}
-	}
-	if len(out) == 0 {
-		return self
-	}
-	// The equipped item must be in its own list or the screen cannot mark
-	// anything as fitted. It normally falls out of the line chain above; this
-	// covers a line whose equipped tier is not the one the index holds.
-	found := false
-	for _, v := range out {
-		if v.itemID == itemID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		out = append(out, slotVariant{itemID: itemID, tier: techTreeSlotTier[itemID]})
 	}
 	return out
 }

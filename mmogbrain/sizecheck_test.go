@@ -85,14 +85,14 @@ var targetSizes = map[string]int{
 	// entries across 52 hulls, versus 237 before, which listed the current
 	// loadout back at the player with nothing to research. Still minimal per
 	// entry and ~7KB under the 32768-byte ring.
-	// Now 29554: module entries became a real per-slot tree -- the equipped
-	// line's tier chain up to the hull's tier, PLUS one entry for every sibling
-	// line in the same family group at the best tier that hull can use. 1418
-	// entries across 52 hulls. Only ~3.3KB under the 32768-byte ring now, and
-	// the cost is the unique ids, which do not compress; FPCost and
-	// NumTechTreeItemsRequired were dropped from module entries and bought only
-	// 600 bytes. Adding anything sizeable to this document needs a plan, not
-	// another field.
+	// Now 29554: one entry per LINE, never a tier chain. Emitting the equipped
+	// line's tiers as separate nodes put the SAME module on the rail twice --
+	// T0 and T1 of Missile_Super are two item ids but one module, and the
+	// screen drew "Tempest Missiles N" beside an identical "Tempest Missiles
+	// N". Alternatives are also no longer tier-gated: the sibling lines mostly
+	// have no T0/T1 variant, so capping them at the hull's tier left a tier-1
+	// ship with only its fitted loadout. 1407 entries; ~3.2KB under the 32768
+	// ring, and the cost is the unique ids, which do not compress.
 	"YA_GetTechTree": 29554,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
