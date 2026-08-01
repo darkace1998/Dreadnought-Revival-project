@@ -92,6 +92,14 @@ fi
 # a second client. Raise it for real play.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
 
+# How long mmogbrain holds YA_Connect back after a match forms. YA_Connect makes
+# the client travel immediately, so this has to cover the battle server's load
+# time or the client arrives before it is accepting connections. Verified at 45s
+# on this host; the same map reached WaitingToStart in 4s with a warm page cache
+# and about a minute cold, so tune it to your hardware. It is otherwise dead
+# time on the "Battle server starting" screen.
+export DN_CONNECT_PUSH_DELAY="${DN_CONNECT_PUSH_DELAY:-45s}"
+
 # Each service defaults DB_PATH to a bare filename, so which database it opens
 # depends on the working directory. Starting from the repo root and starting
 # from run/ therefore used two different sets of files, and they had diverged.
