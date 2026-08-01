@@ -18,14 +18,21 @@ var targetSizes = map[string]int{
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
 	"YA_RequestStaticFleetData": 7172,
 	"YA_GetFeatureToggle":       111,
-	"YA_GetGameConfigData":      534,
-	"YA_GetStaticCareerData":    2153,
-	"YA_GetProgressionData":     126,
-	"YA_GetScoringData":         5753,
-	"YA_GetDailyContractsData":  227,
-	"YA_GetBoosterData":         1856,
-	"YA_GetCareerProgression":   382,
-	"YA_GetPlayerScores":        277,
+	// Now 967 (+433): GameModes is emitted at the message ROOT as well as inside
+	// "result". The response's own handler calls GetGameModesData
+	// (FUN_142a4ca40) on the parsed document and looks the array up as a DIRECT
+	// child (FUN_140237c30 + child count at +0x20); it does not descend into
+	// "result" the way the MaxSquadSize reader does, so a nested-only array read
+	// as zero and the client had an EMPTY game-mode list -- no mode selectable,
+	// Play could not start a match.
+	"YA_GetGameConfigData":     967,
+	"YA_GetStaticCareerData":   2153,
+	"YA_GetProgressionData":    126,
+	"YA_GetScoringData":        5753,
+	"YA_GetDailyContractsData": 227,
+	"YA_GetBoosterData":        1856,
+	"YA_GetCareerProgression":  382,
+	"YA_GetPlayerScores":       277,
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).

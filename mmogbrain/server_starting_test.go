@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
@@ -106,5 +107,63 @@ func TestMatchmakingStatusBecomesMatched(t *testing.T) {
 	payload := buildMmogServerStartingPayload(got)
 	if !bytes.Contains(payload, []byte("10.0.0.73")) || !bytes.Contains(payload, []byte("7777")) {
 		t.Error("server-starting push built from a matched status is missing the address")
+	}
+}
+
+// GameModes must be a DIRECT child of the YA_GetGameConfigData document, not
+// only nested inside "result".
+//
+// That response's own handler calls GetGameModesData (FUN_142a4ca40) on the
+// document it parsed, and that function resolves the array as a direct child
+// (FUN_140237c30, then the child count at +0x20). It does not descend into
+// "result" the way the scalar reader used for MaxSquadSize does. With the array
+// nested only, the client logged "GetGameModesData: Game modes list contains <0>
+// items" and the player had NO selectable game mode -- Play could not start a
+// match at all.
+func TestGameConfigCarriesGameModesAtRoot(t *testing.T) {
+	payload := buildMmogGameConfigDataPayload()
+
+	// The root-level array must appear BEFORE the "result" object opens, which
+	// is what makes it a sibling of RT rather than a child of result.
+	modesAt := bytes.Index(payload, appendFieldMarker("GameModes", 0x0d))
+	resultAt := bytes.Index(payload, appendFieldMarker("result", 0x0c))
+	if modesAt < 0 {
+		t.Fatal("YA_GetGameConfigData has no GameModes array at all")
+	}
+	if resultAt < 0 {
+		t.Fatal("YA_GetGameConfigData has no result object")
+	}
+	if modesAt > resultAt {
+		t.Error("GameModes appears only inside result; the config handler reads it as a DIRECT child and will see zero modes")
+	}
+
+	// Every configured mode has to be present, or it cannot be picked.
+	for _, mode := range matchmaker.GameModeConfigs() {
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, "Name", mode.Name)) {
+			t.Errorf("game config is missing mode %q", mode.Name)
+		}
+	}
+	if len(matchmaker.GameModeConfigs()) == 0 {
+		t.Error("no game modes configured; the client would have an empty Play list")
+	}
+}
+
+// The proving ground is Bootcamp, and it must be offered and be solo-startable.
+func TestProvingGroundModeIsOfferedAndSolo(t *testing.T) {
+	var bc *matchmaker.GameModeConfig
+	for _, mode := range matchmaker.GameModeConfigs() {
+		if mode.Name == "BC" {
+			m := mode
+			bc = &m
+		}
+	}
+	if bc == nil {
+		t.Fatal("BC (Bootcamp / proving ground) is not offered to the client")
+	}
+	if bc.TeamSize != 1 {
+		t.Errorf("BC TeamSize = %d, want 1 so it can start solo", bc.TeamSize)
+	}
+	if !matchmaker.ValidGameMode("BC") {
+		t.Error("BC is not accepted by the matchmaker, so entering its queue would be rejected")
 	}
 }

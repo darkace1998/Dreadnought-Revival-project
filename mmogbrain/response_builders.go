@@ -3030,6 +3030,29 @@ func buildMmogGameConfigDataPayload() []byte {
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetGameConfigData")
+	// GameModes must ALSO sit at the message root, not only inside "result".
+	//
+	// This response's own handler calls GetGameModesData (FUN_142a4ca40) on the
+	// document it just parsed -- the same function the YA_UpdateGameModes push
+	// uses -- and that function looks the array up as a DIRECT child:
+	//
+	//	lVar4 = FUN_140237c30(doc, "GameModes");
+	//	iVar3 = *(int *)(lVar4 + 0x20);   // child count
+	//
+	// It does not descend into "result" the way the scalar reader used for
+	// MaxSquadSize does, so a nested-only array reads as zero children and the
+	// client logs "GetGameModesData: Game modes list contains <0> items" with an
+	// empty mode list -- no game mode can be picked and Play cannot start a
+	// match. Observed live exactly that way. The nested copy is kept because
+	// nothing proves another consumer does not read it there.
+	b, stack = protocol.AppendArrayStart(b, stack, "GameModes")
+	for _, mode := range matchmaker.GameModeConfigs() {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "Name", mode.Name)
+		b = protocol.AppendInt32Field(b, "TeamSize", mode.TeamSize)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendInt32Field(b, "MaxSquadSize", 5)
 	b = protocol.AppendBoolField(b, "banned", false)

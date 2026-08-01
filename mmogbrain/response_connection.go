@@ -631,10 +631,25 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				// YA_GetGameConfigData result. Push it right after the config
 				// response so m_gameModes is non-empty and the hangar Play UI can
 				// build. Correlate to the same request so ordering is preserved.
-				gameModes := buildMmogUpdateGameModesPayload()
-				gameModesFrame := protocol.BuildResponseFrame(frame.RequestID, frame.MsgType, gameModes)
-				if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, "YA_UpdateGameModes", gameModesFrame, appEncoder, encryptResponses, "game modes update failed", "sent YA_UpdateGameModes push"); err != nil {
-					return err
+				// Pushed with a FRESH id, not the config request's.
+				//
+				// Correlating it to YA_GetGameConfigData meant reusing a request
+				// id the client's pending-callback map had already resolved with
+				// the config response itself, so this second frame was dropped
+				// before any RT dispatch saw it -- the same one-shot behaviour
+				// that made the first YA_FleetUpdate attempt a no-op. Evidence it
+				// never ran: the client logged "Game modes list contains <0>
+				// items" exactly ONCE, from the config handler's own call, and
+				// never from this message's handler.
+				gameModesID, err := uuid.NewRandom()
+				if err != nil {
+					log.WithError(err).Warn("mmog: failed to generate game modes push id")
+				} else {
+					gameModes := buildMmogUpdateGameModesPayload()
+					gameModesFrame := protocol.BuildResponseFrame(gameModesID, frame.MsgType, gameModes)
+					if err := writeMmogAppResponse(log, conn, remote, gameModesID, "YA_UpdateGameModes", gameModesFrame, appEncoder, encryptResponses, "game modes update failed", "sent YA_UpdateGameModes push"); err != nil {
+						return err
+					}
 				}
 			}
 			// Match-ready push. While this player is queued, every frame is a
