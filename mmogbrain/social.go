@@ -66,18 +66,36 @@ var chatChannelTypes = map[string]bool{
 }
 
 // defaultChatChannels are the rooms every player is placed in on connect. The
-// client creates exactly these two itself at startup, so if we do not have them
-// its join goes to a channel that does not exist.
-var defaultChatChannels = []string{"global", "language.english"}
+// client creates exactly these two itself at startup ("Adding Chat room type
+// Global." / "English.") and waits to be told their names.
+//
+// The form is "<id>.<type>", NOT "<type>.<id>" -- see chatChannelType.
+var defaultChatChannels = []string{"dreadnought.global", "english.language"}
 
 // chatChannelType returns the type token of a channel name, and whether it is
 // one the client will accept.
+//
+// The type is the segment AFTER THE LAST DOT. UYMmogChat's classifier
+// (FUN_142a1f6d0) scans the name backwards for '.', bails out returning type 0
+// when there is none, and compares only the SUFFIX against its six tokens:
+//
+//	while (p = p - 1, *p != 0x2e) { if (p == start) return 0; }
+//	...
+//	if (compare(suffix, "all") == 0) type = 1;   // then team, squad, global, ...
+//
+// So the id comes first and the type last: "english.language", "<match>.team",
+// "<squad>.squad", "<cluster>.global". Getting this backwards produced both of
+// the errors seen live -- a bare "global" has no dot at all ("Failed to parse
+// channel name. Outgoing chat will not be available"), and "language.english"
+// parses but classifies on "english", which is not a type
+// ("OnChatChannelJoined: Message type unknown or unsupported").
 func chatChannelType(name string) (string, bool) {
-	token := name
-	if idx := strings.Index(name, "."); idx >= 0 {
-		token = name[:idx]
+	idx := strings.LastIndex(name, ".")
+	if idx < 0 {
+		// No dot at all: the client cannot classify it and says so.
+		return "", false
 	}
-	token = strings.ToLower(token)
+	token := strings.ToLower(name[idx+1:])
 	return token, chatChannelTypes[token]
 }
 

@@ -94,14 +94,27 @@ func TestChatRejectsUnknownChannelTypes(t *testing.T) {
 	hub := socialTestHub(t)
 	peer, _ := socialTestPeer(t, hub, "player-a")
 
-	for _, name := range []string{"global", "language.english", "squad.42", "team.1", "customroom.abc", "all"} {
+	// The TYPE is the segment after the LAST dot -- "<id>.<type>". The
+	// classifier scans backwards for '.', so a name without one cannot be
+	// classified at all, and a name whose LAST segment is not one of the six
+	// tokens classifies as unknown.
+	for _, name := range []string{
+		"dreadnought.global", "english.language", "42.squad", "1.team",
+		"abc.customroom", "match.all",
+	} {
 		if _, ok := chatChannelType(name); !ok {
-			t.Errorf("channel %q should be accepted; it is one of the client's six types", name)
+			t.Errorf("channel %q should be accepted; its last segment is one of the client's six types", name)
 		}
 	}
-	for _, name := range []string{"lobby", "trade.eu", "whisper", ""} {
+	for _, name := range []string{
+		"global",           // no dot: "Failed to parse channel name"
+		"all",              // no dot
+		"language.english", // classifies on "english": "Message type unknown or unsupported"
+		"global.eu",        // type-first is the wrong way round
+		"lobby.trade", "", ".",
+	} {
 		if _, ok := chatChannelType(name); ok {
-			t.Errorf("channel %q should be refused; the client's classifier has no such type", name)
+			t.Errorf("channel %q should be refused; the client cannot classify it", name)
 		}
 	}
 
@@ -140,7 +153,7 @@ func TestChatMessageReachesOtherMembers(t *testing.T) {
 
 	go handleChatMethod(socialRequest{
 		method: "chat.channel.message",
-		params: map[string]any{"channel": "global", "message": "hello"},
+		params: map[string]any{"channel": "dreadnought.global", "message": "hello"},
 		peer:   sender, hub: hub,
 	})
 
@@ -151,8 +164,8 @@ func TestChatMessageReachesOtherMembers(t *testing.T) {
 	if params["message"] != "hello" {
 		t.Errorf("event message = %v, want hello", params["message"])
 	}
-	if params["channel"] != "global" {
-		t.Errorf("event channel = %v, want global", params["channel"])
+	if params["channel"] != "dreadnought.global" {
+		t.Errorf("event channel = %v, want dreadnought.global", params["channel"])
 	}
 }
 
@@ -167,7 +180,7 @@ func TestIgnoredSenderIsNotBroadcastTo(t *testing.T) {
 	}
 	go handleChatMethod(socialRequest{
 		method: "chat.channel.message",
-		params: map[string]any{"channel": "global", "message": "blocked"},
+		params: map[string]any{"channel": "dreadnought.global", "message": "blocked"},
 		peer:   sender, hub: hub,
 	})
 
@@ -277,7 +290,7 @@ func TestReconnectReplacesThePreviousPeer(t *testing.T) {
 	if got := hub.peerFor("player-a"); got != second {
 		t.Error("the newest connection should be the one the hub delivers to")
 	}
-	if members := hub.channelMembers("global"); len(members) != 1 {
+	if members := hub.channelMembers("dreadnought.global"); len(members) != 1 {
 		t.Errorf("global has %d members after a reconnect, want 1", len(members))
 	}
 	_ = first
@@ -294,7 +307,7 @@ func TestReconnectReplacesThePreviousPeer(t *testing.T) {
 // sending one is why the client received our join in !!IN!! and still reported
 // "channel name is empty".
 func TestChatJoinEventUsesTheNoticeMethod(t *testing.T) {
-	notice := chatJoinNotice("global", map[string]any{"pid": "player-a"})
+	notice := chatJoinNotice("dreadnought.global", map[string]any{"pid": "player-a"})
 
 	// The METHOD goes in "type": the dispatcher routes on one string, comparing
 	// it against "server.notice" first and "chat.channel.notice" later, which is
@@ -316,7 +329,7 @@ func TestChatJoinEventUsesTheNoticeMethod(t *testing.T) {
 	if joins == 0 {
 		t.Errorf(`join event carries no "join" value the dispatcher can match: %v`, params)
 	}
-	if params["channel"] != "global" {
-		t.Errorf("join event channel = %v, want global", params["channel"])
+	if params["channel"] != "dreadnought.global" {
+		t.Errorf("join event channel = %v, want dreadnought.global", params["channel"])
 	}
 }
