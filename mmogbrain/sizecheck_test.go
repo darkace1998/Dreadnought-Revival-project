@@ -77,7 +77,15 @@ var targetSizes = map[string]int{
 	// Visible, Prereq or Wires -- because only +0x20/+0x2C/+0x3C are read off
 	// the stored record; the full form put the frame at 35103 bytes, over the
 	// 32768-byte ring. 21505 leaves ~11KB of headroom.
-	"YA_GetTechTree": 21505,
+	// Now 25846: the module entries became an UPGRADE PATH instead of a copy of
+	// the equipped loadout. A slot's line is one asset name with a _T<n> token
+	// and each tier is a separately registered item
+	// (WP_AssaultMPri01_weapon01_T1_BP .. _T5_BP), so a slot now emits its
+	// equipped item plus every STRICTLY higher tier of the same line -- 947
+	// entries across 52 hulls, versus 237 before, which listed the current
+	// loadout back at the player with nothing to research. Still minimal per
+	// entry and ~7KB under the 32768-byte ring.
+	"YA_GetTechTree": 25846,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

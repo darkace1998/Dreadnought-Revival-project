@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -1655,27 +1657,139 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 	ids = append(ids, hull.abilities[:]...)
 	ids = append(ids, hull.perks[:]...)
 
-	items := make([]techTreeItem, 0, len(ids))
+	items := make([]techTreeItem, 0, len(ids)*4)
 	position := int32(0)
 	for _, id := range ids {
 		if id == 0 {
 			continue
 		}
-		items = append(items, techTreeItem{
-			id: id,
-			// ClassId keys the per-ship record, so it is the HULL's id, not the
-			// module's -- that is what files this module under this ship.
-			classID:      hull.loadoutID,
-			manufacturer: manufacturerID,
-			tier:         hull.tier,
-			position:     position,
-			xpCost:       techTreeXPCostByTier[hull.tier],
-			module:       true,
-		})
-		position++
+		// Emit the equipped item AND the higher-tier variants of its own line.
+		//
+		// A slot's entries used to be just the equipped item, which made the
+		// rails list the current loadout back to the player with nothing to
+		// research -- "more weapons and modules but they are just the
+		// duplicates, there is no higher version with better stats".
+		//
+		// The client's assets carry the progression in the path: a slot's line
+		// is one asset name with a _T<n> tier token, and the tiers are separate
+		// registered items with their own ids
+		// (WP_AssaultMPri01_weapon01_T1_BP .. _T5_BP,
+		// AB_AS_Pri_Missile_Super_Ability_T0_BP .. _T5_BP). So the upgrades for
+		// a slot are the same line at a higher tier, and they are real
+		// authored items -- not synthesised.
+		//
+		// Only STRICTLY higher tiers are added: lower ones are what earlier
+		// hulls fly, not something this ship can research.
+		for _, variant := range techTreeSlotUpgrades(id, hull.tier) {
+			items = append(items, techTreeItem{
+				id: variant.itemID,
+				// ClassId keys the per-ship record, so it is the HULL's id, not
+				// the module's -- that is what files this module under this
+				// ship.
+				classID:      hull.loadoutID,
+				manufacturer: manufacturerID,
+				tier:         variant.tier,
+				position:     position,
+				xpCost:       techTreeModuleXPCost(variant.tier),
+				module:       true,
+			})
+			position++
+		}
 	}
 	return items
 }
+
+// techTreeModuleXPCost is what one module upgrade costs to research.
+//
+// GUESS: no table in the client or in data/ gives per-module research costs,
+// and the hull costs in techTreeXPCostByTier are for hulls. This scales with the
+// variant's tier so the progression is monotonic and a tier-0 module is free,
+// which is the shape the research UI expects. If real costs ever surface this is
+// the single place to change.
+func techTreeModuleXPCost(tier int32) int32 {
+	if tier <= 0 {
+		return 0
+	}
+	return tier * 1000
+}
+
+// slotVariant is one tier step of a module line.
+type slotVariant struct {
+	itemID int32
+	tier   int32
+}
+
+// techTreeSlotTierToken matches the tier token in a registered asset name, e.g.
+// "WP_AssaultMPri01_weapon01_T3_BP" or "..._T3_Hero_BP".
+var techTreeSlotTierToken = regexp.MustCompile(`^(.*)_T(\d+)((?:_Hero)?_BP)$`)
+
+// techTreeSlotUpgrades returns the equipped item plus every higher-tier variant
+// of the same asset line, ordered by tier.
+//
+// Returns just the item itself when its path is not registered or does not carry
+// a tier token -- an unrecognised slot contributes what it always did rather
+// than nothing.
+func techTreeSlotUpgrades(itemID int32, fallbackTier int32) []slotVariant {
+	// Perks carry no tier token (PRK_COM_AbiInc_Passive_BP), so they fall back
+	// to the hull's tier rather than 0 -- the stored tier at item+0x2C is read
+	// by the module consumers and a spurious 0 would rank them below every
+	// weapon and ability.
+	self := []slotVariant{{itemID: itemID, tier: fallbackTier}}
+
+	path, ok := dreadconfig.GetAssetPathForItemID(itemID)
+	if !ok {
+		return self
+	}
+	slash := strings.LastIndex(path, "/")
+	name := path[slash+1:]
+	match := techTreeSlotTierToken.FindStringSubmatch(name)
+	if match == nil {
+		return self
+	}
+	base, suffix := match[1], match[3]
+	tier, err := strconv.Atoi(match[2])
+	if err != nil {
+		return self
+	}
+
+	variants := []slotVariant{}
+	for candidateTier := tier; candidateTier <= techTreeMaxSlotTier; candidateTier++ {
+		candidate := fmt.Sprintf("%s_T%d%s", base, candidateTier, suffix)
+		id, found := techTreeItemIDByAssetName(candidate)
+		if !found {
+			continue
+		}
+		variants = append(variants, slotVariant{itemID: id, tier: int32(candidateTier)})
+	}
+	if len(variants) == 0 {
+		return self
+	}
+	return variants
+}
+
+// techTreeMaxSlotTier is the highest tier token that appears on a slot asset.
+const techTreeMaxSlotTier = 5
+
+// techTreeItemIDByAssetName resolves a registered asset by its FILE NAME rather
+// than its full path, because a line's tiers live in per-tier directories
+// (".../Pri_Missile_Super/T0/AB_..._T0_BP" vs ".../T2/AB_..._T2_BP") and the
+// directory changes with the tier as well as the name.
+func techTreeItemIDByAssetName(name string) (int32, bool) {
+	techTreeAssetNameOnce.Do(func() {
+		techTreeAssetNameIndex = map[string]int32{}
+		for _, entry := range dreadconfig.GetAllRegistryEntries() {
+			slash := strings.LastIndex(entry.Path, "/")
+			techTreeAssetNameIndex[entry.Path[slash+1:]] = entry.ItemID
+		}
+	})
+	id, ok := techTreeAssetNameIndex[name]
+	return id, ok
+}
+
+var (
+	techTreeAssetNameOnce  sync.Once
+	techTreeAssetNameIndex map[string]int32
+)
 
 // techTreeXPCostByTier is what a hull costs to research.
 //

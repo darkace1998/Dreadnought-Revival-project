@@ -257,3 +257,59 @@ func TestTechTreeLayoutRowIdsPassTheClassLookupGate(t *testing.T) {
 		t.Error("document carries no tier-1 layout row; manager+0x58 will stay empty")
 	}
 }
+
+// A slot's module entries must be an UPGRADE PATH, not the equipped item
+// repeated.
+//
+// The first version of the module work emitted only what each hull already
+// flies, so the rails listed the current loadout back at the player: "more
+// weapons and modules but they are just the duplicates, there is no higher
+// version with better stats". The client's own assets carry the progression --
+// a slot line is one asset name with a _T<n> token and every tier is a
+// separately registered item -- so the upgrades are real authored items, not
+// something synthesised here.
+func TestTechTreeModulesCarryHigherTierUpgrades(t *testing.T) {
+	var agosta baseShipLoadout
+	for _, hull := range baseShipLoadouts {
+		if hull.name == "Agosta" {
+			agosta = hull
+		}
+	}
+	if agosta.loadoutID == 0 {
+		t.Skip("Agosta not in the roster")
+	}
+
+	modules := techTreeModuleItems(agosta, 0)
+	if len(modules) <= 6 {
+		t.Fatalf("Agosta has %d module entries; that is the bare equipped loadout with no upgrades", len(modules))
+	}
+
+	// The equipped primary must be present along with strictly higher tiers of
+	// the same line, and every id distinct -- duplicates are the exact symptom.
+	tiers := map[int32]bool{}
+	seen := map[int32]int{}
+	for _, m := range modules {
+		seen[m.id]++
+		if m.id == agosta.primary {
+			tiers[m.tier] = true
+		}
+	}
+	for id, n := range seen {
+		if n > 1 {
+			t.Errorf("module id %d emitted %d times for one hull", id, n)
+		}
+	}
+
+	upgrades := techTreeSlotUpgrades(agosta.primary, agosta.tier)
+	if len(upgrades) < 2 {
+		t.Fatalf("primary weapon %d resolved %d variants; expected its own tier plus higher ones", agosta.primary, len(upgrades))
+	}
+	for i := 1; i < len(upgrades); i++ {
+		if upgrades[i].tier <= upgrades[i-1].tier {
+			t.Errorf("upgrades are not strictly increasing in tier: %+v", upgrades)
+		}
+		if upgrades[i].itemID == upgrades[i-1].itemID {
+			t.Errorf("upgrade %d repeats item id %d", i, upgrades[i].itemID)
+		}
+	}
+}
