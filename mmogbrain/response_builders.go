@@ -304,14 +304,23 @@ func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {
 // buildMmogServerStartingPayload is the unsolicited "your match is ready,
 // connect to this battle server" push (RT YA_ServerStarting).
 //
-// The client's handler (FUN_142a23440's YA_ServerStarting branch) logs "Match
-// has been found, battle server starting" and then hands the payload to a
-// Blueprint delegate that ClientTravels to the battle server. The address and
-// port fields are the ones that matter; they are sent under every name the
-// client's connection struct exposes (Host/Port/GamePort/serverHost/serverPort/
-// ServerIP/IP), because which one the delegate reads is not yet confirmed live
-// and the doubling is cheap. The match/session identifiers ride along under the
-// names the same struct carries (MatchID/SessionID/InstanceId).
+// DISPROVED, 2026-08-02: this comment used to say the payload "hands the
+// address to a Blueprint delegate that ClientTravels", and that the field names
+// were doubled up because which one the delegate reads was unconfirmed. The
+// answer is none of them. The YA_ServerStarting arm (name compared at
+// 0x142a277d7) reads NO fields whatsoever: it logs "Match has been found,
+// battle server starting" (0x142a27815), moves the interpreter to state 6, and
+// falls through to the next arm (YA_CheckReturn, 0x142a27846). Travelling is
+// YA_Connect's job -- see buildMmogConnectPushPayload.
+//
+// So every Host/Port/MatchID/Map field below is inert; only the RT name has any
+// effect. They are kept because they cost nothing, are harmless, and document
+// what the match actually was, but do NOT add to them expecting the client to
+// read them, and do not treat their presence as evidence of anything.
+//
+// This is also why the client's own connect-push log line prints "Map: ;
+// GameType:;" -- those come from client state that some other message is meant
+// to populate, not from anything sent here.
 //
 // It reuses mmogMatchmakingStatus for the connection details, which
 // currentMmogMatchmakingStatus fills from the formed match row.
