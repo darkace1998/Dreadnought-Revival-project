@@ -2842,7 +2842,7 @@ func TestFirmamentAuthSuccessDoesNotWaitForPlayerDataReady(t *testing.T) {
 		"method": "ping",
 		"params": map[string]any{"timeecho": 123},
 	})
-	pong := readFirmamentTestMessage(t, clientConn, reader, time.Second)
+	pong := readFirmamentTestReply(t, clientConn, reader, "ping-1", 2*time.Second)
 	if got := pong["type"]; got != "pong" {
 		t.Fatalf("pong type = %v, want pong", got)
 	}

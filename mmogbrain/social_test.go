@@ -75,15 +75,15 @@ func readPush(t *testing.T, r *bufio.Reader) map[string]any {
 func readNotice(t *testing.T, r *bufio.Reader) (string, map[string]any) {
 	t.Helper()
 	msg := readPush(t, r)
-	method, _ := msg["method"].(string)
+	method, _ := msg["type"].(string)
 	if method == "" {
-		t.Fatalf("chat event has no method, so the client cannot route it: %v", msg)
+		t.Fatalf("chat event has no type, so the dispatcher cannot route it: %v", msg)
 	}
-	params, _ := msg["params"].(map[string]any)
-	if params == nil {
-		t.Fatalf("chat event has no params: %v", msg)
+	data, _ := msg["data"].(map[string]any)
+	if data == nil {
+		t.Fatalf("chat event has no data: %v", msg)
 	}
-	return method, params
+	return method, data
 }
 
 // A channel type the client's classifier does not know must be refused, not
@@ -296,12 +296,16 @@ func TestReconnectReplacesThePreviousPeer(t *testing.T) {
 func TestChatJoinEventUsesTheNoticeMethod(t *testing.T) {
 	notice := chatJoinNotice("global", map[string]any{"pid": "player-a"})
 
-	if notice["method"] != "chat.channel.notice" {
-		t.Errorf("join event method = %v, want chat.channel.notice", notice["method"])
+	// The METHOD goes in "type": the dispatcher routes on one string, comparing
+	// it against "server.notice" first and "chat.channel.notice" later, which is
+	// the same slot that carries "pong". A "method"/"params" frame is the shape
+	// the CLIENT sends, and one was logged in !!IN!! and ignored.
+	if notice["type"] != "chat.channel.notice" {
+		t.Errorf("join event type = %v, want chat.channel.notice", notice["type"])
 	}
-	params, _ := notice["params"].(map[string]any)
+	params, _ := notice["data"].(map[string]any)
 	if params == nil {
-		t.Fatal("join event has no params")
+		t.Fatal("join event has no data")
 	}
 	joins := 0
 	for _, key := range []string{"notice", "event", "action", "state"} {

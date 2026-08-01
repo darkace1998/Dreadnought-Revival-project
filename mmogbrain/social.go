@@ -589,25 +589,49 @@ func chatJoinNotice(channel string, user map[string]any) map[string]any {
 }
 
 // chatChannelNotice builds a join/leave membership event.
+//
+// ENVELOPE: {"id", "type", "data"} with the METHOD IN "type".
+//
+// The inbound dispatcher FUN_142a8dfa0 routes on ONE string, and that string is
+// compared first against the global that resolves to "server.notice" and later
+// against the ones for "chat.channel.notice", "chat.channel.info",
+// "chat.channel.message" and "chat.user.message". One field, all of those
+// values -- so it is the frame's TYPE, the same slot that carries "pong" and
+// "server.notice" in the frames this client already accepts, and the payload
+// rides in "data" beside it exactly as those do.
+//
+// A JSON-RPC-shaped frame with "method" and "params" is therefore ignored: the
+// client logged ours in !!IN!! verbatim and still reported "channel name is
+// empty", because the dispatcher never found a type to route on. "method" and
+// "params" are the shape the CLIENT sends, not the shape it reads.
 func chatChannelNotice(channel string, event string, user map[string]any) map[string]any {
 	channelType, _ := chatChannelType(channel)
+	return firmamentEvent("chat.channel.notice", map[string]any{
+		// The dispatcher's "join"/"leave" comparison. Which key carries it is
+		// not established -- it is read from the parsed object rather than by
+		// name -- so the plausible ones all carry it.
+		"notice":  event,
+		"event":   event,
+		"action":  event,
+		"state":   event,
+		"channel": channel, "channel_name": channel, "name": channel, "room": channel,
+		"type":  channelType,
+		"user":  user,
+		"users": []any{user},
+	})
+}
+
+// firmamentEvent wraps a server-initiated event in the envelope the client's
+// dispatcher routes: the method goes in "type", the payload in "data".
+func firmamentEvent(method string, data map[string]any) map[string]any {
+	payload := map[string]any{"status": "success", "method": method, "action": method}
+	for k, v := range data {
+		payload[k] = v
+	}
 	return map[string]any{
-		"jsonrpc": "2.0",
-		"method":  "chat.channel.notice",
-		"params": map[string]any{
-			// The dispatcher's "join"/"leave" comparison. Which key carries it
-			// is not established -- the value is read from an already-parsed
-			// structure rather than by name -- so the ones a notice plausibly
-			// uses all carry it.
-			"notice":  event,
-			"event":   event,
-			"action":  event,
-			"state":   event,
-			"channel": channel, "channel_name": channel, "name": channel, "room": channel,
-			"type":  channelType,
-			"user":  user,
-			"users": []any{user},
-		},
+		"id":   uuid.New().String(),
+		"type": method,
+		"data": payload,
 	}
 }
 
@@ -616,20 +640,16 @@ func chatChannelNotice(channel string, event string, user map[string]any) map[st
 // envelope as the membership notice: the dispatcher routes chat.channel.message
 // and chat.user.message the same way it routes chat.channel.notice.
 func chatMessageNotice(method string, channel string, sender map[string]any, body string) map[string]any {
-	return map[string]any{
-		"jsonrpc": "2.0",
-		"method":  method,
-		"params": map[string]any{
-			"channel":      channel,
-			"channel_name": channel,
-			"name":         channel,
-			"message":      body,
-			"content":      body,
-			"text":         body,
-			"sender":       sender,
-			"from":         sender,
-			"user":         sender,
-			"timestamp":    time.Now().Unix(),
-		},
-	}
+	return firmamentEvent(method, map[string]any{
+		"channel":      channel,
+		"channel_name": channel,
+		"name":         channel,
+		"message":      body,
+		"content":      body,
+		"text":         body,
+		"sender":       sender,
+		"from":         sender,
+		"user":         sender,
+		"timestamp":    time.Now().Unix(),
+	})
 }
