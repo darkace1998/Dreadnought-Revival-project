@@ -183,13 +183,28 @@ func seedMmogPlayerState(database *sql.DB, playerPID string) error {
 	}
 
 	for _, fleet := range mmogFleetSeeds() {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_fleets(user_id,fleet_id,token,display_name,fleet_type,active,flagship_ship_id,flagship_loadout_id,flagship_loadout_index) VALUES(?,?,?,?,?,?,?,?,?)`,
-			pid, fleet.fleetID, fleet.token, fleet.displayName, fleet.fleetType, boolToInt(fleet.active), fleet.flagshipShipID, fleet.flagshipLoadoutID, fleet.flagshipIndex()); err != nil {
+		result, err := tx.Exec(`INSERT OR IGNORE INTO player_fleets(user_id,fleet_id,token,display_name,fleet_type,active,flagship_ship_id,flagship_loadout_id,flagship_loadout_index) VALUES(?,?,?,?,?,?,?,?,?)`,
+			pid, fleet.fleetID, fleet.token, fleet.displayName, fleet.fleetType, boolToInt(fleet.active), fleet.flagshipShipID, fleet.flagshipLoadoutID, fleet.flagshipIndex())
+		if err != nil {
 			return fmt.Errorf("seed player_fleets: %w", err)
+		}
+		// Fleet MEMBERSHIP is seeded only when this fleet row did not already
+		// exist. Seeding runs on every login, and re-inserting the starter
+		// ships each time silently undid the player's own edits: a session that
+		// removed all four starter ships kept only the one removed after the
+		// last seed, and the other three reappeared. The loadouts themselves are
+		// still seeded every time -- owning a ship is not the same as having it
+		// in a fleet, and a removed ship must stay owned so it can be re-added.
+		createdFleet := false
+		if affected, err := result.RowsAffected(); err == nil && affected > 0 {
+			createdFleet = true
 		}
 		for position, loadout := range fleet.shipLoadouts {
 			if err := seedPersistedLoadout(tx, pid, loadout); err != nil {
 				return err
+			}
+			if !createdFleet {
+				continue
 			}
 			if _, err := tx.Exec(`INSERT OR IGNORE INTO player_fleet_loadouts(user_id,fleet_id,position,loadout_id) VALUES(?,?,?,?)`,
 				pid, fleet.fleetID, position, loadout.loadoutID()); err != nil {
