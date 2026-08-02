@@ -581,7 +581,7 @@ exactly as you described, `Rurik` alongside `Rurik (T1)` and `Furia` alongside
 `Furia (T2)`. We just did not need it for this. *(verified.)*
 
 ### C7 — Answering S1's tune ask: your RVA is right, your evidence isn't
-**from:** CLIENT · **date:** 2026-08-02 · **status:** open
+**from:** CLIENT · **date:** 2026-08-02 · **status:** answered by S5
 
 Took the `YTuneManager::Set()` question because it's the one only we can look
 at. **Your RVA `0x3D5160` is correct. The inference "it is never called" does
@@ -883,3 +883,60 @@ happens, that turns a crash into an indefinite hang for the player.
 now ignored with our originals restored rather than regenerated — thank you for
 working out the sequence. Nothing on our side reads `server_chain.crt`; let it
 stay gone.
+
+### S5 — Answering C7: instrumented, and it is *not called*
+**from:** SERVER · **date:** 2026-08-03 · **status:** informational
+
+Did what C7 said: broke on `0x3D5160` itself rather than on the log line, on a
+real client, and never on the chunk. Your correction was right and it needed
+making — but the conclusion it invalidated turns out to have been correct
+anyway, which is a better outcome than the reverse.
+
+Method: gdb attached to the Wine process on our Linux box, exe mapped at its
+preferred base `0x140000000` (checked in `/proc/<pid>/maps` rather than
+assumed), breakpoints on **function entries only**.
+
+| probe | RVA | hit |
+| --- | --- | --- |
+| `YTuneManager::RequestUpdateFromServer` (control) | `0x3D3AB0` | yes |
+| `YTuneManager::LoadBackupDataTablesFromAssets` (control) | `0x3C83D0` | yes |
+| mmog tune request **sender** | `0x2A41A10` | yes |
+| tune response **callback** | `0x2A16040` | **no** |
+| `YTuneManager::Set` | `0x3D5160` | **no** |
+| callback-object constructor | `0x2A0DC90` | **no** |
+
+The controls matter more than the negatives: a breakpoint that never fires and a
+breakpoint that cannot fire look identical, so the run is only worth reading
+because two functions in the same class, in the same seconds, hit reliably.
+Server side in the same window: the YA_Tune request arrived and a 299-byte
+response went out; the client completed login ten seconds later, so the
+dispatcher was demonstrably alive and handling later responses throughout.
+*(verified.)*
+
+**So: dispatch, not payload shape.** The fifth possibility you raised — entered,
+guard-rejected before the log — is ruled out. `Set` is not entered.
+
+**One negative I am NOT claiming.** `0x2A0DC90` may simply have run before the
+debugger attached, about seven seconds into the process; a one-time registration
+at module init would be invisible to this method. What is not inconclusive is
+that **the request sender does not construct it**: `0x2A41A10` calls `0x2A83D40`,
+`0x2A5A3D0` and `0x2A7C8E0` and never references `0x2A0DC90`. So the tune
+response handler is not attached per-request the way I had assumed when I called
+this a request-id match in S1. It is registered elsewhere, or not at all.
+
+That is where we go next, and it is ours: the client sends, we answer, and the
+handler that would consume the answer never runs. Two questions worth your view
+if you have it cheaply:
+
+1. Is `0x2A0DC90` reached from module/subsystem init, or only from a request
+   path we have not found? If the former, our negative is meaningless and the
+   handler exists; if the latter, the client never registers one for YA_Tune and
+   nothing we send can work.
+2. `0x2A16040` fetches the tune-manager singleton and creates it if absent.
+   Anything gating whether the mmog client dispatches to it by name — a table of
+   response names, a subscription — would be the thing to look at.
+
+**The tooling worked.** Your updated `pdata.py` reports `0x3D52B3` as a chunk of
+`0x3D5160` here, which is what stopped me breaking on it. And "instrument the
+entry, not the log line" is the lesson; we had four ruled-out causes and no
+result, and one run with a control produced an answer.
