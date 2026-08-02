@@ -1049,6 +1049,9 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		VALUES(?,?,?,?,?)`, playerPID, itemID, purchasedItemType(itemID), freeXP, "freexp"); err != nil {
 		return fmt.Errorf("record unlock %d: %w", itemID, err)
 	}
+	if err := grantUnlockedShipLoadout(tx, playerPID, itemID); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit unlock %d: %w", itemID, err)
 	}
@@ -1148,4 +1151,56 @@ func persistedPlayerShipXP(playerPID string, shipID int32) int32 {
 		return 0
 	}
 	return xp
+}
+
+// grantUnlockedShipLoadout gives the player a loadout row for a ship they just
+// unlocked.
+//
+// A purchase record alone is not ownership as far as the client is concerned.
+// Every ship the client treats as owned is one the player has a LOADOUT for --
+// that is what populates UYLoadoutManager, which is what the hangar and the
+// fleet screens read. The four starter ships are owned precisely because they
+// have rows here.
+//
+// Evidence it is not the purchases list: with the ids in PurchasesData and
+// m_isOwned set on the progression rows, the client still re-sent YA_UnlockItem
+// for 33489267 -- an id already in player_purchases -- so it had not learned
+// ownership from either.
+//
+// The row carries identity only: loadout id, the precast id, the pawn behind
+// it, the blueprint class name and the ship's name. Item slots are left at zero
+// because the client instantiates the precast blueprint named in
+// native_loadout_id and that blueprint carries its own weapons, abilities and
+// perks -- the same reason nativeStarterLoadoutClassName has to name the
+// SHIPPING asset rather than a development one.
+func grantUnlockedShipLoadout(tx *sql.Tx, playerPID string, precastLoadoutID int32) error {
+	switch category := (precastLoadoutID >> 24) & 0xff; category {
+	case mmogItemCategoryShipLoadoutPrecast, mmogItemCategoryShipLoadoutHero:
+	default:
+		return nil // modules and the like own nothing on their own
+	}
+	shipID, ok := dreadconfig.ShipIDForPrecastLoadout(precastLoadoutID)
+	if !ok {
+		return nil
+	}
+	nativeID, ok := nativeStarterLoadoutClassName(precastLoadoutID)
+	if !ok {
+		return nil
+	}
+	name := ""
+	if authoritative, ok := dreadconfig.AuthoritativeShipName(shipID); ok {
+		name = authoritative
+	}
+	var nextPosition int32
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(position)+1,0) FROM player_ship_loadouts WHERE user_id=?`,
+		playerPID).Scan(&nextPosition); err != nil {
+		return fmt.Errorf("next loadout position: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_ship_loadouts(
+		user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active
+	) VALUES(?,?,?,?,?,0,?,?,1)`,
+		playerPID, precastLoadoutID, nativeID, precastLoadoutID, shipID, name, nextPosition); err != nil {
+		return fmt.Errorf("grant loadout for unlocked %d: %w", precastLoadoutID, err)
+	}
+	return nil
 }

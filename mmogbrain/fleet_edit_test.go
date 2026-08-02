@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -436,5 +437,43 @@ func TestUnlockItemResponseCarriesWhatTheClientReads(t *testing.T) {
 		if !bytes.Contains(payload, []byte(field)) {
 			t.Errorf("response is missing %q, which the arm reads", field)
 		}
+	}
+}
+
+// A purchase record alone is not ownership to the client: with the ids in
+// PurchasesData and m_isOwned set, it still re-sent YA_UnlockItem for 33489267,
+// an id already in player_purchases. Every ship the client treats as owned is
+// one the player has a LOADOUT for -- that is what fills UYLoadoutManager, and
+// it is why the four starters are owned.
+func TestUnlockGrantsAShipLoadout(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=50000 WHERE user_id=?`, pid); err != nil {
+		t.Fatalf("fund: %v", err)
+	}
+
+	if err := persistUnlockItem(database, pid, realUnlockItemPayload()); err != nil {
+		t.Fatalf("unlock: %v", err)
+	}
+
+	var native, name string
+	var shipID int32
+	if err := database.QueryRow(`SELECT native_loadout_id,ship_id,loadout_name FROM player_ship_loadouts
+		WHERE user_id=? AND loadout_id=?`, pid, 33489267).Scan(&native, &shipID, &name); err != nil {
+		t.Fatalf("no loadout row granted for the unlocked ship: %v", err)
+	}
+	if shipID == 0 {
+		t.Error("granted loadout has no pawn behind it")
+	}
+	// Must name the SHIPPING precast blueprint, never a Development one -- the
+	// client instantiates this class and reports its own precast id.
+	if !strings.Contains(native, "PrecastLoadout") || strings.Contains(native, "Development") {
+		t.Errorf("native loadout id = %q, want the shipping PrecastLoadout class", native)
+	}
+	if name == "" {
+		t.Error("granted loadout has no ship name")
 	}
 }
