@@ -65,6 +65,35 @@ as the destination would have you reading an item id as an object pointer. When
 a chain looks one hop shorter than it is, this is usually why. The
 `dreadnought-hooks` skill has the full case.
 
+### The other exception: a .pdata entry can be the MIDDLE of a function
+
+MSVC splits functions. Cold and unlikely paths get moved far away and receive
+their **own** `RUNTIME_FUNCTION`, whose unwind info chains back to the primary
+via `UNW_FLAG_CHAININFO`. So a record's "begin" is not always a function entry —
+it can be a fragment living thousands of bytes from the real one.
+
+```console
+$ python pdata.py 3D52B3
+0x3D52B3    CHUNK 0x3D52B3-0x3D5363 of function 0x3D5160 (2 hops) -- not a function entry, do not hook
+```
+
+`pdata.py` resolves the chain for you. Two consequences, both of which have
+bitten:
+
+- **Never hook a chunk.** You would be patching the middle of a function, with
+  a prologue that never ran.
+- **A log line inside a cold chunk does not prove the function ran.** Cold
+  chunks sit past the early-return guards, so a function can be entered and
+  return without ever reaching them. If you are using a log line as evidence
+  that a function executed, check which chunk it lives in first, and instrument
+  the *primary* entry instead.
+
+The second one cost a real diagnosis: a tune-handling function was reported as
+"never called" on the strength of a missing log line, and the line turned out to
+live in a cold chunk two hops from the entry. `strxref.py` reports the chunk it
+found the reference in, so compare that against the primary before concluding
+anything about whether code ran.
+
 ## 1. String → function
 
 A log literal is the one part of a stripped binary that still says what the

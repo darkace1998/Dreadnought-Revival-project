@@ -49,11 +49,13 @@ class PE:
         # RUNTIME_FUNCTION records: begin, end, unwind -- 12 bytes each.
         po = self.rva2off(exc_rva)
         self.funcs = []
+        self.unwind = {}
         for i in range(exc_sz // 12):
-            b, e, _ = struct.unpack_from("<III", data, po + i * 12)
+            b, e, u = struct.unpack_from("<III", data, po + i * 12)
             if b == 0 and e == 0:
                 break
             self.funcs.append((b, e))
+            self.unwind[b] = u
         self.funcs.sort()
         self._starts = [b for b, _ in self.funcs]
         self._entries = set(self._starts)
@@ -97,9 +99,51 @@ class PE:
         next_start = self.funcs[j][0] if j < len(self.funcs) else None
         return prev_end, next_start
 
+    def primary(self, rva):
+        """Follow UNW_FLAG_CHAININFO to the function a chunk belongs to.
+
+        MSVC splits functions: cold and unlikely paths are moved far away and
+        get their OWN RUNTIME_FUNCTION whose unwind info chains back to the
+        primary. So a .pdata "entry" is not necessarily a function entry -- it
+        can be the middle of one, living at a completely different address.
+        Hooking a chunk is catastrophic; always resolve first.
+
+        Returns (primary_begin, primary_end, chunk_count). chunk_count is 0 when
+        rva is already primary.
+        """
+        start = rva
+        hops = 0
+        while hops < 8:
+            u = self.unwind.get(start)
+            if u is None:
+                break
+            off = self.rva2off(u)
+            if off is None:
+                break
+            flags = self.data[off] >> 3
+            if not (flags & 0x4):          # UNW_FLAG_CHAININFO
+                break
+            ncodes = self.data[off + 2]
+            # Unwind codes are 2-byte slots, padded so what follows is 4-aligned.
+            cb = off + 4 + (ncodes + (ncodes & 1)) * 2
+            pb, _pe, _pu = struct.unpack_from("<III", self.data, cb)
+            if pb == start or pb not in self.unwind:
+                break
+            start = pb
+            hops += 1
+        if hops == 0:
+            return None
+        return (start, dict(self.funcs).get(start, 0), hops)
+
     def describe(self, rva):
         if self.is_entry(rva):
             b, e = self.enclosing(rva)
+            chain = self.primary(rva)
+            if chain:
+                pb, pe_, hops = chain
+                return ("CHUNK 0x%X-0x%X of function 0x%X (%d hop%s) -- "
+                        "not a function entry, do not hook"
+                        % (b, e, pb, hops, "" if hops == 1 else "s"))
             return "ENTRY of 0x%X-0x%X (size %d)" % (b, e, e - b)
         fn = self.enclosing(rva)
         if fn:

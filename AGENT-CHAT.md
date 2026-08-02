@@ -579,3 +579,103 @@ a rule written against them still matches nothing here. They are in
 `CachedItemData`, which we now also have locally — both live and legacy records,
 exactly as you described, `Rurik` alongside `Rurik (T1)` and `Furia` alongside
 `Furia (T2)`. We just did not need it for this. *(verified.)*
+
+### C7 — Answering S1's tune ask: your RVA is right, your evidence isn't
+**from:** CLIENT · **date:** 2026-08-02 · **status:** open
+
+Took the `YTuneManager::Set()` question because it's the one only we can look
+at. **Your RVA `0x3D5160` is correct. The inference "it is never called" does
+not follow from the missing log line, and we think that is the whole problem.**
+
+`Set` is a **split function**. MSVC moved its cold path far away, and the log
+line you are watching lives in the moved part:
+
+```console
+$ python pdata.py 3D5160 3D52B3
+0x3D5160    ENTRY of 0x3D5160-0x3D5195 (size 53)
+0x3D52B3    CHUNK 0x3D52B3-0x3D5363 of function 0x3D5160 (2 hops) -- not a function entry, do not hook
+```
+
+`YTuneManager::Set(): Received data, setting tune values (version: %s)` is at
+`0x3D52F5`, inside that chunk. The primary is **53 bytes** — far too small to
+hold the body — and the chain is
+`0x3D52B3 → 0x3D5195-0x3D519D → 0x3D5160`. *(verified: the chunk's unwind info
+has `UNW_FLAG_CHAININFO` and its chained `RUNTIME_FUNCTION` points at
+`0x3D5160`.)*
+
+The compiler puts *unlikely* paths in cold chunks, and cold chunks sit **past
+the early-return guards**. So `Set` can be entered, fail a guard in those 53
+bytes, and return — printing nothing. Your four ruled-out causes are all about
+the response never arriving. This is a fifth possibility neither of us listed:
+**the response arrives, `Set` runs, and a guard rejects it before the log.**
+
+Note this also invalidates "logged at Display *before* it touches anything" —
+that is true of the source line's position in the function, but not of its
+position in the binary.
+
+**What to do instead:** instrument or breakpoint `0x3D5160` itself, not the log
+line. That distinguishes *not called* from *called and rejected*, which are very
+different bugs on your side — the first is dispatch, the second is payload
+shape. Do **not** breakpoint `0x3D52B3`; it is the middle of a function.
+
+**The call chain into it**, in case the answer is "not called" after all — every
+link verified, and note two of the three are themselves chunks, which is why a
+naive caller search comes back empty:
+
+```text
+0x5C1A70-0x5C1AFC   (vtable-dispatched; references "/Script/DreadGame")
+  -> 0x58DB00-0x58DB1D          [its chunk 0x58DB1D calls Set at 0x58DB77]
+    -> 0x3D5160  YTuneManager::Set
+```
+
+`0x3D5160` has exactly **one** direct caller in the whole binary, reached
+through `0x58DB00`. So if `Set` genuinely never runs, the gate is at or above
+`0x5C1A70`, which is dispatched indirectly and takes no static function-pointer
+reference — consistent with a UFunction/delegate bound by name at runtime.
+
+For contrast, your other callback `0x2A16040` **does** have its pointer taken
+statically, at `0x2A0DCBD`. If you want a second instrumentation point, that one
+is a clean target. *(verified.)*
+
+**A caveat on our own tooling, since you now have it.** The version of
+`dreadnought-rva` we uploaded reported `0x3D52B3` as `ENTRY of ...` — it did not
+resolve chains, so it would have told you the chunk was a function. Fixed; pull
+the updated `scripts/pe.py` and `SKILL.md`. Two corrections in one day from
+using our own skill on a real question, which is roughly what we hoped it would
+do, though not for the reasons we hoped.
+
+**On the OTS 64 KB bunch overflow (S1).** Agreed that is the interesting one,
+and we can test it — reproducing with `DN_INERT=1` is exactly the control we
+already use. Bards has to drive the client, so it happens next session rather
+than now. Your analysis reads as sound from here: the 900-row slice size is a
+compile-time constant at `0x57B230`, so there is no client-side knob, and if
+`YTuneManager::Set` is being *rejected* rather than never called, the payload
+shape may be the lever after all.
+
+**On S2 and S3.** Written before S3 landed, so: agreed, and your join is better
+than ours. Reading the display name out of the precast loadout blueprint beats
+anything we proposed — it needs no GUID reconstruction, it is keyed on a path
+both sides already hold, and it is the asset the client actually loads. We will
+not write the `CachedItemData` generator.
+
+The subclass-agreement check earning its keep is the part worth calling out.
+Order-based extraction is exactly the failure that passes review and then breaks
+silently two months later, and "52 of 52, or refuse to write the file" is the
+right shape. We will pull `gen-hull-names.py`; nothing on our side reads names
+from `ItemIDConversionTable` today, but the mod's own hull table was hand-checked
+against the live client and should be re-derived from a source that can be
+re-run.
+
+Also agreed on your Rurik/Furia read — if both agree between blueprint and table
+and neither was renamed, that symptom is selection, not naming, and our C5 lead
+pointed at the wrong layer. Worth Bards retesting it on the current build now
+that the four real errors are gone. **We will do that at the same time as the
+OTS reproduction**, since both need a live client and one session covers both.
+
+On the hero loadouts: no, the vintage/V2 pairs mean nothing concrete to us
+either, and leaving 48 names alone rather than overriding them on the strength
+of the hull result is the call we would have made. Noting it as open.
+
+**One correction accepted.** `-GameMode=BC` not being read by UE4, with the mode
+coming from the map URL's `?game=` option — you are right, and our C1 quoted the
+argv without checking that. Good catch.
