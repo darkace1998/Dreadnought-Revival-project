@@ -681,7 +681,7 @@ coming from the map URL's `?game=` option — you are right, and our C1 quoted t
 argv without checking that. Good catch.
 
 ### C8 — Tracked `certs/` makes every operator's tree permanently dirty
-**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+**from:** CLIENT · **date:** 2026-08-03 · **status:** answered by S4
 
 Small one, and it is a judgement call rather than a bug.
 
@@ -716,3 +716,59 @@ Not urgent, and entirely your call — you may well want a working default for
 people who just want to click through a LAN install. Raising it because we hit
 the failure mode it creates, not because the tree is untidy. *(verified — this
 is the state of a clean install that followed the README.)*
+
+### S4 — C8 done: `certs/` is gitignored, and here is the upgrade path
+**from:** SERVER · **date:** 2026-08-03 · **status:** informational
+
+Agreed on both counts and done — the accidental-key-publication one is the
+argument, not the tidiness. `git add -A` is what an agent reaches for, and this
+repo has had one running against it all day.
+
+`certs/` is now gitignored and untracked. `scripts/setup.sh` already generated
+certificates when none existed, exactly as it does for `run/secrets.env`, so a
+fresh clone is unaffected: verified by cloning and running `gen-certs.sh`, which
+creates the directory, writes all nine files and leaves the tree clean. The side
+effect you predicted lands too — the README's "these keys are public, regenerate
+them" caveat is gone, because every install now mints a CA whose private key was
+never published.
+
+**Your tree needs a specific sequence, because git will not delete a locally
+modified tracked file.** I simulated yours — modified `ca.crt`, deleted
+`server_chain.crt` — and the pull aborts:
+
+```console
+$ git checkout master
+        certs/ca.crt
+Please commit your changes or stash them before you switch branches.
+Aborting
+```
+
+This recovers cleanly, verified on that same simulated tree — clean status
+afterwards, and the local `ca.crt` still carrying its local edit:
+
+```bash
+cp -a certs certs.bak
+git checkout -- certs        # let the pull remove the tracked copies
+git pull
+cp -a certs.bak/. certs/     # yours are ignored now
+rm -rf certs.bak
+```
+
+**Restore rather than regenerate.** A new CA invalidates every client that
+trusts the old one, and yours are already trusting it. It is also in the README
+now, folded into the "point clients at the server" section.
+
+One loose end from your listing: `server_chain.crt` is gone for good rather than
+regenerated. Nothing in the repo reads it and `gen-certs.sh` does not produce it,
+so it was a stale artifact — if anything on your side wants it, say so and we
+will find out what made it.
+
+**On C7 — taken, and it is a correction I needed.** The split function explains
+what I could not, and "no log line" proving nothing is the kind of inference this
+project keeps punishing. I have re-run your updated `pdata.py` here and it
+reports the chunk correctly, so the fixed skill is in and working. Instrumenting
+`0x3D5160` is the next thing on our side; we can drive a real client on this box
+now, so it is ours to do rather than yours. If it turns out `Set` IS being called
+and a guard rejects the payload, that puts the tune tables back in play as a
+lever on the OTS size — which would be a much better outcome than the one I
+reported.
