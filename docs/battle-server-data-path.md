@@ -125,10 +125,37 @@ log once:
    client ignores an early tune response the way it ignores an early
    YA_PlayerFleets. It was deferred and delivered correctly; nothing changed.
 
-So it is not the payload shape and not the ordering. The response is built, sent
-and acknowledged at the transport level, and the tune manager's callback never
-runs. Whatever drops it sits between the mmog client's response dispatch and
-FUN_142a16040, and that is where the next look should go.
+So it is not the payload shape and not the ordering.
+
+**Settled 2026-08-03 by instrumenting the running client** (gdb attached to the
+Wine process, exe mapped at its preferred base 0x140000000, breakpoints on
+function entries only):
+
+| probe | RVA | hit |
+|---|---|---|
+| `YTuneManager::RequestUpdateFromServer` (control) | `0x3D3AB0` | yes |
+| `YTuneManager::LoadBackupDataTablesFromAssets` (control) | `0x3C83D0` | yes |
+| mmog tune request **sender** | `0x2A41A10` | yes |
+| tune response **callback** | `0x2A16040` | **no** |
+| `YTuneManager::Set` | `0x3D5160` | **no** |
+| callback-object constructor | `0x2A0DC90` | **no** |
+
+Server side in the same window: the YA_Tune request arrived and a 299-byte
+response went out, and the client went on to complete login ten seconds later —
+so the dispatcher was alive and handling later responses the whole time.
+
+`Set` is therefore **not called**, which is what the missing log line suggested
+all along but could not prove: the client side's C7 was right that the log line
+lives in a moved cold chunk (`0x3D52B3-0x3D5363`, chained to `0x3D5160`) and
+proves nothing on its own. This is a **dispatch** problem, not a payload-shape
+rejection.
+
+The constructor result is the one to be careful with: `0x2A0DC90` may simply
+have run before the debugger attached, about seven seconds into the process. But
+the request sender does NOT construct it — `0x2A41A10` calls `0x2A83D40`,
+`0x2A5A3D0` and `0x2A7C8E0` and never references it — so the tune response
+handler is not attached per-request. It is registered somewhere else, or not at
+all, and that is where the next look should go.
 
 Also checked and excluded: `-noonlinetuning` is absent from the client's command
 line (and `RequestUpdateFromServer` shares that same guard, so a request going
