@@ -263,6 +263,17 @@ var migrations = []string{
 		PRIMARY KEY (user_id, slot),
 		FOREIGN KEY (user_id) REFERENCES player_state(user_id) ON DELETE CASCADE
 	)`,
+	// The battle server behind a match, and when it announced it was hosting.
+	//
+	// instance_id was previously only written to the log line the matchmaker
+	// prints when a match forms, so mmogbrain had no handle on the instance it
+	// had just asked for and could not ask the control plane anything about it
+	// afterwards. server_ready_at is what that handle buys: the matchmaker polls
+	// the instance and stamps this when it reports ready, and the YA_Connect
+	// travel push waits for the stamp instead of for a fixed guess at how long a
+	// map takes to load.
+	`ALTER TABLE matches ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE matches ADD COLUMN server_ready_at TEXT`,
 }
 
 func Open(path string) (*sql.DB, error) {

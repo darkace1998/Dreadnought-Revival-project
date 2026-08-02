@@ -17,8 +17,12 @@ func sweepTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	for _, ddl := range []string{
+		// instance_id and server_ready_at mirror the real migrations: the
+		// readiness poll selects on both, and a schema without them makes every
+		// test in this package that runs a tick silently skip it.
 		`CREATE TABLE matches (id TEXT PRIMARY KEY, game_mode TEXT, map TEXT, server_ip TEXT,
-		 server_port INTEGER, status TEXT, created_at TEXT, started_at TEXT, ended_at TEXT)`,
+		 server_port INTEGER, status TEXT, created_at TEXT, started_at TEXT, ended_at TEXT,
+		 instance_id TEXT NOT NULL DEFAULT '', server_ready_at TEXT)`,
 		`CREATE TABLE match_slots (match_id TEXT, user_id TEXT, team INTEGER,
 		 joined_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (match_id, user_id))`,
 	} {

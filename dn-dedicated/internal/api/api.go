@@ -57,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("POST /instances", s.requireKey(s.createInstance))
 	mux.HandleFunc("GET /instances", s.listInstances)
+	mux.HandleFunc("GET /instances/{id}", s.getInstance)
 	mux.HandleFunc("DELETE /instances/{id}", s.requireKey(s.stopInstance))
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /metrics", s.metrics)
@@ -228,12 +229,48 @@ func (s *Server) listInstances(w http.ResponseWriter, _ *http.Request) {
 			"players":    inst.Players,
 			"started_at": inst.StartedAt.Format(time.RFC3339),
 			"pid":        inst.PID(),
+			"ready":      inst.Ready(),
+			"running":    inst.Running(),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"instances":  views,
 		"count":      len(views),
 		"ports_used": s.Manager.PortsInUse(),
+	})
+}
+
+// getInstance answers for a single instance, and exists for one caller:
+// mmogbrain, which has to decide when to push YA_Connect.
+//
+// YA_Connect makes the client travel immediately, so pushing it before the map
+// has loaded drops the player on a server that is not accepting connections
+// yet. Without a readiness signal mmogbrain can only guess, which is what
+// DN_CONNECT_PUSH_DELAY is -- a fixed wait long enough for the slowest launch,
+// and dead time on the "Battle server starting" screen for every launch faster
+// than that.
+//
+// It is a read route, so it is not behind requireKey, exactly like GET
+// /instances: neither exposes anything a player could not learn by joining.
+func (s *Server) getInstance(w http.ResponseWriter, r *http.Request) {
+	inst, ok := s.Manager.Get(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "instance not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"id":         inst.ID,
+		"match_id":   inst.MatchID,
+		"ip":         s.ServerIP,
+		"port":       inst.Port,
+		"game_mode":  inst.GameMode,
+		"map":        inst.MapName,
+		"map_path":   inst.MapPath,
+		"players":    inst.Players,
+		"started_at": inst.StartedAt.Format(time.RFC3339),
+		"pid":        inst.PID(),
+		"ready":      inst.Ready(),
+		"running":    inst.Running(),
 	})
 }
 

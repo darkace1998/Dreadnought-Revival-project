@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -281,10 +282,116 @@ func (m *Matchmaker) sweepStaleMatches() error {
 	return nil
 }
 
+// pollServerReadiness asks the control plane whether the battle server behind
+// each young active match has finished loading, and stamps matches.server_ready_at
+// the first time it says yes.
+//
+// This is what lets the YA_Connect travel push stop guessing. YA_Connect makes
+// the client travel the instant it arrives, so pushing it early lands the player
+// on a server that is not accepting connections; DN_CONNECT_PUSH_DELAY covered
+// that by waiting long enough for the slowest launch, which is dead time on the
+// "Battle server starting" screen for every launch faster than that.
+//
+// Readiness lives here, on the matchmaker's own goroutine, rather than in the
+// connection handler: the handler runs per client frame and must not make
+// blocking HTTP calls, and one poller for all matches is cheaper than one per
+// connected player.
+//
+// A control plane that does not report readiness (game-manager has no per-
+// instance route at all) simply never sets the stamp, and the push falls back to
+// the delay. That fallback is why a failure here is logged at debug and not
+// treated as an error.
+func (m *Matchmaker) pollServerReadiness() {
+	if m.GameMgrURL == "" {
+		return
+	}
+	cutoff := time.Now().UTC().Add(-MaxMatchLifetime).Format(time.RFC3339)
+	rows, err := m.DB.Query(`
+		SELECT id, instance_id FROM matches
+		WHERE status='active' AND server_ready_at IS NULL AND instance_id != ''
+		  AND datetime(created_at) >= datetime(?)`, cutoff)
+	if err != nil {
+		m.Log.WithError(err).Debug("query matches awaiting readiness")
+		return
+	}
+	type pending struct{ matchID, instanceID string }
+	var waiting []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.matchID, &p.instanceID); err != nil {
+			break
+		}
+		waiting = append(waiting, p)
+	}
+	_ = rows.Close()
+
+	for _, p := range waiting {
+		ready, err := m.instanceReady(p.instanceID)
+		if err != nil {
+			m.Log.WithError(err).WithField("instance_id", p.instanceID).
+				Debug("readiness poll failed; YA_Connect will fall back to the fixed delay")
+			continue
+		}
+		if !ready {
+			continue
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		if _, err := m.DB.Exec(
+			`UPDATE matches SET server_ready_at=? WHERE id=? AND server_ready_at IS NULL`,
+			now, p.matchID); err != nil {
+			m.Log.WithError(err).WithField("match_id", p.matchID).Warn("record server readiness")
+			continue
+		}
+		m.Log.WithFields(logrus.Fields{
+			"match_id":    p.matchID,
+			"instance_id": p.instanceID,
+		}).Info("battle server reports ready; client may travel now")
+	}
+}
+
+// instanceReady reads one instance's status from the control plane.
+//
+// A 404 is not an error the caller should retry around forever, but it is not
+// readiness either -- the instance may simply be gone -- so it reports false and
+// the stale-match sweep handles the rest. A body with no "ready" key means the
+// control plane does not implement readiness, which is reported as an error so
+// the caller logs it once per tick at debug and keeps using the fallback.
+func (m *Matchmaker) instanceReady(instanceID string) (bool, error) {
+	req, err := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/instances/%s", m.GameMgrURL, url.PathEscape(instanceID)), nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("X-Internal-Key", m.InternalKey)
+	resp, err := gameManagerHTTPClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("instance status returned %d", resp.StatusCode)
+	}
+	var view map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+		return false, fmt.Errorf("decode instance status: %w", err)
+	}
+	ready, ok := view["ready"].(bool)
+	if !ok {
+		return false, fmt.Errorf("instance status has no ready field")
+	}
+	return ready, nil
+}
+
 func (m *Matchmaker) tick() error {
 	if err := m.sweepStaleMatches(); err != nil {
 		m.Log.WithError(err).Warn("stale match sweep failed")
 	}
+	m.pollServerReadiness()
 
 	// Group by game_mode and tier_min to match players within compatible tier ranges.
 	// Players with the same tier_min are treated as compatible for matchmaking.
@@ -406,8 +513,8 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	matchID := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := m.DB.Exec(
-		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at) VALUES(?,?,?,?,?,?,?,?)`,
-		matchID, gameMode, mapName, serverIP, serverPort, "active", now, now,
+		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,instance_id) VALUES(?,?,?,?,?,?,?,?,?)`,
+		matchID, gameMode, mapName, serverIP, serverPort, "active", now, now, instanceID,
 	); err != nil {
 		return fmt.Errorf("insert match %s: %w", matchID, err)
 	}

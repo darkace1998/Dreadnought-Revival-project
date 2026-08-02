@@ -777,10 +777,8 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 	// this one has to stay reachable on later passes while the delay runs down.
 	if state.serverStartingPushed && !state.connectPushed {
 		status := currentMmogMatchmakingStatus(state.playerPID)
-		ready := status.state == "matched" && status.serverIP != "" &&
-			!status.createdAt.IsZero() &&
-			time.Since(status.createdAt) >= mmogConnectPushDelay
-		if ready {
+		open, gate := connectPushGateOpen(status)
+		if open {
 			pushID, err := uuid.NewRandom()
 			if err != nil {
 				log.WithError(err).Warn("mmog: failed to generate connect push id")
@@ -796,11 +794,43 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 					"remote": remote, "pid": state.playerPID,
 					"connect": net.JoinHostPort(status.serverIP, strconv.Itoa(int(status.serverPort))),
 					"team":    status.team, "match": status.matchID,
+					// Which gate opened. "ready" means the battle server told us
+					// it was hosting; "delay" means we waited out
+					// DN_CONNECT_PUSH_DELAY without ever hearing that, so the
+					// client may still be arriving early.
+					"gate": gate,
 				}).Info("mmog: pushed YA_Connect, client should now travel to the battle server")
 			}
 		}
 	}
 	return nil
+}
+
+// connectPushGateOpen decides whether the client may be told to travel, and
+// reports which gate opened for the log line.
+//
+// There are two ways to know the battle server will accept the client:
+//
+//   - "ready": the matchmaker polled the control plane and it reported the
+//     engine had announced it was hosting (matches.server_ready_at). This is the
+//     real signal, and it lets the client travel as soon as the server is up --
+//     seconds on a warm host.
+//   - "delay": DN_CONNECT_PUSH_DELAY has run out without any such report. This
+//     is the original behaviour and only a guess at how long a map takes to
+//     load, so the client may still arrive early. It stays because a control
+//     plane with no per-instance readiness route -- game-manager has none --
+//     would otherwise never let anyone travel at all.
+func connectPushGateOpen(status mmogMatchmakingStatus) (bool, string) {
+	if status.state != "matched" || status.serverIP == "" {
+		return false, ""
+	}
+	if status.serverReady {
+		return true, "ready"
+	}
+	if !status.createdAt.IsZero() && time.Since(status.createdAt) >= mmogConnectPushDelay {
+		return true, "delay"
+	}
+	return false, ""
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *protocol.StreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {

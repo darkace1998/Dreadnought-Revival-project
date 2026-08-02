@@ -245,6 +245,13 @@ type mmogMatchmakingStatus struct {
 	// createdAt is when the match was formed, used to hold YA_Connect back
 	// until the battle server has had time to come up.
 	createdAt time.Time
+	// serverReady is set once the control plane has confirmed the battle server
+	// finished loading its map (matches.server_ready_at, stamped by the
+	// matchmaker's readiness poll). When it is true the YA_Connect push does not
+	// wait out mmogConnectPushDelay -- that delay only exists because there used
+	// to be nothing better than a guess. A control plane that does not report
+	// readiness leaves this false forever and the guess still applies.
+	serverReady bool
 }
 
 func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payload []byte) []byte {
@@ -364,17 +371,19 @@ func currentMmogMatchmakingStatus(playerPID string) mmogMatchmakingStatus {
 	// long since exited. Seen live against a match that was a day old.
 	cutoff := time.Now().UTC().Add(-matchmaker.MaxMatchLifetime).Format(time.RFC3339)
 	var createdAt string
+	var readyAt sql.NullString
 	err := database.QueryRow(`
-		SELECT m.id,m.server_ip,m.server_port,m.game_mode,m.map,ms.team,m.created_at
+		SELECT m.id,m.server_ip,m.server_port,m.game_mode,m.map,ms.team,m.created_at,m.server_ready_at
 		FROM match_slots ms
 		JOIN matches m ON ms.match_id=m.id
 		WHERE ms.user_id=? AND m.status='active' AND datetime(m.created_at) >= datetime(?)
 		ORDER BY ms.joined_at DESC
 		LIMIT 1
 	`, playerPID, cutoff).Scan(&matched.matchID, &matched.serverIP, &matched.serverPort,
-		&matched.gameMode, &matched.mapName, &matched.team, &createdAt)
+		&matched.gameMode, &matched.mapName, &matched.team, &createdAt, &readyAt)
 	if err == nil {
 		matched.state = "matched"
+		matched.serverReady = readyAt.Valid && readyAt.String != ""
 		if parsed, parseErr := time.Parse(time.RFC3339, createdAt); parseErr == nil {
 			matched.createdAt = parsed
 		}

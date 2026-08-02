@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,6 +42,43 @@ type Instance struct {
 	// fallback duration.
 	stopCh       chan struct{}
 	stopSignaled bool
+
+	// ready is set the first time the engine's own output says it is hosting.
+	//
+	// A POINTER to the flag, not the flag itself, and not a sync.Once or a
+	// channel-plus-Once: List() hands out Instance by VALUE, so anything with a
+	// noCopy in it makes every caller of List() a vet failure, and a copied flag
+	// would freeze at whatever it was when the snapshot was taken. Through the
+	// pointer the copy still observes the live process.
+	ready *atomic.Bool
+}
+
+// markReady records that the battle server announced it is hosting. Safe to
+// call from the log-reading goroutines of both streams, and idempotent.
+func (i *Instance) markReady() {
+	if i.ready != nil {
+		i.ready.Store(true)
+	}
+}
+
+// Ready reports, without blocking, whether the engine has announced it is
+// hosting the match.
+//
+// The signal is the engine's own line
+//
+//	LogGameMode: Match State Changed from EnteringMap to WaitingToStart
+//
+// which the spawned process writes to stdout and instanceLogWriter reads. It is
+// verified -- it is what a healthy launch actually prints, and the argv comment
+// above records the same sequence.
+//
+// mmogbrain polls this through GET /instances/{id} to decide when to push
+// YA_Connect. Before it existed the push could only wait out a fixed
+// DN_CONNECT_PUSH_DELAY, which is dead time on the "Battle server starting"
+// screen whenever the map loads faster than the guess, and too early whenever it
+// does not.
+func (i *Instance) Ready() bool {
+	return i.ready != nil && i.ready.Load()
 }
 
 // Spawner manages Wine + DreadGame-Win64-Shipping.exe dedicated server instances.
@@ -102,6 +140,7 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 		ConfigDir: configDir,
 		StartedAt: time.Now(),
 		stopCh:    make(chan struct{}),
+		ready:     new(atomic.Bool),
 	}
 
 	// How the engine is actually told to host, verified by running it by hand:
@@ -164,8 +203,8 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 	// leaves no trace beyond "exit status 3". The engine's own detailed log
 	// still goes to its Saved/Logs directory; this is just enough to see a
 	// startup failure.
-	cmd.Stdout = newInstanceLogWriter(s.log, inst.ID, "stdout")
-	cmd.Stderr = newInstanceLogWriter(s.log, inst.ID, "stderr")
+	cmd.Stdout = newInstanceLogWriter(s.log, inst.ID, "stdout", inst.markReady)
+	cmd.Stderr = newInstanceLogWriter(s.log, inst.ID, "stderr", inst.markReady)
 
 	if err := cmd.Start(); err != nil {
 		// A failed spawn used to be a warning, after which the instance was
@@ -184,6 +223,13 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 			return nil, fmt.Errorf("launch battle server %q: %w", s.gameBinary, err)
 		}
 		s.log.WithError(err).Warn("game binary launch failed; DN_ALLOW_MOCK_INSTANCES is set, recording instance as mock")
+		// A mock has no process and so will never print the engine's hosting
+		// line. Report it ready immediately: the point of a mock is to exercise
+		// the rest of the stack, and leaving it permanently not-ready would make
+		// every mock match wait out DN_CONNECT_PUSH_DELAY before the client was
+		// told to travel to a server that does not exist. dn-dedicated's mock
+		// does the same.
+		inst.markReady()
 	}
 
 	inst.Cmd = cmd
@@ -345,6 +391,19 @@ func (s *Spawner) List() []Instance {
 	return list
 }
 
+// Get returns one instance by id. Like List it returns a COPY, which is safe
+// because the only mutable field a caller reads through it, ready, is a pointer
+// shared with the live instance.
+func (s *Spawner) Get(id string) (Instance, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	inst, ok := s.instances[id]
+	if !ok {
+		return Instance{}, false
+	}
+	return *inst, true
+}
+
 func (s *Spawner) registerWithMaster(inst *Instance) (string, error) {
 	body, err := json.Marshal(map[string]interface{}{
 		"name":        fmt.Sprintf("Match-%s", inst.MatchID[:8]),
@@ -482,11 +541,33 @@ type instanceLogWriter struct {
 	log        *logrus.Logger
 	instanceID string
 	stream     string
-	buf        []byte
+	// onReady fires on the first line that says the match is hosting. This is
+	// the only place that signal exists: the engine reports nothing over the
+	// network that this process can query.
+	onReady func()
+	buf     []byte
 }
 
-func newInstanceLogWriter(log *logrus.Logger, instanceID, stream string) *instanceLogWriter {
-	return &instanceLogWriter{log: log, instanceID: instanceID, stream: stream}
+func newInstanceLogWriter(log *logrus.Logger, instanceID, stream string, onReady func()) *instanceLogWriter {
+	return &instanceLogWriter{log: log, instanceID: instanceID, stream: stream, onReady: onReady}
+}
+
+// readyMarkers are the engine lines that mean the map is loaded and the match is
+// hosting. "WaitingToStart" is the earliest point the server is live; the
+// InProgress transition follows it and is matched too so readiness is still
+// detected if the first line is missed. Kept identical to dn-dedicated's list.
+var readyMarkers = []string{
+	"Match State Changed from EnteringMap to WaitingToStart",
+	"Match State Changed from WaitingToStart to InProgress",
+}
+
+func isReadyLine(line string) bool {
+	for _, marker := range readyMarkers {
+		if strings.Contains(line, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *instanceLogWriter) Write(p []byte) (int, error) {
@@ -503,6 +584,9 @@ func (w *instanceLogWriter) Write(p []byte) (int, error) {
 				"instance_id": w.instanceID,
 				"stream":      w.stream,
 			}).Info("battle server: " + line)
+		}
+		if w.onReady != nil && isReadyLine(line) {
+			w.onReady()
 		}
 	}
 	// Bound the buffer so a stream with no newlines cannot grow without limit.

@@ -474,6 +474,29 @@ func (i *Instance) ExitErr() error {
 	return i.err
 }
 
+// Ready reports, without blocking, whether the engine has announced it is
+// hosting the match.
+//
+// This is the same signal WaitReady waits on -- the engine's own
+// "Match State Changed from EnteringMap to WaitingToStart" line, scraped from
+// the process output by logWriter. It deliberately does NOT consult
+// portExclusivelyHeld: that probe works by trying to bind the port itself, and
+// an accessor an HTTP caller can poll must not be binding the battle server's
+// UDP port over and over. The port check stays where it is safe, inside
+// WaitReady's own loop.
+//
+// The API exposes this so mmogbrain can hold its YA_Connect travel push until
+// the server is genuinely accepting players, instead of guessing with a fixed
+// delay.
+func (i *Instance) Ready() bool {
+	select {
+	case <-i.ready:
+		return true
+	default:
+		return false
+	}
+}
+
 // Running reports whether the process is still alive.
 func (i *Instance) Running() bool {
 	select {

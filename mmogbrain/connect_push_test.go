@@ -124,3 +124,65 @@ func TestConnectPushDelayIgnoresGarbage(t *testing.T) {
 		t.Errorf("delay = %s, want the 75s default when the value does not parse", got)
 	}
 }
+
+// The travel push has two gates and they are not interchangeable: "ready" is a
+// fact reported by the battle server, "delay" is a guess. A match that has just
+// formed must open neither.
+func TestConnectPushGateWaitsWithoutEvidence(t *testing.T) {
+	open, gate := connectPushGateOpen(mmogMatchmakingStatus{
+		state:     "matched",
+		matchID:   "match-123",
+		serverIP:  "10.0.0.73",
+		createdAt: time.Now(),
+	})
+	if open {
+		t.Fatalf("gate %q opened for a match formed a moment ago", gate)
+	}
+}
+
+// The point of the readiness poll: when the control plane says the engine is
+// hosting, the client travels then, not after DN_CONNECT_PUSH_DELAY. Everything
+// between those two moments used to be dead time on "Battle server starting".
+func TestConnectPushGateOpensImmediatelyOnReportedReadiness(t *testing.T) {
+	open, gate := connectPushGateOpen(mmogMatchmakingStatus{
+		state:       "matched",
+		matchID:     "match-123",
+		serverIP:    "10.0.0.73",
+		createdAt:   time.Now(),
+		serverReady: true,
+	})
+	if !open {
+		t.Fatal("gate stayed shut although the battle server reported ready")
+	}
+	if gate != "ready" {
+		t.Errorf("gate = %q, want %q", gate, "ready")
+	}
+}
+
+// The fallback has to survive: game-manager implements no readiness route, so
+// serverReady is false forever there and only the elapsed delay can let the
+// player travel.
+func TestConnectPushGateStillFallsBackToTheDelay(t *testing.T) {
+	open, gate := connectPushGateOpen(readyStatus())
+	if !open {
+		t.Fatal("gate stayed shut after the delay elapsed")
+	}
+	if gate != "delay" {
+		t.Errorf("gate = %q, want %q", gate, "delay")
+	}
+}
+
+// Readiness is about the engine, not about having an address. A match with no
+// server address must never produce a travel push, however ready it claims to
+// be -- the client would travel to ":0".
+func TestConnectPushGateRejectsAnAddresslessMatch(t *testing.T) {
+	open, _ := connectPushGateOpen(mmogMatchmakingStatus{
+		state:       "matched",
+		matchID:     "match-123",
+		createdAt:   time.Now().Add(-2 * mmogConnectPushDelay),
+		serverReady: true,
+	})
+	if open {
+		t.Fatal("gate opened for a match with no server address")
+	}
+}

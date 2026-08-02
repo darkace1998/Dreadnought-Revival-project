@@ -177,6 +177,33 @@ func main() {
 		})
 	}).Methods(http.MethodGet)
 
+	// One instance's status. mmogbrain polls this to decide when the client may
+	// be told to travel: YA_Connect makes it travel immediately, so pushing
+	// before "ready" drops the player on a server still loading its map. The
+	// alternative -- and what happens when this route is missing -- is waiting
+	// out a fixed DN_CONNECT_PUSH_DELAY, which is a guess.
+	//
+	// A read route, so it sits outside the internal-key-guarded subrouter for
+	// the same reason GET /instances does.
+	r.HandleFunc("/instances/{id}", func(w http.ResponseWriter, r *http.Request) {
+		inst, ok := sp.Get(mux.Vars(r)["id"])
+		if !ok {
+			http.Error(w, `{"error":"instance not found"}`, http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"id":         inst.ID,
+			"match_id":   inst.MatchID,
+			"ip":         serverIP,
+			"port":       inst.Port,
+			"game_mode":  inst.GameMode,
+			"map":        inst.Map,
+			"players":    inst.Players,
+			"started_at": inst.StartedAt.Format(time.RFC3339),
+			"ready":      inst.Ready(),
+		})
+	}).Methods(http.MethodGet)
+
 	// Stop a specific instance
 	write.HandleFunc("/instances/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]

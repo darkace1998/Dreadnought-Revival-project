@@ -109,12 +109,19 @@ fi
 # a second client. Raise it for real play.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
 
-# How long mmogbrain holds YA_Connect back after a match forms. YA_Connect makes
-# the client travel immediately, so this has to cover the battle server's load
-# time or the client arrives before it is accepting connections. Verified at 45s
-# on this host; the same map reached WaitingToStart in 4s with a warm page cache
-# and about a minute cold, so tune it to your hardware. It is otherwise dead
-# time on the "Battle server starting" screen.
+# FALLBACK for how long mmogbrain holds YA_Connect back after a match forms.
+#
+# The normal path no longer uses it: the matchmaker polls the control plane's
+# GET /instances/<id> and pushes YA_Connect as soon as the battle server reports
+# it is hosting, which is usually a few seconds. This value only applies when
+# that readiness never arrives -- an older game-manager, a control plane without
+# the route, or an instance whose engine never printed the hosting line.
+#
+# It still has to cover the battle server's load time, because YA_Connect makes
+# the client travel immediately. Verified at 45s on this host; the same map
+# reached WaitingToStart in 4s with a warm page cache and about a minute cold.
+# Which gate opened is in the mmogbrain log line for the push, as gate=ready or
+# gate=delay.
 export DN_CONNECT_PUSH_DELAY="${DN_CONNECT_PUSH_DELAY:-45s}"
 
 # Each service defaults DB_PATH to a bare filename, so which database it opens
