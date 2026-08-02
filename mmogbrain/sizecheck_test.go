@@ -105,7 +105,10 @@ var targetSizes = map[string]int{
 	// numeric strings, matching the rest of this payload family).
 	// Was 1220/4040. Now 857: progression tracks only the 10 validated T1+T2
 	// tech-tree ships (see techTreeShips).
-	"YA_GetPlayerProgression": 1097,
+	// Was 1097, +56: "owned" -> "m_isOwned" on every ship row (the old name is
+	// absent from the client binary), and PurchasesData entries changed from
+	// int32 to numeric strings so the client can actually read them.
+	"YA_GetPlayerProgression": 1153,
 	"YA_GetPlayerPurchases":   100,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the

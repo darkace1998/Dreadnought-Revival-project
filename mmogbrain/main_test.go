@@ -1249,7 +1249,11 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 	if progressionEnd > len(progression) {
 		progressionEnd = len(progression)
 	}
-	if !bytes.Contains(progression[progressionMarker:progressionEnd], protocol.AppendBoolField(nil, "owned", true)) {
+	// m_isOwned, not "owned": the latter appears ZERO times in the client
+	// binary (checked with `strings -n 2`), while m_isOwned appears five and is
+	// what this codebase already uses for module ownership. This test pinned
+	// the invented name.
+	if !bytes.Contains(progression[progressionMarker:progressionEnd], protocol.AppendBoolField(nil, "m_isOwned", true)) {
 		t.Fatal("YA_GetPlayerProgression does not mark purchased Trafalgar as owned")
 	}
 }

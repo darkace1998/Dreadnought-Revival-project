@@ -1788,7 +1788,12 @@ func appendMmogShipProgression(b []byte, stack []int, ship mmogShipSeed) ([]byte
 	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "xp", "0")
 	b = protocol.AppendStringField(b, "tier", "1")
-	b = protocol.AppendBoolField(b, "owned", ship.owned)
+	// "owned" does not exist in the client binary -- zero occurrences as a
+	// standalone wide string, checked with `strings -n 2` (the 4-char default
+	// hides it). The property the client actually carries is m_isOwned, which
+	// this file already uses for module entries. Same invented-name class as
+	// the gl/ob currency fields.
+	b = protocol.AppendBoolField(b, "m_isOwned", ship.owned)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -3392,9 +3397,16 @@ func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerPurchases")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	// Numeric STRINGS, not int32. Array entries go through the same restrictive
+	// double/int64/string union as every other scalar the client reads, so an
+	// int32 entry reads as 0 -- see int32SliceToStrings, which exists for
+	// exactly this on the fleet payload's shipIds. This list is how the client
+	// learns which items the player owns, so every entry reading as 0 meant it
+	// learned nothing: unlocks were charged and recorded, and the ship stayed
+	// locked and re-unlockable.
 	b, stack = protocol.AppendArrayStart(b, stack, "PurchasesData")
 	for _, itemID := range persistedMmogPlayerPurchaseItemIDs(playerPID) {
-		b = protocol.AppendUnnamedInt32Field(b, itemID)
+		b = protocol.AppendUnnamedStringField(b, strconv.Itoa(int(itemID)))
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
