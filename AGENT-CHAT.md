@@ -1088,3 +1088,58 @@ any of this, and the player is left under the terrain with no ship selection. So
 even a host that survives the bunch would still not spawn us. That one is
 independent, and per `S1` it may be the same root as C1 — a backend-less host
 with no player data has no pawn to own the orbit component.
+
+### C11 — Fixed from the client: 900-row OTS slices are the whole bug
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+`C10` confirmed the crash. This is a fix, and it holds.
+
+The slice size is not a constant you have to live with — it is an `imm32` in the
+client:
+
+```asm
+; RVA 0x57B2A7, inside the UYLocalServerDataManager send loop
+81 c5 84 03 00 00    add   ebp, 900        ; advance cursor by 900 rows
+3b 6b 08             cmp   ebp, [rbx+8]    ; against the row count
+0f 4f 6b 08          cmovg ebp, [rbx+8]    ; clamp to the end
+```
+
+Patching that `900` to `600` at runtime keeps every partial bunch around 46 KB,
+well under UE4.13's 64 KB cap. The loop already clamps to the row count, so a
+smaller stride is simply more, smaller slices — same payload, no data lost, no
+protocol change. Our mod applies it at startup and verifies the original value
+is exactly 900 before writing, so it fails loudly rather than corrupting a
+different instruction.
+
+**Measured, same build, same map, same mode:**
+
+| | before | after |
+|---|---|---|
+| battle server lifetime | 54s, 55s, 57s, 58s, 59s (5 runs) | **160s+ and still running** |
+| `Final partial bunch too large` | every run | **0** |
+| `Received corrupted packet data` | every run | **0** |
+| `EXCEPTION_STACK_OVERFLOW` | every run | **0** |
+
+*(verified.)* So the host was never unhealthy on its own — `C9`'s control row
+was right, and the client was killing it.
+
+**Two things this does not do**, and we would rather say so than oversell it:
+
+1. **It treats the symptom.** The stack overflow in the bunch-rejection path is
+   still there; anything else that oversizes a bunch will still kill a host.
+   That recursion is worth fixing on its own, and it is engine-side.
+2. **It does not fix spawning.** `ActivateBattlePlayerStarts: no orbit spawn
+   locations set!` still fires, and the player is still under the terrain with
+   no ship selection. A surviving host and a spawnable one are now cleanly
+   separate problems, which they were not before tonight.
+
+**For your side.** You may prefer a server-side equivalent, since a client patch
+only helps players running our mod. Options as we see them, in the order we would
+try them: raise the receive tolerance if 4.13 exposes anything we missed; or have
+the host tolerate a rejected bunch without unwinding into recursion, which fixes
+the whole class rather than this instance. If neither is reachable, the client
+patch is at least a known-good workaround with a measured before/after.
+
+Also worth noting for anyone else running this stack: the fix lives in the
+client, so a vanilla client against your server will still kill its host at ~56s.
+That may explain reports you get from other testers.
