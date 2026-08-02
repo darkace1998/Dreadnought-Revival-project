@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -130,5 +131,41 @@ func TestPollServerReadinessSkipsMatchesItCannotOrNeedNotPoll(t *testing.T) {
 	}
 	if v := readyAt(t, database, "already-ready"); v.String != "2026-08-02T00:00:00Z" {
 		t.Fatalf("existing stamp was overwritten: %q", v.String)
+	}
+}
+
+// A player who queues for any mode has to end up somewhere they can spawn. On a
+// battle server with no backend the loadout manager is empty, so only a mode
+// that supplies its own loadout -- TM -- produces a pawn.
+func TestRunnableGameModeRedirectsToASpawnableMode(t *testing.T) {
+	t.Setenv("DN_FORCE_GAME_MODE", "")
+	os.Unsetenv("DN_FORCE_GAME_MODE")
+	for _, queued := range []string{"TDM", "BC", "Onslaught", "TER"} {
+		if got := runnableGameMode(queued); got != DefaultSpawnableGameMode {
+			t.Errorf("runnableGameMode(%q) = %q, want %q", queued, got, DefaultSpawnableGameMode)
+		}
+	}
+	// Already spawnable: left alone rather than rewritten to itself.
+	if got := runnableGameMode("TM"); got != "TM" {
+		t.Errorf("runnableGameMode(TM) = %q", got)
+	}
+}
+
+// The redirect is a workaround, not a rule, so an operator has to be able to
+// switch it off and get the queued mode back -- and an unset variable must not
+// be confused with an empty one.
+func TestRunnableGameModeCanBeDisabledAndOverridden(t *testing.T) {
+	t.Setenv("DN_FORCE_GAME_MODE", "")
+	if got := runnableGameMode("TDM"); got != "TDM" {
+		t.Errorf("empty DN_FORCE_GAME_MODE should disable the redirect, got %q", got)
+	}
+	t.Setenv("DN_FORCE_GAME_MODE", "TMBasic")
+	if got := runnableGameMode("TDM"); got != "TMBasic" {
+		t.Errorf("got %q, want TMBasic", got)
+	}
+	// A typo must not send every match to a mode the client does not know.
+	t.Setenv("DN_FORCE_GAME_MODE", "NotAMode")
+	if got := runnableGameMode("TDM"); got != "TDM" {
+		t.Errorf("an invalid override should fall back to the queued mode, got %q", got)
 	}
 }

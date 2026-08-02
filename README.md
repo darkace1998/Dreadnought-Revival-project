@@ -220,6 +220,7 @@ Set in `run/secrets.env` unless noted.
 | `PLAYERS_PER_MATCH` | mmogbrain | `1` | Queued players needed to form a match |
 | `MASTER_URL` | game-manager | `http://127.0.0.1:8084` | Master server URL |
 | `GAME_MGR_URL` | mmogbrain | `http://127.0.0.1:8085` | Game manager URL |
+| `DN_FORCE_GAME_MODE` | mmogbrain | `TM` | Game mode matches actually run in, whatever the player queued for. A battle server has no backend, so its loadout manager is empty and only a mode that supplies its own loadout (`TM`) can spawn a pawn — every other mode leaves the player a spectator. Set to empty to honour the queued mode instead. Remove once the battle server can obtain player data |
 | `DN_CONNECT_PUSH_DELAY` | mmogbrain | `75s` (`45s` from `start-services.sh`) | **Fallback only.** How long to hold the `YA_Connect` travel push back when the control plane never reports the battle server ready. Normally the matchmaker polls `GET /instances/<id>` and pushes as soon as the engine is hosting; the push's log line records which gate opened as `gate=ready` or `gate=delay` |
 | `DN_GAME_MGR_TIMEOUT` | mmogbrain | `30s` | How long the matchmaker waits for game-manager to answer `POST /instances`. The matchmaker ticks on one goroutine, so a control plane that accepts the connection and never replies would otherwise stop matchmaking for everyone. Raise it if your control plane waits for the engine to report ready before answering |
 | `GATEWAY_ADDR` / `GATEWAY_CERT` / `GATEWAY_KEY` | mmogbrain | `:65443`, `certs/server.*` | Client-facing web-services socket |

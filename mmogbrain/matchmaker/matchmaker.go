@@ -436,6 +436,78 @@ func (m *Matchmaker) tick() error {
 	return nil
 }
 
+// runnableGameMode maps the mode a player queued for onto one their pawn can
+// actually spawn in.
+//
+// Why this exists, from the client and battle server logs:
+//
+// A player joins, the client asks the server to spawn it with the loadout id of
+// its active ship, and the server answers
+//
+//	ServerSpawnNearActor | Could not Set the active Loadout.
+//	                       Given loadout ID does not exist in loadout manager!
+//	AYGameMode::SpawnDefaultPawn: Active Loadout not found. Can't spawn
+//
+// The server's UYLoadoutManagerComponent is empty, and it cannot be anything
+// else here. It populates itself from the LOCAL process's mmogbrain player data
+// (UYLoadoutManager::InitializeFromPlayerData reads the YMmogbrain module
+// singleton at +0x3898), and it only reaches the code that adds anything -- the
+// player data path or the m_installerLoadoutList fallback -- once that data is
+// valid. Our battle server has none: it makes zero contact with mmogbrain, even
+// when handed -GatewayAddress/-YFirmamentAddress exactly as dn-launcher passes
+// them to the client, because the backend connection is driven by the frontend
+// login flow and a process booted straight into a map never runs it. There is
+// also no RPC by which a client could send its loadout: the only Server*Loadout
+// function in the whole binary is ServerPlayerClickedShipLoadout, an analytics
+// call.
+//
+// That leaves exactly one source of a loadout on a backend-less server:
+// AYGameMode::GetGameModeLoadout, which the game mode supplies itself. Only
+// AYGameMode_TrainingMatch overrides it (m_trainingMatchLoadout, ->
+// VH_DreadnoughtMedium_TutorialPlayer_PrecastLoadout_BP). In every other mode it
+// is null, GetLoadoutForPlayer returns nothing, and the player stays a
+// spectator.
+//
+// So a queued mode is redirected to TM, which also pins the map to Highlands --
+// the only map in the build with a TM level variation. The cost is honest and
+// real: the player flies the training-match ship, not the ship they picked.
+// DN_FORCE_GAME_MODE="" turns the redirect off and gives everyone spectator mode
+// back; it should be removed for good once the battle server can get player data.
+func runnableGameMode(queued string) string {
+	forced, set := os.LookupEnv("DN_FORCE_GAME_MODE")
+	if !set {
+		forced = DefaultSpawnableGameMode
+	}
+	forced = strings.TrimSpace(forced)
+	if forced == "" || forced == queued {
+		return queued
+	}
+	if !engineGameModeAliases[forced] {
+		return queued
+	}
+	return forced
+}
+
+// engineGameModeAliases is what the engine can resolve from a map URL's
+// "game=" option: the ShortName column of DefaultGame.ini's
+// [/Script/Engine.GameMode] GameModeClassAliases table, which is cooked into the
+// pak and live at runtime (a match requested as BC demonstrably ran
+// GameInfo_BC_BP_C).
+//
+// Deliberately NOT ValidGameMode: that is the set of modes a CLIENT may queue
+// for, which is a different list. TMBasic and Demo are resolvable by the engine
+// but are not queue modes, and several queue aliases are not engine aliases.
+var engineGameModeAliases = map[string]bool{
+	"TDM": true, "PodTDM": true, "TE": true, "TM": true, "Onslaught": true,
+	"Territory": true, "TER": true, "Benchmark": true, "VisualAttraction": true,
+	"Tutorial": true, "Demo": true, "Bootcamp": true, "BC": true,
+	"TMBasic": true, "TurboTDM": true,
+}
+
+// DefaultSpawnableGameMode is the mode matches run in unless DN_FORCE_GAME_MODE
+// says otherwise. See runnableGameMode for why it is not the queued mode.
+const DefaultSpawnableGameMode = "TM"
+
 func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	// Pull the oldest waiting players for this mode and tier
 	rows, err := m.DB.Query(`
@@ -477,6 +549,17 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 			return fmt.Errorf("mark queue entry matched %s: %w", e.ID, err)
 		}
 	}
+
+	// The mode the battle server is actually told to run, which is not always
+	// the one the player queued for. See runnableGameMode.
+	runMode := runnableGameMode(gameMode)
+	if runMode != gameMode {
+		m.Log.WithFields(logrus.Fields{
+			"queued": gameMode,
+			"run_as": runMode,
+		}).Info("running the match in a spawnable game mode; the queued mode cannot spawn a pawn on a battle server with no backend")
+	}
+	gameMode = runMode
 
 	// Pick a map
 	maps := availableMaps
