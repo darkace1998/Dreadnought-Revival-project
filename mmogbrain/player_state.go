@@ -585,6 +585,8 @@ func persistMmogPlayerMutation(playerPID string, requestName string, payload []b
 		return persistSetFleetFlagship(database, pid, payload)
 	case "YA_AddShipDefaultLoadouts":
 		return persistAddShipDefaultLoadouts(database, pid, payload)
+	case "YA_UnlockItem":
+		return persistUnlockItem(database, pid, payload)
 	case "YA_AddToFleet":
 		return persistAddToFleet(database, pid, payload)
 	case "YA_RemoveFromFleet":
@@ -847,6 +849,69 @@ func fleetEditLoadoutID(database *sql.DB, playerPID string, payload []byte) (int
 		return 0, fmt.Errorf("resolve fleet edit loadout %d: %w", candidate, err)
 	}
 	return loadoutID, nil
+}
+
+// persistUnlockItem records a tech-tree unlock and charges what the client says
+// it is spending.
+//
+// YA_UnlockItem was previously answered with a bare success and nothing else,
+// so a tech tree unlock changed no state at all -- the ship never became owned
+// and the player could unlock it again forever. Captured request (2026-08-02):
+//
+//	RT     STRING "YA_UnlockItem"
+//	ItemID tag 0x76 (8-byte int) = 33489267   (the T2 Scout Light precast)
+//	ShipXp tag 0x66 (4-byte int) = 0
+//	FreeXp tag 0x66 (4-byte int) = 5000
+//
+// The client sends the price it already showed the player, so the costs are
+// taken from the request rather than recomputed from a tech tree the server
+// would have to model independently. They are still clamped at zero so a
+// malformed request cannot credit anybody.
+func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error {
+	itemID := firstMmogInt32Field(payload, "ItemID", "itemID", "itemId")
+	if itemID == 0 {
+		return nil
+	}
+	// ShipXp is in the request too, but it is not charged here: the request
+	// names the ITEM, not which ship's pool the XP comes from, and guessing
+	// would take currency from the wrong ship. Free XP is unambiguous.
+	freeXP := firstMmogInt32Field(payload, "FreeXp", "freeXp", "FreeXP")
+	if freeXP < 0 {
+		freeXP = 0
+	}
+
+	tx, err := database.Begin()
+	if err != nil {
+		return fmt.Errorf("unlock item %d: %w", itemID, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if freeXP > 0 {
+		result, err := tx.Exec(`UPDATE player_state SET free_xp=free_xp-?, updated_at=datetime('now')
+			WHERE user_id=? AND free_xp>=?`, freeXP, playerPID, freeXP)
+		if err != nil {
+			return fmt.Errorf("charge free xp for %d: %w", itemID, err)
+		}
+		if affected, _ := result.RowsAffected(); affected == 0 {
+			// Not enough free XP. Record nothing: leaving the unlock unrecorded
+			// is what keeps the client's view and ours in step.
+			return nil
+		}
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+		VALUES(?,?,?,?,?)`, playerPID, itemID, purchasedItemType(itemID), freeXP, "freexp"); err != nil {
+		return fmt.Errorf("record unlock %d: %w", itemID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit unlock %d: %w", itemID, err)
+	}
+	committed = true
+	return nil
 }
 
 func persistAddToFleet(database *sql.DB, playerPID string, payload []byte) error {

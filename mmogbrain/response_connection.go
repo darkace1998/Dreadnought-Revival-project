@@ -864,6 +864,11 @@ func isMmogPlayerMutationRequest(requestName string) bool {
 		"YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
 		"YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts",
 		"YA_ChargeFleet", "YA_RepairFleet",
+		// A tech tree unlock is a mutation like any other. It was missing here,
+		// so persistUnlockItem was never reached and unlocking a ship changed
+		// nothing -- the same ship could be unlocked forever and never became
+		// owned.
+		"YA_UnlockItem",
 		"YA_SaveGame", "YA_SaveCtAData":
 		return true
 	default:

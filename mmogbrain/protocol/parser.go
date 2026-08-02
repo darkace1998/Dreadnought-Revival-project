@@ -73,6 +73,20 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 		// fell through to the default and stopped, making every field AFTER it
 		// invisible -- which is why `shipId` was never seen and fleet edits
 		// silently did nothing.
+		// 0x76 is an 8-byte integer and 0x66 a 4-byte one. The client uses both
+		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
+		// live 2026-08-02. Without them the scanners stopped at ItemID and the
+		// whole request read as empty.
+		case 0x76:
+			if i+8 > len(payload) {
+				return false
+			}
+			i += 8
+		case 0x66:
+			if i+4 > len(payload) {
+				return false
+			}
+			i += 4
 		case 0x02:
 			if i+16 > len(payload) {
 				return false
@@ -156,6 +170,20 @@ func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
 		// fell through to the default and stopped, making every field AFTER it
 		// invisible -- which is why `shipId` was never seen and fleet edits
 		// silently did nothing.
+		// 0x76 is an 8-byte integer and 0x66 a 4-byte one. The client uses both
+		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
+		// live 2026-08-02. Without them the scanners stopped at ItemID and the
+		// whole request read as empty.
+		case 0x76:
+			if i+8 > len(payload) {
+				return nil, false
+			}
+			i += 8
+		case 0x66:
+			if i+4 > len(payload) {
+				return nil, false
+			}
+			i += 4
 		case 0x02:
 			if i+16 > len(payload) {
 				return nil, false
@@ -240,6 +268,28 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 		// fell through to the default and stopped, making every field AFTER it
 		// invisible -- which is why `shipId` was never seen and fleet edits
 		// silently did nothing.
+		// 0x76 is an 8-byte integer and 0x66 a 4-byte one. The client uses both
+		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
+		// live 2026-08-02. Without them the scanners stopped at ItemID and the
+		// whole request read as empty.
+		case 0x76:
+			if i+8 > len(payload) {
+				return 0, false
+			}
+			value64 := int64(binary.LittleEndian.Uint64(payload[i : i+8]))
+			i += 8
+			if name == target {
+				return int32(value64), true
+			}
+		case 0x66:
+			if i+4 > len(payload) {
+				return 0, false
+			}
+			value32 := int32(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if name == target {
+				return value32, true
+			}
 		case 0x02:
 			if i+16 > len(payload) {
 				return 0, false
@@ -328,6 +378,20 @@ func ExtractRequestName(payload []byte) string {
 		// fell through to the default and stopped, making every field AFTER it
 		// invisible -- which is why `shipId` was never seen and fleet edits
 		// silently did nothing.
+		// 0x76 is an 8-byte integer and 0x66 a 4-byte one. The client uses both
+		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
+		// live 2026-08-02. Without them the scanners stopped at ItemID and the
+		// whole request read as empty.
+		case 0x76:
+			if i+8 > len(payload) {
+				return ""
+			}
+			i += 8
+		case 0x66:
+			if i+4 > len(payload) {
+				return ""
+			}
+			i += 4
 		case 0x02:
 			if i+16 > len(payload) {
 				return ""
@@ -432,6 +496,20 @@ func ExtractGUIDField(payload []byte, target string) (string, bool) {
 		fieldType := payload[i]
 		i++
 		switch fieldType {
+		// 0x76 is an 8-byte integer and 0x66 a 4-byte one. The client uses both
+		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
+		// live 2026-08-02. Without them the scanners stopped at ItemID and the
+		// whole request read as empty.
+		case 0x76:
+			if i+8 > len(payload) {
+				return "", false
+			}
+			i += 8
+		case 0x66:
+			if i+4 > len(payload) {
+				return "", false
+			}
+			i += 4
 		case 0x02:
 			if i+16 > len(payload) {
 				return "", false

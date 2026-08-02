@@ -211,3 +211,89 @@ func TestOwnedShipsIncludePersistedNonStarterLoadouts(t *testing.T) {
 		t.Fatal("no tech tree row for a persisted non-starter loadout; the client cannot place or list that ship")
 	}
 }
+
+// realUnlockItemPayload is the exact body the client sent for YA_UnlockItem,
+// captured live 2026-08-02 while trying to unlock the T2 Scout Light:
+//
+//	ItemID tag 0x76 (8-byte int) = 33489267
+//	ShipXp tag 0x66 (4-byte int) = 0
+//	FreeXp tag 0x66 (4-byte int) = 5000
+//
+// Neither tag had a case in the scanners, so reading stopped at ItemID and the
+// whole request came back empty.
+func realUnlockItemPayload() []byte {
+	return []byte{
+		0x02, 'R', 'T', 0x09, 0x0d, 0x00, 0x00, 0x00,
+		'Y', 'A', '_', 'U', 'n', 'l', 'o', 'c', 'k', 'I', 't', 'e', 'm',
+		0x06, 'I', 't', 'e', 'm', 'I', 'D', 0x76, 0x73, 0x01, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x06, 'S', 'h', 'i', 'p', 'X', 'p', 0x66, 0x00, 0x00, 0x00, 0x00,
+		0x06, 'F', 'r', 'e', 'e', 'X', 'p', 0x66, 0x88, 0x13, 0x00, 0x00,
+		0x00, 0x0e, 0x00, 0x00, 0x00, 0x00,
+	}
+}
+
+func TestUnlockItemFieldsAreReadable(t *testing.T) {
+	p := realUnlockItemPayload()
+	if got := firstMmogInt32Field(p, "ItemID"); got != 33489267 {
+		t.Errorf("ItemID = %d, want 33489267 (tag 0x76, 8-byte int)", got)
+	}
+	if got := firstMmogInt32Field(p, "FreeXp"); got != 5000 {
+		t.Errorf("FreeXp = %d, want 5000 -- a field AFTER ItemID, so it only parses if 0x76 is skipped correctly", got)
+	}
+}
+
+// Unlocking must actually record ownership and charge the free XP, or the ship
+// never becomes owned and can be unlocked forever.
+func TestUnlockItemRecordsOwnershipAndCharges(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=10000 WHERE user_id=?`, pid); err != nil {
+		t.Fatalf("fund: %v", err)
+	}
+
+	if err := persistUnlockItem(database, pid, realUnlockItemPayload()); err != nil {
+		t.Fatalf("unlock: %v", err)
+	}
+
+	var owned int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`,
+		pid, 33489267).Scan(&owned); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if owned != 1 {
+		t.Fatalf("purchases for the unlocked item = %d, want 1", owned)
+	}
+	var freeXP int32
+	if err := database.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP); err != nil {
+		t.Fatalf("read free xp: %v", err)
+	}
+	if freeXP != 5000 {
+		t.Errorf("free xp = %d, want 5000 after a 5000 charge from 10000", freeXP)
+	}
+}
+
+// Too little free XP must record nothing, so the client's view and ours agree.
+func TestUnlockItemRefusesWhenFreeXPIsShort(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=10 WHERE user_id=?`, pid); err != nil {
+		t.Fatalf("fund: %v", err)
+	}
+
+	if err := persistUnlockItem(database, pid, realUnlockItemPayload()); err != nil {
+		t.Fatalf("unlock: %v", err)
+	}
+
+	var owned int
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`,
+		pid, 33489267).Scan(&owned)
+	if owned != 0 {
+		t.Fatalf("recorded %d purchases despite insufficient free xp, want 0", owned)
+	}
+}
