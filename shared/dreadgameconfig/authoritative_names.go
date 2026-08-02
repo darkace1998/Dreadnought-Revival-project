@@ -49,6 +49,7 @@ var (
 	precastLoadoutByKey      map[string]int32
 	authoritativeNameByID    map[int32]string
 	authoritativeNameByAsset map[string]string
+	hullNameByID             map[int32]string
 )
 
 // ensurePrecastLoadoutIndex builds the ship -> loadout index if it is missing.
@@ -153,11 +154,83 @@ func buildAuthoritativeNames() {
 			authoritativeNameByAsset[asset] = name
 		}
 	}
+	applyHullNameOverrides()
+}
+
+// applyHullNameOverrides lets the client's own precast loadout blueprints win
+// over ItemIDConversionTable for player hulls.
+//
+// Applied AFTER the table on purpose: the table stays the authority for
+// everything it is right about (which is most of it), and this corrects only the
+// hulls it names from the previous build. See hull_names.go for the mechanism
+// and the four hulls it affects.
+//
+// The join is the asset path, which both sides carry, so no id mapping has to be
+// invented. Ids come from the item catalog rather than from the conversion
+// table, which also picks up VH_DreadnoughtMedium_T1 (Simargl) -- it has no
+// conversion row at all, so the table could never have named it.
+func applyHullNameOverrides() {
+	if len(GetAllHullNames()) == 0 {
+		return
+	}
+	for _, hull := range GetAllHullNames() {
+		authoritativeNameByAsset[hull.Asset] = hull.Name
+	}
+}
+
+// ensureHullNameIndex builds the id -> hull name index if it is missing.
+//
+// Separate from buildAuthoritativeNames, and rebuilt while empty rather than
+// once, for the reason the comment on nameCacheMu already gives: this one needs
+// the ITEM CATALOG, and the catalog is not necessarily loaded when the name
+// tables are first built. Doing it inside buildAuthoritativeNames looked right
+// and silently produced nothing -- ItemByID answered "not found" for all 259
+// precast items at that point, so the four corrected hulls kept their legacy
+// names and the cache, being non-empty, was never rebuilt.
+func ensureHullNameIndex() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(hullNameByID) > 0 {
+		return
+	}
+	if len(GetAllHullNames()) == 0 {
+		return
+	}
+	index := map[int32]string{}
+	for _, category := range GetAllCategories() {
+		if category.CategoryName != "YShipLoadoutPrecast" {
+			continue
+		}
+		for _, itemID := range category.ItemIDs {
+			item, ok := ItemByID(itemID)
+			if !ok {
+				continue
+			}
+			if name, ok := hullNameForAsset(item.AssetPath); ok {
+				index[itemID] = name
+			}
+		}
+	}
+	hullNameByID = index
 }
 
 // AuthoritativeItemName returns the name the client displays for an item id.
+//
+// Hull names read from the client's own precast loadout blueprints win over
+// ItemIDConversionTable, whose Name column carries the previous build's name for
+// any hull that was renamed. See hull_names.go.
 func AuthoritativeItemName(itemID int32) (string, bool) {
+	ensureHullNameIndex()
+	nameCacheMu.Lock()
+	if name, ok := hullNameByID[itemID]; ok {
+		nameCacheMu.Unlock()
+		return name, true
+	}
+	nameCacheMu.Unlock()
+
 	ensureAuthoritativeNames()
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
 	name, ok := authoritativeNameByID[itemID]
 	return name, ok
 }

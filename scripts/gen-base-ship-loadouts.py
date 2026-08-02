@@ -25,6 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REFERENCE = os.path.join(ROOT, "docs/reference/community-loadout-reference.txt")
 REGISTER = os.path.join(ROOT, "data/assets/ItemIDRegister.json")
 CONVERSION = os.path.join(ROOT, "data/assets/ItemIDConversionTable.json")
+HULL_NAMES = os.path.join(ROOT, "data/assets/HullNames.json")
 OUTPUT = os.path.join(ROOT, "mmogbrain/base_ship_loadouts_gen.go")
 
 HEADER = re.compile(r"^(T\d)\s+(.+?),\s*(.+?):\s*(/Game/\S+)\s*$")
@@ -59,7 +60,7 @@ def load_register():
     return {n["Path"]: n["ItemID"] for n in walk(raw) if "ItemID" in n and "Path" in n}
 
 
-def load_names():
+def load_names(register):
     with open(CONVERSION, encoding="utf-8") as handle:
         raw = json.load(handle)
     names = {}
@@ -69,6 +70,18 @@ def load_names():
         name = node.get("Name", "").replace(" ", " ").strip()
         if name:
             names.setdefault(int(node["NewItemID"]), name)
+
+    # HullNames.json is read straight out of the precast loadout blueprints the
+    # client loads, so it wins for the 52 player hulls: the conversion table is
+    # an OldItemID -> NewItemID translation whose Name column carries the OLDER
+    # build's name, and four hulls were renamed between builds. Same precedence
+    # as shared/dreadgameconfig -- see hull_names.go.
+    if os.path.exists(HULL_NAMES):
+        with open(HULL_NAMES, encoding="utf-8") as handle:
+            for hull in json.load(handle).get("hulls", []):
+                item_id = register.get(hull["asset"])
+                if item_id is not None:
+                    names[int(item_id)] = hull["name"]
     return names
 
 
@@ -114,7 +127,7 @@ def parse():
 
 def main():
     register = load_register()
-    names = load_names()
+    names = load_names(register)
     entries = parse()
 
     rows, hero_rows, rejected = [], [], []

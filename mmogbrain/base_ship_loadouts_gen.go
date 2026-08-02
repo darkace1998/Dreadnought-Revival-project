@@ -7,7 +7,7 @@
 // does not land in the category the slot implies (weapon 5, ability 4, perk 6).
 //
 // 52 hulls across 15 hull lines.
-// Names: 51 come from ItemIDConversionTable, 1 from the reference
+// Names: 52 come from ItemIDConversionTable, 0 from the reference
 // (the client's table does not cover them). Where the two disagree the client
 // wins, because the reference names some items after their blueprint filename.
 
@@ -27,7 +27,7 @@ type baseShipLoadout struct {
 }
 
 var baseShipLoadouts = []baseShipLoadout{
-	{loadoutID: 33489271, hullLine: "AssaultHeavy", tier: 3, name: "Kama", clientNamed: true, primary: 100597763, secondary: 100598565, abilities: [4]int32{83820576, 83820608, 83820937, 83820976}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
+	{loadoutID: 33489271, hullLine: "AssaultHeavy", tier: 3, name: "Dola", clientNamed: true, primary: 100597763, secondary: 100598565, abilities: [4]int32{83820576, 83820608, 83820937, 83820976}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489283, hullLine: "AssaultHeavy", tier: 4, name: "Blud", clientNamed: true, primary: 100597764, secondary: 100597783, abilities: [4]int32{83820577, 83820603, 83820568, 83820992}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489298, hullLine: "AssaultHeavy", tier: 5, name: "Gora", clientNamed: true, primary: 100597765, secondary: 100597778, abilities: [4]int32{83820586, 83820597, 83820560, 83820556}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489284, hullLine: "AssaultLight", tier: 4, name: "Vindicta", clientNamed: true, primary: 100597768, secondary: 100597783, abilities: [4]int32{83820590, 83820603, 83820981, 83820558}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
@@ -42,18 +42,18 @@ var baseShipLoadouts = []baseShipLoadout{
 	{loadoutID: 33489273, hullLine: "DreadnoughtLight", tier: 3, name: "Gravis", clientNamed: true, primary: 100597793, secondary: 100598568, abilities: [4]int32{83820641, 83820665, 83820625, 83820923}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489287, hullLine: "DreadnoughtLight", tier: 4, name: "Lorica", clientNamed: true, primary: 100597794, secondary: 100597803, abilities: [4]int32{83820645, 83820666, 83820635, 83820984}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489302, hullLine: "DreadnoughtLight", tier: 5, name: "Invictus", clientNamed: true, primary: 100597795, secondary: 100597809, abilities: [4]int32{83820659, 83820677, 83820632, 83820611}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
-	{loadoutID: 33489423, hullLine: "DreadnoughtMedium", tier: 1, name: "Simargl", clientNamed: false, primary: 100598595, secondary: 100598596, abilities: [4]int32{83821082, 83825291, 83821084, 83821076}, perks: [4]int32{0, 0, 0, 0}},
+	{loadoutID: 33489423, hullLine: "DreadnoughtMedium", tier: 1, name: "Simargl", clientNamed: true, primary: 100598595, secondary: 100598596, abilities: [4]int32{83821082, 83825291, 83821084, 83821076}, perks: [4]int32{0, 0, 0, 0}},
 	{loadoutID: 33489266, hullLine: "DreadnoughtMedium", tier: 2, name: "Nav", clientNamed: true, primary: 100597968, secondary: 100598569, abilities: [4]int32{83820640, 83820664, 83820624, 83820922}, perks: [4]int32{0, 0, 0, 0}},
 	{loadoutID: 33489274, hullLine: "DreadnoughtMedium", tier: 3, name: "Chernobog", clientNamed: true, primary: 100597799, secondary: 100598568, abilities: [4]int32{83820654, 83820665, 83820629, 83820941}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489288, hullLine: "DreadnoughtMedium", tier: 4, name: "Voronezh", clientNamed: true, primary: 100597800, secondary: 100597803, abilities: [4]int32{83820645, 83820675, 83820630, 83820984}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489303, hullLine: "DreadnoughtMedium", tier: 5, name: "Zmey", clientNamed: true, primary: 100597801, secondary: 100597809, abilities: [4]int32{83820647, 83820672, 83820933, 83820614}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489275, hullLine: "ScoutHeavy", tier: 3, name: "Kreshnik", clientNamed: true, primary: 100597975, secondary: 100598574, abilities: [4]int32{83820713, 83820743, 83820951, 83820947}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
-	{loadoutID: 33489289, hullLine: "ScoutHeavy", tier: 4, name: "Perun", clientNamed: true, primary: 100597957, secondary: 100597833, abilities: [4]int32{83820735, 83820748, 83820710, 83820948}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
+	{loadoutID: 33489289, hullLine: "ScoutHeavy", tier: 4, name: "Stribog", clientNamed: true, primary: 100597957, secondary: 100597833, abilities: [4]int32{83820735, 83820748, 83820710, 83820948}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489304, hullLine: "ScoutHeavy", tier: 5, name: "Netron", clientNamed: true, primary: 100597965, secondary: 100597834, abilities: [4]int32{83820716, 83820750, 83820698, 83820945}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489267, hullLine: "ScoutLight", tier: 2, name: "Dover", clientNamed: true, primary: 100597818, secondary: 100598575, abilities: [4]int32{83820730, 83820742, 83820699, 83820692}, perks: [4]int32{0, 0, 0, 0}},
-	{loadoutID: 33489276, hullLine: "ScoutLight", tier: 3, name: "Lerwick", clientNamed: true, primary: 100597819, secondary: 100598574, abilities: [4]int32{83820713, 83820743, 83820700, 83820947}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
+	{loadoutID: 33489276, hullLine: "ScoutLight", tier: 3, name: "Machias", clientNamed: true, primary: 100597819, secondary: 100598574, abilities: [4]int32{83820713, 83820743, 83820700, 83820947}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489290, hullLine: "ScoutLight", tier: 4, name: "Valcour", clientNamed: true, primary: 100597820, secondary: 100597833, abilities: [4]int32{83820735, 83820748, 83820710, 83820948}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
-	{loadoutID: 33489305, hullLine: "ScoutLight", tier: 5, name: "Bakar", clientNamed: true, primary: 100597821, secondary: 100597834, abilities: [4]int32{83820720, 83820739, 83820950, 83820688}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
+	{loadoutID: 33489305, hullLine: "ScoutLight", tier: 5, name: "Nevis", clientNamed: true, primary: 100597821, secondary: 100597834, abilities: [4]int32{83820720, 83820739, 83820950, 83820688}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489277, hullLine: "ScoutMedium", tier: 3, name: "Fulgora", clientNamed: true, primary: 100597824, secondary: 100598574, abilities: [4]int32{83820713, 83820747, 83820951, 83820947}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489291, hullLine: "ScoutMedium", tier: 4, name: "Medusa", clientNamed: true, primary: 100597825, secondary: 100597833, abilities: [4]int32{83820723, 83820748, 83820710, 83820694}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489306, hullLine: "ScoutMedium", tier: 5, name: "Mithras", clientNamed: true, primary: 100597826, secondary: 100597834, abilities: [4]int32{83820718, 83820753, 83820703, 83820690}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},

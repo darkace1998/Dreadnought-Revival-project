@@ -56,9 +56,14 @@ func TestStarterShipsCarryTheirRealNames(t *testing.T) {
 			t.Errorf("ship %d DisplayName = %q, want %q", item.Item.ItemID, item.Item.DisplayName, expected)
 		}
 	}
-	// 33489423, the Dreadnought Medium T1 loadout, is the one starter hull the
-	// conversion table omits; its name is corroborated elsewhere, not here.
-	if _, ok := AuthoritativeItemName(33489423); ok {
-		t.Error("33489423 now has a conversion-table name; assert it directly instead of exempting it")
+	// 33489423, the Dreadnought Medium T1 loadout, is the one starter hull
+	// ItemIDConversionTable omits entirely. This used to assert that it had no
+	// name at all, with a note to assert it directly if it ever got one -- which
+	// it now has: hull names are read from the precast loadout blueprints
+	// (hull_names.go), joined on the asset path rather than through the table,
+	// so a hull with no conversion row is named anyway. Asserting it directly,
+	// as that note asked.
+	if name, ok := AuthoritativeItemName(33489423); !ok || name != "Simargl" {
+		t.Errorf("Dreadnought Medium T1 loadout 33489423 = %q (ok=%v), want %q", name, ok, "Simargl")
 	}
 }
