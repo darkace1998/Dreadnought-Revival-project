@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -440,6 +441,29 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	return nil
 }
 
+// gameManagerHTTPClient replaces http.DefaultClient, which has NO timeout.
+//
+// The matchmaker runs every tick on one goroutine, so a game-manager that
+// accepts the connection and then never answers blocks that goroutine forever:
+// no further ticks, no stale-match sweep, no new matches for anyone, and the
+// queue entries for the in-flight match stay 'matched' with nothing to roll
+// them back. Only restarting mmogbrain recovers it.
+//
+// The timeout is generous because a spawn can legitimately take a while, but it
+// is finite. DN_GAME_MGR_TIMEOUT overrides it for a control plane that is
+// slower still -- e.g. one that waits for the engine to report ready before
+// answering.
+var gameManagerHTTPClient = &http.Client{Timeout: gameManagerRequestTimeout()}
+
+func gameManagerRequestTimeout() time.Duration {
+	if raw := os.Getenv("DN_GAME_MGR_TIMEOUT"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 30 * time.Second
+}
+
 func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string) (string, int, string, error) {
 	body, err := json.Marshal(map[string]interface{}{
 		"game_mode": gameMode,
@@ -456,7 +480,7 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, play
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Key", m.InternalKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := gameManagerHTTPClient.Do(req)
 	if err != nil {
 		return "", 0, "", err
 	}
@@ -477,5 +501,13 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, play
 	ip, _ := result["ip"].(string)
 	portF, _ := result["port"].(float64)
 	instID, _ := result["instance_id"].(string)
+	// A 201 with no usable address is worse than an error: the match is
+	// recorded as active, the player is pushed at ":0" or at nothing, and they
+	// wait on "Battle server starting" with everything server-side looking
+	// healthy. Refuse it here so formMatch rolls the queue entries back and the
+	// player can simply try again.
+	if ip == "" || int(portF) <= 0 {
+		return "", 0, "", fmt.Errorf("game manager returned no usable address (ip=%q port=%v)", ip, result["port"])
+	}
 	return ip, int(portF), instID, nil
 }

@@ -220,6 +220,7 @@ Set in `run/secrets.env` unless noted.
 | `PLAYERS_PER_MATCH` | mmogbrain | `1` | Queued players needed to form a match |
 | `MASTER_URL` | game-manager | `http://127.0.0.1:8084` | Master server URL |
 | `GAME_MGR_URL` | mmogbrain | `http://127.0.0.1:8085` | Game manager URL |
+| `DN_GAME_MGR_TIMEOUT` | mmogbrain | `30s` | How long the matchmaker waits for game-manager to answer `POST /instances`. The matchmaker ticks on one goroutine, so a control plane that accepts the connection and never replies would otherwise stop matchmaking for everyone. Raise it if your control plane waits for the engine to report ready before answering |
 | `GATEWAY_ADDR` / `GATEWAY_CERT` / `GATEWAY_KEY` | mmogbrain | `:65443`, `certs/server.*` | Client-facing web-services socket |
 | `FIRMAMENT_ADDR` / `FIRMAMENT_CERT` / `FIRMAMENT_KEY` | mmogbrain | `:48843`, `certs/firmament.*` | Social/presence socket. Uses its **own** certificate: the client pins this connection, and `gen-certs.sh` builds `certs/firmament.*` with an "Amazon RSA 2048 M01" issuer to satisfy the pin |
 | `HTTP_ADDR` / `HTTPS_ADDR` | gateway | `:80`, `:443` | Proxy listen addresses |
