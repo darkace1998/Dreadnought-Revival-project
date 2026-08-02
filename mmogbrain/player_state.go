@@ -1018,6 +1018,21 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		}
 	}()
 
+	// Already owned? Charge nothing. The client re-sends YA_UnlockItem for an
+	// item it does not believe it owns, and it does not yet believe it owns
+	// these -- one session sent six unlock requests while the purchase count
+	// stayed at four, each repeat silently taking another 5,000 free XP for an
+	// item the player already had. INSERT OR IGNORE swallowed the duplicate row
+	// but the charge above it had already happened.
+	var alreadyOwned int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=? AND item_id=?`,
+		playerPID, itemID).Scan(&alreadyOwned); err != nil {
+		return fmt.Errorf("check ownership of %d: %w", itemID, err)
+	}
+	if alreadyOwned > 0 {
+		return nil
+	}
+
 	if freeXP > 0 {
 		result, err := tx.Exec(`UPDATE player_state SET free_xp=free_xp-?, updated_at=datetime('now')
 			WHERE user_id=? AND free_xp>=?`, freeXP, playerPID, freeXP)

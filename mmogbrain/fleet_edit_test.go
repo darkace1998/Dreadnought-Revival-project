@@ -382,3 +382,33 @@ func TestPurchasedT3LoadoutGetsARow(t *testing.T) {
 	}
 	t.Fatal("no row for a purchased T3 loadout; the unlock is charged but invisible")
 }
+
+// The client re-sends YA_UnlockItem for anything it does not believe it owns.
+// One live session sent six unlock requests while the purchase count stayed at
+// four -- each repeat silently took another 5,000 free XP for an item the
+// player already had, because INSERT OR IGNORE swallowed the duplicate row
+// while the charge above it had already gone through.
+func TestUnlockItemDoesNotChargeTwiceForTheSameItem(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=20000 WHERE user_id=?`, pid); err != nil {
+		t.Fatalf("fund: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := persistUnlockItem(database, pid, realUnlockItemPayload()); err != nil {
+			t.Fatalf("unlock %d: %v", i, err)
+		}
+	}
+
+	var freeXP int32
+	if err := database.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if freeXP != 15000 {
+		t.Fatalf("free xp = %d after three unlocks of the same item, want 15000 (charged once)", freeXP)
+	}
+}
