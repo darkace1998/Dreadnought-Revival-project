@@ -158,8 +158,21 @@ func buildMmogRequestSuccessPayload(requestName string) []byte {
 // payload.
 func buildMmogFleetMutationPayload(requestName string, payload []byte) []byte {
 	var b []byte
+	var stack []int
 	b = protocol.AppendStringField(b, "RT", requestName)
+	// "result" is fetched TWICE: FUN_140237c30(doc, "result") at 0x142a31543,
+	// then FUN_1402c3bf0(<that value>, "result") at 0x142a31565 -- a lookup of
+	// "result" INSIDE the result. So it is an object carrying its own "result",
+	// not the bare string matchmaking wants. Sending the bare string was tried
+	// live and still failed, with fleet/shipId echoing correctly by then, which
+	// isolates the failure to this field. "status" rides along because the rest
+	// of this codebase's success payloads use it and it costs nothing.
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, "result", "ok")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	// fleet and shipId are read from the ROOT (both via FUN_140237c30 against
+	// the document at 0x142a314d4 / 0x142a3151e), not from inside result.
 	if fleet := protocol.FirstGUIDField(payload, "fleet", "Fleet"); fleet != "" {
 		b = protocol.AppendStringField(b, "fleet", fleet)
 	}

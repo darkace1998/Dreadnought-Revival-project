@@ -157,8 +157,14 @@ func TestSeedingDoesNotRestoreRemovedFleetShips(t *testing.T) {
 func TestFleetMutationResponseCarriesWhatTheClientReads(t *testing.T) {
 	payload := buildMmogFleetMutationPayload("YA_RemoveFromFleet", realRemoveFromFleetPayload())
 
+	// result is an OBJECT carrying its own "result": the arm looks the name up
+	// twice (0x142a31543 then 0x142a31565). A bare top-level string was tried
+	// live and rejected.
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "result", "ok")) {
-		t.Error(`result must be the STRING "ok", not an object wrapping status`)
+		t.Error(`result object must contain result:"ok"`)
+	}
+	if bytes.Index(payload, []byte("result")) == bytes.LastIndex(payload, []byte("result")) {
+		t.Error("expected result to appear twice: the object and its inner field")
 	}
 	// The fleet GUID the client sent, echoed back as hex.
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "fleet", "650dd79476a1484b8adcd01ac2f17354")) {
