@@ -1025,3 +1025,66 @@ hang. A server-side sweep cannot help there; it needs the client's own
 connection timeout, or the match ending through mmogbrain, which is a thing we
 can do: game-manager/dn-dedicated knows when an instance exits and currently
 tells mmogbrain nothing. That is ours and it is now on the list.
+
+### C10 — CONFIRMED: the oversized bunch does not just disconnect the client, it kills the host
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+You called this the single most useful thing we could confirm. Confirmed, and it
+is worse than `S1` concluded.
+
+Captured from a live matchmade battle server on Windows, consecutive lines:
+
+```text
+LogYOrbitTransitionManager:Error: AYOrbitTransitionManager::ActivateBattlePlayerStarts:
+    no orbit spawn locations set!
+LogYPlayerControllerBase:Warning: GetMovieManager() - UYDreadnoughtLocalPlayer could not be found!
+LogNetPartialBunch:Error: Final partial bunch too large
+LogNetTraffic:Error: UChannel::ReceivedRawBunch: Bunch.IsError() after ReceivedNextBunch 1
+LogNetTraffic:Error: Received corrupted packet data from client 127.0.0.1.  Disconnecting.
+LogWindows:Error: === Critical error: ===
+LogWindows:Error: Fatal error!
+LogWindows:Error: Unhandled Exception: EXCEPTION_STACK_OVERFLOW
+LogWindows:Error: DreadGame-Win64-Shipping.exe   (x~100 frames)
+```
+
+*(verified.)* Your three predicted lines appear exactly as written in `S1`, and
+the crash follows them **immediately** — same log, no lines between
+`Disconnecting.` and `=== Critical error: ===`.
+
+So `S1` and `C9` are the same bug. The host does not survive the rejection: it
+unwinds into unbounded recursion and dies. That accounts for every `exit status
+3` in the `C9` table, all five of them, at 54–59s — the death is not a timer, it
+is the moment the client's OTS slices finish arriving.
+
+**Retract one claim from C9.** We said no battle server log is obtainable on
+Windows. Wrong, and we should have spotted it sooner: `wer.dll` side-loads our
+DLL into **every** DreadGame process, our mod tees the engine log to
+`dread_mod_log.txt`, and the battle server writes to the **same file** as the
+client. The log has been there all along. The interleaving you documented in
+`BuildArgs` is real and it is exactly what let us read a process we thought was
+silent. Everything else in C9's capture list still holds — `-ABSLOG`, `-LOG=`,
+redirected stdout and the hidden console are all still dead ends.
+
+Also in the same window, and probably relevant to you:
+
+```text
+LogGameMode:Display: Match State Changed from WaitingToStart to InProgress
+LogUObjectGlobals:Warning: Failed to find object 'Class None.TM'
+LogYGameState_Objective:Warning: GetObjectiveState - Id:Move to the battlezone not found!
+LogOnline:Warning: STEAM: Failed to initialize Steam ... Try running with -NOSTEAM on the cmdline
+LogOnline:Warning: STEAM: Steam API failed to initialize!
+```
+
+The match does reach `InProgress`, so the host is healthy right up to the bunch.
+`Class None.TM` is the same benign lookup noise you already identified. The Steam
+lines are the battle server trying to init Steam and failing — `-NoSteam` is in
+its argv, so this looks like OnlineSubsystemSteam initialising before the switch
+is honoured. Harmless as far as we can tell, but it is two failed inits and a
+double `Shutdown()` per launch.
+
+**What this does not explain**, and what still blocks a playable match on our
+side: `ActivateBattlePlayerStarts: no orbit spawn locations set!` fires *before*
+any of this, and the player is left under the terrain with no ship selection. So
+even a host that survives the bunch would still not spawn us. That one is
+independent, and per `S1` it may be the same root as C1 — a backend-less host
+with no player data has no pawn to own the orbit component.
