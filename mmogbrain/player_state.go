@@ -289,6 +289,15 @@ func loadPersistedShipLoadouts(database *sql.DB, playerPID string) (map[int32]mm
 		loadout.ship = persistedShipByID(shipID)
 		if starter, ok := starterLoadoutByPrecastID(loadout.precastLoadoutID); ok {
 			loadout.fleetShipID = starter.fleetShipID
+		} else if loadout.precastLoadoutID != 0 {
+			// Same rule the starter fleet uses -- fleetStarterShipIDForPrecast is
+			// the identity function, so a fleet's ship id IS its precast loadout
+			// id. Without this branch only the four starter loadouts got it, and
+			// any other owned ship (a Veteran/Legendary fleet, anything unlocked
+			// later) fell back to the YPawn id instead, giving the client a
+			// different id shape for those fleets than for the one that is known
+			// to render correctly.
+			loadout.fleetShipID = fleetStarterShipIDForPrecast(loadout.precastLoadoutID)
 		}
 		loadout.active = active != 0
 		loadouts[loadout.loadoutID()] = loadout
