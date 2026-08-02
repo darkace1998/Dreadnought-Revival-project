@@ -122,7 +122,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogChatPayload(requestName, playerPID, payload)
 
 	// --- Fleet/Loadout Modifications ---
-	case "YA_AddToFleet", "YA_RemoveFromFleet", "YA_SetFleetFlagship",
+	case "YA_AddToFleet", "YA_RemoveFromFleet":
+		return buildMmogFleetMutationPayload(requestName, payload)
+	case "YA_SetFleetFlagship",
 		"YA_ChargeFleet", "YA_RepairFleet", "YA_FleetUpdate",
 		"YA_FleetAutoRepair", "YA_UpdateFleetMaintenance":
 		return buildMmogRequestSuccessPayload(requestName)

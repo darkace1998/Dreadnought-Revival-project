@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"strings"
 )
 
@@ -410,4 +411,68 @@ func FirstInt32(payload []byte, names ...string) int32 {
 		}
 	}
 	return 0
+}
+
+// ExtractGUIDField returns the hex form of a 16-byte GUID field (wire tag
+// 0x02), without hyphens -- the same shape PIDs take on this protocol.
+//
+// The client uses tag 0x02 for the `fleet` field of YA_AddToFleet /
+// YA_RemoveFromFleet, and its response handler expects that value echoed back
+// (it logs "from fleet [%s]" and printed [None] while we sent nothing).
+func ExtractGUIDField(payload []byte, target string) (string, bool) {
+	i := 0
+	for i < len(payload) {
+		nameLen := int(payload[i])
+		i++
+		if nameLen == 0 || i+nameLen+1 > len(payload) {
+			return "", false
+		}
+		name := string(payload[i : i+nameLen])
+		i += nameLen
+		fieldType := payload[i]
+		i++
+		switch fieldType {
+		case 0x02:
+			if i+16 > len(payload) {
+				return "", false
+			}
+			if name == target {
+				return hex.EncodeToString(payload[i : i+16]), true
+			}
+			i += 16
+		case 0x09, 0x0a:
+			if i+4 > len(payload) {
+				return "", false
+			}
+			valueLen := int(binary.LittleEndian.Uint32(payload[i : i+4]))
+			i += 4
+			if valueLen < 0 || i+valueLen > len(payload) {
+				return "", false
+			}
+			i += valueLen
+		case 0x05:
+			if i >= len(payload) {
+				return "", false
+			}
+			i++
+		case 0x56:
+			if i+4 > len(payload) {
+				return "", false
+			}
+			i += 4
+		default:
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// FirstGUIDField returns the first GUID field present under any of names.
+func FirstGUIDField(payload []byte, names ...string) string {
+	for _, name := range names {
+		if value, ok := ExtractGUIDField(payload, name); ok && value != "" {
+			return value
+		}
+	}
+	return ""
 }

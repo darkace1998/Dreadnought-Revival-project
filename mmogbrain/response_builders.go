@@ -131,6 +131,44 @@ func buildMmogRequestSuccessPayload(requestName string) []byte {
 	return b
 }
 
+// buildMmogFleetMutationPayload answers YA_AddToFleet / YA_RemoveFromFleet.
+//
+// buildMmogRequestSuccessPayload is wrong for these two. Its "result" is an
+// OBJECT holding status:"ok", but the client's handlers compare `result`
+// ITSELF against the string "ok" -- the same shape that made every matchmaking
+// registration read as a failure. The arms (YA_RemoveFromFleet name compared at
+// 0x142a31349) read exactly three fields:
+//
+//	result  0x142a313ba  -- must equal "ok"
+//	fleet   0x142a31432  -- echoed back
+//	shipId  0x142a314aa  -- echoed back
+//
+// and otherwise log
+//
+//	Failed to Remove ship [%d] from fleet [%s]. Error: [%s]   (0x142a31633)
+//	Failed to Add ship [%d] to fleet [%s]. Error: [%s]        (0x142a312f4)
+//
+// which is exactly what a live session produced -- "ship [0] from fleet [None]",
+// i.e. neither echoed field arrived -- while the database change itself had
+// already succeeded.
+//
+// fleet comes back as the hex GUID the client sent (tag 0x02). shipId goes out
+// as a NUMERIC STRING: the client reads these through the int32-blind value
+// union, the same reason FlagShipID and friends are strings in the fleet
+// payload.
+func buildMmogFleetMutationPayload(requestName string, payload []byte) []byte {
+	var b []byte
+	b = protocol.AppendStringField(b, "RT", requestName)
+	b = protocol.AppendStringField(b, "result", "ok")
+	if fleet := protocol.FirstGUIDField(payload, "fleet", "Fleet"); fleet != "" {
+		b = protocol.AppendStringField(b, "fleet", fleet)
+	}
+	if shipID := protocol.FirstInt32(payload, "shipId", "ShipID", "shipID"); shipID != 0 {
+		b = protocol.AppendStringField(b, "shipId", strconv.Itoa(int(shipID)))
+	}
+	return b
+}
+
 // --- Matchmaking ---
 
 type mmogMatchmakingStatus struct {

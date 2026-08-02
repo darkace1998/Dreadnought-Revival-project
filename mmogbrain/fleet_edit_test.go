@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"testing"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -144,5 +147,28 @@ func TestSeedingDoesNotRestoreRemovedFleetShips(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("fleet has %d ships after re-login, want the removal to stick", count)
+	}
+}
+
+// The client compares `result` ITSELF against "ok" and echoes back `fleet` and
+// `shipId`; a nested result object left it logging
+// "Failed to Remove ship [0] from fleet [None]. Error: []" even though the
+// database change had already succeeded.
+func TestFleetMutationResponseCarriesWhatTheClientReads(t *testing.T) {
+	payload := buildMmogFleetMutationPayload("YA_RemoveFromFleet", realRemoveFromFleetPayload())
+
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "result", "ok")) {
+		t.Error(`result must be the STRING "ok", not an object wrapping status`)
+	}
+	// The fleet GUID the client sent, echoed back as hex.
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "fleet", "650dd79476a1484b8adcd01ac2f17354")) {
+		t.Error("fleet GUID was not echoed back")
+	}
+	// shipId as a numeric string -- an int32 reads as 0 through the client's union.
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "shipId", "33489262")) {
+		t.Error("shipId was not echoed back as a numeric string")
+	}
+	if !bytes.Contains(payload, []byte("YA_RemoveFromFleet")) {
+		t.Error("response is not tagged with the request name")
 	}
 }
