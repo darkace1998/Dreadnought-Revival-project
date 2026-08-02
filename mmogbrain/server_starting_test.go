@@ -332,3 +332,29 @@ func TestStaleMatchDoesNotHoldAPlayerHostage(t *testing.T) {
 		t.Errorf("matched port = %d, want the fresh match's 7778", got.serverPort)
 	}
 }
+
+// MMOG_HOST is the address the gateway hands the client for its MMOG
+// connection. It defaulted to the literal 10.0.0.73 -- a second IP knob that
+// SERVER_IP never reached and that start-services.sh does not export. On any
+// other host the client logged in (dn-launcher passes -GatewayAddress directly,
+// so firmament was fine) and then timed out dialling 10.0.0.73 for player data
+// at the protocol's 5001 ms phase budget. Reported as a hard blocker on a clean
+// install elsewhere.
+func TestMmogHostFollowsServerIPRatherThanAHardcodedAddress(t *testing.T) {
+	t.Setenv("MMOG_HOST", "")
+	t.Setenv("SERVER_IP", "192.0.2.10")
+	if got := mmogHostAddress(); got != "192.0.2.10" {
+		t.Errorf("mmog host = %q, want it to follow SERVER_IP", got)
+	}
+
+	t.Setenv("MMOG_HOST", "203.0.113.5")
+	if got := mmogHostAddress(); got != "203.0.113.5" {
+		t.Errorf("mmog host = %q, want the explicit MMOG_HOST override", got)
+	}
+
+	t.Setenv("MMOG_HOST", "")
+	t.Setenv("SERVER_IP", "")
+	if got := mmogHostAddress(); got != "127.0.0.1" {
+		t.Errorf("mmog host = %q, want a loopback fallback, never a foreign literal", got)
+	}
+}

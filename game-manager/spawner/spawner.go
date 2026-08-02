@@ -168,8 +168,22 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 	cmd.Stderr = newInstanceLogWriter(s.log, inst.ID, "stderr")
 
 	if err := cmd.Start(); err != nil {
-		s.log.WithError(err).Warn("game binary launch failed (binary may not be present); recording instance as mock")
-		// Continue in mock mode so the rest of the stack can be tested without the game binary
+		// A failed spawn used to be a warning, after which the instance was
+		// recorded as a mock and handed back as if it were real. Matchmaking
+		// then formed the match and pushed the client an address nothing was
+		// listening on, so the player sat on "match starting" forever with no
+		// error on either side. Reported from a clean install, where it hid a
+		// simple mistyped GAME_BINARY for an entire debugging session.
+		//
+		// Mock instances are still useful for exercising the stack without the
+		// game, but that has to be asked for (DN_ALLOW_MOCK_INSTANCES=1), not
+		// be the silent fallback for a real launch error.
+		if os.Getenv("DN_ALLOW_MOCK_INSTANCES") == "" {
+			s.log.WithError(err).WithField("binary", s.gameBinary).
+				Error("battle server launch failed; failing the match rather than recording a mock instance")
+			return nil, fmt.Errorf("launch battle server %q: %w", s.gameBinary, err)
+		}
+		s.log.WithError(err).Warn("game binary launch failed; DN_ALLOW_MOCK_INSTANCES is set, recording instance as mock")
 	}
 
 	inst.Cmd = cmd

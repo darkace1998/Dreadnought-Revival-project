@@ -93,7 +93,13 @@ cert = (x509.CertificateBuilder()
     .add_extension(x509.AuthorityKeyIdentifier(key_identifier=AMAZON_SKID, authority_cert_issuer=None, authority_cert_serial_number=None), critical=False)
     .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
     .add_extension(x509.SubjectAlternativeName([
-        x509.IPAddress(ipaddress.IPv4Address("10.0.0.73")),
+        # Same literal, same bug as the one fixed for the server certificate
+        # above: hardcoding one machine's address made the firmament cert
+        # useless anywhere else. It survived here because the client pins this
+        # connection on the "Amazon RSA 2048 M01" issuer rather than checking
+        # the IP SAN, so nobody hit it -- but a stricter path would.
+        x509.IPAddress(ipaddress.IPv4Address("${SERVER_IP}")),
+        x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
         x509.DNSName("firmament.greybox.aviary.cloud"),
         x509.DNSName("firmament.prod.greybox.sixfoot.live"),
     ]), critical=False)

@@ -259,9 +259,35 @@ func handleGWLegalDocument(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 //   - "serverHost" (DAT_143d9bd40): server address string
 //   - "serverPort" (DAT_143d9bd50): port as a STRING — read via FUN_140ccc750 then _wtoi()
 //
-// MMOG_HOST defaults to 10.0.0.73; FIRMAMENT_PORT defaults to 48843.
+// The address comes from mmogHostAddress(); FIRMAMENT_PORT defaults to 48843.
+// mmogHostAddress is the address handed to the client to open its MMOG
+// connection on.
+//
+// This used to default to the literal 10.0.0.73, which is a second IP knob that
+// SERVER_IP does not reach: start-services.sh exports SERVER_IP and nothing in
+// the tree sets MMOG_HOST, so on any host that is not that one machine the
+// client logged in fine (dn-launcher passes -GatewayAddress directly, so
+// firmament was unaffected), then dialled 10.0.0.73 for player data and timed
+// out at the protocol's 5001 ms phase budget:
+//
+//	LogYMmogbrain:Error: ET_ConnectionFailed: phase 2, time 5016
+//	[ULoginGateManager] Mmog login failed
+//
+// Reported from a clean install on another machine, where it is a hard blocker.
+// MMOG_HOST still overrides for split-host setups; otherwise it follows
+// SERVER_IP, which is already auto-detected and is what the certificate covers.
+func mmogHostAddress() string {
+	if host := getenv("MMOG_HOST", ""); host != "" {
+		return host
+	}
+	if host := getenv("SERVER_IP", ""); host != "" {
+		return host
+	}
+	return "127.0.0.1"
+}
+
 func handleGWPlayLkg(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
-	host := getenv("MMOG_HOST", "10.0.0.73")
+	host := mmogHostAddress()
 	port := getenv("FIRMAMENT_PORT", "48843")
 	gwJSON(w, map[string]any{
 		"Code":       0,
@@ -332,7 +358,7 @@ func handleGWTouch(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 
 // handleGWPlay handles GET /api/v1/play.
 func handleGWPlay(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
-	host := getenv("MMOG_HOST", "10.0.0.73")
+	host := mmogHostAddress()
 	port := getenv("FIRMAMENT_PORT", "48843")
 	gwJSON(w, map[string]any{
 		"Code":       0,

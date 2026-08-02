@@ -67,6 +67,23 @@ export WINE_EXE="${WINE_EXE:-wine}"
 # separate dedicated-server build. See game-manager/spawner for the argv.
 export GAME_BINARY="${GAME_BINARY:-}"
 
+# Sourcing secrets.env under `set -a` runs it as shell, so backslashes in an
+# unquoted value are escape characters and get eaten: a Windows path like
+#   GAME_BINARY=D:\Dreadnought\...\DreadGame-Win64-Shipping.exe
+# arrives as D:Dreadnought...  Reported from a clean install, where it cost a
+# whole session because the spawn failure was silently recorded as a mock.
+# Quote the value in secrets.env, or use forward slashes (Go accepts them on
+# Windows). Checking here makes the mistake visible at startup either way.
+if [ -n "$GAME_BINARY" ] && [ ! -e "$GAME_BINARY" ]; then
+    echo "WARNING: GAME_BINARY does not exist: $GAME_BINARY" >&2
+    case "$GAME_BINARY" in
+        *\\*) : ;;
+        *:*) echo "         Looks like a Windows path with its backslashes stripped." >&2
+             echo "         Quote it in run/secrets.env, or use forward slashes." >&2 ;;
+    esac
+    echo "         Battle servers will fail to spawn and matches will not form." >&2
+fi
+
 # The spawned battle server needs a CONFIGURED Wine prefix, not a fresh one:
 # with an empty prefix wine cannot start the game and the instance exits within
 # seconds (status 3). Point this at the same prefix the client harness uses.
