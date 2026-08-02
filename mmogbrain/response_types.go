@@ -44,6 +44,10 @@ type mmogShipLoadoutSeed struct {
 	weaponSecondaryID int32
 	abilityIDs        [4]int32
 	perkIDs           [4]int32
+	// savedDisplayInfo is the appearance the CLIENT exported for this ship,
+	// stored verbatim from YA_UpdateShipLoadout. Empty means the player has
+	// never customised it and the computed default applies.
+	savedDisplayInfo string
 }
 
 func (loadout mmogShipLoadoutSeed) loadoutID() int32 {
@@ -112,6 +116,12 @@ const noShipVanityDisplayInfo = "-1#-1#-1#-1;-1;-1;-1;-1"
 // one pattern and four hull mesh parts per hull line, and the ship maker's base
 // coating. See shared/dreadgameconfig/ship_vanity.go for where each comes from.
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
+	// What the player actually chose wins over the computed default. Without
+	// this every customisation was answered with the stock appearance on the
+	// next load, so the ship the player built was never the ship they got back.
+	if info := strings.TrimSpace(loadout.savedDisplayInfo); info != "" {
+		return info
+	}
 	hullLine, ok := shipHullLine(loadout.ship.id)
 	if !ok {
 		return noShipVanityDisplayInfo

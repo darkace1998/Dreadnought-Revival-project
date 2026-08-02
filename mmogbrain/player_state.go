@@ -279,7 +279,7 @@ func seedPersistedLoadout(exec sqlExecer, playerPID string, loadout mmogShipLoad
 func loadPersistedShipLoadouts(database *sql.DB, playerPID string) (map[int32]mmogShipLoadoutSeed, error) {
 	rows, err := database.Query(`SELECT loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active,
 		weapon_primary_id,weapon_secondary_id,ability_primary_id,ability_secondary_id,ability_perimeter_id,ability_internal_id,
-		perk_com_id,perk_weapon_id,perk_navigation_id,perk_engineer_id
+		perk_com_id,perk_weapon_id,perk_navigation_id,perk_engineer_id,display_info
 		FROM player_ship_loadouts WHERE user_id=? ORDER BY position, loadout_id`, playerPID)
 	if err != nil {
 		return nil, fmt.Errorf("load player_ship_loadouts: %w", err)
@@ -297,7 +297,7 @@ func loadPersistedShipLoadouts(database *sql.DB, playerPID string) (map[int32]mm
 		if err := rows.Scan(
 			&loadoutID, &loadout.nativeLoadoutID, &loadout.precastLoadoutID, &shipID, &loadout.loadoutIndex, &loadout.loadoutName, &loadout.position, &active,
 			&loadout.weaponPrimaryID, &loadout.weaponSecondaryID, &loadout.abilityIDs[0], &loadout.abilityIDs[1], &loadout.abilityIDs[2], &loadout.abilityIDs[3],
-			&loadout.perkIDs[0], &loadout.perkIDs[1], &loadout.perkIDs[2], &loadout.perkIDs[3],
+			&loadout.perkIDs[0], &loadout.perkIDs[1], &loadout.perkIDs[2], &loadout.perkIDs[3], &loadout.savedDisplayInfo,
 		); err != nil {
 			return nil, fmt.Errorf("scan player_ship_loadouts: %w", err)
 		}
@@ -821,8 +821,36 @@ func persistSavePlayerDisplayInformation(database *sql.DB, playerPID string, pay
 	return nil
 }
 
+// persistUpdateShipLoadout stores a loadout the player edited in the hangar.
+//
+// Every field name here comes from a captured request, because none of the ones
+// this function used to look for exist. The client sends (tags in brackets):
+//
+//	RT [str] "YA_UpdateShipLoadout"   ID [guid]   PID [guid]
+//	ShipID [i32] 33489262             Name [str] "Agosta"
+//	DisplayInfo [str] "335872027#335872028#335872026#335872025;352649226;..."
+//	WeaponPrimary [i32]  WeaponSecondary [i32]
+//	AbilityPrimary [i32] AbilitySecondary [i32] AbilityPerimeter [i32] AbilityInternal [i32]
+//	PerkCom [i32] PerkWeapon [i32] PerkNavigation [i32] PerkEngineer [i32]
+//	LoadoutSlotNum [i32]
+//
+// Two things were wrong, and together they made this function a complete no-op:
+//
+//   - The row was looked up by "LoadoutID"/"loadoutID"/"precastLoadout"/
+//     "precastLoadoutID". The client calls it **ShipID**, and its value is the
+//     precast loadout id (33489262 for the Agosta), not the pawn id. So the
+//     lookup returned 0 and the function returned at the first statement, every
+//     time.
+//   - The item fields were spelled "weaponPrimary", "abilityPerimeter" and so
+//     on. The client capitalises them, and protocol.ExtractInt32Field compares
+//     names with ==, not case-insensitively. Even reached, none would have
+//     matched.
+//
+// So no weapon, module, perk or appearance change a player made was ever
+// stored. The old names are kept as fallbacks: they cost nothing and this
+// server has answered to itself with them in tests.
 func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte) error {
-	loadoutID := firstMmogInt32Field(payload, "LoadoutID", "loadoutID", "precastLoadout", "precastLoadoutID")
+	loadoutID := firstMmogInt32Field(payload, "ShipID", "LoadoutID", "loadoutID", "precastLoadout", "precastLoadoutID")
 	if loadoutID == 0 {
 		return nil
 	}
@@ -830,24 +858,46 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 		column string
 		fields []string
 	}{
-		{column: "weapon_primary_id", fields: []string{"weaponPrimary", "weaponPrimaryID"}},
-		{column: "weapon_secondary_id", fields: []string{"weaponSecondary", "weaponSecondaryID"}},
-		{column: "ability_primary_id", fields: []string{"abilityPrimary"}},
-		{column: "ability_secondary_id", fields: []string{"abilitySecondary"}},
-		{column: "ability_perimeter_id", fields: []string{"abilityPerimeter"}},
-		{column: "ability_internal_id", fields: []string{"abilityInternal"}},
-		{column: "perk_com_id", fields: []string{"perkCom"}},
-		{column: "perk_weapon_id", fields: []string{"perkWeapon"}},
-		{column: "perk_navigation_id", fields: []string{"perkNavigation"}},
-		{column: "perk_engineer_id", fields: []string{"perkEngineer"}},
+		{column: "weapon_primary_id", fields: []string{"WeaponPrimary", "weaponPrimary", "weaponPrimaryID"}},
+		{column: "weapon_secondary_id", fields: []string{"WeaponSecondary", "weaponSecondary", "weaponSecondaryID"}},
+		{column: "ability_primary_id", fields: []string{"AbilityPrimary", "abilityPrimary"}},
+		{column: "ability_secondary_id", fields: []string{"AbilitySecondary", "abilitySecondary"}},
+		{column: "ability_perimeter_id", fields: []string{"AbilityPerimeter", "abilityPerimeter"}},
+		{column: "ability_internal_id", fields: []string{"AbilityInternal", "abilityInternal"}},
+		{column: "perk_com_id", fields: []string{"PerkCom", "perkCom"}},
+		{column: "perk_weapon_id", fields: []string{"PerkWeapon", "perkWeapon"}},
+		{column: "perk_navigation_id", fields: []string{"PerkNavigation", "perkNavigation"}},
+		{column: "perk_engineer_id", fields: []string{"PerkEngineer", "perkEngineer"}},
 	}
 	for _, assignment := range assignments {
 		value := firstMmogInt32Field(payload, assignment.fields...)
 		if value == 0 {
+			// Zero is "not sent" here, not "cleared": the client sends 0 for the
+			// perk slots of a tier-1 hull, which legitimately has none.
 			continue
 		}
 		if _, err := database.Exec("UPDATE player_ship_loadouts SET "+assignment.column+"=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?", value, playerPID, loadoutID); err != nil {
 			return fmt.Errorf("update loadout %s: %w", assignment.column, err)
+		}
+	}
+
+	// The ship's appearance. Stored verbatim -- the server has no reason to
+	// understand it, it only has to survive the round trip so the ship the
+	// player built is the ship they get back. Format and consumers are in
+	// shared/dreadgameconfig/ship_vanity.go.
+	if displayInfo := strings.TrimSpace(firstMmogStringField(payload, "DisplayInfo", "displayInfo", "m_displayInfo")); displayInfo != "" {
+		if _, err := database.Exec(`UPDATE player_ship_loadouts SET display_info=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?`,
+			displayInfo, playerPID, loadoutID); err != nil {
+			return fmt.Errorf("update loadout display_info: %w", err)
+		}
+	}
+
+	// The client also renames through this request, not only through
+	// YA_RenameShipLoadout.
+	if name := strings.TrimSpace(firstMmogStringField(payload, "Name", "name")); name != "" {
+		if _, err := database.Exec(`UPDATE player_ship_loadouts SET loadout_name=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?`,
+			name, playerPID, loadoutID); err != nil {
+			return fmt.Errorf("update loadout name: %w", err)
 		}
 	}
 	return nil

@@ -274,6 +274,18 @@ var migrations = []string{
 	// map takes to load.
 	`ALTER TABLE matches ADD COLUMN instance_id TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE matches ADD COLUMN server_ready_at TEXT`,
+	// APPEND ONLY, and this entry is why. Adding it in the middle of the list
+	// shifted instance_id and server_ready_at from 28/29 to 29/30, so a database
+	// that had already recorded 29 re-ran what was now migration 28 and died on
+	// "duplicate column name: server_ready_at". The comment above migrate()
+	// says the order is load-bearing; it is not decorative.
+	//
+	// The ship's appearance, exactly as the client exports it:
+	// "<mesh>#<mesh>#<mesh>#<mesh>;<emblem>;<paint>;<pattern>;<decal>". Without
+	// somewhere to keep it, every customisation a player made was answered with
+	// the computed default on the next load -- the ship they built was never the
+	// ship they got back.
+	`ALTER TABLE player_ship_loadouts ADD COLUMN display_info TEXT NOT NULL DEFAULT ''`,
 }
 
 func Open(path string) (*sql.DB, error) {
