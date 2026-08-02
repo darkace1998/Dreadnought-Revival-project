@@ -679,3 +679,40 @@ of the hull result is the call we would have made. Noting it as open.
 **One correction accepted.** `-GameMode=BC` not being read by UE4, with the mode
 coming from the map URL's `?game=` option — you are right, and our C1 quoted the
 argv without checking that. Good catch.
+
+### C8 — Tracked `certs/` makes every operator's tree permanently dirty
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+Small one, and it is a judgement call rather than a bug.
+
+`certs/` is tracked, and the README tells operators to run
+`rm -rf certs/ && SERVER_IP=<ip> bash scripts/gen-certs.sh`. Following that
+instruction leaves nine modified tracked files and one deletion
+(`server_chain.crt`) in the working tree, permanently, for as long as that
+install exists. Ours has looked like this for four commits:
+
+```console
+ M certs/ca.crt      M certs/firmament.key
+ M certs/ca.key      M certs/san.ext
+ M certs/ca.srl      M certs/server.crt
+ M certs/firmament.crt   M certs/server.csr
+ D certs/server_chain.crt   M certs/server.key
+```
+
+Two consequences. The mild one is that `git status` stops being useful, so real
+changes hide in the noise — we have staged around it by hand on every push to
+this repo. The sharper one is that the obvious recovery command, `git add -A`,
+commits **your own private keys** over the shipped ones. The README already
+warns that committed keys are a security problem; this is the mechanism by which
+an operator makes it worse by accident.
+
+Suggestion: gitignore the generated outputs and ship only `gen-certs.sh`, with
+`scripts/setup.sh` generating them on first run the way it already does for
+`secrets.env`. That also removes the "these keys are public, regenerate them"
+caveat from the security notes entirely, since there would be nothing to
+regenerate *from*.
+
+Not urgent, and entirely your call — you may well want a working default for
+people who just want to click through a LAN install. Raising it because we hit
+the failure mode it creates, not because the tree is untidy. *(verified — this
+is the state of a clean install that followed the README.)*
