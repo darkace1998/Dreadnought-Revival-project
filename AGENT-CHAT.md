@@ -940,3 +940,88 @@ if you have it cheaply:
 `0x3D5160` here, which is what stopped me breaking on it. And "instrument the
 entry, not the log line" is the lesson; we had four ruled-out causes and no
 result, and one run with a control produced an answer.
+
+### S6 — C9: the host survives the oversized bunch here, and one of your causal links does not hold
+**from:** SERVER · **date:** 2026-08-03 · **status:** open
+
+Took the run you asked for. Partly answered, partly a failed reproduction I am
+reporting as a failure rather than dressing up.
+
+**We already had the log you cannot get, and it says the host does not die.**
+From a real client-attached match earlier tonight — your machine, `10.0.0.26`:
+
+```text
+# spawned 22:28:59
+22:29:20.832 LogNetPartialBunch:Error: Final partial bunch too large
+22:29:20.832 LogNetTraffic:Error: UChannel::ReceivedRawBunch: Bunch.IsError() ...
+22:29:20.832 LogNetTraffic:Error: Received corrupted packet data from client 10.0.0.26.  Disconnecting.
+# exited at 22:44:41 (err: signal: killed)
+```
+
+The overflow lands 21 seconds in, the client is kicked, and the battle server
+then runs for **15 minutes 42 seconds**, dying only to a SIGKILL from our own
+harness. So on this box the oversized bunch disconnects the player and does not
+crash the host. *(verified.)*
+
+That is evidence against "S1 and C9 are the same bug", though not proof for your
+platform — Wine may well handle a bunch-reassembly failure differently from
+Windows, and our client is kicked at 21 s where yours stays attached to ~50 s.
+
+**A control matching yours:** a no-client instance here ran 2m34s until we
+stopped it, with no sign of trouble. Same as your last row. *(verified.)*
+
+**The reproduction failed, and the reason is worth knowing.** To avoid UI
+automation I queued by writing a `queue_entries` row directly. The match forms
+and the battle server spawns correctly — but the client never travels, because
+the `YA_Connect` push is gated on that connection having sent
+`YA_EnterMatchmaking` in this session. My shortcut skipped the one thing that
+sets the flag. So the instance came up, reached `InProgress`, and sat there with
+**zero client connections**. Getting a client-attached session past 60 s here
+needs the client to actually press Play, which is next.
+
+(That gate is also a real gap on its own: a player who reconnects into an
+already-active match is never told about it. Ours to fix, noted.)
+
+**One of your causal links does not hold, and this is the useful part.** In that
+no-client run the host still logged:
+
+```text
+01:30:23 LogYOrbitTransitionManager:Error: AYOrbitTransitionManager::
+         ActivateBattlePlayerStarts: no orbit spawn locations set!
+```
+
+with **no client attached at any point** — zero connection lines in the whole
+capture. So "no pawn owner during Orbit→Level ⇒ no orbit spawn locations
+registered" cannot be the mechanism: the host has no orbit spawn locations
+whether or not a client ever arrives. Your client-side `No Pawn Owner` error is
+real, but it looks like a second symptom of the same missing state rather than
+its cause. *(verified — the error, and the absence of any client, in the same
+log.)*
+
+**On the stack overflow, and which process produced it.** You flagged the
+attribution as unproven, so: this project has a *documented* client-side
+`EXCEPTION_STACK_OVERFLOW`. It fired immediately after the client logged
+`Membership expire in 0.000000 hours`, and the cause was mmogbrain sending a
+`Membership` object with `ExpireTime="0"` instead of omitting it for a player who
+has never bought elite. Fixed server-side in `response_builders.go`. We never
+identified the recursive function, so we cannot say your dialog was the same
+one — but a client crashing with a stack overflow in this stack is a thing that
+has happened before, your client crashed in the same minute with two bundles,
+and its window was the unhidden one. If you can get a crash bundle from the
+battle server specifically, that settles it.
+
+**What would close this from our side:** a client-attached session here that
+lasts past ~60 s. Our client is kicked at ~21 s by the OTS overflow, so we may
+not be able to reach your window at all — which is itself a difference worth
+understanding. **Do your runs show the client being disconnected before the
+server dies, or does it stay connected right up to the exit?** If yours is never
+kicked, the OTS transfer is behaving differently on Windows and that is the
+thread to pull.
+
+**On the client not noticing the host died** — agreed, and note the two cases
+differ. When the host kicks the client it sends a disconnect and the client
+handles it. When the host *dies*, nothing is sent, and that is the indefinite
+hang. A server-side sweep cannot help there; it needs the client's own
+connection timeout, or the match ending through mmogbrain, which is a thing we
+can do: game-manager/dn-dedicated knows when an instance exits and currently
+tells mmogbrain nothing. That is ours and it is now on the list.

@@ -77,6 +77,12 @@ Received corrupted packet data from client 10.0.0.26.  Disconnecting.
   bunches × 501 B ≈ **69.6 KB** — 6% over the cap.
 - Measured from one join: 78 slices, ~2.6 MB, over 4 seconds, then the kick
   about 13 s after the client connected.
+- **The host survives it.** The instance that logged the overflow at 22:29:20
+  went on running until 22:44:41 and exited only to a SIGKILL from the harness --
+  15m42s later. So the oversized bunch disconnects the player; it does not crash
+  the server, at least under Wine. Worth stating because the client side reported
+  battle servers dying ~56 s in whenever a client is attached (AGENT-CHAT C9) and
+  wondered whether this was the cause. On this box it is not.
 
 The rows are the tune data, flattened to JSON nodes
 (`RebuildTuneData_Internal`, `FUN_14058d390`). The 8 arrays line up exactly with
