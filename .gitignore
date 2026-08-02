@@ -1,3 +1,17 @@
+# TLS certificates and keys -- GENERATED, never committed.
+#
+# They used to be tracked, which had two costs. The README tells operators to
+# regenerate for their own IP (`rm -rf certs/ && bash scripts/gen-certs.sh`), and
+# following that instruction left nine modified tracked files and one deletion in
+# the working tree forever -- so `git status` stopped being useful and real
+# changes hid in the noise. Worse, the obvious way out of that state,
+# `git add -A`, commits the operator's own PRIVATE KEYS over the shipped ones.
+#
+# scripts/setup.sh generates them on first run, the same way it does
+# run/secrets.env, so a fresh clone still works with no extra step -- and every
+# install now has its own CA instead of one whose private key is public.
+certs/
+
 # Runtime data
 run/
 *.db

@@ -113,6 +113,10 @@ On the **server**, the certificate must cover the address clients dial. `gen-cer
 rm -rf certs/ && SERVER_IP=<your-lan-ip> bash scripts/gen-certs.sh
 ```
 
+`certs/` is gitignored, so this leaves your working tree clean. Regenerating
+mints a new CA, so redistribute the new `certs/ca.crt` to every client
+afterwards — the old one will no longer be trusted.
+
 On each **client** machine:
 
 ```powershell
@@ -162,7 +166,7 @@ Dreadnought-Revival-project/
 ├── dn-launcher/     Go         -- Windows launcher replacement (client-side)
 ├── shared/          shared packages (db, logging, middleware, game data loader)
 ├── data/            extracted game data: item tables, loadouts, assets (committed)
-├── certs/           CA + server certificate
+├── certs/           CA + server certificate  (generated, gitignored)
 ├── run/             binaries, databases, logs, secrets.env  (gitignored)
 ├── scripts/
 │   ├── setup.sh              build + certs + secrets, one shot
@@ -232,7 +236,7 @@ Set in `run/secrets.env` unless noted.
 ## Security notes
 
 - `setup.sh` generates random secrets. If you write your own, use `openssl rand -hex 32`.
-- **The TLS private keys under `certs/` are committed to this repository.** Anyone with `certs/ca.key` can mint certificates your clients will trust. For anything beyond a private LAN install, regenerate them (`rm -rf certs/ && bash scripts/gen-certs.sh`), keep them out of version control, and redistribute the new `ca.crt` to clients.
+- **`certs/` is generated, not committed.** Every install mints its own CA on first `setup.sh`, so no private key in this repository can sign a certificate your clients trust. Keep `certs/ca.key` to yourself; anyone holding it can mint certificates your clients will accept. The directory is gitignored, so `git add -A` cannot publish it by accident.
 - SQLite databases are plain files under `run/`. Use filesystem encryption if that matters to you.
 - The gateway rate-limits proxied requests to 100/min per IP, and crash-report uploads to 5/min per IP.
 
