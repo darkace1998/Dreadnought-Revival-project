@@ -67,6 +67,16 @@ for svc in "${SERVICES[@]}"; do
   echo "OK"
 done
 
+# dn-dedicated is the control plane that replaced game-manager (see
+# start-services.sh). It is a SEPARATE Go module and is deliberately not in
+# go.work, so it builds with GOWORK=off from its own directory.
+printf '    %-16s ' "dn-dedicated"
+if (cd "$PROJECT_DIR/dn-dedicated" && GOWORK=off go build -o "$RUN_DIR/dn-dedicated" .); then
+  echo "OK"
+else
+  echo "FAILED -- the stack will fall back to game-manager"
+fi
+
 # The launcher is the one client-side component, and it is Windows-only
 # (//go:build windows). Cross-compiling it here is optional -- skip quietly if
 # the toolchain cannot.

@@ -159,10 +159,41 @@ start() {
     echo "started $name $(cat "$RUN_DIR/$name.pid")"
 }
 
+# The control plane is what mmogbrain's matchmaker POSTs a formed match to, and
+# what actually spawns the battle server. dn-dedicated replaced game-manager:
+# same routes, same argv, plus per-instance readiness (GET /instances/{id}
+# reports "ready"), which is what lets the YA_Connect travel push fire when the
+# server is genuinely hosting instead of after DN_CONNECT_PUSH_DELAY.
+#
+# Both listen on :8085 and only one may run. Set DN_CONTROL_PLANE=game-manager
+# to go back; the old service is still built and still works, it just makes
+# every match wait out the fixed delay.
+start_control_plane() {
+    local choice="${DN_CONTROL_PLANE:-dn-dedicated}"
+    if [ "$choice" = "dn-dedicated" ] && [ ! -x "$RUN_DIR/dn-dedicated" ]; then
+        echo "run/dn-dedicated is missing -- falling back to game-manager (run scripts/setup.sh)" >&2
+        choice="game-manager"
+    fi
+    if [ "$choice" = "game-manager" ]; then
+        start game-manager "$RUN_DIR/game-manager"
+        return
+    fi
+    # serve takes its game binary, ports and key from the same environment
+    # game-manager reads, so nothing else here changes. --register puts matches
+    # in the server browser, which game-manager did unconditionally.
+    start dn-dedicated "$RUN_DIR/dn-dedicated" serve \
+        --addr ":8085" \
+        --server-ip "$SERVER_IP" \
+        --game-binary "$GAME_BINARY" \
+        --register \
+        --master-url "$MASTER_URL" \
+        --log-dir "$RUN_DIR/battle-logs"
+}
+
 echo "=== Starting services ==="
 start auth-server "$RUN_DIR/auth-server"
 start master-server "$RUN_DIR/master-server"
-start game-manager "$RUN_DIR/game-manager"
+start_control_plane
 TLS_CERT="$ROOT/certs/server.crt" TLS_KEY="$ROOT/certs/server.key" \
     CRASH_REPORT_DIR="$RUN_DIR/crash-reports" start gateway "$RUN_DIR/gateway"
 start mmogbrain "$RUN_DIR/mmogbrain"

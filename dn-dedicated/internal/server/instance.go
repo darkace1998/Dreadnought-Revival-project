@@ -446,6 +446,22 @@ func buildEnv(cfg LaunchConfig) []string {
 	}
 	env = append(env, "WINEDEBUG=-all")
 
+	// The shipping binary links WebBrowserWidget, so CEF initialises even with
+	// -nullrhi -unattended. CEF creates a real window and aborts the process
+	// ("FATAL:hwnd_util.cc(67): Invalid window handle") when there is no X
+	// display, which surfaces as a libcef.dll call stack and an immediate exit
+	// with nothing else in the log to explain it.
+	//
+	// GAME_DISPLAY overrides; otherwise an inherited DISPLAY is kept; otherwise
+	// fall back to the Xvfb display the stack starts on demand. Only relevant
+	// under Wine, which is why it lives after the useWine gate -- on Windows
+	// there is no X display and none is needed.
+	if display := os.Getenv("GAME_DISPLAY"); display != "" {
+		env = append(env, "DISPLAY="+display)
+	} else if os.Getenv("DISPLAY") == "" {
+		env = append(env, "DISPLAY=:99")
+	}
+
 	// These matter even with -nullrhi: without them the shipping build
 	// page-faults during RHI init under Wine on a box with no GPU. Each is only
 	// added when unset, so an operator with real hardware can override any of
