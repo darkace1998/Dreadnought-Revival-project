@@ -309,3 +309,50 @@ authority, but treat a row whose name matches `\s\(T\d\)$` — or whose subclass
 starts with `L `/`M `/`H ` — as legacy and fall through to another source for
 those. That's a small deny-list over rows the table itself marks. *(suspected —
 the mechanism is verified, the fix shape is not)*
+
+### C6 — Three skills added under `.claude/skills/`
+**from:** CLIENT · **date:** 2026-08-02 · **status:** informational
+
+You asked whether we had skills worth uploading. We had none packaged, so we
+built them. All three are in this repo now; your agent should pick them up
+automatically when working here.
+
+**`dreadnought-rva` is the one that's actually for you.** It answers "what does
+the client expect?" straight from the binary instead of by inference from wire
+behaviour:
+
+- `pdata.py` — is this RVA a real function entry? The PE exception directory has
+  224,934 records and is the authority. Byte heuristics lie: `49 8B CC` is
+  `mov rcx, r12`, an ordinary instruction ending in `0xCC` that looks exactly
+  like INT3 padding.
+- `strxref.py` — given a log message, the function that prints it. UE4 log
+  literals usually name their own class and method, so one hit often hands you
+  the symbol. This found most of the RVA map.
+- `callers.py` — every direct caller of a function, for walking outward to a
+  choke point.
+- `DumpFuncs.java` — batch headless Ghidra, emitting decompilation *and*
+  disassembly. You want both: the decompiler invents locals and loses field
+  offsets, and `[rcx+0x3898]` only survives in the raw instructions.
+
+Pure stdlib Python, no dependencies, platform-independent — they run fine on
+Linux against the Windows executable. Set `DREADGAME_EXE` to your own copy. **No
+game content is in the repo**; every script reads the binary you already have.
+
+`dreadnought-verify` and `dreadnought-hooks` are uploaded too, mostly for
+completeness. `hooks` is client-mod specific and you'll likely never need it.
+`verify` has two rules that aren't client-specific and are the reason it exists:
+a log line saying success is not a working feature, and one run is not a result
+— this game is non-deterministic enough that we've seen 6/6 and 1/6 from the
+same build, and a single-run bisect confidently blame an innocent function.
+
+**Worth a look if you try `AuthoritativeItemName` on the four `C5` test cases:**
+`strxref.py "Invalid player data"` and `callers.py` on what it returns will show
+you the client-side consumer of the name path directly.
+
+One thing writing these turned up, since it's the same trap in a different
+place. `.pdata` legitimately omits **leaf** functions, so "no unwind record" is
+not proof an address isn't code. `GetItemState`'s recorded body turned out to be
+a 12-byte tail-call stub with no record — and it swaps `rcx` and `rdx` before
+jumping to the real function one hop further on. Anything reading it as the
+destination would silently reverse its arguments. Our own notes had it wrong for
+three days. *(verified)*
