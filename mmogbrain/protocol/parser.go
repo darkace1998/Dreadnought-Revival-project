@@ -66,6 +66,17 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 				return false
 			}
 			i += valueLen
+		// Tag 0x02 is a 16-byte GUID. The client uses it for the `fleet` field
+		// of YA_AddToFleet/YA_RemoveFromFleet (captured live 2026-08-02, where
+		// it carried the player's own PID). With no case for it these scanners
+		// fell through to the default and stopped, making every field AFTER it
+		// invisible -- which is why `shipId` was never seen and fleet edits
+		// silently did nothing.
+		case 0x02:
+			if i+16 > len(payload) {
+				return false
+			}
+			i += 16
 		case 0x05:
 			if i >= len(payload) {
 				return false
@@ -138,6 +149,17 @@ func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
 				return value, true
 			}
 			i += valueLen
+		// Tag 0x02 is a 16-byte GUID. The client uses it for the `fleet` field
+		// of YA_AddToFleet/YA_RemoveFromFleet (captured live 2026-08-02, where
+		// it carried the player's own PID). With no case for it these scanners
+		// fell through to the default and stopped, making every field AFTER it
+		// invisible -- which is why `shipId` was never seen and fleet edits
+		// silently did nothing.
+		case 0x02:
+			if i+16 > len(payload) {
+				return nil, false
+			}
+			i += 16
 		case 0x05:
 			if i >= len(payload) {
 				return nil, false
@@ -211,6 +233,17 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 				return 0, false
 			}
 			i += valueLen
+		// Tag 0x02 is a 16-byte GUID. The client uses it for the `fleet` field
+		// of YA_AddToFleet/YA_RemoveFromFleet (captured live 2026-08-02, where
+		// it carried the player's own PID). With no case for it these scanners
+		// fell through to the default and stopped, making every field AFTER it
+		// invisible -- which is why `shipId` was never seen and fleet edits
+		// silently did nothing.
+		case 0x02:
+			if i+16 > len(payload) {
+				return 0, false
+			}
+			i += 16
 		case 0x05:
 			if i >= len(payload) {
 				return 0, false
@@ -288,6 +321,17 @@ func ExtractRequestName(payload []byte) string {
 				return ""
 			}
 			i += valueLen
+		// Tag 0x02 is a 16-byte GUID. The client uses it for the `fleet` field
+		// of YA_AddToFleet/YA_RemoveFromFleet (captured live 2026-08-02, where
+		// it carried the player's own PID). With no case for it these scanners
+		// fell through to the default and stopped, making every field AFTER it
+		// invisible -- which is why `shipId` was never seen and fleet edits
+		// silently did nothing.
+		case 0x02:
+			if i+16 > len(payload) {
+				return ""
+			}
+			i += 16
 		case 0x05:
 			if i >= len(payload) {
 				return ""

@@ -721,17 +721,76 @@ func persistAddShipDefaultLoadouts(database *sql.DB, playerPID string, payload [
 	return nil
 }
 
-func persistAddToFleet(database *sql.DB, playerPID string, payload []byte) error {
-	fleetID := firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId")
-	loadoutID := firstMmogInt32Field(payload, "LoadoutID", "loadoutID", "FlagShipLoadoutID")
-	shipID := firstMmogInt32Field(payload, "ShipID", "shipID", "shipId")
-	if fleetID == 0 {
-		fleetID = starterFleetState().fleetID
+// Item categories, from the top byte of an id ((id >> 24) & 0xff) -- the same
+// tag ItemIDTable assigns and the client's own gates compare (see
+// tech_tree_precast.go for the decompile evidence).
+const (
+	mmogItemCategoryShipLoadoutPrecast = 1
+	mmogItemCategoryShipLoadoutHero    = 3
+)
+
+// fleetEditTargetFleetID picks the fleet a YA_AddToFleet/YA_RemoveFromFleet
+// applies to.
+//
+// The client does NOT send our numeric fleet id back. Captured live, the
+// request carries `fleet` as a 16-byte GUID (wire tag 0x02) holding the
+// player's own PID -- it identifies the owner, not which of their three fleets
+// -- plus `shipId`. So the only sane target is the fleet the player currently
+// has active, falling back to the starter fleet if none is marked.
+func fleetEditTargetFleetID(database *sql.DB, playerPID string, payload []byte) int32 {
+	if fleetID := firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId"); fleetID != 0 {
+		return fleetID
 	}
-	if loadoutID == 0 && shipID != 0 {
-		if err := database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("lookup loadout for add to fleet: %w", err)
-		}
+	var fleetID int32
+	if err := database.QueryRow(`SELECT fleet_id FROM player_fleets WHERE user_id=? AND active=1 LIMIT 1`,
+		playerPID).Scan(&fleetID); err == nil && fleetID != 0 {
+		return fleetID
+	}
+	return starterFleetState().fleetID
+}
+
+// fleetEditLoadoutID resolves which of the player's loadouts a fleet edit is
+// about.
+//
+// The `shipId` the client sends is NOT a ship id. Captured live, a removal of
+// Agosta carried shipId=33489262 -- the PRECAST LOADOUT id. By the category law
+// its top byte is 1 (YShipLoadoutPrecast); a real ship id has top byte 10
+// (YPawn). Looking it up in ship_id therefore matched nothing and both handlers
+// silently returned nil, which is why fleet edits never took: twenty
+// YA_RemoveFromFleet requests in one session, every one a no-op.
+//
+// Resolve by category rather than by guessing a column: a precast/hero id is
+// matched against loadout_id and precast_loadout_id, a YPawn id against ship_id.
+func fleetEditLoadoutID(database *sql.DB, playerPID string, payload []byte) (int32, error) {
+	if loadoutID := firstMmogInt32Field(payload, "LoadoutID", "loadoutID", "FlagShipLoadoutID"); loadoutID != 0 {
+		return loadoutID, nil
+	}
+	candidate := firstMmogInt32Field(payload, "ShipID", "shipID", "shipId")
+	if candidate == 0 {
+		return 0, nil
+	}
+	var loadoutID int32
+	var err error
+	switch category := (candidate >> 24) & 0xff; category {
+	case mmogItemCategoryShipLoadoutPrecast, mmogItemCategoryShipLoadoutHero:
+		err = database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts
+			WHERE user_id=? AND (loadout_id=? OR precast_loadout_id=?) ORDER BY position LIMIT 1`,
+			playerPID, candidate, candidate).Scan(&loadoutID)
+	default:
+		err = database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts
+			WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, candidate).Scan(&loadoutID)
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("resolve fleet edit loadout %d: %w", candidate, err)
+	}
+	return loadoutID, nil
+}
+
+func persistAddToFleet(database *sql.DB, playerPID string, payload []byte) error {
+	fleetID := fleetEditTargetFleetID(database, playerPID, payload)
+	loadoutID, err := fleetEditLoadoutID(database, playerPID, payload)
+	if err != nil {
+		return err
 	}
 	if loadoutID == 0 {
 		return nil
@@ -747,10 +806,10 @@ func persistAddToFleet(database *sql.DB, playerPID string, payload []byte) error
 }
 
 func persistRemoveFromFleet(database *sql.DB, playerPID string, payload []byte) error {
-	fleetID := firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId")
-	loadoutID := firstMmogInt32Field(payload, "LoadoutID", "loadoutID", "FlagShipLoadoutID")
-	if fleetID == 0 {
-		fleetID = starterFleetState().fleetID
+	fleetID := fleetEditTargetFleetID(database, playerPID, payload)
+	loadoutID, err := fleetEditLoadoutID(database, playerPID, payload)
+	if err != nil {
+		return err
 	}
 	if loadoutID == 0 {
 		return nil
