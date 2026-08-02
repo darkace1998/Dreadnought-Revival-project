@@ -182,6 +182,52 @@ func buildMmogFleetMutationPayload(requestName string, payload []byte) []byte {
 	return b
 }
 
+// buildMmogUnlockItemPayload answers YA_UnlockItem.
+//
+// The generic success envelope is wrong for this one in two ways, and the
+// client said so: "Failed to unlock item 0. Error:" -- item id 0 because we
+// echoed none, and a failure because the envelope's status is "ok".
+//
+// The response arm reads, in order (all against the same document):
+//
+//	result 0x142a25e13   status 0x142a25e8b   reason 0x142a25f03
+//	ShipXp 0x142a25f7b   FreeXp 0x142a25ff3
+//	ItemID 0x142a2606b   ShipID 0x142a260e3
+//
+// and the value it compares against is "succeeded" (0x142a261d3), NOT "ok".
+// That single word is why every unlock reported failure even once the item was
+// being charged and recorded correctly.
+//
+// The balances are the ones AFTER the charge: the connection persists the
+// mutation before building this response.
+func buildMmogUnlockItemPayload(playerPID string, payload []byte) []byte {
+	itemID := protocol.FirstInt32(payload, "ItemID", "itemID", "itemId")
+	state := mmogPlayerStateForPID(playerPID)
+
+	var shipID int32
+	if itemID != 0 {
+		if resolved, ok := dreadconfig.ShipIDForPrecastLoadout(itemID); ok {
+			shipID = resolved
+		}
+	}
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_UnlockItem")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
+	b = protocol.AppendStringField(b, "reason", "")
+	// Numeric strings: the client reads these through the restrictive
+	// double/int64/string union, so an int32 would read as 0 -- which is
+	// exactly how ItemID came back before.
+	b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(persistedPlayerShipXP(playerPID, shipID))))
+	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
+	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
+	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(shipID)))
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
 // --- Matchmaking ---
 
 type mmogMatchmakingStatus struct {

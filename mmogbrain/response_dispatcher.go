@@ -197,7 +197,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogConnectPayload(playerPID)
 	case "YA_PlayerStateInHangar", "YA_UserLogout", "YA_ReconnectJoinChannels":
 		return buildMmogRequestSuccessPayload(requestName)
-	case "YA_UnlockItem", "YA_ClaimItem", "YA_AddItems", "YA_RemoveItems",
+	case "YA_UnlockItem":
+		return buildMmogUnlockItemPayload(playerPID, payload)
+	case "YA_ClaimItem", "YA_AddItems", "YA_RemoveItems",
 		"YA_ContractReplace", "YA_ContractRemove":
 		return buildMmogRequestSuccessPayload(requestName)
 

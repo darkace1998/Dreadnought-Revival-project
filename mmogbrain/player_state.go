@@ -1130,3 +1130,22 @@ func boolToInt(value bool) int {
 	}
 	return 0
 }
+
+// persistedPlayerShipXP returns the XP the player has accumulated on one ship,
+// or 0 when there is no row (or no database). YA_UnlockItem's response echoes
+// it back alongside the free-XP balance.
+func persistedPlayerShipXP(playerPID string, shipID int32) int32 {
+	if shipID == 0 {
+		return 0
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return 0
+	}
+	var xp int32
+	if err := database.QueryRow(`SELECT xp FROM player_ship_xp WHERE user_id=? AND ship_id=?`,
+		normalizedPlayerStatePID(playerPID), shipID).Scan(&xp); err != nil {
+		return 0
+	}
+	return xp
+}

@@ -412,3 +412,29 @@ func TestUnlockItemDoesNotChargeTwiceForTheSameItem(t *testing.T) {
 		t.Fatalf("free xp = %d after three unlocks of the same item, want 15000 (charged once)", freeXP)
 	}
 }
+
+// The unlock response arm reads result/status/reason/ShipXp/FreeXp/ItemID/ShipID
+// and compares the status against "succeeded" -- not "ok". With the generic
+// success envelope the client logged "Failed to unlock item 0. Error:" : id 0
+// because nothing was echoed, failure because the word was wrong.
+func TestUnlockItemResponseCarriesWhatTheClientReads(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	payload := buildMmogUnlockItemPayload(pid, realUnlockItemPayload())
+
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, fieldStatus, "succeeded")) {
+		t.Error(`status must be "succeeded"; "ok" is what made every unlock report failure`)
+	}
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "ItemID", "33489267")) {
+		t.Error("ItemID not echoed as a numeric string -- the client logged item 0")
+	}
+	for _, field := range []string{"reason", "ShipXp", "FreeXp", "ShipID"} {
+		if !bytes.Contains(payload, []byte(field)) {
+			t.Errorf("response is missing %q, which the arm reads", field)
+		}
+	}
+}

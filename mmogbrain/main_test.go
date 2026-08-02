@@ -2764,7 +2764,10 @@ func TestSafeNoopClientCallsReturnSuccess(t *testing.T) {
 	for _, name := range []string{
 		"YA_PlayerStateInHangar",
 		"YA_UserLogout",
-		"YA_UnlockItem",
+		// YA_UnlockItem is no longer a no-op: it charges free XP, records
+		// ownership, and answers with its own payload whose success value is
+		// "succeeded", not "ok" (the arm compares against "succeeded" at
+		// 0x142a261d3). Covered by TestUnlockItemResponseCarriesWhatTheClientReads.
 		"YA_ClaimItem",
 		"YA_AddItems",
 		"YA_RemoveItems",
