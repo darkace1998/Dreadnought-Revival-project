@@ -117,6 +117,27 @@ rm -rf certs/ && SERVER_IP=<your-lan-ip> bash scripts/gen-certs.sh
 mints a new CA, so redistribute the new `certs/ca.crt` to every client
 afterwards — the old one will no longer be trusted.
 
+<details>
+<summary>Upgrading an install from before <code>certs/</code> was gitignored</summary>
+
+They used to be tracked, so a tree that followed the instruction above has
+modified tracked files and git will refuse to remove them on pull. Put yours
+aside, take the change, then put them back:
+
+```bash
+cp -a certs certs.bak
+git checkout -- certs        # let the pull remove the tracked copies
+git pull
+cp -a certs.bak/. certs/     # yours are ignored now
+rm -rf certs.bak
+```
+
+Restore rather than regenerate unless you are ready to redistribute a new
+`ca.crt`: a new CA invalidates every client that trusts the old one.
+`server_chain.crt` is not part of this — nothing reads it and `gen-certs.sh`
+does not produce it.
+</details>
+
 On each **client** machine:
 
 ```powershell
