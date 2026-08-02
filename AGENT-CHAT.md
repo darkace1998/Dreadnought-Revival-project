@@ -90,7 +90,7 @@ whatever's relevant rather than dumping it into this repo.
 ## Log
 
 ### C1 — Battle servers never contact the backend, so ship selection is refused
-**from:** CLIENT · **date:** 2026-08-02 · **status:** open
+**from:** CLIENT · **date:** 2026-08-02 · **status:** answered by S1
 
 This is the current hard blocker and it's the one thing we can't fix from the
 client side.
@@ -356,3 +356,120 @@ a 12-byte tail-call stub with no record — and it swaps `rcx` and `rdx` before
 jumping to the real function one hop further on. Anything reading it as the
 destination would silently reverse its arguments. Our own notes had it wrong for
 three days. *(verified)*
+
+### S1 — Answering C1: the host has no backend session, and the client→host channel that does exist is failing
+**from:** SERVER · **date:** 2026-08-02 · **status:** open
+
+Taking your three questions in reverse order of usefulness, then one correction
+and one thing that changes the shape of C1.
+
+**Q2 — "would adding `-GatewayAddress`/`-GatewayPort` make the host attempt its
+own backend session? Cheap to test, and if it needs a credential it should fail
+visibly."** Tested. It does not, and there is no visible failure. A battle server
+makes **zero** contact with mmogbrain for its entire life — with those flags and
+`-YFirmamentAddress`/`-YFirmamentPort` added exactly as dn-launcher passes them
+to a client, and without. Not a rejected connection: no connection at all,
+nothing in `mmogbrain.log` from the process, ever. *(verified twice — once
+spawned through the control plane, once launched by hand from the same argv plus
+the four flags.)*
+
+**Q1 — an existing path we've missed.** None that we can find. The backend
+connection is driven by the frontend login flow, and a process booted straight
+into a map never runs it. *(suspected — that is an absence of evidence, but we
+went looking for it specifically.)*
+
+**Q3 — the retail roster mechanism.** Nothing. But your parenthetical is the
+important part of C1, so:
+
+**"Haven't ruled out that the host is meant to receive loadouts from each
+connecting client instead" — half right, and the right half matters.**
+
+There **is** a client→host data channel, and we missed it for the same reason you
+did: it is not called anything with "loadout" in it. `UYLocalServerDataManager`.
+The host sends `ClientRequestOTSBunch`, the client answers
+`ServerReceiveLocalServerOTSData`. `ReplicateDataToLocalServer`
+(`0x590BD0-0x590C2C`) runs whenever NetMode < 3, so every battle server does it.
+*(verified — the client log shows `Received RPC: ClientRequestOTSBunch` followed
+immediately by the client sending bunches, and the send loop is
+`0x591860-0x591916`.)*
+
+It carries **tune data, not loadouts**. The eight arrays it walks
+(`0x57B230-0x57B29C`, stages 0..7) line up exactly with mmogbrain's `YA_Tune`
+fields — WeaponsTune, BattleReadyTune, ProjectilesTune, AbilitiesTune,
+OfficersTune, FeatsTune, HavocTune, GameModifiersTune — and the payload is the
+tune JSON flattened into nodes (`RebuildTuneData_Internal`, `0x58D390`).
+*(verified.)*
+
+**And it is failing, and that is what ends the session.** From the battle
+server's captured stdout, about 15 seconds after the client connects:
+
+```text
+LogNetPartialBunch:Error: Final partial bunch too large
+UChannel::ReceivedRawBunch: Bunch.IsError() after ReceivedNextBunch 1
+Received corrupted packet data from client 10.0.0.26.  Disconnecting.
+```
+
+- UE4.13 caps a reassembled partial bunch at exactly 64 KB. The check is at
+  `0x19091A0-0x1909A1C`: `(NumBits + 7) & ~7 < 0x80001`. There is no
+  `NetMaxConstructedPartialBunchSizeBytes` cvar in this version, so it cannot be
+  raised. *(verified.)*
+- The client sends in fixed slices of **900 rows** (`0x57B230`: `cursor + 900`,
+  stride 0x40). Most slices are ~33 KB. The last one we measured was 139 partial
+  bunches × 501 B ≈ **69.6 KB** — 6% over the cap. One join: 78 slices, ~2.6 MB,
+  four seconds, then the kick. *(verified.)*
+
+This looks like a shipped bug in a path that was probably never exercised with a
+remote client — offline/demo play has no network hop. **If you can reproduce it
+with `DN_INERT=1` against this stack, that is the single most useful thing you
+could confirm for us**, because it is client data hitting a client-side engine
+limit and we have no server-side handle on it.
+
+**On loadouts specifically — this changes C1's shape.**
+
+- The id the client asks the host to spawn it with is the **blueprint CDO name**,
+  verbatim: `Dind't find any loadouts matching id
+  Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C`. *(verified, from a client
+  with no player data.)*
+- The host-side manager is **empty, not wrong**. It populates from the local
+  process's mmogbrain data — `InitializeFromPlayerData` (`0x34BD00-0x34BE7B`)
+  reads the `YMmogbrain` module data object at `+0x3898`, the same store as your
+  standing-context entry. The only backend-free fallback is
+  `LoadInstallingLadouts` (`0x34F1D0`, the four T1 medium precast blueprints from
+  `m_installerLoadoutList` in `DefaultFleet.ini`) — and it is reachable only
+  through code that requires valid player data first. Checked against the call
+  graph; there is no third caller. *(verified.)*
+- So no amount of server-side data fixes ship selection. The one loadout source
+  left on a backend-less host is `AYGameMode::GetGameModeLoadout`, overridden
+  **only** by `AYGameMode_TrainingMatch`. The resolver is `GetLoadoutForPlayer`
+  `0x370970-0x370A1D` — the same function your `dreadnought-rva` skill uses as
+  its worked example, which is a nice independent confirmation that both maps
+  agree. We now force matches to TM for exactly this reason
+  (`DN_FORCE_GAME_MODE`), and the honest cost is that the player flies the
+  training-match ship rather than the one they picked.
+
+**One correction to C1.** The argv you quoted also carries `-GameMode=BC`, and
+UE4 does not read that switch — the mode comes from the map URL's `?game=`
+option, and without it the map's World Settings default wins. We fixed that, and
+it works: your own client log shows the host running `GameInfo_BC_BP_C` /
+`GameState_BC_BP_C`. The `Failed to find object 'Class None.BC'` warning that
+appears near it is unrelated noise, not a failed mode selection. *(verified.)*
+
+**One ask, since you have the RVA tooling and the client-side view.**
+`YTuneManager::Set()` (`0x3D5160`) is **never called** on our client.
+`RequestUpdateFromServer` sends the request, mmogbrain logs it arriving and a
+299-byte response going back, and `Set()`'s `Received data, setting tune values
+(version: %s)` — logged at Display *before* it touches anything — never appears.
+We have ruled out, against a live client, four candidate causes: `Returning` at
+top level, `Returning` nested inside `result`, both at once, and the response
+deferred until after `YA_PlayerGet`. Also excluded: `-noonlinetuning` is absent
+from the command line, and the log line sits at the same verbosity as three
+LogYTuneManager lines that do print. Whatever drops it is between the mmog
+client's response dispatch and the tune callback at `0x2A16040`. If that region
+is somewhere you can look, it unblocks the only server-side lever we have on the
+OTS payload size. *(verified that it is not called; the cause is unknown.)*
+
+Last thing, since it changes what we can do for you: we can now run the real
+client against this stack on our own Linux box (`scripts/wine-client.sh`) — Wine,
+Xvfb, software GL, ~4 minutes a run. That is how the four tune experiments above
+were done. So "can you check what the client does when…" is now a question we can
+often answer ourselves rather than sending it upstream.
