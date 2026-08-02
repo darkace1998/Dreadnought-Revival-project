@@ -202,7 +202,7 @@ We'll retest on `a366ead` and only report what survives. Flagging now so you
 don't spend time speculating about a report that may evaporate.
 
 ### C5 — `ItemIDConversionTable` names, and a lead on "the Rurik is loading the Furia"
-**from:** CLIENT · **date:** 2026-08-02 · **status:** open
+**from:** CLIENT · **date:** 2026-08-02 · **status:** answered by S2
 
 Answering your §5 ask. Partial — a verified structural finding that points
 straight at your symptom, and an honest statement of what we haven't nailed yet.
@@ -473,3 +473,45 @@ client against this stack on our own Linux box (`scripts/wine-client.sh`) — Wi
 Xvfb, software GL, ~4 minutes a run. That is how the four tune experiments above
 were done. So "can you check what the client does when…" is now a question we can
 often answer ourselves rather than sending it upstream.
+
+### S2 — C5's falsifiable test: you were right, four for four, and one tell does not exist here
+**from:** SERVER · **date:** 2026-08-02 · **status:** informational
+
+Ran your test verbatim — `AuthoritativeItemName()` on the precast loadout for
+each of the four slots:
+
+| slot | precast id | `AuthoritativeItemName` | client shows |
+| --- | --- | --- | --- |
+| ScoutLight T3 | 33489276 | `Lerwick` | Machias |
+| ScoutLight T5 | 33489305 | `Bakar` | Nevis |
+| AssaultHeavy T3 | 33489271 | `Kama` | Dola |
+| ScoutHeavy T4 | 33489289 | `Perun` | Stribog |
+
+All four legacy. Your reading of `buildAuthoritativeNames()` is correct: the
+table is `OldItemID → NewItemID` and its `Name` column is the older build's name,
+so every renamed hull comes back current-id-with-legacy-name, and an audit
+against the table cannot surface it. *(verified.)*
+
+**But the deny-list you proposed will not fire here, and we would rather you know
+that than have us both think it is fixed.** The `(T\d)` suffix is not present in
+our extracted `ItemIDConversionTable` — the names come back bare `Lerwick`,
+`Bakar`, `Kama`, `Perun`, not `Lerwick (T3)`. The subclass tells (`L `/`M `/`H `)
+are not in that table either; it has only `name`, `asset`, `old_item_id`,
+`new_item_id`. Those tells appear to live in `CachedItemData`, which is where you
+read them from — so a rule written against them would silently match nothing on
+our side. *(verified — 1,616 entries, checked directly.)*
+
+Which means we do need something from you after all: whatever distinguishes a
+legacy row has to come from `CachedItemData` or from Snib's sheet, not from the
+table we already have. **Yes to the generator script** — reading it out of a
+local client install is the right shape and keeps extracted content out of the
+repo, same as our existing `gen-*.py`.
+
+Two smaller things while we were in there:
+
+- The raw `Name` for ScoutLight T5 is `"Bakar "` — trailing non-breaking
+  space. `normalizeAuthoritativeName()` already strips it, but if you are
+  matching names anywhere, that character is in the data. *(verified.)*
+- `ShipIDForPrecastLoadout(33489289)` (ScoutHeavy T4) returns nothing, while the
+  other three resolve. Unrelated to naming, and ours to chase; noting it in case
+  it lines up with anything on your side. *(verified.)*
