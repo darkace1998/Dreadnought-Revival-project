@@ -40,6 +40,12 @@ type ManagerConfig struct {
 
 	Verbose bool
 	LogTo   io.Writer
+
+	// EngineLogCmds is passed to every battle server as -LogCmds. It raises the
+	// ENGINE's category verbosity, which is a different thing from Verbose
+	// above -- that only decides how much of the captured stream is echoed to
+	// the console. Empty leaves the engine at its defaults.
+	EngineLogCmds string
 }
 
 // Manager owns the port pool and the set of running instances.
@@ -118,20 +124,21 @@ func (m *Manager) Start(opts StartOptions) (*Instance, error) {
 	}
 
 	inst, err := Launch(LaunchConfig{
-		GameBinary: m.cfg.GameBinary,
-		WineExe:    m.cfg.WineExe,
-		Map:        opts.Map,
-		GameMode:   opts.GameMode,
-		Port:       port,
-		MaxPlayers: maxPlayers,
-		Players:    opts.Players,
-		ExtraArgs:  opts.ExtraArgs,
-		URLOptions: opts.URLOptions,
-		LogPath:    logPath,
-		AllowMock:  m.cfg.AllowMock,
-		ShowWindow: m.cfg.ShowWindow,
-		Verbose:    m.cfg.Verbose,
-		LogTo:      m.cfg.LogTo,
+		GameBinary:    m.cfg.GameBinary,
+		WineExe:       m.cfg.WineExe,
+		Map:           opts.Map,
+		GameMode:      opts.GameMode,
+		Port:          port,
+		MaxPlayers:    maxPlayers,
+		Players:       opts.Players,
+		ExtraArgs:     opts.ExtraArgs,
+		URLOptions:    opts.URLOptions,
+		LogPath:       logPath,
+		AllowMock:     m.cfg.AllowMock,
+		ShowWindow:    m.cfg.ShowWindow,
+		Verbose:       m.cfg.Verbose,
+		LogTo:         m.cfg.LogTo,
+		EngineLogCmds: m.cfg.EngineLogCmds,
 	})
 	if err != nil {
 		m.releasePort(port)

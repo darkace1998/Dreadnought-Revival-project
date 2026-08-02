@@ -23,6 +23,17 @@ import (
 
 // ---------------------------------------------------------------- run
 
+// engineLogCmdsUsage documents --engine-log-cmds, which is passed straight to
+// the engine as -LogCmds.
+//
+// Never raise LogYComVOComponent past Verbose. Above that the process crashes
+// in UYComVOComponent::PlayVoiceLineInternal, which logs two UObject names
+// before validating them; by the end of a voice line one of them is already
+// destroyed. So a "global" raise has to exempt it:
+//
+//	--engine-log-cmds "global verbose, LogYComVOComponent log"
+const engineLogCmdsUsage = `engine -LogCmds value, e.g. "global verbose, LogYComVOComponent log" (never raise LogYComVOComponent past Verbose -- it crashes)`
+
 func cmdRun(argv []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	fs.Usage = func() {
@@ -50,6 +61,7 @@ and no GPU is used (-nullrhi), so this is safe on a headless host.
 		readyWait  = fs.Duration("ready-timeout", 120*time.Second, "how long to wait for the server to report it is hosting")
 		logDir     = fs.String("log-dir", defaultLogDir(), "directory for per-instance battle server logs")
 		showWindow = fs.Bool("show-window", false, "leave the engine's game window visible (debugging)")
+		logCmds    = fs.String("engine-log-cmds", getenv("DN_ENGINE_LOG_CMDS", ""), engineLogCmdsUsage)
 	)
 	var extraArgs, urlOptions stringList
 	fs.Var(&extraArgs, "extra-arg", "extra engine argument, repeatable (advanced)")
@@ -81,17 +93,18 @@ and no GPU is used (-nullrhi), so this is safe on a headless host.
 	}
 
 	mgr := server.NewManager(server.ManagerConfig{
-		GameBinary: binary,
-		WineExe:    *wineExe,
-		ServerIP:   *serverIP,
-		PortStart:  *port,
-		PortEnd:    *port,
-		MaxPlayers: *maxPlayers,
-		Master:     masterClient,
-		LogDir:     *logDir,
-		ShowWindow: *showWindow,
-		Verbose:    *verbose,
-		LogTo:      os.Stderr,
+		GameBinary:    binary,
+		WineExe:       *wineExe,
+		ServerIP:      *serverIP,
+		PortStart:     *port,
+		PortEnd:       *port,
+		MaxPlayers:    *maxPlayers,
+		Master:        masterClient,
+		LogDir:        *logDir,
+		ShowWindow:    *showWindow,
+		Verbose:       *verbose,
+		LogTo:         os.Stderr,
+		EngineLogCmds: *logCmds,
 	})
 
 	fmt.Printf("Dreadnought dedicated server (headless)\n")
@@ -195,6 +208,7 @@ matchmaker can drive it unchanged:
 		logDir     = fs.String("log-dir", defaultLogDir(), "directory for per-instance battle server logs")
 		allowMock  = fs.Bool("allow-mock", false, "record a mock instance when no game process can be started (game-manager compatibility)")
 		showWindow = fs.Bool("show-window", false, "leave the engine's game window visible (debugging)")
+		logCmds    = fs.String("engine-log-cmds", getenv("DN_ENGINE_LOG_CMDS", ""), engineLogCmdsUsage)
 	)
 	if err := fs.Parse(argv); err != nil {
 		return err
@@ -229,18 +243,19 @@ matchmaker can drive it unchanged:
 	}
 
 	mgr := server.NewManager(server.ManagerConfig{
-		GameBinary: binary,
-		WineExe:    *wineExe,
-		ServerIP:   *serverIP,
-		PortStart:  *portStart,
-		PortEnd:    *portEnd,
-		MaxPlayers: *maxPlayers,
-		Master:     masterClient,
-		LogDir:     *logDir,
-		AllowMock:  *allowMock,
-		ShowWindow: *showWindow,
-		Verbose:    *verbose,
-		LogTo:      os.Stderr,
+		GameBinary:    binary,
+		WineExe:       *wineExe,
+		ServerIP:      *serverIP,
+		PortStart:     *portStart,
+		PortEnd:       *portEnd,
+		MaxPlayers:    *maxPlayers,
+		Master:        masterClient,
+		LogDir:        *logDir,
+		AllowMock:     *allowMock,
+		ShowWindow:    *showWindow,
+		Verbose:       *verbose,
+		LogTo:         os.Stderr,
+		EngineLogCmds: *logCmds,
 	})
 
 	apiSrv := &api.Server{

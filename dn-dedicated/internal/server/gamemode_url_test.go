@@ -53,3 +53,53 @@ func TestBuildArgsOmitsEmptyGameMode(t *testing.T) {
 		t.Errorf("map URL %q has a game= option with no mode to put in it", args[0])
 	}
 }
+
+// This build writes no log file of its own, so the captured stdout stream is
+// the only record of a battle server that exists -- and UE4.13's stdout device
+// caps itself at Display without this switch. Losing it means losing every
+// Log-verbosity line, which is where the loadout and spawn failures explain
+// themselves.
+func TestBuildArgsRaisesStdoutVerbosity(t *testing.T) {
+	args := BuildArgs(LaunchConfig{
+		Map:      gamedata.Map{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"},
+		GameMode: "TM",
+		Port:     7777,
+	}, "match-1")
+
+	if !containsArg(args, "-AllowStdOutLogVerbosity") {
+		t.Error("-AllowStdOutLogVerbosity missing; stdout stays capped at Display")
+	}
+	// -FullStdOutLogOutput would give All, but it does not exist in 4.13 and
+	// the string is absent from the binary. Passing it would be a silent no-op
+	// that looks like it works.
+	if containsArg(args, "-FullStdOutLogOutput") {
+		t.Error("-FullStdOutLogOutput is not a switch this build has")
+	}
+}
+
+func TestBuildArgsPassesEngineLogCmdsOnlyWhenAsked(t *testing.T) {
+	base := LaunchConfig{
+		Map:      gamedata.Map{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"},
+		GameMode: "TM",
+		Port:     7777,
+	}
+	for _, arg := range BuildArgs(base, "m") {
+		if strings.HasPrefix(arg, "-LogCmds=") {
+			t.Fatalf("unrequested %q; verbose engine logging is opt-in", arg)
+		}
+	}
+
+	base.EngineLogCmds = "global verbose, LogYComVOComponent log"
+	if !containsArg(BuildArgs(base, "m"), "-LogCmds=global verbose, LogYComVOComponent log") {
+		t.Error("-LogCmds was not passed through")
+	}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}

@@ -183,12 +183,26 @@ start_control_plane() {
     # in the server browser, which game-manager did unconditionally.
     start dn-dedicated "$RUN_DIR/dn-dedicated" serve \
         --addr ":8085" \
+        --engine-log-cmds "$DN_ENGINE_LOG_CMDS" \
         --server-ip "$SERVER_IP" \
         --game-binary "$GAME_BINARY" \
         --register \
         --master-url "$MASTER_URL" \
         --log-dir "$RUN_DIR/battle-logs"
 }
+
+# Engine log verbosity for battle servers, passed through as -LogCmds.
+#
+# On while the spawn path is being reverse-engineered: the battle server writes
+# no log of its own, so the only record of why a player could not spawn is the
+# stream dn-dedicated captures, and the lines that explain it -- the loadout
+# manager's contents and the id it failed to find -- are Verbose.
+#
+# LogYComVOComponent is held at Log on purpose. Above Verbose the process
+# crashes in UYComVOComponent::PlayVoiceLineInternal (it logs two UObject names
+# before validating them), so "global verbose" must exempt it. Set
+# DN_ENGINE_LOG_CMDS= (empty) to turn the whole thing off.
+export DN_ENGINE_LOG_CMDS="${DN_ENGINE_LOG_CMDS-global verbose, LogYLoadout veryverbose, LogYComVOComponent log}"
 
 echo "=== Starting services ==="
 start auth-server "$RUN_DIR/auth-server"

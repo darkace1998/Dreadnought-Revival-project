@@ -32,6 +32,11 @@ type LaunchConfig struct {
 	ExtraArgs  []string // appended verbatim, after the standard argv
 	URLOptions []string // appended to the map URL as ?k=v, after ?listen
 
+	// EngineLogCmds is the value for the engine's -LogCmds switch, e.g.
+	// "global verbose, LogYComVOComponent log". Empty leaves engine verbosity
+	// at its default. See BuildArgs for the LogYComVOComponent caveat.
+	EngineLogCmds string
+
 	// LogPath is where this process writes the battle server's captured output.
 	// See newLogWriter for why the log is captured here rather than delegated
 	// to the engine's own -ABSLOG switch.
@@ -200,6 +205,26 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	// so a server that dies mid-startup still leaves the lines that explain it.
 	// dn-launcher uses the same switch for the client.
 	args = append(args, "-forcelogflush")
+
+	// This build writes NO log file of its own -- there is no Saved/Logs
+	// anywhere after a run -- so the captured stdout stream is the only record
+	// that exists. UE4.13's stdout device caps itself at Display and
+	// -AllowStdOutLogVerbosity raises it to Log, which is the difference
+	// between seeing an error and seeing why. (-FullStdOutLogOutput, which
+	// would give All, does not exist in 4.13; the string is absent from the
+	// binary.)
+	args = append(args, "-AllowStdOutLogVerbosity")
+
+	// Category verbosity on top of that, for reverse-engineering a live match.
+	// Off by default because it is a lot of output.
+	//
+	// LogYComVOComponent is pinned back down to Log even here: above Verbose
+	// the client crashes in UYComVOComponent::PlayVoiceLineInternal, which logs
+	// two UObject names before validating them. dn-launcher documents the
+	// memory dump that proved it. Anything that raises "global" must exempt it.
+	if cfg.EngineLogCmds != "" {
+		args = append(args, "-LogCmds="+cfg.EngineLogCmds)
+	}
 	return append(args, cfg.ExtraArgs...)
 }
 
