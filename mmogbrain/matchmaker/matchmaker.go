@@ -110,6 +110,25 @@ func NormalizeGameMode(mode string) string {
 // pveMaps lists maps available for PvE modes. Amirani and Derelict are real
 // entries in the same client table; "Iapetus" and "Kalyke", which used to sit
 // beside them here, are not maps this game has.
+// mapsByGameMode pins modes that only work on particular maps, and wins over
+// the availableMaps/pveMaps split below.
+//
+// TM (Training Match) is the one mode whose game info supplies the PLAYER's
+// loadout itself: GameInfo_TM_BP sets m_trainingMatchLoadout to
+// /Game/Generic/Loadouts/Precast/Tutorial/VH_DreadnoughtMedium_TutorialPlayer_PrecastLoadout_BP.
+// That matters because AYGameMode's spawn path takes the game mode's loadout
+// when it has one and only falls back to the player's own fleet otherwise --
+// and the fallback needs backend fleet data the battle server does not have.
+// So TM is currently the only mode that can spawn a pawn at all.
+//
+// It has to run on Highlands: that is the only map in the build shipping a TM
+// level variation (MP_Highlands_TM.umap). On other maps the orbit manager logs
+// "ActivateBattlePlayerStarts: no orbit spawn locations set!".
+var mapsByGameMode = map[string][]GameMap{
+	"TM":      {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
+	"TMBasic": {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
+}
+
 var pveMaps = []GameMap{
 	{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"},
 	{Name: "Derelict", Path: "/Game/Maps/MP/Derelict/MP_Derelict_P"},
@@ -353,10 +372,14 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 
 	// Pick a map
 	maps := availableMaps
-	for _, pveMode := range []string{"Onslaught", "BC"} {
-		if gameMode == pveMode {
-			maps = pveMaps
-			break
+	if modeMaps, ok := mapsByGameMode[gameMode]; ok {
+		maps = modeMaps
+	} else {
+		for _, pveMode := range []string{"Onslaught", "BC"} {
+			if gameMode == pveMode {
+				maps = pveMaps
+				break
+			}
 		}
 	}
 	chosen := maps[time.Now().UnixNano()%int64(len(maps))]

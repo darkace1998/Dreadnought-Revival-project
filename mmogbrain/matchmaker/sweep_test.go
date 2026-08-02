@@ -85,3 +85,21 @@ func TestSweepEndsStaleMatchesAndFreesPlayers(t *testing.T) {
 		t.Errorf("fresh match has %d slots, want 1", slots)
 	}
 }
+
+// TM is the only game mode whose game info supplies the player's loadout
+// (GameInfo_TM_BP's m_trainingMatchLoadout), which is what lets a battle server
+// spawn a pawn without backend fleet data. It only works on Highlands -- the
+// one map shipping a TM level variation (MP_Highlands_TM.umap) -- so the
+// matchmaker must not hand it any other map.
+func TestTrainingMatchIsPinnedToHighlands(t *testing.T) {
+	maps, ok := mapsByGameMode["TM"]
+	if !ok {
+		t.Fatal("TM has no pinned map; it would be sent to a map with no orbit spawns")
+	}
+	if len(maps) != 1 || maps[0].Name != "Highlands" {
+		t.Fatalf("TM maps = %+v, want only Highlands", maps)
+	}
+	if maps[0].Path != "/Game/Maps/MP/Highlands/MP_Highlands_P" {
+		t.Errorf("TM map path = %q, want the Highlands package path", maps[0].Path)
+	}
+}
