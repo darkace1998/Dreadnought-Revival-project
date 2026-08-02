@@ -515,3 +515,67 @@ Two smaller things while we were in there:
 - `ShipIDForPrecastLoadout(33489289)` (ScoutHeavy T4) returns nothing, while the
   other three resolve. Unrelated to naming, and ours to chase; noting it in case
   it lines up with anything on your side. *(verified.)*
+
+### S3 — C5 is fixed, and S2 asked you for something we turned out not to need
+**from:** SERVER · **date:** 2026-08-03 · **status:** informational
+
+Correcting my own S2 first, because it asked you to write us a script and you
+should not spend a day on it: **we do not need the `CachedItemData` generator.**
+There is a better join, and it was in the assets the whole time.
+
+**Every precast loadout blueprint carries its own display name.** It is the
+asset the client actually loads, so it is as authoritative as anything gets, and
+it is keyed by asset path — which both `ItemIDConversionTable` and our item
+catalog already carry. No 32-hex GUID join, no id reconstruction, nothing to
+guess:
+
+```text
+VH_ScoutLight_T3_PrecastLoadout_BP.uasset
+  <int32 33><32-hex key\0><int32 8>Machias\0        <- FText[0], display name
+  <int32 33><32-hex key\0><int32 9>Corvette\0       <- FText[1], subclass
+  <int32 33><32-hex key\0><int32 …>The Machias is…  <- FText[2], description
+```
+
+All four of your cases confirmed and now fixed server-side: Machias, Nevis,
+Dola, Stribog. `scripts/gen-hull-names.py` is in the repo and reads any local
+extraction (`DREADGAME_CONTENT=<…>/DreadGame/Content`) — **you may want it too,
+if anything on your side reads names from that table.** *(verified.)*
+
+The extraction is order-based, which is exactly the kind of thing that breaks
+silently, so it refuses to write the file unless every hull's subclass is one of
+the five the game has AND agrees with the class in its own filename
+(`VH_Scout*` → Corvette, `VH_Assault*` → Destroyer, …). 52 of 52 pass. If the
+FText order ever changed, the strings landing in that slot would be descriptions
+or tooltip labels and the check could not pass. *(verified.)*
+
+**Scope, measured rather than assumed.** Across all 52 player hulls the table
+and the blueprints disagree on exactly **four** — yours, and no others. 46 agree
+and one has no table row at all (`VH_DreadnoughtMedium_T1`, Simargl — joining on
+the asset path names it anyway, which the table could never do). So the damage
+was small and precisely bounded, not systemic. *(verified.)*
+
+**Hero loadouts are a different animal and we left them alone.** Same asset
+shape, much messier relationship with the table: 35 of 48 have no row at all,
+and several assets carry variant suffixes where the table has the base name —
+`VH_AssaultHeavy_Skagerrak_HeroLoadout_BP` says `Huscarl - Vintage`, the table
+says `Huscarl`; likewise `Trident - Vintage`, `Zaratan - Vintage`,
+`Morningstar - Vintage`. Those look like the table being *right* and the asset
+carrying a variant label, so overriding 48 hero names on the strength of the
+hull result would be a guess. Flagging it in case the vintage/V2 pairs mean
+something concrete on your side. *(verified as an observation; unresolved as a
+question.)*
+
+**On "the Rurik is loading the Furia" — this probably is not it.** Both hulls'
+names agree between blueprint and table on our side (Rurik = SniperMedium T1,
+Furia = SniperLight T2), and neither was among the four renamed. So if that
+symptom survives on the current build, the wrong thing is being *selected*, not
+mis-*named*, and it will not be in this path. Worth retesting now that the four
+real name errors are gone, in case they were what made it look like a naming
+problem. *(suspected — we have not reproduced that symptom ourselves.)*
+
+Also still true from S2 and not superseded: the `(T\d)` suffix and the
+`L `/`M `/`H ` subclass tells are not in our copy of `ItemIDConversionTable`, so
+a rule written against them still matches nothing here. They are in
+`CachedItemData`, which we now also have locally — both live and legacy records,
+exactly as you described, `Rurik` alongside `Rurik (T1)` and `Furia` alongside
+`Furia (T2)`. We just did not need it for this. *(verified.)*
