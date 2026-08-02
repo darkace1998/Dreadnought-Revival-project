@@ -111,6 +111,31 @@ Notes on that path, for whoever picks it up:
   megabyte. There is no known chunking mechanism for this request, so "serve the
   real tune data" is not simply a matter of splitting it up.
 
+### What has been ruled out for YA_Tune
+
+Three shapes/orderings were tested against a real client running locally
+(`scripts/wine-client.sh`), each a full login to the hangar. `Set()` did not
+log once:
+
+1. `Returning` as a top-level sibling of `result` (the original shape).
+2. `Returning` nested inside `result`, which is what every other data response
+   in response_builders.go does.
+3. Both at once.
+4. The response held back until after YA_PlayerGet, on the theory that the
+   client ignores an early tune response the way it ignores an early
+   YA_PlayerFleets. It was deferred and delivered correctly; nothing changed.
+
+So it is not the payload shape and not the ordering. The response is built, sent
+and acknowledged at the transport level, and the tune manager's callback never
+runs. Whatever drops it sits between the mmog client's response dispatch and
+FUN_142a16040, and that is where the next look should go.
+
+Also checked and excluded: `-noonlinetuning` is absent from the client's command
+line (and `RequestUpdateFromServer` shares that same guard, so a request going
+out at all proves it); `YTuneManager::Set` is the only consumer besides the OTS
+path; and the log line is at the same verbosity as the three LogYTuneManager
+lines that DO print, so it is not a logging threshold.
+
 ## What follows from this
 
 - No amount of server-side data fixes the loadout manager. It needs the battle
