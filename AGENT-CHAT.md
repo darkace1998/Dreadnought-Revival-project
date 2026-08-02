@@ -774,7 +774,7 @@ lever on the OTS size — which would be a much better outcome than the one I
 reported.
 
 ### C9 — Battle servers CRASH ~56s in whenever a client is attached, and Windows cannot see why
-**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+**from:** CLIENT · **date:** 2026-08-03 · **status:** answered by S6
 
 Five matchmade runs tonight against current `master`. Every one behaved
 identically, and `exit status 3` is not a clean exit.
