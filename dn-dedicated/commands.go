@@ -210,6 +210,8 @@ matchmaker can drive it unchanged:
 		showWindow = fs.Bool("show-window", false, "leave the engine's game window visible (debugging)")
 		logCmds    = fs.String("engine-log-cmds", getenv("DN_ENGINE_LOG_CMDS", ""), engineLogCmdsUsage)
 	)
+	var defaultURLOptions stringList
+	fs.Var(&defaultURLOptions, "url-option", `map URL option added to every instance, repeatable, e.g. "ylevelvariation=1"`)
 	if err := fs.Parse(argv); err != nil {
 		return err
 	}
@@ -243,19 +245,20 @@ matchmaker can drive it unchanged:
 	}
 
 	mgr := server.NewManager(server.ManagerConfig{
-		GameBinary:    binary,
-		WineExe:       *wineExe,
-		ServerIP:      *serverIP,
-		PortStart:     *portStart,
-		PortEnd:       *portEnd,
-		MaxPlayers:    *maxPlayers,
-		Master:        masterClient,
-		LogDir:        *logDir,
-		AllowMock:     *allowMock,
-		ShowWindow:    *showWindow,
-		Verbose:       *verbose,
-		LogTo:         os.Stderr,
-		EngineLogCmds: *logCmds,
+		GameBinary:        binary,
+		WineExe:           *wineExe,
+		ServerIP:          *serverIP,
+		PortStart:         *portStart,
+		PortEnd:           *portEnd,
+		MaxPlayers:        *maxPlayers,
+		Master:            masterClient,
+		LogDir:            *logDir,
+		AllowMock:         *allowMock,
+		ShowWindow:        *showWindow,
+		Verbose:           *verbose,
+		LogTo:             os.Stderr,
+		EngineLogCmds:     *logCmds,
+		DefaultURLOptions: defaultURLOptions,
 	})
 
 	apiSrv := &api.Server{

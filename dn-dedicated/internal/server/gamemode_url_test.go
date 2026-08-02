@@ -103,3 +103,20 @@ func containsArg(args []string, want string) bool {
 	}
 	return false
 }
+
+// A deployment-wide option (?ylevelvariation=<n>, which decides which sublevel
+// of a map is streamed) has to reach the URL without every caller knowing about
+// it, and must not displace what the request itself asked for.
+func TestBuildArgsCarriesURLOptionsAfterListen(t *testing.T) {
+	args := BuildArgs(LaunchConfig{
+		Map:        gamedata.Map{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"},
+		GameMode:   "TM",
+		Port:       7777,
+		URLOptions: []string{"ylevelvariation=1", "  ", "someopt=2"},
+	}, "m")
+
+	want := "/Game/Maps/MP/Highlands/MP_Highlands_P?listen?ylevelvariation=1?someopt=2?game=TM"
+	if args[0] != want {
+		t.Errorf("map URL =\n  %s\nwant\n  %s", args[0], want)
+	}
+}

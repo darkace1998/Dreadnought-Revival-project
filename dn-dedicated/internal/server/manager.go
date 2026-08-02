@@ -41,6 +41,14 @@ type ManagerConfig struct {
 	Verbose bool
 	LogTo   io.Writer
 
+	// DefaultURLOptions are appended to every instance's map URL, on top of
+	// whatever the request itself asked for. This is how a map-URL option that
+	// applies to the whole deployment gets set without teaching every caller
+	// about it -- ?ylevelvariation=<n>, for instance, which decides which
+	// sublevel of a map is streamed and therefore whether the mode's orbit
+	// spawn points exist at all.
+	DefaultURLOptions []string
+
 	// EngineLogCmds is passed to every battle server as -LogCmds. It raises the
 	// ENGINE's category verbosity, which is a different thing from Verbose
 	// above -- that only decides how much of the captured stream is echoed to
@@ -132,7 +140,7 @@ func (m *Manager) Start(opts StartOptions) (*Instance, error) {
 		MaxPlayers:    maxPlayers,
 		Players:       opts.Players,
 		ExtraArgs:     opts.ExtraArgs,
-		URLOptions:    opts.URLOptions,
+		URLOptions:    append(append([]string(nil), m.cfg.DefaultURLOptions...), opts.URLOptions...),
 		LogPath:       logPath,
 		AllowMock:     m.cfg.AllowMock,
 		ShowWindow:    m.cfg.ShowWindow,

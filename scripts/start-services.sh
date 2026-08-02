@@ -184,6 +184,7 @@ start_control_plane() {
     start dn-dedicated "$RUN_DIR/dn-dedicated" serve \
         --addr ":8085" \
         --engine-log-cmds "$DN_ENGINE_LOG_CMDS" \
+        ${DN_MAP_URL_OPTION:+--url-option "$DN_MAP_URL_OPTION"} \
         --server-ip "$SERVER_IP" \
         --game-binary "$GAME_BINARY" \
         --register \
@@ -203,6 +204,19 @@ start_control_plane() {
 # before validating them), so "global verbose" must exempt it. Set
 # DN_ENGINE_LOG_CMDS= (empty) to turn the whole thing off.
 export DN_ENGINE_LOG_CMDS="${DN_ENGINE_LOG_CMDS-global verbose, LogYLoadout veryverbose, LogYComVOComponent log}"
+
+# An extra map URL option for every battle server, e.g.
+# DN_MAP_URL_OPTION="ylevelvariation=1".
+#
+# A map's game-mode sublevels are streamed by index, and the orbit manager takes
+# its spawn points from the streamed sublevel: a TM match on Highlands loads
+# variation 0 and then logs "ActivateBattlePlayerStarts: no orbit spawn
+# locations set!", because MP_Highlands_TM is a different variation. The option
+# is real and is honoured (verified live at 1, 2, 3 and 9), but WHICH index is
+# TM is not yet known -- the map declares Territory, TM and Onslaught in that
+# order, and the index only shows its effect with a client attached. Left unset
+# until a client test identifies it.
+export DN_MAP_URL_OPTION="${DN_MAP_URL_OPTION:-}"
 
 echo "=== Starting services ==="
 start auth-server "$RUN_DIR/auth-server"
