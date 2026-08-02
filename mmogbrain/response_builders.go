@@ -1396,8 +1396,15 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "tll", "1")
 	b = protocol.AppendStringField(b, "tpl", "1")
 	b = protocol.AppendStringField(b, "tc", "1")
-	b = protocol.AppendInt32Field(b, "gl", state.softCurrency)
-	b = protocol.AppendInt32Field(b, "ob", state.premiumCurrency)
+	// gl (credits) and ob (premium) were the last two int32 holdouts among these
+	// top-level scalars, and they read as ZERO for exactly the reason the
+	// comment above gives. Confirmed live 2026-08-02 by direct A/B inside this
+	// same payload: an account funded with 50,000,000 credits and 1,000,000
+	// premium showed neither in game, while FreeXp -- 10,000,000, and the only
+	// one of the three already sent as a numeric string (see "FreeXp" below) --
+	// displayed correctly.
+	b = protocol.AppendStringField(b, "gl", strconv.Itoa(int(state.softCurrency)))
+	b = protocol.AppendStringField(b, "ob", strconv.Itoa(int(state.premiumCurrency)))
 	b = protocol.AppendStringField(b, "rep", "0")
 	b = protocol.AppendStringField(b, "repDN_L", "0")
 	b = protocol.AppendStringField(b, "repDN_M", "0")

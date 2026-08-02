@@ -814,10 +814,16 @@ func TestMmogPlayerStatePersistsCurrencyPerPlayer(t *testing.T) {
 	}
 
 	playerAGet := buildMmogPlayerGetPayload(playerA)
-	if !bytes.Contains(playerAGet, protocol.AppendInt32Field(nil, "gl", 12345)) {
+	// gl/ob are numeric STRINGS, not int32. This test previously pinned the
+	// int32 form; the live client disproved it -- an account funded with
+	// 50,000,000 credits and 1,000,000 premium showed neither in game, while
+	// FreeXp (already a numeric string, asserted below) displayed correctly.
+	// The client reads these through the same int32-blind scalar union as every
+	// other top-level scalar here.
+	if !bytes.Contains(playerAGet, protocol.AppendStringField(nil, "gl", "12345")) {
 		t.Fatal("YA_PlayerGet missing persisted soft currency")
 	}
-	if !bytes.Contains(playerAGet, protocol.AppendInt32Field(nil, "ob", 678)) {
+	if !bytes.Contains(playerAGet, protocol.AppendStringField(nil, "ob", "678")) {
 		t.Fatal("YA_PlayerGet missing persisted premium currency")
 	}
 	// FreeXp goes through the same int32-blind parser as tll/tpl/tc/etc — sent
@@ -840,10 +846,10 @@ func TestMmogPlayerStatePersistsCurrencyPerPlayer(t *testing.T) {
 	}
 
 	playerBGet := buildMmogPlayerGetPayload(playerB)
-	if !bytes.Contains(playerBGet, protocol.AppendInt32Field(nil, "gl", 10000)) {
+	if !bytes.Contains(playerBGet, protocol.AppendStringField(nil, "gl", "10000")) {
 		t.Fatal("second player should keep default soft currency")
 	}
-	if !bytes.Contains(playerBGet, protocol.AppendInt32Field(nil, "ob", 0)) {
+	if !bytes.Contains(playerBGet, protocol.AppendStringField(nil, "ob", "0")) {
 		t.Fatal("second player should keep default premium currency")
 	}
 }

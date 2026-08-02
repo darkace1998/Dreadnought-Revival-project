@@ -140,7 +140,13 @@ var targetSizes = map[string]int{
 	// FILETIME — the last thing logged before an EXCEPTION_STACK_OVERFLOW
 	// crash during hangar entry. Sending no object at all uses the client's
 	// own dedicated "no membership" branch instead.
-	"YA_PlayerGet":             10810,
+	// Was 10810, +6 after sending "gl" (credits) and "ob" (premium) as numeric
+	// strings instead of int32 -- the last two holdouts among these top-level
+	// scalars. Confirmed live: an account funded with 50,000,000 credits and
+	// 1,000,000 premium showed NEITHER in game, while FreeXp (10,000,000, and
+	// already a numeric string) displayed correctly. The +6 is exactly the two
+	// 4-byte ints becoming length-prefixed strings for "10000" and "0".
+	"YA_PlayerGet":             10816,
 	"YA_PlayerFleets":          2088,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,
