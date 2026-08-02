@@ -178,3 +178,36 @@ func TestFleetMutationResponseCarriesWhatTheClientReads(t *testing.T) {
 		t.Error("response is not tagged with the request name")
 	}
 }
+
+// The client resolves a fleet entry by looking its loadout id up IN the tech
+// tree, and builds the owned-ship overview from the same rows. techTreeShips()
+// synthesises those rows only for the four STARTER loadouts, so a player given
+// any other ship had no row for it: observed live as an empty owned-ship
+// overview, with the only addable ships being ones just removed from a fleet.
+func TestOwnedShipsIncludePersistedNonStarterLoadouts(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed player: %v", err)
+	}
+	// A T3 loadout, exactly as the Veteran fleet carries it.
+	if _, err := database.Exec(`INSERT OR REPLACE INTO player_ship_loadouts
+		(user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active)
+		VALUES(?,?,?,?,?,0,?,9,1)`,
+		pid, 33489272, "Default__VH_AssaultMedium_T3_PrecastLoadout_BP_C", 33489272, 184483980, "Otranto"); err != nil {
+		t.Fatalf("insert loadout: %v", err)
+	}
+
+	var found bool
+	for _, ship := range playerOwnedTechTreeShips(pid) {
+		if ship.id == 33489272 {
+			found = true
+			if !ship.owned {
+				t.Error("the persisted loadout's row is not marked owned")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no tech tree row for a persisted non-starter loadout; the client cannot place or list that ship")
+	}
+}

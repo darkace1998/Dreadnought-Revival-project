@@ -504,12 +504,60 @@ func persistedMmogPlayerPurchasedItemIDSet(playerPID string) map[int32]struct{} 
 func playerOwnedTechTreeShips(playerPID string) []mmogShipSeed {
 	ships := techTreeShips()
 	purchased := persistedMmogPlayerPurchasedItemIDSet(playerPID)
-	if len(purchased) == 0 {
+	if len(purchased) > 0 {
+		for idx := range ships {
+			if _, ok := purchased[ships[idx].id]; ok {
+				ships[idx].owned = true
+			}
+		}
+	}
+	return appendPersistedLoadoutShipRows(playerPID, ships)
+}
+
+// appendPersistedLoadoutShipRows gives every loadout the player actually owns a
+// tech-tree row, marked owned.
+//
+// techTreeShips() synthesises these "fleet alias" rows only for the four
+// STARTER loadouts, because until now no account had anything else. The client
+// resolves a fleet entry by looking its loadout id up IN the tech tree
+// (YUIHangarFleetData::Load), and the owned-ship overview is built from the
+// same rows -- so a loadout with no row is a ship the client cannot place and
+// will not list. Observed directly: with T3 and T5 ships in the Veteran and
+// Legendary fleets, the owned-ship overview came up empty and the only ships
+// offered for adding were ones just removed from a fleet (those still had
+// starter rows).
+//
+// Ownership here means "this player has the loadout persisted", which is
+// exactly what player_ship_loadouts records; purchases stay an additional
+// source rather than the only one.
+func appendPersistedLoadoutShipRows(playerPID string, ships []mmogShipSeed) []mmogShipSeed {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
 		return ships
 	}
-	for idx := range ships {
-		if _, ok := purchased[ships[idx].id]; ok {
-			ships[idx].owned = true
+	loadouts, err := loadPersistedShipLoadouts(database, normalizedPlayerStatePID(playerPID))
+	if err != nil || len(loadouts) == 0 {
+		return ships
+	}
+	seen := make(map[int32]struct{}, len(ships))
+	for _, ship := range ships {
+		seen[ship.id] = struct{}{}
+	}
+	for _, loadout := range loadouts {
+		for _, id := range []int32{loadout.effectiveFleetShipID(), loadout.loadoutID()} {
+			if id == 0 {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ships = append(ships, mmogShipSeed{
+				id: id, name: syntheticRowName(id, loadout),
+				classID: loadout.ship.classID, shipClass: loadout.ship.shipClass,
+				weight: loadout.ship.weight, owned: true, nodeID: id, nodeType: 0,
+				manufacturer: shipManufacturerForClassID(loadout.ship.classID, loadout.ship.manufacturer),
+			})
 		}
 	}
 	return ships
