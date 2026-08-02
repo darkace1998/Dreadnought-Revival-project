@@ -1396,15 +1396,24 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "tll", "1")
 	b = protocol.AppendStringField(b, "tpl", "1")
 	b = protocol.AppendStringField(b, "tc", "1")
-	// gl (credits) and ob (premium) were the last two int32 holdouts among these
-	// top-level scalars, and they read as ZERO for exactly the reason the
-	// comment above gives. Confirmed live 2026-08-02 by direct A/B inside this
-	// same payload: an account funded with 50,000,000 credits and 1,000,000
-	// premium showed neither in game, while FreeXp -- 10,000,000, and the only
-	// one of the three already sent as a numeric string (see "FreeXp" below) --
-	// displayed correctly.
-	b = protocol.AppendStringField(b, "gl", strconv.Itoa(int(state.softCurrency)))
-	b = protocol.AppendStringField(b, "ob", strconv.Itoa(int(state.premiumCurrency)))
+	// "gl" and "ob" were INVENTED. They do not exist anywhere in the client
+	// binary -- zero occurrences as standalone wide strings, while every other
+	// field name in this payload has one or more (tll 1, tpl 1, tc 2, rep 2,
+	// FreeXp 2, Credits 4). Beware: `strings` defaults to a 4-character minimum
+	// and silently hides all of these; use -n 2.
+	//
+	// So credits and premium were never delivered at all, which is what a
+	// funded account showed in game: 50,000,000 credits and 1,000,000 premium
+	// both displaying as nothing while FreeXp displayed fine. Converting them
+	// from int32 to numeric strings changed nothing, because the names were the
+	// problem, not the encoding.
+	//
+	// The real names were already known in this codebase: YA_RewardCurrencies
+	// reads root-level "Credits" and "Points" (see
+	// buildMmogRewardCurrenciesPayload), and the two sit together in the
+	// YMmogClient field-name block at 0x1438bf870 / 0x1438bf8a8.
+	b = protocol.AppendStringField(b, "Credits", strconv.Itoa(int(state.softCurrency)))
+	b = protocol.AppendStringField(b, "Points", strconv.Itoa(int(state.premiumCurrency)))
 	b = protocol.AppendStringField(b, "rep", "0")
 	b = protocol.AppendStringField(b, "repDN_L", "0")
 	b = protocol.AppendStringField(b, "repDN_M", "0")
