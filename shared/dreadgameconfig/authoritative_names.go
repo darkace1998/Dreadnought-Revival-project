@@ -196,3 +196,23 @@ func AuthoritativeNameForAssetPath(assetPath string) (string, bool) {
 	}
 	return "", false
 }
+
+// ShipIDForPrecastLoadout is the inverse of PrecastLoadoutIDForShip: given a
+// precast-loadout id it returns the ship pawn that loadout represents.
+//
+// Needed because ownership arrives as loadout ids -- a tech tree unlock and a
+// fleet entry both name the loadout (category 1/3), never the pawn (category
+// 10) -- while a ship row still has to carry the pawn's identity.
+func ShipIDForPrecastLoadout(precastLoadoutID int32) (int32, bool) {
+	for _, category := range GetAllCategories() {
+		if category.CategoryName != "YPawn" {
+			continue
+		}
+		for _, shipID := range category.ItemIDs {
+			if id, ok := PrecastLoadoutIDForShip(shipID); ok && id == precastLoadoutID {
+				return shipID, true
+			}
+		}
+	}
+	return 0, false
+}

@@ -511,7 +511,63 @@ func playerOwnedTechTreeShips(playerPID string) []mmogShipSeed {
 			}
 		}
 	}
-	return appendPersistedLoadoutShipRows(playerPID, ships)
+	ships = appendPersistedLoadoutShipRows(playerPID, ships)
+	return appendPurchasedLoadoutShipRows(purchased, ships)
+}
+
+// appendPurchasedLoadoutShipRows gives an unlocked ship a row of its own.
+//
+// A tech tree unlock names the PRECAST LOADOUT (category 1/3), and the ship
+// list is keyed by those same ids -- but techTreeShips() only contains T1/T2
+// pawns plus starter aliases, so an unlocked T2/T3 ship had no row for the
+// purchased id to mark owned. Live evidence: three unlocks were charged and
+// recorded (33489267, 33489277, 33489281) while the ships stayed invisible,
+// which is indistinguishable from "the unlock did nothing".
+//
+// The pawn behind the loadout comes from ShipIDForPrecastLoadout, so the row
+// carries the real ship's identity rather than an invented one.
+func appendPurchasedLoadoutShipRows(purchased map[int32]struct{}, ships []mmogShipSeed) []mmogShipSeed {
+	if len(purchased) == 0 {
+		return ships
+	}
+	seen := make(map[int32]struct{}, len(ships))
+	for _, ship := range ships {
+		seen[ship.id] = struct{}{}
+	}
+	for itemID := range purchased {
+		if _, ok := seen[itemID]; ok {
+			continue
+		}
+		switch category := (itemID >> 24) & 0xff; category {
+		case mmogItemCategoryShipLoadoutPrecast, mmogItemCategoryShipLoadoutHero:
+		default:
+			continue
+		}
+		shipID, ok := dreadconfig.ShipIDForPrecastLoadout(itemID)
+		if !ok {
+			continue
+		}
+		base, ok := shipSeedByID(ships, shipID)
+		if !ok {
+			continue
+		}
+		seen[itemID] = struct{}{}
+		row := base
+		row.id = itemID
+		row.nodeID = itemID
+		row.owned = true
+		ships = append(ships, row)
+	}
+	return ships
+}
+
+func shipSeedByID(ships []mmogShipSeed, shipID int32) (mmogShipSeed, bool) {
+	for _, ship := range ships {
+		if ship.id == shipID {
+			return ship, true
+		}
+	}
+	return mmogShipSeed{}, false
 }
 
 // appendPersistedLoadoutShipRows gives every loadout the player actually owns a

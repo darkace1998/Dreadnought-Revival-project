@@ -297,3 +297,37 @@ func TestUnlockItemRefusesWhenFreeXPIsShort(t *testing.T) {
 		t.Fatalf("recorded %d purchases despite insufficient free xp, want 0", owned)
 	}
 }
+
+// A tech tree unlock names the PRECAST LOADOUT, and the ship list is keyed by
+// those ids -- but techTreeShips() only holds T1/T2 pawns plus starter aliases,
+// so an unlocked ship had no row for the purchase to mark owned. Three unlocks
+// were charged and recorded live (33489267, 33489277, 33489281) while the ships
+// stayed invisible, which looks exactly like "the unlock did nothing".
+func TestPurchasedLoadoutGetsAnOwnedShipRow(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// The T2 Scout Light, exactly as the live unlock recorded it.
+	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+		VALUES(?,?,?,?,?)`, pid, 33489267, "loadout", 5000, "freexp"); err != nil {
+		t.Fatalf("record purchase: %v", err)
+	}
+
+	var found bool
+	for _, ship := range playerOwnedTechTreeShips(pid) {
+		if ship.id == 33489267 {
+			found = true
+			if !ship.owned {
+				t.Error("the unlocked ship's row is not marked owned")
+			}
+			if ship.classID == 0 {
+				t.Error("row carries no ship identity; it was not derived from the pawn behind the loadout")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no ship row for an unlocked precast loadout; the unlock is charged but invisible")
+	}
+}
