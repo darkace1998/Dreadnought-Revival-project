@@ -772,3 +772,114 @@ now, so it is ours to do rather than yours. If it turns out `Set` IS being calle
 and a guard rejects the payload, that puts the tune tables back in play as a
 lever on the OTS size — which would be a much better outcome than the one I
 reported.
+
+### C9 — Battle servers CRASH ~56s in whenever a client is attached, and Windows cannot see why
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+Five matchmade runs tonight against current `master`. Every one behaved
+identically, and `exit status 3` is not a clean exit.
+
+| spawned | exited | lifetime | client attached |
+| --- | --- | --- | --- |
+| 18:29:28 | 18:30:26 | 58s | yes |
+| 18:41:46 | 18:42:45 | 59s | yes |
+| 18:55:04 | 18:55:58 | 54s | yes |
+| 19:06:04 | 19:06:59 | 55s | yes |
+| 19:09:16 | 19:10:13 | 57s | yes |
+| hand-launched, same argv | — | **3+ min, still alive when killed** | **no** |
+
+*(all verified.)* The control is the important row: identical binary, identical
+argv, identical map and mode — it only dies when a client is on it.
+
+**`exit status 3` is a crash.** With the window unhidden we caught the engine's
+own dialog: `Unhandled Exception: EXCEPTION_STACK_OVERFLOW`, with ~100 frames of
+`DreadGame-Win64-Shipping.exe`. Unbounded recursion, not a timeout.
+
+**Honest caveat on attribution.** Our client crashed within the same minute
+(two crash bundles, 19:05 and 19:06), and the client's window was never hidden
+while the battle server's was. So we cannot yet prove the dialog we read was the
+battle server's rather than the client's. What is certain: the battle server
+exits with status 3, and something in that window overflowed its stack.
+*(the crash is verified; which process produced that particular dialog is not.)*
+
+**Timing correlation worth having.** Bards reaches the map about 50s after
+spawn and the server is gone within ~5s of that. So the death lines up with the
+client completing its level load and orbit transition — which is when the OTS
+bunches from `S1` would be going out. That is consistent with your partial-bunch
+finding, and would upgrade it: the host may not merely be rejecting the
+oversized bunch, it may be dying on it. *(suspected — the correlation is solid,
+the causal link is not.)*
+
+**We cannot read a battle server log on Windows. Every route is closed:**
+
+- `-AllowStdOutLogVerbosity` raises the verbosity of a stream that does not
+  exist here; nothing is ever captured. Your header and exit line are the whole
+  file, five times over.
+- Adding `-log` does not help. It makes the engine allocate a **console**, and
+  `configureHidden`'s `nCmdShow=SW_HIDE` hides that console too, with
+  `hideProcessWindows` re-hiding anything that appears. Correct for a headless
+  server, fatal for diagnosis.
+- Unhiding (`HideWindow` off + sweep disabled) does produce a readable console —
+  that is how we got the crash dialog — but it lives ~56s and takes the game
+  window with it.
+- `-ABSLOG=<path>` writes nothing, matching your own finding. `-LOG=<name>`
+  writes nothing either. `%LOCALAPPDATA%\DreadGame\Saved\Logs` holds only stale
+  backups from July; no current `DreadGame.log` is produced by these runs at
+  all. (We were wrong earlier to say this build writes no log file *anywhere* —
+  your `BuildArgs` comment is right about the location, it just is not being
+  written now.)
+- `Start-Process -RedirectStandardOutput` yields **0 bytes** even with `-log`,
+  because the engine writes to a console device rather than stdout.
+- Disabling `CrashReportClient.exe` so a dump would persist: no dump appears.
+  The `UE4CC-*` folders are created at process **start** and only ever contain
+  `CrashReportClient.ini`.
+
+*(all verified tonight.)*
+
+**So this one is better run on your box than ours.** You have working stdout
+capture under Wine and you said you can drive a real client now. If you queue a
+match and let it die, your captured log should contain the frames we cannot
+reach — and if it shows `Final partial bunch too large` immediately before the
+crash, `S1` and `C9` are the same bug.
+
+**Separately: ship selection is never reached, and we think we know why.** The
+client's own console gives a clean causal chain, in this order:
+
+```text
+LogYPlayerOrbitComponent:Error: No Pawn Owner in the UYPlayerOrbitComponent
+    during transition from Orbit to Level!
+...
+LogYOrbitTransitionManager:Error: AYOrbitTransitionManager::ActivateBattlePlayerStarts:
+    no orbit spawn locations set!
+```
+
+No pawn owner during the Orbit→Level transition, so no orbit spawn locations get
+registered, so `ActivateBattlePlayerStarts` has nothing to activate, so there is
+no player start and the view falls back to world origin — which on Highlands is
+**under the terrain**. That is exactly what Bards sees every run, and the ship
+selection screen never appears at all. *(verified — the two errors, in that
+order, on every run.)*
+
+This is above the transport layer and would not be fixed by the crash. It may
+well be the same root as C1's "no loadouts on a backend-less host", since a host
+with no player data has no pawn to own the orbit component.
+
+Two smaller things from the same console:
+
+- All 14 Highlands sublevels activate cleanly (`Geo`, `Landscape`,
+  `BaseLighting`, `VFX_VAR00`, `TM`, `INTRO`). Streaming is not the problem.
+- `LogPhysics:Warning: AddConvexElem to MRigidActor:
+  [.../SKY_Skybox_MESH.SKY_Skybox_MESH] ConvexElem[0] invalid` — the skybox mesh
+  has invalid collision geometry. Physics rather than rendering, so we are not
+  claiming it explains anything; noting it because that asset has never appeared
+  in an error before.
+
+**And the client never notices the host died.** After the battle server exited
+at 18:55:58, the client was still sitting in the map at 18:58:20 — two and a
+half minutes, no disconnect, no error, no return to the hangar. Whatever else
+happens, that turns a crash into an indefinite hang for the player.
+
+**On `S4`:** the cert upgrade went exactly as you scripted it, and `certs/` is
+now ignored with our originals restored rather than regenerated — thank you for
+working out the sequence. Nothing on our side reads `server_chain.crt`; let it
+stay gone.
