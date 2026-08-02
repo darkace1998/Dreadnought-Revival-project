@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -547,12 +548,11 @@ func appendPurchasedLoadoutShipRows(purchased map[int32]struct{}, ships []mmogSh
 		if !ok {
 			continue
 		}
-		base, ok := shipSeedByID(ships, shipID)
+		row, ok := shipSeedForPawn(ships, shipID)
 		if !ok {
 			continue
 		}
 		seen[itemID] = struct{}{}
-		row := base
 		row.id = itemID
 		row.nodeID = itemID
 		row.owned = true
@@ -561,13 +561,84 @@ func appendPurchasedLoadoutShipRows(purchased map[int32]struct{}, ships []mmogSh
 	return ships
 }
 
-func shipSeedByID(ships []mmogShipSeed, shipID int32) (mmogShipSeed, bool) {
+// shipSeedForPawn builds a ship row for any pawn, preferring an existing row
+// and otherwise deriving one from the pawn's asset path.
+//
+// Copying an existing row is not enough on its own: the built-in list only
+// holds T1/T2 pawns, so a T3+ unlock found no row to copy and was dropped.
+// Observed live -- of four unlocks, only the T2 one (33489267, Dover) appeared;
+// the two T3 ones (33489277, 33489281) were charged and stayed invisible.
+func shipSeedForPawn(ships []mmogShipSeed, shipID int32) (mmogShipSeed, bool) {
 	for _, ship := range ships {
 		if ship.id == shipID {
 			return ship, true
 		}
 	}
-	return mmogShipSeed{}, false
+	return deriveShipSeedFromAssetPath(shipID)
+}
+
+// shipClassIDsByClassName maps the class segment of a pawn's asset path to the
+// classID/shipClass pair the client expects.
+//
+// Read off the built-in T1/T2 rows, where the pair depends on the CLASS only
+// and never on the size: Assault 14/4 (Agosta, Trafalgar), Dreadnought 6/0
+// (Simargl, Nav), Sniper 10/2 (Rurik, Tugarin, and Furia which is Light),
+// Support 12/3 (Cerberus, Orcus), Scout 2/1 (Dover, Light). TestDerivedShipSeed
+// MatchesTheBuiltInRows re-checks this against those rows so a wrong pair
+// cannot be introduced silently.
+var shipClassIDsByClassName = map[string]struct{ classID, shipClass int32 }{
+	"Assault":     {14, 4},
+	"Dreadnought": {6, 0},
+	"Scout":       {2, 1},
+	"Sniper":      {10, 2},
+	"Support":     {12, 3},
+}
+
+// shipWeightBySizeName is the size index the same rows carry: Light 0
+// (Furia, Dover), Medium 1 (everything else in the built-in list). Heavy
+// follows the sequence but has no built-in row to confirm it, so it is marked.
+var shipWeightBySizeName = map[string]int32{
+	"Light":  0,
+	"Medium": 1,
+	"Heavy":  2, // GUESS: no built-in T1/T2 Heavy row to check against.
+}
+
+var shipPawnAssetPathPattern = regexp.MustCompile(`^/Game/Generic/Ships/([A-Za-z]+)/([A-Za-z]+)/T\d/`)
+
+func deriveShipSeedFromAssetPath(shipID int32) (mmogShipSeed, bool) {
+	item, ok := dreadconfig.ItemByID(shipID)
+	if !ok || item.AssetPath == "" {
+		return mmogShipSeed{}, false
+	}
+	match := shipPawnAssetPathPattern.FindStringSubmatch(item.AssetPath)
+	if match == nil {
+		return mmogShipSeed{}, false
+	}
+	class, ok := shipClassIDsByClassName[match[1]]
+	if !ok {
+		return mmogShipSeed{}, false
+	}
+	weight, ok := shipWeightBySizeName[match[2]]
+	if !ok {
+		return mmogShipSeed{}, false
+	}
+	// The ship's real name comes from the authoritative table, not from
+	// ItemMetadata.DisplayName -- the latter is synthesised from the asset path
+	// and yields things like "Scout Heavy T3 Vh Scouth Pawn T3" where the game
+	// calls the ship by a proper name.
+	name := item.DisplayName
+	if authoritative, ok := dreadconfig.AuthoritativeShipName(shipID); ok && authoritative != "" {
+		name = authoritative
+	}
+	return mmogShipSeed{
+		id:           shipID,
+		name:         name,
+		classID:      class.classID,
+		shipClass:    class.shipClass,
+		weight:       weight,
+		nodeID:       shipID,
+		manufacturer: shipManufacturerForClassID(class.classID, ""),
+	}, true
 }
 
 // appendPersistedLoadoutShipRows gives every loadout the player actually owns a

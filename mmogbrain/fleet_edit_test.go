@@ -331,3 +331,54 @@ func TestPurchasedLoadoutGetsAnOwnedShipRow(t *testing.T) {
 		t.Fatal("no ship row for an unlocked precast loadout; the unlock is charged but invisible")
 	}
 }
+
+// The class/size -> classID/shipClass/weight mapping was read off the built-in
+// T1/T2 rows. Re-derive each of those rows from its asset path and require the
+// same answer, so a wrong pair cannot be introduced silently.
+func TestDerivedShipSeedMatchesTheBuiltInRows(t *testing.T) {
+	checked := 0
+	for _, want := range t1t2TechTreeShips {
+		got, ok := deriveShipSeedFromAssetPath(want.id)
+		if !ok {
+			continue // hero/alias rows have no pawn asset path
+		}
+		checked++
+		if got.classID != want.classID || got.shipClass != want.shipClass || got.weight != want.weight {
+			t.Errorf("%s (%d): derived classID/shipClass/weight = %d/%d/%d, built-in row says %d/%d/%d",
+				want.name, want.id, got.classID, got.shipClass, got.weight,
+				want.classID, want.shipClass, want.weight)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("derived nothing; the asset-path pattern no longer matches any built-in ship")
+	}
+	t.Logf("re-derived %d built-in ship rows", checked)
+}
+
+// A T3+ unlock has no built-in row to copy from -- that is why two of four
+// live unlocks were charged and stayed invisible while the T2 one appeared.
+func TestPurchasedT3LoadoutGetsARow(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// 33489277 = VH_ScoutMedium_T3, one of the two that vanished.
+	if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+		VALUES(?,?,?,?,?)`, pid, 33489277, "loadout", 15000, "freexp"); err != nil {
+		t.Fatalf("record purchase: %v", err)
+	}
+
+	for _, ship := range playerOwnedTechTreeShips(pid) {
+		if ship.id == 33489277 {
+			if !ship.owned {
+				t.Error("T3 unlock present but not owned")
+			}
+			if ship.classID == 0 || ship.name == "" {
+				t.Errorf("T3 row lacks identity: classID=%d name=%q", ship.classID, ship.name)
+			}
+			return
+		}
+	}
+	t.Fatal("no row for a purchased T3 loadout; the unlock is charged but invisible")
+}
