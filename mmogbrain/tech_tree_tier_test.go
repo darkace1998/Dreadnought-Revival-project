@@ -38,6 +38,50 @@ func TestTechTreeStillReportsRealTiers(t *testing.T) {
 	}
 }
 
+// The tree has one layout row per tier, and the game has five. A raw tier 0
+// produced a SIXTH row -- two of them claiming Tier 1, one carrying the row id
+// techTreeLayoutRowID reserves for tier 0 -- against a client whose TierColors
+// array has exactly five entries.
+func TestTechTreeHasOneLayoutRowPerRealTier(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	byManufacturer := map[int32][]techTreeItem{}
+	var order []int32
+	seen := map[int32]bool{}
+	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+		byManufacturer[item.manufacturer] = append(byManufacturer[item.manufacturer], item)
+		if !seen[item.manufacturer] {
+			seen[item.manufacturer] = true
+			order = append(order, item.manufacturer)
+		}
+	}
+	tiers := techTreeTiersPresent(byManufacturer, order)
+	if len(tiers) != 5 {
+		t.Errorf("tech tree emits %d layout rows (%v), want 5 -- one per tier", len(tiers), tiers)
+	}
+	for _, tier := range tiers {
+		if tier < 1 || tier > 5 {
+			t.Errorf("layout row for tier %d, which is outside 1..5", tier)
+		}
+	}
+}
+
+// Normalising the tier must not reprice anything: a /T0/ alternative is the
+// base variant of its line and stays free to research.
+func TestTierNormalisationDidNotRepriceModules(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	free := 0
+	for _, item := range techTreeBaseItems() {
+		if item.module && item.xpCost == 0 {
+			free++
+		}
+	}
+	if free != 55 {
+		t.Errorf("%d modules are free to research, want 55; the cost is no longer taken from the raw tier", free)
+	}
+}
+
 func TestTechTreeWireTierFloorsAtOne(t *testing.T) {
 	for in, want := range map[int32]int32{-1: 1, 0: 1, 1: 1, 3: 3, 5: 5} {
 		if got := techTreeWireTier(in); got != want {

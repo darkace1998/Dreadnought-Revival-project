@@ -2121,10 +2121,19 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 				// ship.
 				classID:      hull.loadoutID,
 				manufacturer: manufacturerID,
-				tier:         variant.tier,
-				position:     position,
-				xpCost:       techTreeModuleXPCost(variant.tier),
-				module:       true,
+				// Normalised HERE, not at the emit site. techTreeTiersPresent
+				// walks these tiers to decide how many layout rows the tree
+				// has, so a raw 0 produced SIX rows for a five-tier game --
+				// two of them claiming Tier 1, and one carrying the row id
+				// techTreeLayoutRowID reserves for tier 0 (-1000000).
+				tier: techTreeWireTier(variant.tier),
+				// The COST still comes from the raw tier, so a T0 alternative
+				// stays free to research. That is a separate judgement call
+				// (see techTreeModuleXPCost) and normalising the tier should
+				// not quietly reprice fifty-five modules.
+				xpCost:   techTreeModuleXPCost(variant.tier),
+				position: position,
+				module:   true,
 			})
 			position++
 		}
