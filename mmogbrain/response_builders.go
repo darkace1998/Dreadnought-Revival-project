@@ -2015,7 +2015,7 @@ func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]b
 		manufacturer = "0" + manufacturer
 	}
 	b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(item.tier))))
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	// FPCost and NumTechTreeItemsRequired are omitted. Both parsed to 0 anyway,
 	// and neither survives into the stored record -- of the 0x48-byte module
@@ -2130,6 +2130,35 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 		}
 	}
 	return items
+}
+
+// techTreeWireTier is the tier value the client can actually render.
+//
+// The tech tree's tile colour is TierColors[Tier - 1] and that array has FIVE
+// entries, so the client's tier space is 1..5. A Tier of "0" indexes -1 and the
+// tile is drawn uncoloured:
+//
+//	LogScriptCore:Warning: Script Msg: Attempted to access index -1 from array TierColors of length 5!
+//
+// Fifty-five module entries did exactly that. They are the sibling-line
+// alternatives whose lowest available variant is a /T0/ asset -- Assault's
+// Pri_Missile_Super, Per_Turret_Off, Sec_TorpedoM_Dmg, Int_Buff_AbInc and the
+// equivalents on the other classes -- and techTreeSlotUpgrades reports the tier
+// it found in the path, which is genuinely 0.
+//
+// T0 is the base variant of a line, the one a Tier 1 hull flies, so 1 is what
+// it means in the client's 1..5 space. gatewayMarketItemTier already collapses
+// /T0/ to 1 for the store; this keeps the tech tree saying the same thing about
+// the same item.
+//
+// Deliberately applied only on the wire. The internal tier stays 0 so that
+// techTreeModuleXPCost keeps making a T0 alternative free to research, which is
+// a separate (and separately flagged) judgement call.
+func techTreeWireTier(tier int32) int32 {
+	if tier < 1 {
+		return 1
+	}
+	return tier
 }
 
 // techTreeModuleXPCost is what one module upgrade costs to research.
@@ -2839,7 +2868,7 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 		manufacturer = "0" + manufacturer
 	}
 	b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(item.tier))))
 	b = protocol.AppendStringField(b, "Position", strconv.Itoa(int(item.position)))
 	// Visible gates the whole item: a falsy value makes the loader jump past the
 	// rest of the entry, so the item is never stored, no manufacturer group is
@@ -3023,7 +3052,7 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 			b = protocol.AppendStringField(b, "Id", pid)
 			b = protocol.AppendStringField(b, "Manufacturer", manufacturer)
-			b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(item.tier)))
+			b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(item.tier))))
 			b = protocol.AppendStringField(b, "ProxyType", proxyType)
 			b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 			b = protocol.AppendStringField(b, "FPCost", "0")
@@ -3185,7 +3214,7 @@ func appendMmogTechTreeLayoutRow(b []byte, stack []int, tier int32) ([]byte, []i
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(id)))
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
 	b, stack = appendMmogTechTreeUI(b, stack, 0, float64(tier)*techTreeGridY)
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(tier)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(tier))))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -3279,7 +3308,7 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
-	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(techTreeRowTier(ship)))
+	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(int32(techTreeRowTier(ship))))))
 	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(mmogShipClassWire(ship.shipClass))))
 	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
 	// REGRESSION FIX: for ships that have a starter loadout, emit
