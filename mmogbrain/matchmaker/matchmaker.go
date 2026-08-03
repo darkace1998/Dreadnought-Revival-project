@@ -538,17 +538,50 @@ func (m *Matchmaker) tick() error {
 // is null, GetLoadoutForPlayer returns nothing, and the player stays a
 // spectator.
 //
-// So a queued mode is redirected to TM, which also pins the map to Highlands --
-// the only map in the build with a TM level variation. The cost is honest and
-// real: the player flies the training-match ship, not the ship they picked.
-// DN_FORCE_GAME_MODE="" turns the redirect off and gives everyone spectator mode
-// back; it should be removed for good once the battle server can get player data.
+// This USED TO redirect every queued mode to TM by default. That was a bad
+// trade and it is off now.
+//
+// TM is the only mode whose host fails to set up player starts. Measured on a
+// host with no client attached, same map, same binary, only the URL's game
+// option differing:
+//
+//	mode on Highlands        sublevels loaded   "no orbit spawn locations set!"
+//	TM                       12                 yes
+//	TDM                      13                 no
+//	BC                       13                 no
+//	Onslaught (map default)  13                 no
+//
+// TM loads MP_Highlands_TM and does not load MP_Highlands_Light or
+// MP_Highlands_Onslaught, and it is the one configuration where
+// AYOrbitTransitionManager::ActivateBattlePlayerStarts finds nothing to
+// activate. Downstream of that the player has no player start, drops to world
+// origin -- under the terrain on Highlands -- and never gets the ship selection
+// screen at all.
+//
+// So the two failures are mutually exclusive, and forcing TM chose the worse
+// one:
+//
+//   - TM: the game mode supplies a loadout, so a pawn COULD spawn, but the
+//     player never reaches ship selection.
+//   - anything else: ship selection works, but the host's loadout manager is
+//     empty, so the spawn is refused and the player stays a spectator.
+//
+// The second is what this server did before the redirect, and it is what the
+// operator reported having: orbit, and a ship selection menu. Getting a pawn out
+// of TM was speculative; losing the screen was not. Both are blocked on the same
+// root -- a host with no player data -- and that is where the fix belongs.
+//
+// DN_FORCE_GAME_MODE is kept as an escape hatch: set it to a mode name to force
+// that mode, or to "1" for DefaultSpawnableGameMode. Unset or empty honours what
+// the player queued for.
 func runnableGameMode(queued string) string {
-	forced, set := os.LookupEnv("DN_FORCE_GAME_MODE")
-	if !set {
+	forced := strings.TrimSpace(os.Getenv("DN_FORCE_GAME_MODE"))
+	switch strings.ToLower(forced) {
+	case "":
+		return queued
+	case "1", "on", "true", "yes":
 		forced = DefaultSpawnableGameMode
 	}
-	forced = strings.TrimSpace(forced)
 	if forced == "" || forced == queued {
 		return queued
 	}
@@ -574,8 +607,9 @@ var engineGameModeAliases = map[string]bool{
 	"TMBasic": true, "TurboTDM": true,
 }
 
-// DefaultSpawnableGameMode is the mode matches run in unless DN_FORCE_GAME_MODE
-// says otherwise. See runnableGameMode for why it is not the queued mode.
+// DefaultSpawnableGameMode is what DN_FORCE_GAME_MODE selects when it is set to
+// "1" or "on" rather than to a mode name. It is NOT applied by default -- see
+// runnableGameMode.
 const DefaultSpawnableGameMode = "TM"
 
 func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {

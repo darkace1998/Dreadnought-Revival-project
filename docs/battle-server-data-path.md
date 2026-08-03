@@ -169,6 +169,46 @@ out at all proves it); `YTuneManager::Set` is the only consumer besides the OTS
 path; and the log line is at the same verbosity as the three LogYTuneManager
 lines that DO print, so it is not a logging threshold.
 
+## 3. TM is not a way out, and forcing it made things worse
+
+The loadout finding above led to forcing every match into TM, since TM is the
+only mode whose game mode supplies a loadout. Measured afterwards on a host with
+no client attached — same map, same binary, only the URL's `game` option
+differing:
+
+| mode on Highlands | sublevels loaded | `no orbit spawn locations set!` |
+| --- | --- | --- |
+| TM | 12 | **yes** |
+| TDM | 13 | no |
+| BC | 13 | no |
+| Onslaught (the map's own default) | 13 | no |
+
+TM loads `MP_Highlands_TM` and does not load `MP_Highlands_Light` or
+`MP_Highlands_Onslaught`, and it is the one configuration where
+`AYOrbitTransitionManager::ActivateBattlePlayerStarts` finds nothing to activate.
+Downstream the player has no player start, falls to world origin — under the
+terrain on Highlands — and never reaches ship selection at all.
+
+So the two failures are mutually exclusive:
+
+- **TM**: a loadout exists, but the player never gets to choose a ship.
+- **anything else**: ship selection works, and the spawn is refused because the
+  host's loadout manager is empty.
+
+The second is what this server did before the redirect, and what the operator
+reported having. The redirect is off by default now; `DN_FORCE_GAME_MODE` still
+turns it on. Both failures share one root — a host with no player data — and
+that is where the fix belongs.
+
+### Reading a host's log at all
+
+`-AllowStdOutLogVerbosity` alone captures nothing useful: without **`-stdout`**
+the engine attaches no stdout log device, so raising that device's verbosity
+raises a stream nobody writes to. The same run captures 219 lines without it and
+570 with, including every `ActivateLevel`. Both spawners pass both switches now.
+Every "the host does not do X" conclusion drawn before this was reading a log
+that could not have shown X.
+
 ## What follows from this
 
 - No amount of server-side data fixes the loadout manager. It needs the battle

@@ -213,7 +213,13 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	// between seeing an error and seeing why. (-FullStdOutLogOutput, which
 	// would give All, does not exist in 4.13; the string is absent from the
 	// binary.)
-	args = append(args, "-AllowStdOutLogVerbosity")
+	//
+	// -stdout is the one that actually matters. Without it the engine never
+	// attaches a stdout log device at all, so -AllowStdOutLogVerbosity raises the
+	// verbosity of a stream nobody is writing to: 219 captured lines, no LogLevel
+	// at all. With it, the same run captures 570 lines including every
+	// ActivateLevel -- which is how the sublevel question got answered.
+	args = append(args, "-stdout", "-AllowStdOutLogVerbosity")
 
 	// Category verbosity on top of that, for reverse-engineering a live match.
 	// Off by default because it is a lot of output.

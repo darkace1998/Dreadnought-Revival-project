@@ -176,6 +176,14 @@ func (s *Spawner) Launch(gameMode, mapName, mapPath string, port int, players []
 		"-nosound",
 		"-noeac",
 		"-NoSteam",
+		// Without -stdout the engine attaches no stdout log device at all, so
+		// nothing this process captures contains a single Log-verbosity line and
+		// -AllowStdOutLogVerbosity raises a stream nobody writes to. Measured on
+		// the same run: 219 lines without, 570 with, including every
+		// ActivateLevel -- which is what finally showed which sublevels a host
+		// loads.
+		"-stdout",
+		"-AllowStdOutLogVerbosity",
 	}
 
 	var cmd *exec.Cmd

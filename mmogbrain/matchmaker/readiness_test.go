@@ -231,34 +231,40 @@ func matchStatus(t *testing.T, database *sql.DB, id string) string {
 	return status
 }
 
-// A player who queues for any mode has to end up somewhere they can spawn. On a
-// battle server with no backend the loadout manager is empty, so only a mode
-// that supplies its own loadout -- TM -- produces a pawn.
-func TestRunnableGameModeRedirectsToASpawnableMode(t *testing.T) {
-	t.Setenv("DN_FORCE_GAME_MODE", "")
+// This asserted the opposite until 2026-08-03: that every queued mode is
+// redirected to TM, because TM is the only mode whose GAME MODE supplies a
+// loadout. The assertion was inverted after measuring what that redirect
+// actually did to a host.
+//
+// TM is also the only mode where ActivateBattlePlayerStarts finds no orbit spawn
+// locations, so the player never reaches ship selection at all -- measured on a
+// host with no client, same map and binary, only the URL's game option
+// differing: TM loads 12 sublevels and logs the error, while TDM, BC and the
+// map's own default each load 13 and do not. Trading a working ship-selection
+// screen for a speculative pawn spawn was the wrong way round.
+func TestQueuedGameModeIsHonouredByDefault(t *testing.T) {
 	os.Unsetenv("DN_FORCE_GAME_MODE")
-	for _, queued := range []string{"TDM", "BC", "Onslaught", "TER"} {
-		if got := runnableGameMode(queued); got != DefaultSpawnableGameMode {
-			t.Errorf("runnableGameMode(%q) = %q, want %q", queued, got, DefaultSpawnableGameMode)
+	for _, queued := range []string{"TDM", "BC", "Onslaught", "TER", "TM"} {
+		if got := runnableGameMode(queued); got != queued {
+			t.Errorf("runnableGameMode(%q) = %q; the queued mode must be honoured", queued, got)
 		}
-	}
-	// Already spawnable: left alone rather than rewritten to itself.
-	if got := runnableGameMode("TM"); got != "TM" {
-		t.Errorf("runnableGameMode(TM) = %q", got)
 	}
 }
 
-// The redirect is a workaround, not a rule, so an operator has to be able to
-// switch it off and get the queued mode back -- and an unset variable must not
-// be confused with an empty one.
-func TestRunnableGameModeCanBeDisabledAndOverridden(t *testing.T) {
-	t.Setenv("DN_FORCE_GAME_MODE", "")
-	if got := runnableGameMode("TDM"); got != "TDM" {
-		t.Errorf("empty DN_FORCE_GAME_MODE should disable the redirect, got %q", got)
-	}
+// The override is still there for anyone who wants to experiment with the TM
+// trade, by name or with a plain "1".
+func TestForcedGameModeOverride(t *testing.T) {
 	t.Setenv("DN_FORCE_GAME_MODE", "TMBasic")
 	if got := runnableGameMode("TDM"); got != "TMBasic" {
 		t.Errorf("got %q, want TMBasic", got)
+	}
+	t.Setenv("DN_FORCE_GAME_MODE", "1")
+	if got := runnableGameMode("TDM"); got != DefaultSpawnableGameMode {
+		t.Errorf(`DN_FORCE_GAME_MODE=1 = %q, want %q`, got, DefaultSpawnableGameMode)
+	}
+	t.Setenv("DN_FORCE_GAME_MODE", "")
+	if got := runnableGameMode("TDM"); got != "TDM" {
+		t.Errorf("empty DN_FORCE_GAME_MODE should honour the queued mode, got %q", got)
 	}
 	// A typo must not send every match to a mode the client does not know.
 	t.Setenv("DN_FORCE_GAME_MODE", "NotAMode")

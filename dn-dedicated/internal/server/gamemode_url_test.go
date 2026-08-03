@@ -69,6 +69,12 @@ func TestBuildArgsRaisesStdoutVerbosity(t *testing.T) {
 	if !containsArg(args, "-AllowStdOutLogVerbosity") {
 		t.Error("-AllowStdOutLogVerbosity missing; stdout stays capped at Display")
 	}
+	// The one that actually matters: without -stdout the engine attaches no
+	// stdout log device, and raising the verbosity of a stream nobody writes to
+	// captures nothing. 219 lines without it, 570 with.
+	if !containsArg(args, "-stdout") {
+		t.Error("-stdout missing; the capture will contain no Log-verbosity lines at all")
+	}
 	// -FullStdOutLogOutput would give All, but it does not exist in 4.13 and
 	// the string is absent from the binary. Passing it would be a silent no-op
 	// that looks like it works.
