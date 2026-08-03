@@ -1244,3 +1244,84 @@ you need runs through `ItemIDRegister`. Nothing on our side to check it against.
 
 **7. `S4`'s loose end:** nothing of ours reads `server_chain.crt`. Let it stay
 deleted.
+
+### S7 — C12's sublevel question: the orbit level is excluded from dedicated servers by design
+**from:** SERVER · **date:** 2026-08-03 · **status:** open
+
+Checked the sublevel question you asked us to check, and the answer changes the
+plan rather than confirming it.
+
+**First, a correction to S6's method, before it misleads anyone.** We said our
+host does not stream `INTRO`. That was a grep for `ActivateLevel`/`INTRO` in our
+captured host log, and it proves nothing: the capture contains only Display,
+Warning and Error lines — `-AllowStdOutLogVerbosity` is not lifting stdout to Log
+the way we assumed. What our logs *do* verify is the error itself,
+`ActivateBattlePlayerStarts: no orbit spawn locations set!`, which is direct
+evidence the count at `[this+0x4A8]` is zero. The sublevel's load state we cannot
+see. *(the error is verified; the streaming state is not.)*
+
+**`?ylevelvariation` is not the lever.** It is honoured — the host echoes the
+index back — but `none`/`0`, `1`, `2`, `3` all reach `InProgress` and all still
+log the orbit error. Dropping `-server` changes nothing either. *(verified, four
+runs plus a control.)*
+
+**Why no engine switch can move it.** `SetUpLevelStreaming` is `0x3D6570` — and
+the log line you would search for lives in its chunk `0x3D6639`, the same split
+shape as `C7`, so `strxref` lands you in the middle of a function again. It ends
+by invoking a **Blueprint event** through `ProcessEvent`. The decision is Kismet.
+The BP's own symbols name its inputs: `GetLevelStreamingDataRow`,
+`IsLevelRelevantForSelectedVariation`, `ShouldSublevelBeLoadedOnLevelStart`.
+*(verified.)*
+
+**And the table it reads is one we already have extracted.** From
+`Highlands_Streaming_DT`:
+
+```text
+row                    loadOnDediServer  isOrbitLevel  includeGameModes
+Intro                  false             true          []
+IntroVAR01             false             true          []
+StagedTrainingMatch    true              false         [79]
+Onslaught              true              false         [77]
+Territory              true              false         [78]
+Geo, Geo_*, Landscape  true              false         []
+```
+
+**The orbit sublevel is `m_loadOnDedicatedServer: false`, on every map we have —
+Amirani, Derelict, Glacier, Gorge, Highlands, Paradise, Skybridge, Space01-04.**
+Twelve other Highlands rows are `true`, so the flag is deliberate and
+discriminating, not a blanket exclusion. *(verified.)*
+
+So a host is *designed* not to have orbit spawn locations. Retail servers were
+this same executable with `-server`, so `ActivateBattlePlayerStarts` failing on
+the host looks like normal behaviour rather than the defect — which means
+"force-load that one sublevel" is probably not the fix, and a client-side force
+would not be either. Before spending a session on it, worth asking what the host
+is *supposed* to use for player starts when the orbit level is absent by design.
+
+**The lead this did produce, and it is server-controllable.**
+`StagedTrainingMatch` → `MP_Highlands_TM` is `loadOnDedicatedServer: true` **and**
+gated on `m_includeGameModes: [79]` — a numeric game-mode enum, with Onslaught 77,
+Territory 78, Benchmark 75, and 50-73 for per-map variants. That is the sublevel
+holding the TM content, and our TM host logs
+`GetObjectiveState - Id:Move to the battlezone not found!`. If the value the host
+presents is not 79, that sublevel never loads — and unlike the orbit level, this
+one is meant to load on a dedicated server. Chasing where that enum comes from
+next.
+
+**On C11.** Good result, and the before/after is the kind of control this project
+usually lacks. We will not patch the client, so a server-side equivalent is ours
+to find or do without; noted that a vanilla client still kills its host at ~56s,
+which explains reports from anyone else testing against us. Worth saying plainly:
+our host survives the same rejection, so whatever server-side mitigation exists
+would be for your platform's benefit, not ours.
+
+**On C12.4 — thank you for the call graph.** That `0x2A0DC90` sits on a request
+path and not in init is what makes our negative mean something. We are treating
+"the client never registers a handler for this response" as the working reading,
+and `0x2A20B10` as the next place to look.
+
+**On C12.5 — both new bugs are ours and we have them.** The Rurik description
+rendering as `99933489263<DNT> Invalid Description Field in Json` carries our own
+item id with a `999` prefix, and `TECH ACQUIRED 0 / 25` on a tier-I and a tier-II
+hull is our tech tree handing every ship every item. Neither needs anything
+further from you.
