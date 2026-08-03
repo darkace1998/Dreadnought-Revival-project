@@ -531,6 +531,9 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		if !ok {
 			continue
 		}
+		if !marketCatalogSellsCategory(itemID) {
+			continue
+		}
 		seed := gatewayCatalogEntitySeed{
 			itemID:      itemID,
 			externalID:  extractedMarketItemExternalID(itemID, meta.displayName),
@@ -601,6 +604,55 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		seeds = append(seeds, seed)
 	}
 	return seeds
+}
+
+// marketCatalogSellsCategory rejects item categories the game's own store never
+// listed.
+//
+// The catalog here is seeded from localization keys, which is a wider net than
+// the store ever was: a string table entry only means the client can NAME the
+// item. That let ship PAWN ids (category 10, YPawn) into the item catalog, and
+// the client cannot render a store tile for one.
+//
+// Symptom, from a live client (AGENT-CHAT S11.5): ten YPawn offers produced
+// exactly ten
+//
+//	YUI::Util::GetCategoryImagePath: Unhandled loadout vanity slot type <0>
+//
+// and no other category produced any. The UI picks one of six image-path
+// overloads from a byte on its item data (+0x104) and passes the neighbouring
+// int (+0x100):
+//
+//	0 loadout vanity slot   FUN_1404E96A0   <- what a YPawn offer falls into
+//	1 ability type          FUN_1404E5D80
+//	2 weapon slot type      FUN_1404E8F80
+//	3 officer type          FUN_1404E75F0
+//	4 base ship class       FUN_1404E8030   <- where a ship belongs
+//	5 character vanity slot FUN_1404E67C0
+//
+// A ship should take overload 4. Ours took 0 with a value of 0, i.e. the field
+// was never set, and slot 0 is outside the vanity function's own accepted range
+// (it accepts 1..8: four mesh parts, emblem, paint, pattern, decal).
+//
+// The reason is not something we can send. The client builds that item data
+// from its OWN tables, not from our JSON -- "stat_name" and "stat_value", the
+// keys of the ItemStatsArray we emit, do not occur anywhere in the shipping
+// binary, so nothing we put in an offer can classify it.
+//
+// What settles it is the shipped catalog: CatalogIDTable.json holds 6630 SKUs
+// across 12 buckets and **not one of them is a YPawn id**. Ships were sold as
+// precast loadouts (category 1, 49 SKUs) and hero loadouts (category 3), which
+// is also what our catalog still offers and what produces no warning. The ten
+// pawn entries were never purchasable in the real game, and half of them were
+// the tier-less base blueprints (VH_AssaultM_Pawn_BP and friends) rather than a
+// ship a player could own.
+//
+// Kept as a category rule rather than an id allowlist deliberately: restricting
+// to ids literally present in CatalogIDTable would also drop the abilities and
+// weapons the client renders correctly today, which is a much larger change
+// than the evidence supports.
+func marketCatalogSellsCategory(itemID int32) bool {
+	return (itemID>>24)&0xff != mmogItemCategoryShipPawn
 }
 
 // sortedMarketCatalogItemIDs returns the catalog's item ids in a stable order.

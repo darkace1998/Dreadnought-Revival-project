@@ -969,6 +969,7 @@ func persistAddShipDefaultLoadouts(database *sql.DB, playerPID string, payload [
 const (
 	mmogItemCategoryShipLoadoutPrecast = 1
 	mmogItemCategoryShipLoadoutHero    = 3
+	mmogItemCategoryShipPawn           = 10
 )
 
 // fleetEditTargetFleetID picks the fleet a YA_AddToFleet/YA_RemoveFromFleet

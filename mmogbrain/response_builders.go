@@ -3841,6 +3841,27 @@ func buildMmogBoosterDataPayload() []byte {
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// GoldMembershipTable is sent EMPTY, and that is a known gap rather than an
+	// oversight.
+	//
+	// Both tables are read by the same parser (FUN_142a65fe0), but not into the
+	// same shape: BoosterTable entries go through the booster-entry parser
+	// (FUN_142a66500, 0x50-byte elements), while GoldMembershipTable is copied
+	// into an array of 16-byte elements with FString frees on teardown -- i.e.
+	// an array of STRINGS, not objects.
+	//
+	// The game did sell memberships: CatalogIDTable holds eight category-31
+	// (YGoldMembership) SKUs, /Game/DevGroup/Meta/GoldMembership/
+	// SHOP_Booster_GoldMember_{001,003,007,014,030,090,180,360}D_DA. What is
+	// NOT established is what the strings in this array are -- ids, SKUs, or
+	// something else entirely -- and the one previous attempt to send
+	// speculative membership data (Membership.ExpireTime="0" instead of an
+	// omitted object) crashed the client with EXCEPTION_STACK_OVERFLOW. So this
+	// stays empty until something says what belongs in it.
+	//
+	// Suspected consequence, unconfirmed: the hangar's elite-status panel logs
+	// "Attempted to access index 0..2 from array Bonuses of length 0"
+	// (AGENT-CHAT S11.5). Three bonuses, none delivered.
 	b, stack = protocol.AppendArrayStart(b, stack, "GoldMembershipTable")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
