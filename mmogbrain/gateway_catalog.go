@@ -526,13 +526,31 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	}
 
 	seeds := make([]gatewayCatalogEntitySeed, 0, len(marketItemLocalizationKeys))
-	for _, itemID := range sortedMarketCatalogItemIDs() {
-		meta, ok := extractedMarketItemMetadataForID(itemID)
+	emitted := map[int32]bool{}
+	for _, sourceID := range sortedMarketCatalogItemIDs() {
+		meta, ok := extractedMarketItemMetadataForID(sourceID)
 		if !ok {
 			continue
 		}
-		if !marketCatalogSellsCategory(itemID) {
+		if !marketCatalogSellsCategory(sourceID) {
 			continue
+		}
+		// A hull has two live precast ids and only the tiered one was ever a
+		// SKU; see CanonicalPrecastLoadoutID. Everything below is derived from
+		// the canonical id, so the store, the tech tree and the description
+		// index all end up talking about the same item -- except the
+		// localization key, which is looked up under the id it was recovered
+		// for. The key is a hash of the SHIP's name, so it is correct for
+		// either id, and preferring the source keeps a generated table that
+		// happens to key one id from silently losing the other's name.
+		itemID := dreadconfig.CanonicalPrecastLoadoutID(sourceID)
+		if emitted[itemID] {
+			continue
+		}
+		emitted[itemID] = true
+		localizationKey := marketItemLocalizationKeys[sourceID]
+		if localizationKey == "" {
+			localizationKey = marketItemLocalizationKeys[itemID]
 		}
 		seed := gatewayCatalogEntitySeed{
 			itemID:      itemID,
@@ -551,7 +569,7 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			// description for them anywhere in the extracted data, and inventing
 			// one is worse than the gap.
 			description:     hullCatalogDescription(itemID),
-			localizationKey: marketItemLocalizationKeys[itemID],
+			localizationKey: localizationKey,
 			entityType:      "item",
 			itemType:        meta.itemType,
 			priceCurrencyID: "CR",

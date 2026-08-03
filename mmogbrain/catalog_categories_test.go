@@ -67,9 +67,9 @@ func TestStoreHullsCarryTheirRealTierAndPrice(t *testing.T) {
 		name string
 		tier int32
 	}{
-		{33489315, "Athos", 5},
-		{33489318, "Zmey", 5},
-		{33489331, "Aion", 4},
+		{33489300, "Athos", 5},
+		{33489303, "Zmey", 5},
+		{33489297, "Aion", 4},
 		{33489262, "Agosta", 1}, // unchanged: its path states T1
 	} {
 		seed, ok := seeds[tc.id]
@@ -86,6 +86,44 @@ func TestStoreHullsCarryTheirRealTierAndPrice(t *testing.T) {
 		if seed.priceAmount != wantPrice {
 			t.Errorf("%s (%d) price = %d, want %d (tier %d)",
 				tc.name, tc.id, seed.priceAmount, wantPrice, tc.tier)
+		}
+	}
+}
+
+// The store must offer the id the game sells. Each hull has a second, legacy
+// precast id pointing at the previous build's asset; it is in no CatalogIDTable
+// bucket, it disagrees with the tech tree (which keys a ship's modules on its
+// own id), and it carries no description because the description index joins on
+// the asset path.
+func TestStoreOffersCanonicalHullIDsOnly(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	legacy := map[int32]string{33489315: "Athos", 33489318: "Zmey", 33489331: "Aion"}
+	canonical := map[int32]string{33489300: "Athos", 33489303: "Zmey", 33489297: "Aion"}
+
+	seen := map[int32]gatewayCatalogEntitySeed{}
+	for _, seed := range gatewayItemCatalogSeeds("") {
+		if name, isLegacy := legacy[seed.itemID]; isLegacy {
+			t.Errorf("%s is offered under its legacy id %d, which the game never sold",
+				name, seed.itemID)
+		}
+		seen[seed.itemID] = seed
+	}
+	for id, name := range canonical {
+		seed, ok := seen[id]
+		if !ok {
+			t.Errorf("%s (%d) is missing from the catalog entirely", name, id)
+			continue
+		}
+		if seed.localizationKey == "" {
+			t.Errorf("%s (%d) lost its localization key in the substitution; the client "+
+				"renders an unresolved key as <DNT>[[NotFound]]", name, id)
+		}
+		// Aion is one of the eight hulls whose blueprint carries no description
+		// at all, so only the other two can be checked for prose.
+		if name != "Aion" && seed.description == "" {
+			t.Errorf("%s (%d) has no description; the client renders that as "+
+				"Invalid Description Field in Json", name, id)
 		}
 	}
 }

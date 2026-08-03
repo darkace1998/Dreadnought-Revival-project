@@ -52,6 +52,7 @@ type HullName struct {
 }
 
 var (
+	hullIDByName     map[string]int32
 	hullTierByName   map[string]int
 	hullNames        []HullName
 	hullNameByAsset  map[string]string
@@ -122,6 +123,97 @@ func HullDescriptionForItemID(itemID int32) (string, bool) {
 	defer nameCacheMu.Unlock()
 	description, ok := hullDescriptionByID[itemID]
 	return description, ok && description != ""
+}
+
+// CanonicalPrecastLoadoutID returns the id the GAME sells for a hull.
+//
+// A hull has two live precast ids. One points at the current asset,
+// /Loadouts/Precast/T<n>/VH_<Class><Size>_T<n>_PrecastLoadout_BP; the other at
+// the previous build's, /Loadouts/Precast/VH_<Class><Size>_PrecastLoadout_BP.
+// Both are registered, both resolve to the same ship name, and nothing about
+// either looks wrong in isolation:
+//
+//	Athos  33489300  /Precast/T5/VH_AssaultMedium_T5_PrecastLoadout_BP   <- SKU
+//	Athos  33489315  /Precast/VH_AssaultMedium_PrecastLoadout_BP         <- legacy
+//
+// The shipped CatalogIDTable settles which one is real: its 49 category-1 SKUs
+// are 33489265..33489312, i.e. every TIERED id from T2 up, and not one of the
+// fifteen tier-less ids (33489313..33489331) appears in any bucket. The legacy
+// id was never purchasable.
+//
+// Serving the legacy id is not cosmetic. It disagrees with the tech tree, which
+// keys a ship's modules on its own id, and it carries no description, because
+// the description index joins on the asset path and the legacy path is not one
+// of the 52 the blueprints describe -- the client renders that as
+// "<sku><DNT> Invalid Description Field in Json".
+//
+// Returns the input unchanged when there is nothing to substitute, so it is
+// safe to call on any id.
+func CanonicalPrecastLoadoutID(itemID int32) int32 {
+	if (itemID>>24)&0xff != categoryIDShipLoadoutPrecast {
+		return itemID
+	}
+	item, ok := ItemByID(itemID)
+	if !ok {
+		return itemID
+	}
+	if _, current := hullNameForAsset(item.AssetPath); current {
+		return itemID // already the asset the blueprints describe
+	}
+	name, ok := AuthoritativeItemName(itemID)
+	if !ok {
+		return itemID
+	}
+	ensureHullIDIndex()
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if canonical, ok := hullIDByName[name]; ok {
+		return canonical
+	}
+	return itemID
+}
+
+// ensureHullIDIndex builds the hull name -> current item id index.
+//
+// Only assets HullNames knows are indexed, which is exactly the 52 player hulls
+// in the tiered directories, and an ambiguous name is dropped rather than
+// resolved arbitrarily -- the same rule as ensureHullTierIndex, for the same
+// reason.
+func ensureHullIDIndex() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(hullIDByName) > 0 {
+		return
+	}
+	if len(GetAllHullNames()) == 0 {
+		return
+	}
+	counts := map[string]int{}
+	candidate := map[string]int32{}
+	for _, category := range GetAllCategories() {
+		if category.CategoryName != "YShipLoadoutPrecast" {
+			continue
+		}
+		for _, itemID := range category.ItemIDs {
+			item, ok := ItemByID(itemID)
+			if !ok {
+				continue
+			}
+			name, ok := hullNameForAsset(item.AssetPath)
+			if !ok {
+				continue
+			}
+			counts[name]++
+			candidate[name] = itemID
+		}
+	}
+	index := make(map[string]int32, len(candidate))
+	for name, itemID := range candidate {
+		if counts[name] == 1 {
+			index[name] = itemID
+		}
+	}
+	hullIDByName = index
 }
 
 // HullTierForItemID returns the tier of a precast hull, 1..5.
