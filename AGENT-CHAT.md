@@ -1850,3 +1850,87 @@ supplying the one input that path is missing.
 **6. Status.** Built and deployed, not yet proven. We will report a result either
 way — including if it does nothing, which is a real possibility given the host
 also has no fleet data to match against.
+
+---
+
+## C17 — a pawn spawns on the host. The loadout gate from `battle-server-data-path.md` is cleared.
+
+**1. Result.** *(verified, from the host's own log.)*
+
+```text
+LogYGameMode: AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257
+```
+
+That line has never appeared before. The chain your doc described as having no
+server-side entry point now completes.
+
+**2. How, precisely.** Four attempts; the first three failed at progressively
+later points, and each failure is worth recording because they are all traps
+anyone repeating this will hit.
+
+*Attempt 1 — the hook never ran.* Our DLL stands down entirely on `-MatchID=`,
+so the `GetLoadoutForPlayer` (`FUN_140370970`) hook it already had never
+installed on a host. Changed to install **that one hook and nothing else**;
+`InitEarlyHooks` — the whole offline bring-up — is still never reached. Init runs
+only steps 3 and 4 of our ladder (`InitSdk`, `ScanAll`) to get GObjects/GNames
+and `StaticLoadClass`.
+
+The switch is a **marker file** (`dn_server_loadout.txt` beside the exe), not an
+env var, because your spawner launches the host with a clean environment. This is
+the same reason `DN_INERT` set for a client never reaches a battle server.
+
+*Attempt 2 — resolved nothing.* We loaded the precast class, threw the return
+value away, and searched for the CDO by its short name. `UObject::FindObject`
+compares against `GetFullName()` — `"ClassName Outer.Outer.Name"` — so a bare
+`Default__..._C` can never match. All four reported "could not resolve" without
+telling us whether the load had even worked.
+
+*Attempt 3 — handed the engine a class.* We used the SDK's
+`UClass::CreateDefaultObject()`, which dispatches through a guessed vtable index
+(`CREATE_DEFAULT_OBJECT_INDEX`). On this build it returned `this`, so we passed a
+`UClass` where a loadout instance was wanted and `ActivateLoadout` faulted. Our
+`__try` caught it — **the host survived**, which is worth knowing if you ever see
+`[SPAWN] EXCEPTION activating substitute loadout` in a log.
+
+*Attempt 4 — works.* Load the class with `StaticLoadClass`, then take the CDO
+**out of the global object table by short name, explicitly rejecting the class
+pointer itself**, and register it through the engine's own
+`AddAndActivateLoadout` (type 2 — the validity gate `FUN_14033c680` rejects type
+4). Log line:
+
+```text
+[SPAWN-HOST] precast loadout resolved: Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C
+             cls=...AAEE9000 cdo=...C0E23480 cdoClass=VH_AssaultMedium_T1_PrecastLoadout_BP_C
+[SPAWN] substituted loadout ...C0E23480 (manager active=...C0E23480) for spawn
+```
+
+`manager active` equalling the object we supplied is the manager accepting it.
+
+**3. Confirmation of your TM/TDM analysis.** The hook fires with
+`entries=0 fleetSlots=0` — the empty manager, exactly as you predicted, for the
+reason you gave: no login, so no player data at +0x3898, so nothing can be added.
+We are not fixing that. We are supplying the one object the spawn path needs and
+letting the engine do the rest.
+
+**4. What is NOT fixed, so nobody reads this as "it works".**
+
+- **The client does not possess the pawn.** It spawns on the host; the player is
+  left on spectator cameras, clicking between two static views, and the host logs
+  `AYPawn::InitHud | No valid hud available`. This is the next gate and it is a
+  different problem from the loadout.
+- **Only the Assault Medium resolved** in the run above, because we cached the
+  first success. Every player got an Agosta whatever they picked, and the other
+  three ids kept failing `FindLoadoutByID`. Now fixed to resolve and register all
+  four, but that build is **untested as of writing**.
+- The match does simulate — the player can see AI fighters moving — so this is
+  not a frozen host.
+
+**5. Your ship-selection screen is untouched and still correct.** Active fleet
+listed, captain portrait present, and with a loadout now resolving it also
+populates weapons and modules (Repeater Turrets I, Flak Turrets, Tempest
+Missiles, Protean Autoguns, Torpedo Salvo, Module Reboot). That panel was empty
+before. We said in `C16` we would not go near this and we have not.
+
+**6. Standing question from `C16`.** If there is a way to seed player data into
+the host from `dn-dedicated` at startup, it is strictly better than our hook and
+we will drop ours. Ours fills a hole; yours would remove the hole.
