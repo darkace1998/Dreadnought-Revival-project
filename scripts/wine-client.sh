@@ -6,6 +6,7 @@
 # shaped most of this project's history.
 #
 #   bash scripts/wine-client.sh [seconds] [output-log]
+#   SHOT_DIR=/somewhere bash scripts/wine-client.sh   # + PNGs of the running UI
 #
 # What it does, in order:
 #   1. runs dn-launcher.exe with DN_PLAYER_ID set, which authenticates against
@@ -60,8 +61,17 @@ kill_clients() {
 }
 
 echo "[harness] minting a fresh auth token as $DN_PLAYER_ID"
+# NOT piped into grep. The launcher starts the game itself, and that child
+# INHERITS the launcher's stdout -- so a pipe stays open long after `timeout`
+# has killed the launcher, and the harness hangs here forever waiting on a grep
+# that is really waiting on the game. (Observed: 10 minutes in phase 1 with the
+# client still up and the real run never started.) Redirect to a file, then read
+# the file: the child holding the fd open costs nothing.
+LAUNCHER_LOG="${OUT%.log}.launcher.log"
 (cd "$GAME_ROOT" && taskset -c "$CLIENT_CPUS" nice -n 19 timeout -s KILL 90 \
-    wine ./dn-launcher.exe 2>&1 | grep -E "Authenticated|token written|\[!\]")
+    wine ./dn-launcher.exe >"$LAUNCHER_LOG" 2>&1) || true
+grep -E "Authenticated|token written|\[!\]" "$LAUNCHER_LOG" || \
+    echo "[harness] launcher printed no auth line -- see $LAUNCHER_LOG"
 sleep 2
 kill_clients   # the launcher starts the game itself; we want our own argv
 sleep 2
@@ -72,7 +82,7 @@ taskset -c "$CLIENT_CPUS" nice -n 19 timeout -s KILL "$SECS" \
     wine ./DreadGame-Win64-Shipping.exe \
     -GatewayAddress=127.0.0.1 -GatewayPort=65443 \
     -YFirmamentAddress=127.0.0.1 -YFirmamentPort=48843 \
-    -LOG -AllowStdOutLogVerbosity \
+    -LOG -stdout -AllowStdOutLogVerbosity \
     -noeac -NoSteam -nosound -windowed -ResX=1024 -ResY=576 \
     "-LogCmds=global verbose, LogYComVOComponent log" -forcelogflush \
     >"$OUT" 2>&1 &
@@ -100,6 +110,28 @@ if [ -n "$WID" ]; then
     echo "[harness] dismissed the title screen (window $WID)"
 else
     echo "[harness] no game window appeared -- check $OUT" >&2
+fi
+
+# Screenshots. The whole history of this project is arguing about client state
+# from log lines; a PNG of the hangar settles questions the log cannot answer at
+# all (does the credit counter show a number, is the tech tree preview empty).
+# Taken from the X server rather than the window, because the client's window is
+# borderless and `import -window` on it has come back black.
+shoot() {
+    [ -n "${SHOT_DIR:-}" ] || return 0
+    mkdir -p "$SHOT_DIR"
+    local name="$SHOT_DIR/$1.png"
+    if command -v import >/dev/null 2>&1; then
+        import -display "$DISPLAY" -window root "$name" 2>/dev/null && echo "[harness] shot: $name"
+    fi
+}
+
+if [ -n "${SHOT_DIR:-}" ]; then
+    # One per phase, so a run that never reaches the hangar still shows where it
+    # stopped rather than leaving one black frame.
+    (   sleep 60;  shoot 01-after-keypress
+        sleep 45;  shoot 02-hangar
+        sleep 45;  shoot 03-hangar-late ) &
 fi
 
 wait $GAME 2>/dev/null

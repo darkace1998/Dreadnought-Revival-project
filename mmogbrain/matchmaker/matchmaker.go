@@ -578,7 +578,7 @@ func runnableGameMode(queued string) string {
 	forced := strings.TrimSpace(os.Getenv("DN_FORCE_GAME_MODE"))
 	switch strings.ToLower(forced) {
 	case "":
-		return queued
+		return substituteBrokenGameMode(queued)
 	case "1", "on", "true", "yes":
 		forced = DefaultSpawnableGameMode
 	}
@@ -605,6 +605,47 @@ var engineGameModeAliases = map[string]bool{
 	"Territory": true, "TER": true, "Benchmark": true, "VisualAttraction": true,
 	"Tutorial": true, "Demo": true, "Bootcamp": true, "BC": true,
 	"TMBasic": true, "TurboTDM": true,
+}
+
+// brokenHostGameModes maps a mode whose HOST does not work onto one that does.
+//
+// This is the opposite of the blanket redirect that used to live here, and it is
+// narrow on purpose: exactly one mode is substituted, and only because it is
+// measurably broken on a battle server.
+//
+// TM is what the front end's "Proving Grounds" button queues -- the ordinary
+// button, not an exotic option -- and TM is the one mode of four whose host logs
+//
+//	AYOrbitTransitionManager::ActivateBattlePlayerStarts: no orbit spawn locations set!
+//	GetObjectiveState - Id:Move to the battlezone not found!
+//
+// Measured on a host with no client attached, same map and binary, only the map
+// URL's game option differing: TM yes, TDM no, BC no, the map's own default no.
+// Reproduced independently on Windows by the client side (AGENT-CHAT C13.1), and
+// the consequence measured there too (C14.1): under TM the player is left under
+// the terrain with no ship selection, while the same client in TDM gets the
+// "CHOOSE YOUR SHIP" screen, a working ready toggle and the orbit backdrop.
+//
+// So a player pressing the normal button lands in the one mode that cannot work.
+// Substituting it is strictly better than what they get otherwise, and it is
+// reversible: DN_KEEP_BROKEN_MODES=1 sends the queued mode through untouched.
+//
+// Remove this the moment TM's host works. It is a workaround for a defect, not a
+// statement about what these modes are.
+var brokenHostGameModes = map[string]string{
+	"TM": "TDM",
+}
+
+// substituteBrokenGameMode swaps a mode that cannot work on a host for one that
+// can. Anything not in the table is returned untouched.
+func substituteBrokenGameMode(queued string) string {
+	if os.Getenv("DN_KEEP_BROKEN_MODES") == "1" {
+		return queued
+	}
+	if replacement, broken := brokenHostGameModes[queued]; broken {
+		return replacement
+	}
+	return queued
 }
 
 // DefaultSpawnableGameMode is what DN_FORCE_GAME_MODE selects when it is set to

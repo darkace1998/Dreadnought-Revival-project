@@ -123,6 +123,13 @@ this box down before, killing four services. `taskset -c 4,5,6 nice -n 19 timeou
 -s KILL <secs>` on a 12-core host kept load under 2 across four runs with the
 whole stack up. Keep it.
 
+`SHOT_DIR=/some/dir` additionally captures PNGs of the running UI at three
+points (after the keypress, and twice in the hangar). Use it for anything the log
+cannot answer — whether a counter shows a number, whether a preview viewport is
+empty. It grabs the X root window, so the frame includes the Wine console window
+overlapping the top-left of the game; the game itself is the 1024x576 area at
++128+115. Needs `imagemagick`.
+
 Two things to know before reading its output:
 
 - The client writes **no log file of its own** under Wine, even with `-LOG`.
@@ -132,6 +139,12 @@ Two things to know before reading its output:
   Verbose lines never appear. `-FullStdOutLogOutput` does not exist in 4.13.
 - Never raise `LogYComVOComponent` past Verbose — the client crashes in
   `PlayVoiceLineInternal`.
+- `-stdout` is required for any of that to matter: without it the engine attaches
+  no stdout log device at all, and `-AllowStdOutLogVerbosity` raises a stream
+  nobody writes to (219 lines vs 570 on the same run).
+- The launcher phase must not be piped into `grep`. The launcher starts the game
+  itself and the child inherits its stdout, so the pipe outlives `timeout` and
+  the harness hangs before the real run ever starts.
 
 The same limits apply to battle servers, which is why the control plane passes
 `-AllowStdOutLogVerbosity` and keeps the whole stream per instance.

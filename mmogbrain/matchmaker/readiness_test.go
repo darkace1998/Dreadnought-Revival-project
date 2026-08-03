@@ -244,10 +244,44 @@ func matchStatus(t *testing.T, database *sql.DB, id string) string {
 // screen for a speculative pawn spawn was the wrong way round.
 func TestQueuedGameModeIsHonouredByDefault(t *testing.T) {
 	os.Unsetenv("DN_FORCE_GAME_MODE")
-	for _, queued := range []string{"TDM", "BC", "Onslaught", "TER", "TM"} {
+	os.Unsetenv("DN_KEEP_BROKEN_MODES")
+	// TM is excluded here and asserted separately below: it is the one mode
+	// measurably broken on a host, and it is substituted.
+	for _, queued := range []string{"TDM", "BC", "Onslaught", "TER", "PodTDM"} {
 		if got := runnableGameMode(queued); got != queued {
 			t.Errorf("runnableGameMode(%q) = %q; the queued mode must be honoured", queued, got)
 		}
+	}
+}
+
+// "Proving Grounds", the ordinary front-end queue button, asks for TM -- and TM
+// is the one mode of four whose host logs "no orbit spawn locations set!" and
+// leaves the player under the terrain with no ship selection. The same client in
+// TDM gets the ship selection screen and the orbit backdrop. So a player
+// pressing the normal button must not be sent somewhere that cannot work.
+func TestTheOneBrokenModeIsSubstituted(t *testing.T) {
+	os.Unsetenv("DN_FORCE_GAME_MODE")
+	os.Unsetenv("DN_KEEP_BROKEN_MODES")
+	got := runnableGameMode("TM")
+	if got == "TM" {
+		t.Fatal("TM was passed through; the player lands under the terrain with no ship selection")
+	}
+	if got != "TDM" {
+		t.Errorf("TM was substituted with %q, want TDM -- the mode measured working on the same map", got)
+	}
+	// The substitution must be one mode, not a blanket redirect: that is the
+	// mistake this replaced.
+	if len(brokenHostGameModes) != 1 {
+		t.Errorf("brokenHostGameModes has %d entries; each one needs its own measurement", len(brokenHostGameModes))
+	}
+}
+
+// Anyone testing TM itself has to be able to get it.
+func TestBrokenModeSubstitutionCanBeDisabled(t *testing.T) {
+	os.Unsetenv("DN_FORCE_GAME_MODE")
+	t.Setenv("DN_KEEP_BROKEN_MODES", "1")
+	if got := runnableGameMode("TM"); got != "TM" {
+		t.Errorf("DN_KEEP_BROKEN_MODES=1 gave %q, want TM", got)
 	}
 }
 

@@ -44,7 +44,7 @@ Two different things are called "gateway", which is worth knowing before reading
 | **master-server** | 8084 | Server registry, heartbeat, server browser |
 | **game-manager** | 8085 | Spawns and monitors battle-server processes |
 | **DreadGame (Wine)** | 7777-7877/UDP | One battle server per active match |
-| **admin-cli** | — | Operator CLI (`servers`, `instances`, `stop-instance`, `ban`, `unban`, `queue`, `chat`) |
+| **admin-cli** | — | Operator CLI (`servers`, `instances`, `stop-instance`, `ban`, `unban`, `queue`, `chat`, `players`, `grant`) |
 | **dn-launcher** | — | Windows launcher replacement (register / sign in / start the game) |
 
 ---

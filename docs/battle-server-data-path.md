@@ -43,6 +43,15 @@ sends can never match. The one loadout source that still works is
 `AYGameMode_TrainingMatch` (`m_trainingMatchLoadout`). The resolver is
 `GetLoadoutForPlayer` = `FUN_140370970`. That is why the matchmaker forces TM.
 
+**A fix exists, and it is not here.** The client-side team hooks
+`GetLoadoutForPlayer` (`FUN_140370970`) in their DLL: call the original, and only
+if it produced nothing, load the cooked precast asset whose CDO name the engine
+just asked for and hand back the CDO — which is what `LoadInstallingLadouts`
+would have done if anything could reach it. It is opt-in on the host via a marker
+file (`dn_server_loadout.txt` beside the executable). Kept in their tree, not
+this one, so that "the game client is unmodified" stays true of this repo
+(AGENT-CHAT C16, S10.6).
+
 ### The battle server cannot log in
 
 Verified twice: nothing reaches mmogbrain during a battle server's whole life,

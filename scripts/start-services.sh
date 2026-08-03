@@ -138,10 +138,49 @@ db_for() {
     esac
 }
 
+# ---------------------------------------------------------------- process check
+#
+# pgrep and pkill DO NOT EXIST in Git Bash / MSYS. `if pgrep -x "$name"` there is
+# not a failed match, it is `command not found` -- non-zero -- so every caller
+# takes the else branch. The damage is not theoretical: stop-services.sh reported
+# every service as "not running" and stopped none, and then start() decided
+# nothing was running and started a SECOND copy. Three gateway processes
+# accumulated across three runs, the first holding the port, and an operator
+# spent an hour measuring a stale mmogbrain that predated the environment
+# variable they were testing (AGENT-CHAT C13.5).
+#
+# So: pidfile first, because it is portable and exact; then pgrep; then tasklist
+# on Windows. If none of them can answer, say so rather than guessing "not
+# running", which is the answer that starts duplicates.
+service_pid() {
+    local name="$1" pidfile="$RUN_DIR/$1.pid"
+    [ -f "$pidfile" ] || return 1
+    local pid
+    pid="$(cat "$pidfile" 2>/dev/null)"
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    echo "$pid"
+}
+
+service_running() {
+    local name="$1"
+    service_pid "$name" >/dev/null && return 0
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -x "$name" >/dev/null 2>&1 && return 0
+        return 1
+    fi
+    if command -v tasklist >/dev/null 2>&1; then
+        tasklist /FI "IMAGENAME eq $name.exe" 2>/dev/null | grep -qi "$name" && return 0
+        return 1
+    fi
+    echo "WARNING: cannot tell whether $name is running (no pidfile, no pgrep, no tasklist)." >&2
+    return 1
+}
+
 start() {
     local name="$1"
     shift
-    if pgrep -x "$name" >/dev/null 2>&1; then
+    if service_running "$name"; then
         echo "already running: $name"
         return
     fi

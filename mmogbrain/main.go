@@ -86,6 +86,8 @@ func main() {
 	adminSub := r.PathPrefix("/admin").Subrouter()
 	adminSub.Use(adminKeyMiddleware(adminKey))
 	adminSub.HandleFunc("/queue", h.AdminQueue).Methods(http.MethodGet)
+	adminSub.HandleFunc("/players", h.AdminPlayers).Methods(http.MethodGet)
+	adminSub.HandleFunc("/grant", h.AdminGrant).Methods(http.MethodPost)
 
 	// Authenticated
 	auth := r.PathPrefix("/mmog").Subrouter()

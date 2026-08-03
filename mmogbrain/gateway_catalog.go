@@ -319,12 +319,16 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 // balance is at least honest, but it does not drive anything on screen.
 //
 // The HUD's three numbers are FPlayerCurrencyAmountsData{m_freeXP,
-// m_softCurrency, m_hardCurrency}. Only m_freeXP is currently fed, by the
-// "FreeXp" field of YA_PlayerGet -- and it is correct, matching the persisted
-// value. The other two read zero because nothing this server sends supplies
-// them: a complete enumeration of the YA_PlayerGet parser's 47 FName lookups
-// contains no currency field, and the gateway fields that might have carried
-// one ("wallet") are unknown to the client.
+// m_softCurrency, m_hardCurrency}. m_freeXP is fed by the "FreeXp" field of
+// YA_PlayerGet. The other two do NOT come from the gateway at all -- they
+// arrive on the binary protocol as YA_RewardCurrencies, pushed after
+// YA_PlayerGet (buildMmogRewardCurrenciesPayload). This comment used to end
+// "finding the real source of m_softCurrency/m_hardCurrency is still open";
+// that was true when it was written and is not any more.
+//
+// Confirmed live on 2026-08-03: an admin grant that took the balance to
+// 1,010,300 moved the pushed frame from 100 to 102 bytes, i.e. the two extra
+// digits, on the same login that reached the hangar.
 //
 // Other gateway fields in this payload are likewise absent from the binary and
 // therefore dead: owned_items, player_id, catalog_version, starter_ship_ids and

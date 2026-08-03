@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,6 +32,10 @@ const (
 	fieldError    = "error"
 )
 
+// playerIDPattern is the binary protocol's player id: a UUID with the hyphens
+// stripped.
+var playerIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+
 const usage = `Dreadnought Private Server — Admin CLI
 
 Usage: admin-cli <command> [args...]
@@ -51,6 +56,10 @@ Commands:
   ban [-y] <username> <reason>  Ban a player
   unban [-y] <username>         Unban a player
   queue                         Show current matchmaking queue
+  players                       List accounts with their balances
+  grant <player> <credits> [premium] [free_xp]
+                                Add currency/XP to an account (<player> is a
+                                32-hex player id from the players command, or a display name)
   chat [channel]                Show recent chat (default channel: global)
   help                          Show this help
 
@@ -127,6 +136,14 @@ func main() {
 		c.unban(args[0])
 	case "queue":
 		c.queue()
+	case "players":
+		c.players()
+	case "grant":
+		if len(args) < 2 {
+			die("usage: grant <player> <credits> [premium] [free_xp]\n" +
+				"  <player> is a 32-hex player id (see `admin-cli players`) or a display name")
+		}
+		c.grant(args[0], args[1:])
 	case "chat":
 		channel := "global"
 		if len(args) > 0 {
@@ -337,6 +354,87 @@ func (c *client) unban(username string) {
 func (c *client) queue() {
 	r := c.get(c.joinPath(c.mmogURL, "/admin/queue"))
 	printJSON(r)
+}
+
+func (c *client) players() {
+	r := c.get(c.joinPath(c.mmogURL, "/admin/players"))
+	list, _ := r["players"].([]interface{})
+	if len(list) == 0 {
+		printJSON(r)
+		return
+	}
+	fmt.Printf("%-34s %-20s %10s %10s %10s\n", "PLAYER ID", "NAME", "CREDITS", "PREMIUM", "FREE XP")
+	for _, entry := range list {
+		p, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fmt.Printf("%-34v %-20v %10v %10v %10v\n",
+			p["user_id"], p["display_name"], jsonNumber(p["credits"]),
+			jsonNumber(p["premium"]), jsonNumber(p["free_xp"]))
+	}
+}
+
+// jsonNumber prints a JSON number as an integer. encoding/json decodes into
+// float64, and %v on a float64 renders 1e+06 for a million credits, which is
+// both ugly and easy to misread as a different number.
+func jsonNumber(v interface{}) string {
+	if f, ok := v.(float64); ok {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// resolvePlayerID accepts either a player id or a display name. The id is the
+// key player_state is on, but it appears nowhere in the client UI, so requiring
+// it would mean every grant starts with a trip through a sqlite shell.
+func (c *client) resolvePlayerID(who string) string {
+	if playerIDPattern.MatchString(who) {
+		return strings.ToLower(who)
+	}
+	r := c.get(c.joinPath(c.mmogURL, "/admin/players"))
+	list, _ := r["players"].([]interface{})
+	var matches []string
+	for _, entry := range list {
+		p, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := p["display_name"].(string)
+		if !strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(who)) {
+			continue
+		}
+		if id, ok := p["user_id"].(string); ok {
+			matches = append(matches, id)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0]
+	case 0:
+		die(fmt.Sprintf("no player named %q — run `admin-cli players` to see the list", who))
+	default:
+		// Display names are not unique in this game's data, so refuse rather
+		// than crediting whichever row came back first.
+		die(fmt.Sprintf("%d players are named %q; pass the player id instead", len(matches), who))
+	}
+	return ""
+}
+
+func (c *client) grant(who string, amounts []string) {
+	fields := []string{"credits", "premium", "free_xp"}
+	payload := map[string]interface{}{"user_id": c.resolvePlayerID(who)}
+	for i, raw := range amounts {
+		if i >= len(fields) {
+			die("usage: grant <player> <credits> [premium] [free_xp]")
+		}
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			die(fmt.Sprintf("%s must be a non-negative whole number, got %q", fields[i], raw))
+		}
+		payload[fields[i]] = value
+	}
+	printJSON(c.post(c.joinPath(c.mmogURL, "/admin/grant"), payload))
 }
 
 func (c *client) chat(channel string) {

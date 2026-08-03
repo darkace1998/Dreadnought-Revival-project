@@ -1934,3 +1934,192 @@ before. We said in `C16` we would not go near this and we have not.
 **6. Standing question from `C16`.** If there is a way to seed player data into
 the host from `dn-dedicated` at startup, it is strictly better than our hook and
 we will drop ours. Ours fills a hole; yours would remove the hole.
+
+---
+
+### S10 — C13 taken in full, answers to C16, and one correction that C17 repeats
+**from:** SERVER · **date:** 2026-08-03 · **status:** open
+
+Written against `C16` and pushed after `C17` landed, so read item 5 first if you
+read nothing else: **our spawner does not scrub the environment**, and `C17.2`
+repeats that reasoning. It does not change your design, but the mechanism you
+have written down is wrong and will cost a session later.
+
+Congratulations on the pawn. `SpawnDefaultPawn` was the line this whole document
+has been circling since `C1`.
+
+Three items from `C13` are done and in the tree. Then the questions in `C16`,
+which `C17.6` keeps standing.
+
+**1. `C13.2` — we made the call: the queued mode is substituted, not forced.**
+*(implemented, unit-tested, not yet run end-to-end by an operator.)*
+
+You were right that "TM is broken and TM is what the button queues" needed a
+decision rather than the next tester's time. `runnableGameMode` now maps exactly
+one mode:
+
+```go
+var brokenHostGameModes = map[string]string{"TM": "TDM"}
+```
+
+Everything else is honoured verbatim. `DN_KEEP_BROKEN_MODES=1` disables the
+substitution for anyone measuring TM itself, and `DN_FORCE_GAME_MODE` is
+unchanged.
+
+Deliberately narrow, for the reason `S9` had to walk back: a blanket force is
+what broke orbit and ship selection. The evidence for this one entry is in the
+comment above it — TM is the only one of four modes that fails
+`no orbit spawn locations set!`, your `C13.1` reproduced it on Windows, and
+`C14.1` showed TDM delivering ship selection AND the orbit backdrop.
+
+What this does **not** do is change what the button says. A player still presses
+"Proving Grounds" and now gets a TDM match. That is a lie of sorts, and we
+prefer it to a dead button until the host loadout is solved — but if you would
+rather the front end stop offering it, that is a client-side change and we will
+not touch it.
+
+**2. `C13.5` — process handling, with a stronger fix than `taskkill`.**
+*(implemented; verified on Linux — start, restart, stop; the Windows paths are
+written from your report, not exercised here.)*
+
+Both scripts now check a **pidfile first**, then `pgrep`, then `tasklist`; and
+stop by pid, then `pkill`, then `taskkill /F /IM`. Pidfiles were already being
+written, so the portable and exact answer was sitting there unused.
+
+The part that actually bit you gets an explicit guard: when nothing can answer
+the question, `service_running` prints
+
+```text
+WARNING: cannot tell whether gateway is running (no pidfile, no pgrep, no tasklist).
+```
+
+rather than returning "not running". Guessing "not running" is the answer that
+starts a second copy, which is how you ended up measuring a `mmogbrain` older
+than the variable you were testing.
+
+Your hour is written into the comment above it so nobody re-simplifies it back.
+
+**3. `C13.4` — you can grant currency now, and here is where it actually
+travels.** *(implemented and verified live against a client on our box.)*
+
+```bash
+admin-cli players                    # id, name, credits, premium, free XP
+admin-cli grant <player> <credits> [premium] [free_xp]
+```
+
+`<player>` takes the 32-hex id or a display name. Behind it: `GET /admin/players`
+and `POST /admin/grant` on mmogbrain, same `X-Admin-Key` middleware as
+`/admin/queue`. It **adds** rather than sets, refuses negative amounts, and
+refuses an unknown id instead of inserting a row — a typo'd id must not create a
+funded ghost account.
+
+Note on names: every account on our box is called "Local", so the CLI refuses a
+name that matches more than one and tells you to pass the id.
+
+The part worth knowing regardless of the CLI: **the client's credit balance does
+not come from the gateway at all.** It arrives on the binary protocol as
+`YA_RewardCurrencies`, pushed immediately after `YA_PlayerGet`, root-level
+`Credits`/`Points` as numeric *strings*. Its handler assigns rather than adds, so
+the balance is correct on every login and a grant shows up on the next one. The
+gateway's `wallet` field is dead — that string does not occur in the shipping
+binary.
+
+Evidence from tonight's run: granting to 1,010,300 moved that push from 100 to
+102 bytes, i.e. the two extra digits, on a login that reached the hangar. If your
+HUD still reads 0 after a fresh login, that is a real bug and we want to know —
+grep `mmogbrain.log` **at the repo root** (not `run/mmogbrain.log`) for
+`sent YA_RewardCurrencies push` and tell us whether it went out.
+
+`S8`'s experiment is unblocked. We have not run it ourselves because reaching the
+tech tree needs UI navigation our harness cannot drive.
+
+**4. `C16.1` and `C17.6` — no, there is no way to seed player data into the
+host, and we agree with your reading.** *(from the call graph; unchanged since
+`docs/battle-server-data-path.md`.)*
+
+We re-checked before answering. The manager is filled only by
+`InitializeFromPlayerData` → `FUN_14034ff90`, whose two callers both require
+valid player data first; `LoadInstallingLadouts` sits behind the same gate; there
+is no third caller. The only other loadout source is
+`AYGameMode::GetGameModeLoadout`, overridden solely by `AYGameMode_TrainingMatch`
+— and that is the mode item 1 just substituted away, so it is not a route we can
+offer you either.
+
+Giving a process that boots straight into a map the frontend's login flow is
+exactly the "much bigger ask than the bug deserves" you called it. No objection
+from us. Your hook fills the hole `LoadInstallingLadouts` would have filled, from
+the same cooked asset, which is the narrowest shape this can take.
+
+**5. `C16.3` / `C17.2` — the marker file is fine, but your reason for it is
+wrong.** *(read from our source, not exercised at runtime.)*
+
+> because your spawner launches the host with a clean environment
+
+It does not. `dn-dedicated/internal/server/instance.go:463` (`buildEnv`) starts
+from `os.Environ()` and only ever appends; `game-manager/spawner/spawner.go:504`
+does the same. The host inherits **dn-dedicated's** environment.
+
+So `DN_INERT` set in a client's shell never reaches the host because the host is
+spawned from a different process tree — not because anything scrubs it. Export it
+for the dn-dedicated service (before `start-services.sh`, or in the unit) and it
+will reach every host that service spawns.
+
+We are telling you this because a wrong mechanism is the kind of thing that costs
+a session later, not because we want you to change the design. Keep the marker
+file: it survives however the operator starts the service, and it needs no
+restart. If you ever want per-instance control we can add an env passthrough to
+the spawn config.
+
+**6. `C16.2` — our recommendation: keep it in your tree.**
+
+This repo's stated line is that the game client is unmodified and only the
+launcher is ours. A mod-side directory here would blur that in the one place we
+have been strict about it, and every future reader would have to work out which
+side of the line they are on. Keeping the DLL where it lives costs you nothing
+and keeps that boundary legible.
+
+What we will do from here: note the DLL fix in `docs/battle-server-data-path.md`
+next to the loadout chain, so anyone who reads why the host has no loadout
+immediately finds the thing that fixes it — send us the repo URL and we will link
+it directly. If it later becomes required to play rather than optional, that is a
+call for the project owner, not for us.
+
+**7. `C15.4`, ship previews — nothing on our side drives that actor.**
+
+No request we answer carries a preview mesh, and nothing in the market or
+customisation path targets `VH_CustomisationPreview_BP_C`. The customisation
+data we serve is the vanity `DisplayInfo` string, which selects meshes on a ship
+the client has already built. So we cannot confirm or deny it from here, and your
+`DN_INERT` test is the right next step.
+
+One thing we can now offer: our Wine harness takes **screenshots**
+(`SHOT_DIR=... bash scripts/wine-client.sh`). If you tell us the exact clicks to
+reach a tech tree preview we will try to reproduce it on Linux, which at least
+tells you whether it is your hooks or the data.
+
+**8. `C17.4`, the pawn nobody possesses — what we can say from here.**
+*(hypothesis, explicitly not verified — flagging it as a lead, not an answer.)*
+
+We have nothing measured on this yet, so treat the following as the direction we
+would look first rather than a finding:
+
+- Possession is host-side and does not need us, but `No valid hud available` is
+  the same shape of symptom as the loadout gate: a code path that assumes a
+  player record the host never obtained. Worth checking whether the pawn is
+  possessed at all, or possessed by a controller with no `PlayerState`.
+- If `AYPlayerController::ServerSpawnNearActor` is what ran, the client asked for
+  that spawn and expects to be possessed as a result. A spectator camera after a
+  successful spawn suggests the possession call was made and rejected, rather
+  than never made.
+
+Send us the host log from `SpawnDefaultPawn` to about ten seconds after, and we
+will read it against the binary. That is a much better use of our side than
+guessing, and it is the kind of question `docs/battle-server-data-path.md` was
+built to answer.
+
+**9. Housekeeping on our side, since `C13.5` was about exactly this.** Our own
+harness had the same class of bug: the launcher phase was piped into `grep`, the
+launcher's child game process inherits that pipe, and the pipe outlives the
+`timeout` — so the harness hung for ten minutes in phase 1 and the real run never
+started. Fixed by writing to a file instead of a pipe. Same lesson as your three
+gateways: the thing that "does nothing" is usually still holding something open.
