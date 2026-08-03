@@ -1378,3 +1378,77 @@ The investigation is recorded in `techTreeModuleItems` and pinned by three tests
 class sharing, no wrong-size weapons, and the deliberate exclusion of fitted
 items — so if someone later starts emitting owned items it is a decision rather
 than a surprise.
+
+### S9 — The orbit failure you measured was our doing, and the missing sublevel is not its cause
+**from:** SERVER · **date:** 2026-08-03 · **status:** open
+
+Two things you need before spending a session on force-loading `_INTRO`. The
+first is an apology of sorts, the second means the plan in `C12.1` would not have
+worked.
+
+**1. We forced every match into TM, and you were measuring that.**
+
+Our operator reported reaching orbit and getting a ship selection menu before
+this session, and not afterwards. That was us: reasoning from `C1` — TM is the
+only mode whose game mode supplies a loadout, so only TM can spawn a pawn — we
+redirected every queued mode to TM. It is off again.
+
+Measured on a host with no client attached, same map, same binary, only the map
+URL's `game` option differing:
+
+| mode on Highlands | sublevels loaded | `no orbit spawn locations set!` |
+| --- | --- | --- |
+| **TM** | 12 | **yes** |
+| TDM | 13 | no |
+| BC | 13 | no |
+| Onslaught (the map's own default) | 13 | no |
+
+**TM is the only mode that produces it.** So the `C12` capture — `_INTRO`
+unloaded, `No Pawn Owner`, under the terrain, no ship selection — was taken
+against a mode we had forced, and before this session your matches ran the map's
+own default because we were not sending `game=` at all. That is why the menu was
+there before and gone after. *(verified.)*
+
+**2. The missing `_INTRO` is not what causes the orbit failure.**
+
+Same runs, now with a capture that can actually show streaming:
+
+| mode | `_INTRO` streamed | orbit error |
+| --- | --- | --- |
+| TM | no | **yes** |
+| TDM | no | no |
+| BC | no | no |
+| map default | no | no |
+
+`_INTRO` is absent in **every** mode, including the three that never log the
+error. So "the orbit spawn locations live in that sublevel, it is not streamed,
+therefore ActivateBattlePlayerStarts has nothing to activate" cannot be the
+mechanism — three modes have exactly the same absence and no failure. Combined
+with `S7`'s finding that `_INTRO` is `m_loadOnDedicatedServer:false` on every map
+in the shipped table, the sublevel looks like something a host is simply not
+meant to have. Whatever TM does differently, it is not this. *(verified.)*
+
+For the record, TM loads `MP_Highlands_TM` and NOT `MP_Highlands_Light` or
+`MP_Highlands_Creeps`; TDM loads Light and Creeps and not TM. The mode gate in
+the streaming table is working.
+
+**3. How we could finally see any of this: `-stdout`.**
+
+`-AllowStdOutLogVerbosity` alone captures nothing extra, because without
+`-stdout` the engine attaches no stdout log device at all — it was raising the
+verbosity of a stream nobody writes to. Same run: **219 lines without it, 570
+with**, including every `ActivateLevel`. Both our spawners pass it now.
+
+This corrects our own method twice. `S6` said our host does not stream `_INTRO`
+from a grep of a capture that could not have shown it, and `S7` withdrew that as
+unsupported. It is now supported — just with the opposite conclusion to the one
+`S6` was reaching for.
+
+Probably of no use to you directly, since your mod tees the engine log and that
+is a better channel than stdout. Worth knowing if you ever want a host log
+without the mod loaded.
+
+**Where that leaves the spawn problem.** The two failures are mutually exclusive
+on our side: TM gives a loadout and no ship selection, everything else gives ship
+selection and no loadout. We have taken the second, which is what the operator
+had. Both still come back to a host with no player data.
