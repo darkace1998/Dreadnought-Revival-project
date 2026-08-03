@@ -50,3 +50,42 @@ func TestItemCatalogStillOffersHullsAsPrecastLoadouts(t *testing.T) {
 		}
 	}
 }
+
+// Three hulls in the store were sold as Tier 1 at the Tier 1 price because
+// ItemIDRegister points their ids at the previous build's tier-less asset. The
+// store is where a player sees the number and pays the price, so the catalog
+// asserts it too and not just the config package.
+func TestStoreHullsCarryTheirRealTierAndPrice(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	seeds := map[int32]gatewayCatalogEntitySeed{}
+	for _, seed := range gatewayItemCatalogSeeds("") {
+		seeds[seed.itemID] = seed
+	}
+	for _, tc := range []struct {
+		id   int32
+		name string
+		tier int32
+	}{
+		{33489315, "Athos", 5},
+		{33489318, "Zmey", 5},
+		{33489331, "Aion", 4},
+		{33489262, "Agosta", 1}, // unchanged: its path states T1
+	} {
+		seed, ok := seeds[tc.id]
+		if !ok {
+			t.Errorf("%s (%d) is not in the catalog", tc.name, tc.id)
+			continue
+		}
+		if got := gatewayMarketItemTier(tc.id); got != tc.tier {
+			t.Errorf("%s (%d) tier = %d, want %d", tc.name, tc.id, got, tc.tier)
+		}
+		// The price is derived from the tier, so a wrong tier was also a wrong
+		// price -- a T5 hull for the T1 fee.
+		wantPrice := gatewayMarketCreditPrice(seed.itemType, tc.tier)
+		if seed.priceAmount != wantPrice {
+			t.Errorf("%s (%d) price = %d, want %d (tier %d)",
+				tc.name, tc.id, seed.priceAmount, wantPrice, tc.tier)
+		}
+	}
+}

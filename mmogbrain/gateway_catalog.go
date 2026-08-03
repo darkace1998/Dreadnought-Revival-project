@@ -974,7 +974,22 @@ func techTreeShipManufacturer(shipID int32) string {
 //
 // The result is clamped to 1..5. The UI only ships tier badges for a small
 // range, and an out-of-range value produces a texture path that cannot resolve.
+// gatewayMarketItemTier is the tier the store shows for an item, and the tier
+// its credit price is derived from.
+//
+// Hulls go through dreadconfig.HullTierForItemID rather than the asset path,
+// because for some ids ItemIDRegister still points at the previous build's
+// tier-less asset. Three hulls in the catalog were affected -- Athos and Zmey
+// (both T5) and Aion (T4) -- and all three were sold as Tier 1 at the Tier 1
+// price. See HullTierForItemID for the evidence.
+//
+// Everything else keeps the asset path: /T0/ collapses to 1 deliberately, since
+// the client's tier colour table has five entries (a tier of 0 indexes -1 off
+// the bottom), and an item with no tier segment has no tier to report.
 func gatewayMarketItemTier(itemID int32) int32 {
+	if tier, ok := dreadconfig.HullTierForItemID(itemID); ok {
+		return int32(tier)
+	}
 	item, ok := dreadconfig.ItemByID(itemID)
 	if !ok {
 		return 1

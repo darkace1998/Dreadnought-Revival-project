@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"sync"
 )
 
@@ -50,6 +52,7 @@ type HullName struct {
 }
 
 var (
+	hullTierByName   map[string]int
 	hullNames        []HullName
 	hullNameByAsset  map[string]string
 	hullNamesOnce    sync.Once
@@ -119,6 +122,86 @@ func HullDescriptionForItemID(itemID int32) (string, bool) {
 	defer nameCacheMu.Unlock()
 	description, ok := hullDescriptionByID[itemID]
 	return description, ok && description != ""
+}
+
+// HullTierForItemID returns the tier of a precast hull, 1..5.
+//
+// The asset path is normally the game's own statement of a tier
+// (/Loadouts/Precast/T<n>/...), and where it carries one it is used directly.
+// The trap is that ItemIDRegister maps a handful of ids to the PREVIOUS build's
+// tier-less path -- the same "the table describes an older build" problem that
+// gave four hulls the wrong NAME (see the note at the top of this file). Those
+// ids resolve to /Loadouts/Precast/VH_<Class><Size>_PrecastLoadout_BP with no
+// tier segment at all, and reading a tier off that path silently yields the
+// fallback:
+//
+//	Athos  33489315  registered /Precast/VH_AssaultMedium_PrecastLoadout_BP     really T5
+//	Zmey   33489318  registered /Precast/VH_DreadnoughtMedium_PrecastLoadout_BP really T5
+//	Aion   33489331  registered /Precast/VH_SupportMedium_PrecastLoadout_BP     really T4
+//
+// All three went out of the market as Tier 1, at the Tier 1 price.
+//
+// So the name is the join of last resort: the blueprint the client loads names
+// the hull AND sits in the tiered directory, and the 52 player hull names are
+// distinct (asserted by a test), so a name identifies exactly one tier. The
+// caller must only ask about precast-loadout ids -- a name match is meaningless
+// for anything else, and display names are not unique across categories.
+func HullTierForItemID(itemID int32) (int, bool) {
+	if (itemID>>24)&0xff != categoryIDShipLoadoutPrecast {
+		return 0, false
+	}
+	if item, ok := ItemByID(itemID); ok {
+		if match := hullAssetTierPattern.FindStringSubmatch(item.AssetPath); match != nil {
+			if tier, err := strconv.Atoi(match[1]); err == nil && tier >= 1 && tier <= 5 {
+				return tier, true
+			}
+		}
+	}
+	name, ok := AuthoritativeItemName(itemID)
+	if !ok {
+		return 0, false
+	}
+	ensureHullTierIndex()
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	tier, ok := hullTierByName[name]
+	return tier, ok
+}
+
+// categoryIDShipLoadoutPrecast is YShipLoadoutPrecast's ItemIDTable CategoryID,
+// which by the category law is the top byte of every id in it.
+const categoryIDShipLoadoutPrecast = 1
+
+var hullAssetTierPattern = regexp.MustCompile(`/Loadouts/Precast/T(\d)/`)
+
+// ensureHullTierIndex builds the name -> tier index over the player hulls.
+//
+// Names that are not unique are dropped rather than resolved arbitrarily. There
+// are none today (all 52 differ, and TestHullNamesAreUniqueEnoughToJoinOnTier
+// keeps it that way), so this only guards against a future asset change turning
+// a silent wrong answer into no answer.
+func ensureHullTierIndex() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(hullTierByName) > 0 {
+		return
+	}
+	hulls := GetAllHullNames()
+	if len(hulls) == 0 {
+		return
+	}
+	counts := make(map[string]int, len(hulls))
+	for _, hull := range hulls {
+		counts[hull.Name]++
+	}
+	index := make(map[string]int, len(hulls))
+	for _, hull := range hulls {
+		if hull.Name == "" || hull.Tier < 1 || counts[hull.Name] != 1 {
+			continue
+		}
+		index[hull.Name] = hull.Tier
+	}
+	hullTierByName = index
 }
 
 // ensureHullDescriptionIndex builds the id -> description index if it is
