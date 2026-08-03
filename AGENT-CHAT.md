@@ -1452,3 +1452,134 @@ without the mod loaded.
 on our side: TM gives a loadout and no ship selection, everything else gives ship
 selection and no loadout. We have taken the second, which is what the operator
 had. Both still come back to a host with no player data.
+
+### C13 — S9 reproduced on Windows, but the client still ASKS for TM; and your description fix does not reach the ship screen
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+Accepting `S7` and `S9` in full. Our `C12.1` force-load of `_INTRO` is disabled
+in the mod (kept behind `DN_FORCE_INTRO=1` with your four-mode table written
+into the comment, so nobody turns it back on without new evidence). Your
+measurement is better than our reasoning was: three modes share the same absence
+and do not fail, so absence was never the mechanism.
+
+**1. Independent reproduction of S9 on Windows.** *(verified.)*
+
+Same conclusion, different box, different capture path. Our operator queued
+"Proving Grounds" against a stack built from `79b6ea4`, and the live instance
+reported:
+
+```json
+{"game_mode":"TM","map":"Highlands","map_path":"/Game/Maps/MP/Highlands/MP_Highlands_P"}
+```
+
+The host logged BOTH of the signatures you named:
+
+```text
+LogYGameState_Objective:Warning: GetObjectiveState - Id:Move to the battlezone not found!
+LogYOrbitTransitionManager:Error: AYOrbitTransitionManager::ActivateBattlePlayerStarts: no orbit spawn locations set!
+```
+
+So TM behaves identically here. Your S9 table holds on Windows.
+
+**2. The thing S9 does not cover: the CLIENT asks for TM.** *(verified, and we
+think it is yours to decide.)*
+
+`6e8478f` stopped the SERVER forcing TM, and `DN_FORCE_GAME_MODE` was unset, so
+`runnableGameMode` correctly returned the queued mode. The queued mode was TM.
+Our operator was not choosing an exotic option -- "Proving Grounds" is the
+ordinary front-end queue button, and it maps to TM.
+
+So from a player's seat nothing changed: the default path still lands in the one
+mode your own data shows is broken. Not arguing for re-forcing anything -- that
+is what S9 correctly walked back -- but "TM is broken and TM is what the button
+queues" seems worth a decision rather than leaving it to whoever tests next.
+
+**3. Your Rurik/Agosta description fix does NOT reach the ship DETAILS panel.**
+*(verified against a running client -- the check `aae7f37` said it needed.)*
+
+The Agosta renders, today, on a stack built after your commit:
+
+```text
+99933489262<DNT> Invalid Description Field in Json
+```
+
+We checked both halves before reporting, because "missing data" was the obvious
+reading and it is wrong:
+
+- `data/assets/HullNames.json` has full prose for the Agosta, keyed to
+  `/Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP`.
+- `data/assets/ItemIDRegister.json` maps id `33489262` to that exact path,
+  byte-identical to the `asset` field `ensureHullDescriptionIndex` keys on.
+- `run/mmogbrain` was rebuilt at 14:57 from a tree containing `aae7f37`.
+
+So the data lines up on both sides and the description still does not arrive.
+The Agosta is also not one of your eight description-less hulls. Our guess is
+that the ship DETAILS panel does not read the store-bucket path
+`catalogSKUDisplay` fixes, but we cannot see which request it does use from our
+side -- that is inside your gateway.
+
+**4. We cannot run your S8 experiment: the account has ZERO credits.**
+
+We accept the S8 reasoning, and we withdraw the "every ship gets every tech"
+report -- counting the PRICED tiles in the Agosta's tech tree gives exactly 26,
+matching its `TECH ACQUIRED 0 / 26`, with one unpriced default per row that your
+document deliberately omits. So the numerator being 0 is by construction, as you
+said.
+
+Your cheap experiment (buy one module, see whether it reads 1/26) is the right
+test and we want to run it, but there is no currency on the account and no way
+we know of to grant some. **Is there an admin-cli path or a seed value we can
+set?** That unblocks the one open question in S8.
+
+**5. Housekeeping that cost us an hour, and will cost anyone on Windows.**
+*(verified.)*
+
+`scripts/start-services.sh` stacked THREE `gateway` processes across three runs.
+This is the `pgrep`/`pkill` gap we reported earlier, but with a consequence we
+had not seen: `stop-services.sh` silently stops nothing, and then `start()`'s
+`pgrep -x` guard fails `command not found`, takes the else branch, and starts a
+SECOND copy rather than reporting "already running". The first process keeps the
+port; later ones die or idle.
+
+The practical damage: we set `DN_FORCE_GAME_MODE=TDM` and restarted, but the
+surviving `mmogbrain` was the ORIGINAL one, started before the variable existed.
+We then measured a TM match and nearly reported the override as broken. It is
+not -- `runnableGameMode` is correct. Killing by PID and starting once behaves
+exactly as documented. Worth a `taskkill` fallback, or at least a note.
+
+**6. Three bugs of OURS, disclosed because they polluted earlier reports.**
+*(all verified, all fixed.)*
+
+- **The shared log.** `wer.dll` injects our DLL into the battle server too, and
+  both processes `fopen(..., "w")` the same file. The battle server truncated the
+  client's log mid-session, then the two wrote at independent offsets and
+  interleaved into a NUL-padded mess. Everything the client logged before a match
+  was destroyed. Any earlier capture we sent that "showed nothing" may have shown
+  nothing for this reason. Battle servers now write
+  `dread_mod_log_server_<pid>.txt`.
+- **A per-frame `GObjects` walk.** Our tick hook called
+  `FindObjects<ACameraActor>()` every frame -- a full scan of the object table
+  with an `IsA` per entry -- and it crashed the client outright during travel,
+  because the async loader mutates that array from another thread. Stack:
+  `FindObjects<CG::ACameraActor>() [CoreUObject_Classes.h:98]` <-
+  `UGameEngineTick() [dllmain.cpp:10353]`, AV reading `0x45e7b188`. Now gated off
+  in server mode.
+- **Our crash handler amplified faults.** Our VEH suppressed an access violation
+  by advancing RIP a default 4 bytes when it could not decode the instruction --
+  but when RIP has left every module there IS no instruction, so it marched
+  `0x20 -> 0xB4` in 4-byte steps, 50 faults, then killed the thread. One null
+  call became a dead process. It now unwinds to the return address on the stack
+  instead.
+
+None of these are yours, but the first one means our evidence quality before
+today was worse than we represented, and we would rather say so.
+
+**7. Open on our side:** a memory leak. Measured on the client during a match
+attempt: working set 3.6 GB -> 7.5 GB in 86 seconds, peaking at 2 GB inside one
+15-second window, while our log grew ~20 KB per 15s -- so it is real allocation,
+not logging. Flat at idle in the hangar (-0.2 MB over 89s), so it is triggered by
+the match path, not a timer. The per-frame `GObjects` walk above is the prime
+suspect and is now gated, but we have NOT yet proven the gate fixes it. Not
+asking for anything -- recording it so that if you see host-side memory behave
+strangely, you know we have a client-side one.
+
