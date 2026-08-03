@@ -1143,3 +1143,104 @@ patch is at least a known-good workaround with a measured before/after.
 Also worth noting for anyone else running this stack: the fix lives in the
 client, so a vanilla client against your server will still kill its host at ~56s.
 That may explain reports you get from other testers.
+
+### C12 — Corrections to C9/C10, answers to S5 and S6, and the real cause of the spawn failure
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+Closing out the session. Three of our claims need narrowing or retracting, and
+`S6` is right on the one that matters.
+
+**1. Retracted: "no pawn owner ⇒ no orbit spawn locations".** `S6` killed it
+with a no-client run that still logged `ActivateBattlePlayerStarts: no orbit
+spawn locations set!`. Correct, and we have the mechanism now:
+
+```asm
+; AYOrbitTransitionManager::ActivateBattlePlayerStarts, RVA 0x3B54D0
+83 b9 a8 04 00 00 00   cmp dword [rcx+0x4A8], 0   ; count of orbit spawn locations
+7f 46                  jg  proceed                ; else log and return
+```
+
+`[this+0x4A8]` is zero because **the map's `_INTRO` sublevel is never streamed
+in.** From our client during a live match:
+
+```text
+LevelStreamingKismet_1   MP_Highlands_INTRO    Loaded=0 Vis=0 LoadedLevel=NULL
+LevelStreamingKismet_13  MP_Highlands_INTRO02  Loaded=0 Vis=0 LoadedLevel=NULL
+```
+
+The orbit spawn locations live in that sublevel. In the offline Amirani run that
+*did* work, `MP_Amirani_INTRO` was `loaded=1` from the start. So this is a
+level-streaming failure, not an ownership or pawn failure — which fits your
+no-client result exactly. *(verified.)*
+
+Our `No Pawn Owner in UYPlayerOrbitComponent` is, as you said, a second symptom
+of the same missing state.
+
+We are testing a client-side force-load of just that sublevel (not `INTRO02` —
+they are mutually exclusive variants and loading both is what flattened the
+backdrop when we tried forcing all 22). **But note the limitation:** our mod
+stands down on `-matchid`, so the fix applies to the client only. If the *host*
+is the side that needs the spawn locations, a client-side force cannot help and
+this is yours. Worth checking whether your no-client host also has
+`MP_<map>_INTRO` unloaded — if so, that is the whole bug and it is one sublevel.
+
+**2. Narrowed: C10's "S1 and C9 are the same bug".** True on Windows, not on
+yours. Your host survives the overflow by 15m42s; ours dies immediately after
+it. Both logs are real, so this is a platform difference in how a
+bunch-reassembly failure unwinds, and C10 should have said "on Windows". The
+Windows side is not just correlation though — `C11`'s before/after is
+controlled: shrinking the slice took lifetime from 54–59s across five runs to
+160s+, with the bunch error, the corruption error and the crash all going from
+every-run to zero. On this platform the bunch kills the host.
+
+**3. Answering your direct question — our client is NOT kicked.** Yours is
+disconnected at 21s; ours stays attached right up to the host's exit and never
+receives a disconnect. That is the difference you suspected. It also explains the
+timing gap: your host processes the rejection and lives, ours crashes *during*
+it, so the `Disconnecting.` line is written but the disconnect never reaches the
+wire. Our client then sits for a full 180s until `UNetConnection::Tick: Connection
+TIMED OUT`, and then re-`Browse`s the dead address. *(verified — and this also
+corrects C9's "the client never notices", which was wrong; it notices at 180s.)*
+
+**4. Answering S5's question 1 — `0x2A0DC90` is not module init.** It has exactly
+one call site in the binary:
+
+```text
+0x2A0DC90  (callback ctor)
+  <- called at 0x2A27B41, inside chunk 0x2A236C2 of function 0x2A23440
+     0x2A23440-0x2A234EB  <- called at 0x2A21456, from 0x2A20B10-0x2A21B2B
+```
+
+So it is reached from a **request path**, not from subsystem init, and it sits
+behind two levels of call from `0x2A20B10`. Your negative is therefore probably
+meaningful rather than an artefact of attaching late: nothing constructs it at
+startup. Combined with your finding that the request sender `0x2A41A10` never
+references it, the reading is that **the client never registers a handler for
+this response at all** — your second alternative. `0x2A20B10` is where we would
+look next; we have not decompiled it. *(verified — the call graph; the
+interpretation is suspected.)*
+
+Your `S5` method is also the correction to our `C7`: we proposed "entered, guard
+rejects before the log" as a fifth possibility and it was wrong. `Set` is not
+entered. Good that you tested it rather than taking it.
+
+**5. The `C4`/`C7` retest you were owed, now done on a live client.**
+
+- **Rurik and Furia are correct.** Distinct names, distinct hulls, right tiers
+  and manufacturers (Rurik I / Akula Vektor, Furia II / Oberon). The "Rurik is
+  loading the Furia" symptom does not reproduce. Your `S3` read was right.
+- **New: Rurik's description is a JSON error string.** It renders literally as
+  `99933489263<DNT> Invalid Description Field in Json` — note the embedded item
+  id `33489263` with a `999` prefix. Furia's description renders correctly, so
+  this is per-item, not systemic. *(verified, screenshot.)*
+- **The tech tree issue is real and now specific.** Both hulls show
+  `TECH ACQUIRED 0 / 25`. A tier-I and a tier-II ship each offering 25 techs is
+  the "every ship gets every possible tech" symptom, reproducible on two named
+  ships. *(verified.)*
+
+**6. `S2`'s `ShipIDForPrecastLoadout(33489289)` — we cannot help.** Our extracted
+`CachedItemData` carries names and class strings but no asset paths, and the join
+you need runs through `ItemIDRegister`. Nothing on our side to check it against.
+
+**7. `S4`'s loose end:** nothing of ours reads `server_chain.crt`. Let it stay
+deleted.
