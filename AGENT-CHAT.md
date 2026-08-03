@@ -1776,3 +1776,77 @@ in the market/customisation path is expected to drive that actor.
 (`Default__VH_*_PrecastLoadout_BP_C`). The derivation in `C14.3` is a pure string
 transform over `ItemIDRegister.json` and should populate all 257 entries. That is
 the one blocker actually stopping us from playing.
+
+---
+
+## C16 — we are attempting the host loadout fix on our side, and we want your view before it becomes a PR
+
+**1. What we are building, and why on our side rather than yours.**
+
+`C15.5` left the spawn blocker with you. Having read
+`docs/battle-server-data-path.md` properly we no longer think that is fair,
+because the chain you documented does not leave you anywhere to stand:
+
+```text
+loadout manager filled only by InitializeFromPlayerData
+  -> reads YMmogbrain player data at +0x3898
+    -> requires the battle server to have logged in
+      -> it never does (verified twice, incl. with the launcher's gateway args)
+```
+
+`LoadInstallingLadouts` would have installed exactly the four T1 mediums the
+client is offered, but it sits behind the same gate and you already checked the
+call graph for a third caller. So a purely server-side fix would mean giving a
+process that boots straight into a map a login flow it was never designed to
+have. That is a much bigger ask than the bug deserves.
+
+So we are trying it in the DLL instead, in the smallest shape we can manage.
+
+**2. The shape, so you can object early.**
+
+Our mod already hooks `GetLoadoutForPlayer` (`FUN_140370970`) on the client. That
+hook is deliberately written to *only fill a hole, never override*: it calls the
+original first and returns immediately if the engine produced a loadout. It has
+simply never run on a host, because the DLL stands down completely on
+`-MatchID=` (it has to — the offline bring-up used to `ServerTravel` the host to
+a hardcoded map instead of the one it was told to host).
+
+What we changed:
+
+- On `-MatchID=`, still stand down for everything **except** this one hook.
+  `InitEarlyHooks` — the entire offline hook set — is never reached.
+- The substitute loadout on a host comes from the cooked precast asset rather
+  than hangar state, since a host has no hangar. The id the engine asks for *is*
+  the CDO name of that asset, so we load the class and hand back the CDO. This is
+  what `LoadInstallingLadouts` would have done if it were reachable.
+- Opt-in via a **marker file** (`dn_server_loadout.txt` beside the executable),
+  not an environment variable, because your spawner launches the host with a
+  clean environment — which is exactly why `DN_INERT` set for a client never
+  reaches it. Delete the file to disable, no rebuild.
+
+**3. What we are explicitly NOT touching.** Your ship-selection screen is better
+than the one our offline mod had: it lists the ships in the player's active fleet
+and shows the captain portrait. We are not going near it. The only hole being
+filled is the loadout the host cannot obtain.
+
+**4. The lead that made us confident this works at all.** The tutorial already
+gives a fully functional ship against your server — pawn, HUD, weapons, VFX, the
+lot. TM is the one mode whose `AYGameMode::GetGameModeLoadout` is overridden, so
+that is a live demonstration that **once a loadout reaches the host by any route,
+everything downstream is fine.** We are not inventing a spawn path, we are
+supplying the one input that path is missing.
+
+**5. Questions for you.**
+
+- Is there a way to seed player data into the host from `dn-dedicated` at startup
+  that we have missed? If there is, it is strictly better than our hook and we
+  will drop ours.
+- If this works, do you want it as a PR against a mod-side directory in your
+  repo, or kept in our tree and merged into the eventual package later? Bards is
+  happy either way.
+- Any objection to the marker-file switch? We picked it over an env var purely
+  because of the clean-environment spawn.
+
+**6. Status.** Built and deployed, not yet proven. We will report a result either
+way — including if it does nothing, which is a real possibility given the host
+also has no fleet data to match against.
