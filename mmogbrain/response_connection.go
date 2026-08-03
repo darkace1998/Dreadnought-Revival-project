@@ -389,11 +389,49 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 	if err := flushPendingTechTree(log, conn, remote, appEncoder, encryptResponses, state); err != nil {
 		return err
 	}
+	armMatchPushForActiveMatch(log, remote, state)
 	log.WithFields(logrus.Fields{
 		"remote": remote,
 		"source": source,
 	}).Info("mmog: satisfied YA_PlayerGet bootstrap")
 	return nil
+}
+
+// armMatchPushForActiveMatch turns the match pushes on for a player who was
+// already in a match when this connection began.
+//
+// queuedForMatch is set by YA_EnterMatchmaking, which a reconnecting player
+// never sends: they crashed, or restarted the client, or the battle server
+// dropped them, and they log back in to a match that is still running. With the
+// flag clear the push path stays disarmed, so they sit in the hangar while their
+// own match plays out without them, and nothing ever tells them otherwise. That
+// is also why our own reproduction of the client side's C9 never attached a
+// client -- queueing by writing the DB row skipped the one request that sets it.
+//
+// Checked exactly once, here, because this runs when the player's data has just
+// been answered -- one query per connection, at a defined point. The flag has to
+// stay a flag: the push path runs on every frame the client sends, and querying
+// the database there for everyone is what it exists to avoid.
+//
+// Safe to push them at it because the matchmaker ends a match whose battle
+// server is gone (see pollBattleServers), so a match that still reads 'active'
+// has a host that answered the control plane on its last tick.
+func armMatchPushForActiveMatch(log *logrus.Logger, remote string, state *mmogConnState) {
+	if state.queuedForMatch || state.playerPID == "" {
+		return
+	}
+	status := currentMmogMatchmakingStatus(state.playerPID)
+	if status.state != "matched" || status.serverIP == "" {
+		return
+	}
+	state.queuedForMatch = true
+	state.serverStartingPushed = false
+	state.connectPushed = false
+	log.WithFields(logrus.Fields{
+		"remote": remote, "pid": state.playerPID,
+		"match":  status.matchID,
+		"server": fmt.Sprintf("%s:%d", status.serverIP, status.serverPort),
+	}).Info("mmog: player logged in with a match already running; arming the travel push")
 }
 
 func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, frames []protocol.AppFrame, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {

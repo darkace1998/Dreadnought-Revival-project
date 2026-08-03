@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func readyAt(t *testing.T, database *sql.DB, id string) sql.NullString {
 // The stamp is what lets the YA_Connect push stop waiting out
 // DN_CONNECT_PUSH_DELAY, so it must appear as soon as the control plane says the
 // engine is hosting -- and not before.
-func TestPollServerReadinessStampsOnlyWhenReady(t *testing.T) {
+func TestPollBattleServersStampsOnlyWhenReady(t *testing.T) {
 	database := sweepTestDB(t)
 	insertActiveMatch(t, database, "m1", "inst-1")
 
@@ -61,13 +62,13 @@ func TestPollServerReadinessStampsOnlyWhenReady(t *testing.T) {
 
 	m := readinessMatchmaker(t, database, srv.URL)
 
-	m.pollServerReadiness()
+	m.pollBattleServers()
 	if v := readyAt(t, database, "m1"); v.Valid {
 		t.Fatalf("stamped %q while the server was still loading", v.String)
 	}
 
 	ready = true
-	m.pollServerReadiness()
+	m.pollBattleServers()
 	if v := readyAt(t, database, "m1"); !v.Valid || v.String == "" {
 		t.Fatal("no stamp after the control plane reported ready")
 	}
@@ -76,7 +77,7 @@ func TestPollServerReadinessStampsOnlyWhenReady(t *testing.T) {
 // A control plane with no readiness route -- game-manager has none -- must leave
 // the stamp unset so the push falls back to the fixed delay rather than never
 // firing or firing immediately.
-func TestPollServerReadinessToleratesAControlPlaneWithoutIt(t *testing.T) {
+func TestPollBattleServersToleratesAControlPlaneWithoutIt(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		status int
@@ -97,7 +98,7 @@ func TestPollServerReadinessToleratesAControlPlaneWithoutIt(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			readinessMatchmaker(t, database, srv.URL).pollServerReadiness()
+			readinessMatchmaker(t, database, srv.URL).pollBattleServers()
 			if v := readyAt(t, database, "m1"); v.Valid {
 				t.Fatalf("stamped %q from a control plane that reported nothing usable", v.String)
 			}
@@ -105,10 +106,15 @@ func TestPollServerReadinessToleratesAControlPlaneWithoutIt(t *testing.T) {
 	}
 }
 
-// Matches with no instance handle cannot be polled, and one already stamped must
-// not be polled again -- the poll runs every 3s for the life of the match
-// otherwise.
-func TestPollServerReadinessSkipsMatchesItCannotOrNeedNotPoll(t *testing.T) {
+// A match with no instance handle cannot be polled at all.
+//
+// This used to also assert that an ALREADY-STAMPED match is never polled again,
+// on the grounds that the poll would otherwise run every 3s for the life of the
+// match. That assertion is now wrong on purpose: the poll is what notices the
+// battle server going away, so it has to keep watching a match after it has gone
+// ready. What it must still not do is overwrite an existing stamp, which is
+// asserted below.
+func TestPollBattleServersSkipsMatchesItCannotPoll(t *testing.T) {
 	database := sweepTestDB(t)
 	insertActiveMatch(t, database, "no-instance", "")
 	insertActiveMatch(t, database, "already-ready", "inst-2")
@@ -117,21 +123,112 @@ func TestPollServerReadinessSkipsMatchesItCannotOrNeedNotPoll(t *testing.T) {
 		t.Fatalf("stamp: %v", err)
 	}
 
-	polled := 0
+	var polledPaths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		polled++
+		polledPaths = append(polledPaths, r.URL.Path)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ready":true}`))
+		_, _ = w.Write([]byte(`{"ready":true,"running":true}`))
 	}))
 	defer srv.Close()
 
-	readinessMatchmaker(t, database, srv.URL).pollServerReadiness()
-	if polled != 0 {
-		t.Fatalf("polled %d times; want none", polled)
+	readinessMatchmaker(t, database, srv.URL).pollBattleServers()
+	for _, path := range polledPaths {
+		if strings.Contains(path, "no-instance") || path == "/instances/" {
+			t.Errorf("polled a match with no instance handle: %s", path)
+		}
 	}
 	if v := readyAt(t, database, "already-ready"); v.String != "2026-08-02T00:00:00Z" {
 		t.Fatalf("existing stamp was overwritten: %q", v.String)
 	}
+}
+
+// The whole point of continuing to poll: when the control plane says the host is
+// gone, the match ends and its players are freed. Without this a dead host left
+// everyone in it "matched" until MaxMatchLifetime expired 45 minutes later --
+// unable to queue again, and now liable to be pushed straight back at an address
+// with nothing behind it, since a player who logs in mid-match gets the travel
+// push.
+func TestPollBattleServersEndsAMatchWhoseHostIsGone(t *testing.T) {
+	database := sweepTestDB(t)
+	insertActiveMatch(t, database, "m1", "inst-1")
+	if _, err := database.Exec(`INSERT INTO match_slots(match_id,user_id,team) VALUES('m1','player-1',0)`); err != nil {
+		t.Fatalf("seed slot: %v", err)
+	}
+
+	alive := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !alive {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ready":true,"running":true}`))
+	}))
+	defer srv.Close()
+
+	m := readinessMatchmaker(t, database, srv.URL)
+	m.pollBattleServers() // sees it alive, which is what makes the later 404 readable
+	if status := matchStatus(t, database, "m1"); status != "active" {
+		t.Fatalf("match ended while its host was alive: %q", status)
+	}
+
+	alive = false
+	m.pollBattleServers()
+	if status := matchStatus(t, database, "m1"); status != "ended" {
+		t.Errorf("match status = %q, want ended once the host was gone", status)
+	}
+	var slots int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM match_slots WHERE match_id='m1'`).Scan(&slots); err != nil {
+		t.Fatalf("count slots: %v", err)
+	}
+	if slots != 0 {
+		t.Errorf("%d slots left; the players are still pinned to a dead match", slots)
+	}
+}
+
+// A control plane with no per-instance route 404s EVERY id, forever. Reading
+// that as "the host is gone" would end every live match on the older
+// game-manager, so a 404 only counts once that instance has answered a 200.
+func TestPollBattleServersIgnoresA404FromAControlPlaneWithoutTheRoute(t *testing.T) {
+	database := sweepTestDB(t)
+	insertActiveMatch(t, database, "m1", "inst-1")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	m := readinessMatchmaker(t, database, srv.URL)
+	m.pollBattleServers()
+	m.pollBattleServers()
+	if status := matchStatus(t, database, "m1"); status != "active" {
+		t.Errorf("match status = %q; a 404 from a control plane that never knew the instance must not end it", status)
+	}
+}
+
+// A running host that has not finished loading must not be mistaken for a dead
+// one.
+func TestPollBattleServersKeepsAMatchWhoseHostIsStillLoading(t *testing.T) {
+	database := sweepTestDB(t)
+	insertActiveMatch(t, database, "m1", "inst-1")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ready":false,"running":true}`))
+	}))
+	defer srv.Close()
+
+	readinessMatchmaker(t, database, srv.URL).pollBattleServers()
+	if status := matchStatus(t, database, "m1"); status != "active" {
+		t.Errorf("match status = %q, want active", status)
+	}
+}
+
+func matchStatus(t *testing.T, database *sql.DB, id string) string {
+	t.Helper()
+	var status string
+	if err := database.QueryRow(`SELECT status FROM matches WHERE id=?`, id).Scan(&status); err != nil {
+		t.Fatalf("read match status: %v", err)
+	}
+	return status
 }
 
 // A player who queues for any mode has to end up somewhere they can spawn. On a

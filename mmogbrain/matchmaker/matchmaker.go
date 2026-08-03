@@ -167,8 +167,13 @@ type Matchmaker struct {
 	// seconds later, forever.
 	InternalKey     string
 	PlayersPerMatch int
-	ticker          *time.Ticker
-	stop            chan struct{}
+	// seenInstance remembers which instance ids the control plane has ever
+	// answered a 200 for. Without it a 404 cannot be read: it means "the host
+	// is gone" on dn-dedicated and "there is no such route" on game-manager,
+	// and acting on the second would end every live match.
+	seenInstance map[string]bool
+	ticker       *time.Ticker
+	stop         chan struct{}
 }
 
 // New creates a Matchmaker.
@@ -282,7 +287,7 @@ func (m *Matchmaker) sweepStaleMatches() error {
 	return nil
 }
 
-// pollServerReadiness asks the control plane whether the battle server behind
+// pollBattleServers asks the control plane whether the battle server behind
 // each young active match has finished loading, and stamps matches.server_ready_at
 // the first time it says yes.
 //
@@ -301,24 +306,27 @@ func (m *Matchmaker) sweepStaleMatches() error {
 // instance route at all) simply never sets the stamp, and the push falls back to
 // the delay. That fallback is why a failure here is logged at debug and not
 // treated as an error.
-func (m *Matchmaker) pollServerReadiness() {
+func (m *Matchmaker) pollBattleServers() {
 	if m.GameMgrURL == "" {
 		return
 	}
 	cutoff := time.Now().UTC().Add(-MaxMatchLifetime).Format(time.RFC3339)
 	rows, err := m.DB.Query(`
-		SELECT id, instance_id FROM matches
-		WHERE status='active' AND server_ready_at IS NULL AND instance_id != ''
+		SELECT id, instance_id, server_ready_at IS NOT NULL FROM matches
+		WHERE status='active' AND instance_id != ''
 		  AND datetime(created_at) >= datetime(?)`, cutoff)
 	if err != nil {
 		m.Log.WithError(err).Debug("query matches awaiting readiness")
 		return
 	}
-	type pending struct{ matchID, instanceID string }
+	type pending struct {
+		matchID, instanceID string
+		alreadyReady        bool
+	}
 	var waiting []pending
 	for rows.Next() {
 		var p pending
-		if err := rows.Scan(&p.matchID, &p.instanceID); err != nil {
+		if err := rows.Scan(&p.matchID, &p.instanceID, &p.alreadyReady); err != nil {
 			break
 		}
 		waiting = append(waiting, p)
@@ -326,13 +334,28 @@ func (m *Matchmaker) pollServerReadiness() {
 	_ = rows.Close()
 
 	for _, p := range waiting {
-		ready, err := m.instanceReady(p.instanceID)
+		state, err := m.instanceState(p.instanceID)
 		if err != nil {
 			m.Log.WithError(err).WithField("instance_id", p.instanceID).
-				Debug("readiness poll failed; YA_Connect will fall back to the fixed delay")
+				Debug("instance poll failed; YA_Connect will fall back to the fixed delay")
 			continue
 		}
-		if !ready {
+		if state.gone && m.seenInstance[p.instanceID] {
+			m.endMatchWithNoHost(p.matchID, p.instanceID)
+			continue
+		}
+		if !state.known {
+			continue
+		}
+		if m.seenInstance == nil {
+			m.seenInstance = map[string]bool{}
+		}
+		m.seenInstance[p.instanceID] = true
+		if !state.running {
+			m.endMatchWithNoHost(p.matchID, p.instanceID)
+			continue
+		}
+		if !state.ready || p.alreadyReady {
 			continue
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -349,49 +372,96 @@ func (m *Matchmaker) pollServerReadiness() {
 	}
 }
 
-// instanceReady reads one instance's status from the control plane.
+// endMatchWithNoHost ends a match whose battle server is no longer there.
 //
-// A 404 is not an error the caller should retry around forever, but it is not
-// readiness either -- the instance may simply be gone -- so it reports false and
-// the stale-match sweep handles the rest. A body with no "ready" key means the
-// control plane does not implement readiness, which is reported as an error so
-// the caller logs it once per tick at debug and keeps using the fallback.
-func (m *Matchmaker) instanceReady(instanceID string) (bool, error) {
+// Nothing else does this in time. sweepStaleMatches only ends a match once it is
+// older than MaxMatchLifetime (45 minutes), which is the right backstop and far
+// too slow for the case that actually happens: the host dies, and every player
+// in it stays "matched" -- unable to queue again, and now, since mmogbrain arms
+// the travel push for a player who logs in mid-match, liable to be sent straight
+// back at an address with nothing behind it.
+func (m *Matchmaker) endMatchWithNoHost(matchID, instanceID string) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := m.DB.Exec(`UPDATE matches SET status='ended', ended_at=? WHERE id=? AND status='active'`, now, matchID); err != nil {
+		m.Log.WithError(err).WithField("match_id", matchID).Warn("end match with no host")
+		return
+	}
+	if _, err := m.DB.Exec(`DELETE FROM match_slots WHERE match_id=?`, matchID); err != nil {
+		m.Log.WithError(err).WithField("match_id", matchID).Warn("clear slots for match with no host")
+		return
+	}
+	delete(m.seenInstance, instanceID)
+	m.Log.WithFields(logrus.Fields{
+		"match_id":    matchID,
+		"instance_id": instanceID,
+	}).Info("battle server is gone; ended the match and freed its players")
+}
+
+// battleServerState is what the control plane says about one instance.
+//
+// `known` separates "the control plane answered about this instance" from "it
+// does not implement the route at all", which matters because game-manager has
+// no per-instance route and 404s every id. `gone` is only actionable together
+// with having seen a 200 for that same instance earlier -- see the caller.
+type battleServerState struct {
+	known   bool
+	gone    bool
+	ready   bool
+	running bool
+}
+
+// instanceState reads one instance's status from the control plane.
+//
+// A 404 is ambiguous on its own: dn-dedicated deletes an instance from its map
+// when the process exits, so 404 there means the host is gone -- but
+// game-manager has no per-instance route, so 404 there means every id, forever.
+// This reports the 404 and lets the caller disambiguate with what it has seen
+// before. A body with no "ready" key means the control plane does not implement
+// readiness, which is an error so the caller logs it at debug and keeps using
+// the fixed-delay fallback.
+func (m *Matchmaker) instanceState(instanceID string) (battleServerState, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/instances/%s", m.GameMgrURL, url.PathEscape(instanceID)), nil)
 	if err != nil {
-		return false, err
+		return battleServerState{}, err
 	}
 	req.Header.Set("X-Internal-Key", m.InternalKey)
 	resp, err := gameManagerHTTPClient.Do(req)
 	if err != nil {
-		return false, err
+		return battleServerState{}, err
 	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
+		return battleServerState{gone: true}, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("instance status returned %d", resp.StatusCode)
+		return battleServerState{}, fmt.Errorf("instance status returned %d", resp.StatusCode)
 	}
 	var view map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
-		return false, fmt.Errorf("decode instance status: %w", err)
+		return battleServerState{}, fmt.Errorf("decode instance status: %w", err)
 	}
 	ready, ok := view["ready"].(bool)
 	if !ok {
-		return false, fmt.Errorf("instance status has no ready field")
+		return battleServerState{}, fmt.Errorf("instance status has no ready field")
 	}
-	return ready, nil
+	// running predates nothing -- both control planes report it alongside
+	// ready -- but treat its absence as "running" rather than as "dead",
+	// because guessing "dead" would end live matches.
+	running := true
+	if value, present := view["running"].(bool); present {
+		running = value
+	}
+	return battleServerState{known: true, ready: ready, running: running}, nil
 }
 
 func (m *Matchmaker) tick() error {
 	if err := m.sweepStaleMatches(); err != nil {
 		m.Log.WithError(err).Warn("stale match sweep failed")
 	}
-	m.pollServerReadiness()
+	m.pollBattleServers()
 
 	// Group by game_mode and tier_min to match players within compatible tier ranges.
 	// Players with the same tier_min are treated as compatible for matchmaking.
