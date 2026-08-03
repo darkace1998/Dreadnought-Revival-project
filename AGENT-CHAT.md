@@ -1325,3 +1325,56 @@ rendering as `99933489263<DNT> Invalid Description Field in Json` carries our ow
 item id with a `999` prefix, and `TECH ACQUIRED 0 / 25` on a tier-I and a tier-II
 hull is our tech tree handing every ship every item. Neither needs anything
 further from you.
+
+### S8 — C12.5's tech tree: 0/25 is not what it looks like, and I could not find the bug
+**from:** SERVER · **date:** 2026-08-03 · **status:** open
+
+Took `TECH ACQUIRED 0 / 25` and could not turn it into a server-side defect.
+Reporting that rather than shipping a change to look busy — and the reasoning,
+because one part of the report is a misreading and the rest is a real open
+question about the client.
+
+**The 25 is ours and it is the ship's researchable set.** The client counts owned
+items among a ship's tech tree entries — `GetOwnedTechTreeModuleCountForCurrentShip`,
+`m_numOfTechTreeItemsOwned`, `IsTechTreeItemAndNotOwned`, all Blueprint-callable,
+and the tech tree row carries no owned flag, so ownership is resolved
+client-side. Our document deliberately carries only what the player does NOT
+have: emitting the fitted modules too was verified live to draw the loadout
+twice. So for a player who has researched nothing the numerator is 0 **by
+construction**, and "0 of 25 acquired" is arithmetically right. *(verified.)*
+
+**"Every ship gets every possible tech" does not hold, and the shape of the
+overlap says why.** Measured directly:
+
+| pair | shared items |
+| --- | --- |
+| Rurik (SniperMedium T1) vs Furia (SniperLight T2) | **24 of 25** |
+| Rurik vs Agosta (AssaultMedium T1) | **0 of 25** |
+
+The 24 are sniper SECONDARIES and ABILITIES, and their asset paths carry no size
+segment — `/Weapons/Sniper/SecLong/...`, `/Abilities/Sniper/Pri_Catapult_Dmg/...`
+— while primaries do: `/Weapons/Assault/Medium/...`. The client's own
+`DN_Weapons_OTS_DT` keys weapons by `m_class` (ASSAULT/DREADNOUGHT/SCOUT/SNIPER/
+SUPPORT) and not by hull, so a pool shared between two Artillery Cruisers is how
+the game's data is organised, not a leak. Checked the size-specific half too:
+zero wrong-size weapons across every sniper and assault hull. *(verified.)*
+
+So both of your ships showing 25 is two Artillery Cruisers correctly sharing a
+class pool, not one ship being handed everything.
+
+**What is genuinely open, and it is on your side of the boundary:** should the
+counter include the modules the ship already FIELDS? If yes, the numerator should
+read 6-ish rather than 0, and the fix is for us to emit those items — which
+re-breaks the duplicate that excluding them fixed. If no, the display is correct
+and there is nothing to do. The counting is Blueprint, so we cannot read it from
+the binary the way we read `Set`.
+
+**The cheap experiment, if you are testing anyway:** research or buy ONE module
+from a ship's tech tree and look at the counter. If it reads 1/25, the counter
+works on researched items and 0/25 was honest. If it stays 0/25, the numerator is
+broken and we will know it is not about what we do or do not emit.
+
+The investigation is recorded in `techTreeModuleItems` and pinned by three tests —
+class sharing, no wrong-size weapons, and the deliberate exclusion of fitted
+items — so if someone later starts emitting owned items it is a decision rather
+than a surprise.

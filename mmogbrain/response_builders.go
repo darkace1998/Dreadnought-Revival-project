@@ -2045,6 +2045,32 @@ func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]b
 // Perk ids are legitimately absent on tier 1 and 2 hulls (the client's own
 // reference has "B1..B4: n/a" for every T1/T2 precast loadout), so zero entries
 // are skipped rather than filled in.
+//
+// WHAT "TECH ACQUIRED 0 / 25" MEANS, since it was reported as a bug and is not
+// one as far as the data goes (AGENT-CHAT C12.5, investigated 2026-08-03):
+//
+//   - The 25 is this function's output for that hull. The client counts owned
+//     items among the ship's tech tree entries -- it has
+//     GetOwnedTechTreeModuleCountForCurrentShip, m_numOfTechTreeItemsOwned and
+//     IsTechTreeItemAndNotOwned, all Blueprint-callable, and the tech tree row
+//     carries no owned flag, so ownership is resolved client-side.
+//   - The numerator is therefore 0 BY CONSTRUCTION: this function deliberately
+//     emits only what the player does NOT have, because sending the equipped
+//     items too was verified live to draw the loadout twice (see
+//     techTreeSlotUpgrades). A player who has researched nothing owns none of
+//     the 25, and "0 of 25 acquired" is then arithmetically right.
+//   - The report reasoned from a tier-I and a tier-II ship both showing 25 that
+//     every ship gets every tech. They do not: Rurik (SniperMedium) and Furia
+//     (SniperLight) share 24 of 25 because sniper SECONDARIES and ABILITIES are
+//     class-level assets with no size in their path, which is how the client's
+//     own tables organise them -- both hulls are Artillery Cruisers. Agosta
+//     (Assault) shares zero with either. Size-specific slots are size-correct:
+//     zero mismatches across the sniper and assault hulls.
+//
+// What is NOT settled is whether the counter is meant to include the modules the
+// ship already fields. If it is, the fix is to emit them and re-break the
+// duplicate; that is a client-side question and needs a look at the screen, not
+// another change here.
 func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeItem {
 	ids := make([]int32, 0, 10)
 	ids = append(ids, hull.primary, hull.secondary)
