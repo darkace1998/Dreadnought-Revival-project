@@ -1680,3 +1680,99 @@ last two we named turned out to be wrong.
 running any mode other than TM. The spawn problem is now a single, named lookup
 on the host, and item 3 should be enough to populate it.
 
+
+---
+
+## C15 — the leak was ours, and we found it. Plus: hull descriptions work now, ship previews do not.
+
+**1. The memory leak is FIXED. It was never yours.** *(verified, measured, one
+variable at a time.)*
+
+`C14.5` told you we were chasing it and would not name a cause until we measured
+one. We measured one. It was our own hook on `FMallocBinned::Free`.
+
+```cpp
+void __fastcall MyHookFMallocBinnedFree(void *allocator, void *ptr) {
+  if (!ptr) return;
+  if (!IsValidBinnedPtr(allocator, ptr)) {
+    return;              // <-- the block is never freed. Ever.
+  }
+  OrigFMallocBinnedFree(allocator, ptr);
+}
+```
+
+The hook existed to stop a crash from mismatched frees. Swallowing a free *is* a
+leak, and the validity check returns false on **failure to confirm**, not only on
+corruption — it has an `__except` catch-all, a fallthrough, and it only walks
+pooled small blocks, so large allocations can never be found at all.
+
+Same build, same server, same hangar, one variable:
+
+```text
+all 39 RVA hooks         hangar +31 MB/s     match +40.7 MB/s (peak 14.2 GB)
+DN_RVA_OFF=0xBFCA40      hangar   0.0 MB/s   (private bytes identical x20 samples)
+DN_INERT=1               hangar   0.0 MB/s   match 0.0 MB/s (net -5.65)
+```
+
+Fixed in code by not installing the hook in server mode. Re-verified with no
+environment overrides: **-0.03 MB/s, private bytes identical across 16
+consecutive samples.** The four-minute ceiling in `C14.5` is gone. Please
+disregard that whole caveat when reading our future reports.
+
+**2. The method, since it may save you time later.** The thing that cracked it
+was `DN_INERT=1` — our mod loads but installs nothing — run against your live
+server while sampling **private bytes, not just working set**, on both the client
+and the battle server. Inert and live were put in the *identical* stranded state
+(queued TDM, travelled, no spawn, staring at the planet). Inert was flat; live
+ran at +49 MB/s. That is what proved it was ours rather than an error path in the
+game reacting to an incomplete match.
+
+Worth knowing: a headless `-nullrhi` host with our full mod did **not** leak
+(0.01 MB/s, 3/3 runs). Anything of this shape needs a real client with a
+renderer to reproduce. We had two wrong suspects before this one, both named from
+reasoning rather than measurement, and both cost real time.
+
+**3. Hull descriptions are FIXED — confirmed against a running client.** *(verified,
+user-visible.)*
+
+`C13` reported that the description fix had not taken. It has now. Both hulls we
+checked render full prose where they previously showed
+`Invalid Description Field in Json`:
+
+```text
+Vucari  "The Vucari is a sublime beast, savage but precise..."
+Agosta  "The Agosta was salvaged from the Jupiter Arms junkyard asteroid..."
+```
+
+**4. Ship previews do not render in the 3D viewport.** *(verified by eye, cause
+not yet established — no suggestion attached, deliberately.)*
+
+Selecting a hull in the tech tree leaves the hangar bay empty. The description,
+manufacturer badge and tech counter all populate correctly; only the ship is
+missing. Outside the tech trees the flagship is visible, so the viewport itself
+renders.
+
+What we can tell you from the client side:
+
+- The preview actor **exists**. `VH_CustomisationPreview_BP_C_1` is present in
+  `MN_HGR_ASSAULTL.PersistentLevel` and our scan finds it every frame.
+- The client logs **no asset-resolution failures** for the hull. The only
+  `LoadItemsAsync` warnings are `Asset with ID 0`, which is an empty slot.
+- So the client is not erroring. It has the actor and it is not complaining about
+  missing data — it simply never puts a mesh on it.
+
+We are **not** proposing you change anything for this yet. We found one bug of
+our own in that path today and fixed it, and it was not sufficient. Before we
+send you a theory we want to answer one question on our side first: whether the
+preview renders with `DN_INERT=1`. If it does, the blocker is one of our own
+hooks intercepting the hull path and we will delete it rather than ask you for
+anything. If it does not, we will come back with exactly what the client asks for
+and never receives.
+
+Flagging it now only so it is on your radar, and so you can say whether anything
+in the market/customisation path is expected to drive that actor.
+
+**5. Still open, unchanged from `C14`.** The host loadout lookup
+(`Default__VH_*_PrecastLoadout_BP_C`). The derivation in `C14.3` is a pure string
+transform over `ItemIDRegister.json` and should populate all 257 entries. That is
+the one blocker actually stopping us from playing.
