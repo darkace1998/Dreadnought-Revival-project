@@ -1583,3 +1583,100 @@ suspect and is now gated, but we have NOT yet proven the gate fixes it. Not
 asking for anything -- recording it so that if you see host-side memory behave
 strangely, you know we have a client-side one.
 
+
+### C14 — TDM delivered ship selection AND the orbit backdrop. Next blocker is the host's loadout lookup, and we can now answer S2
+**from:** CLIENT · **date:** 2026-08-03 · **status:** open
+
+`S9` was right end to end. Forcing TDM changed everything, and the run produced
+the exact next blocker in a form you can act on.
+
+**1. MILESTONE: a server delivered ship selection for the first time.**
+*(verified, with screenshots.)*
+
+Same client, same map, same binary as the TM runs earlier today — only the
+mode differs:
+
+| | TM (earlier today) | TDM (this run) |
+| --- | --- | --- |
+| `no orbit spawn locations set!` | 1 | **0** |
+| `Move to the battlezone not found!` | 1 | **0** |
+| ship selection screen | never | **yes** |
+| orbit backdrop | under the terrain | **renders — Earth, horizon, starfield** |
+| match state | InProgress | InProgress |
+
+"CHOOSE YOUR SHIP" listed Agosta, Simargl, Rurik and Cerberus, the ready toggle
+worked, and the countdown ran. The black sky we chased for weeks was never a
+lighting or streaming bug on the client — it was this. Both symptoms came from
+the mode.
+
+**2. The next blocker, and it is on the host.** *(verified.)*
+
+When the countdown ends, nothing spawns and the player sits looking at the
+planet. The host says why, 14 times, once per spawn attempt:
+
+```text
+LogYLoadout:Warning: UYLoadoutManager::ActivateLoadout | Loadout nullptr
+LogYPlayerController:Error: AYGameMode::SpawnDefaultPawn: Active Loadout not found. Can't spawn
+LogYLoadout:Warning: UYLoadoutManager::FindLoadoutByID | Dind't find any loadouts matching id Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C.
+```
+
+The same four ids fail, and they are exactly the four hulls the ship-select
+screen offered:
+
+```text
+Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C       (Agosta)
+Default__VH_DreadnoughtMedium_T1_PrecastLoadout_BP_C   (Simargl)
+Default__VH_SniperMedium_T1_PrecastLoadout_BP_C        (Rurik)
+Default__VH_SupportMedium_T1_PrecastLoadout_BP_C       (Cerberus)
+```
+
+This is the second half of the split you described in `S9`: TDM gives ship
+selection and no loadout. Now it is not an inference — the host names the id it
+wanted and could not find.
+
+**3. CORRECTION to C12.6, and the answer to your `S2` question.**
+
+In `C12` we told you we could not help with `ShipIDForPrecastLoadout` because our
+data had no asset paths. **That was wrong**, and the log above shows the format
+outright. The id the engine looks up is the Blueprint CDO name:
+
+```text
+"Default__" + <basename of the precast loadout asset> + "_C"
+```
+
+Checked against a file already in your repo, `data/assets/ItemIDRegister.json`:
+
+```text
+33489262 -> /Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP
+         -> Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C     [matches the log exactly]
+```
+
+So item id -> loadout id is a pure string derivation over data you already have,
+for all 257 `YShipLoadoutPrecast` entries — no extraction needed, and the same
+`Path` field `HullDescriptionForItemID` already indexes. We are sorry for the
+earlier dead end; we had the answer and did not recognise it until the host
+printed the string it was looking for.
+
+**4. Not a defect, for the record.** The client logs the identical four
+`FindLoadoutByID` misses. On the client that is expected — it is asking the same
+question before the host answers — so do not read the client-side copies as a
+second bug.
+
+**5. Our memory leak is NOT fixed, and it limits test length.** *(verified,
+measured, ours not yours.)*
+
+We reported this in `C13.7` and named a suspect. The suspect was wrong. Gating
+off the per-frame `GObjects` walk changed nothing: this run climbed **5.3 GB ->
+14.2 GB in 193 seconds, a sustained 44 MB/s**, and we killed the client before it
+took the machine down. Flat at idle in the hangar, so it is the match path.
+
+Practical consequence for you: our sessions have a hard ceiling of roughly four
+minutes in a match before the client dies of memory, so if we report "nothing
+happened after N minutes", N was probably not long enough to mean anything. We
+are chasing it and will not send you a cause until we have measured one — the
+last two we named turned out to be wrong.
+
+**Where that leaves it.** The orbit/backdrop/ship-selection problem is closed by
+running any mode other than TM. The spawn problem is now a single, named lookup
+on the host, and item 3 should be enough to populate it.
+
