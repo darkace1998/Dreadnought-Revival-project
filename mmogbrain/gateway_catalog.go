@@ -372,6 +372,46 @@ func gatewayOwnedInventorySnapshot() []any {
 // No real price data exists anywhere in the extracted assets for these SKUs
 // (confirmed in the issue) — defaultPrice is a placeholder per bucket type,
 // not real pricing.
+// catalogSKUNumber matches the store's own SKU shape: "999" followed by an item
+// id. Confirmed from the shipped CatalogIDTable itself, where e.g. 99933489268
+// is the Furia's precast loadout id 33489268 behind that prefix.
+var catalogSKUNumber = regexp.MustCompile(`^999(\d{6,10})$`)
+
+// catalogSKUDisplay gives a SKU the item's real name and description where the
+// SKU encodes an item id we can resolve.
+//
+// Every one of the 6630 catalog entries used to be labelled "<bucket> <sku>" and
+// described as "<bucket> catalog item" -- invented placeholders, and the client
+// shows them. It also renders a missing entry as
+// "<sku><DNT> Invalid Description Field in Json", which is what the Rurik's
+// description was: the client asks this catalog for a ship's description by SKU,
+// and a hull with no store entry has none to give.
+//
+// Names come from the same authority as everywhere else, and descriptions from
+// the hull's own precast blueprint. Anything unresolvable keeps the old
+// placeholder rather than getting a made-up one.
+func catalogSKUDisplay(bucketName, sku string) (string, string) {
+	displayName := bucketName + " " + sku
+	description := bucketName + " catalog item"
+
+	match := catalogSKUNumber.FindStringSubmatch(sku)
+	if match == nil {
+		return displayName, description
+	}
+	id, err := strconv.ParseInt(match[1], 10, 32)
+	if err != nil {
+		return displayName, description
+	}
+	itemID := int32(id)
+	if name, ok := dreadconfig.AuthoritativeItemName(itemID); ok && name != "" {
+		displayName = name
+	}
+	if text, ok := dreadconfig.HullDescriptionForItemID(itemID); ok {
+		description = text
+	}
+	return displayName, description
+}
+
 func realCatalogBucketSeeds(bucketName, itemType, entityType, priceCurrencyID string, defaultPrice int32, idBase int32) []gatewayCatalogEntitySeed {
 	_ = dreadconfig.LoadCatalogIDTable()
 	bucket, ok := dreadconfig.GetCatalogBucket(bucketName)
@@ -392,11 +432,12 @@ func realCatalogBucketSeeds(bucketName, itemType, entityType, priceCurrencyID st
 		if sku == "" {
 			continue
 		}
+		displayName, description := catalogSKUDisplay(bucketName, sku)
 		seeds = append(seeds, gatewayCatalogEntitySeed{
 			itemID:          idBase + int32(i),
 			externalID:      sku,
-			displayName:     bucketName + " " + sku,
-			description:     bucketName + " catalog item",
+			displayName:     displayName,
+			description:     description,
 			entityType:      entityType,
 			itemType:        itemType,
 			priceCurrencyID: priceCurrencyID,
@@ -462,6 +503,13 @@ var realCatalogBucketIDBase = map[string]int32{
 // Everything is listed as owned and free. This server has no real store, and
 // gatewayMarketEntity deliberately reports price 0 for every entry so the client
 // never computes a campaign discount against its own local prices.
+// hullCatalogDescription returns a ship's own description text, or "" for items
+// the game has no description for.
+func hullCatalogDescription(itemID int32) string {
+	description, _ := dreadconfig.HullDescriptionForItemID(itemID)
+	return description
+}
+
 func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	purchased := persistedMmogPlayerPurchasedItemIDSet(playerID)
 
@@ -480,9 +528,22 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			continue
 		}
 		seed := gatewayCatalogEntitySeed{
-			itemID:          itemID,
-			externalID:      extractedMarketItemExternalID(itemID, meta.displayName),
-			displayName:     meta.displayName,
+			itemID:      itemID,
+			externalID:  extractedMarketItemExternalID(itemID, meta.displayName),
+			displayName: meta.displayName,
+			// Every entry here went out with an EMPTY description, and the
+			// client renders a ship whose description it cannot read as
+			// "99933489263<DNT> Invalid Description Field in Json" -- its own
+			// SKU form of the id, then the error. Reported live for the Rurik
+			// (AGENT-CHAT C12) while the Furia, which reaches the client through
+			// the store-bucket path instead, rendered fine.
+			//
+			// The hulls' real prose is in their precast loadout blueprints, the
+			// same assets the names come from. Eight hulls have none there and
+			// stay empty, and non-ship items stay empty too: there is no
+			// description for them anywhere in the extracted data, and inventing
+			// one is worse than the gap.
+			description:     hullCatalogDescription(itemID),
 			localizationKey: marketItemLocalizationKeys[itemID],
 			entityType:      "item",
 			itemType:        meta.itemType,

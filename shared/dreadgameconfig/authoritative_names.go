@@ -50,6 +50,7 @@ var (
 	authoritativeNameByID    map[int32]string
 	authoritativeNameByAsset map[string]string
 	hullNameByID             map[int32]string
+	hullDescriptionByID      map[int32]string
 )
 
 // ensurePrecastLoadoutIndex builds the ship -> loadout index if it is missing.

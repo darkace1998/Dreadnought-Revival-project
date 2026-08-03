@@ -107,8 +107,12 @@ def content_root():
     return precast
 
 
-def ftexts(data, limit=2):
+def ftexts(data, limit=3):
     """Return the first `limit` FText source strings in an asset.
+
+    In a precast loadout they are, in order: display name, hull subclass,
+    description. The first two are cross-checked below; the description is taken
+    on the strength of those two being right.
 
     Anchored on the 32-hex key preceded by its own int32 length (33 = 32 chars
     plus the null terminator), which is specific enough not to collide with
@@ -153,10 +157,10 @@ def main():
 
             with open(os.path.join(tier_path, filename), "rb") as handle:
                 texts = ftexts(handle.read())
-            if len(texts) < 2:
-                problems.append("%s: fewer than two FTexts" % base)
+            if len(texts) < 3:
+                problems.append("%s: fewer than three FTexts" % base)
                 continue
-            name, subclass = texts[0].strip(), texts[1].strip()
+            name, subclass, description = texts[0].strip(), texts[1].strip(), texts[2].strip()
 
             expected = SUBCLASS_FOR_CLASS[ship_class]
             if subclass != expected:
@@ -169,11 +173,24 @@ def main():
                 problems.append("%s: implausible display name %r" % (base, name))
                 continue
 
+            # Eight hulls have no description in their blueprint at all, and the
+            # next FText -- the subline "A Sinley Bay blackmarket special!" --
+            # slides into its place. Writing that out as eight ships' description
+            # would be exactly the kind of plausible nonsense this script exists
+            # to refuse, so an implausible one is recorded as ABSENT rather than
+            # as an error: the data genuinely does not have it.
+            #
+            # A real description is prose. The subline, a bare subclass and a
+            # ship-name-length string are not.
+            if len(description) < 60 or description in SUBCLASS_FOR_CLASS.values():
+                description = ""
+
             hulls.append(
                 {
                     "asset": "%s/%s/%s" % (GAME_PATH_PREFIX, tier_dir, base),
                     "name": name,
                     "subclass": subclass,
+                    "description": description,
                     "class": ship_class,
                     "size": size,
                     "tier": int(tier),
@@ -187,6 +204,9 @@ def main():
         sys.exit(1)
 
     hulls.sort(key=lambda h: h["asset"])
+    without = [h["name"] for h in hulls if not h["description"]]
+    if without:
+        print("no description in the blueprint for %d hulls: %s" % (len(without), ", ".join(sorted(without))))
     with open(OUTPUT, "w", encoding="utf-8") as handle:
         json.dump(
             {
@@ -198,6 +218,7 @@ def main():
                 ),
                 "hulls": hulls,
                 "hull_count": len(hulls),
+                "hulls_without_description": len(without),
             },
             handle,
             indent=1,

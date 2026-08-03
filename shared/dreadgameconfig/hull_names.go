@@ -41,9 +41,12 @@ type HullName struct {
 	Asset    string `json:"asset"`
 	Name     string `json:"name"`
 	Subclass string `json:"subclass"`
-	Class    string `json:"class"`
-	Size     string `json:"size"`
-	Tier     int    `json:"tier"`
+	// Description is the blueprint's own prose. Empty for the eight hulls whose
+	// blueprint has no description field.
+	Description string `json:"description"`
+	Class       string `json:"class"`
+	Size        string `json:"size"`
+	Tier        int    `json:"tier"`
 }
 
 var (
@@ -101,4 +104,57 @@ func hullNameForAsset(assetPath string) (string, bool) {
 	_ = LoadHullNames()
 	name, ok := hullNameByAsset[assetPath]
 	return name, ok
+}
+
+// HullDescriptionForItemID returns the blueprint description for a precast
+// loadout id.
+//
+// Eight hulls have no description in their blueprint at all -- the field is
+// absent and the generator records that rather than substituting the subline
+// that sits next to it -- so a false second return is "the game has none", not
+// "we failed to look it up".
+func HullDescriptionForItemID(itemID int32) (string, bool) {
+	ensureHullDescriptionIndex()
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	description, ok := hullDescriptionByID[itemID]
+	return description, ok && description != ""
+}
+
+// ensureHullDescriptionIndex builds the id -> description index if it is
+// missing, on the same rebuild-while-empty rule as the name index and for the
+// same reason: it needs the item catalog, which is not necessarily loaded when
+// this package is first touched.
+func ensureHullDescriptionIndex() {
+	nameCacheMu.Lock()
+	defer nameCacheMu.Unlock()
+	if len(hullDescriptionByID) > 0 {
+		return
+	}
+	hulls := GetAllHullNames()
+	if len(hulls) == 0 {
+		return
+	}
+	byAsset := make(map[string]string, len(hulls))
+	for _, hull := range hulls {
+		if hull.Description != "" {
+			byAsset[hull.Asset] = hull.Description
+		}
+	}
+	index := map[int32]string{}
+	for _, category := range GetAllCategories() {
+		if category.CategoryName != "YShipLoadoutPrecast" {
+			continue
+		}
+		for _, itemID := range category.ItemIDs {
+			item, ok := ItemByID(itemID)
+			if !ok {
+				continue
+			}
+			if description, ok := byAsset[item.AssetPath]; ok {
+				index[itemID] = description
+			}
+		}
+	}
+	hullDescriptionByID = index
 }

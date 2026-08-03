@@ -5,6 +5,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T1/VH_AssaultMedium_T1_PrecastLoadout_BP",
    "name": "Agosta",
    "subclass": "Destroyer",
+   "description": "The Agosta was salvaged from the Jupiter Arms junkyard asteroid by scavengers and bought by Sive Blackhat for the Sinley Bay black market. Before being decommissioned, It had a long service from the beginning the Great Solar War. As part of the early Jupiter Arms convoys between Mars and the Jovian system, it defended the terraformers transportation from Transhuman attacks.  While the venerable Agosta still shows its age, Sinley Bay's Jupiter Mods have done a solid job resurrecting it.",
    "class": "Assault",
    "size": "Medium",
    "tier": 1
@@ -13,6 +14,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T1/VH_DreadnoughtMedium_T1_PrecastLoadout_BP",
    "name": "Simargl",
    "subclass": "Dreadnought",
+   "description": "Simargl means ultimate destructive power, harnessed. Perfected at the start of the Great Solar War, this classic battleship is slow but tough.",
    "class": "Dreadnought",
    "size": "Medium",
    "tier": 1
@@ -21,6 +23,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T1/VH_SniperMedium_T1_PrecastLoadout_BP",
    "name": "Rurik",
    "subclass": "Artillery Cruiser",
+   "description": "The Rurik, originally knowns as SN-95380.2 ZZX, is a modified medium Artillery Cruiser with history stretching back to the decades before the Great Solar War. Manufactured by Akula, it retained its sleek charm despite taking a beating as the flagship of the brutish PCF General Agrajag on the frontlines of the War. It was acquired by scavengers with an eye for a hidden gem  from its final resting place in the PCC shipbreaking yards. Sinley Bay's Akula Tuners have given it a once over.",
    "class": "Sniper",
    "size": "Medium",
    "tier": 1
@@ -29,6 +32,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T1/VH_SupportMedium_T1_PrecastLoadout_BP",
    "name": "Cerberus",
    "subclass": "Tactical Cruiser",
+   "description": "Introducing the Cerberus. Developed at the end of the Great Solar War, this frangible speedster weaves reverse-engineered Transhuman tech with Oberon know-how.  \"The secret of all victory lies in the organization of the non-obvious.\"",
    "class": "Support",
    "size": "Medium",
    "tier": 1
@@ -37,6 +41,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_AssaultMedium_T2_PrecastLoadout_BP",
    "name": "Trafalgar",
    "subclass": "Destroyer",
+   "description": "The Trafalgar was commissioned by Shiphead Houlk during Jupiter Arms' rise to power at the start of the Great Solar War. At the time it was the cutting edge of Destroyer technology, faster and sturdier than anything that had been previously developed. It is still spaceworthy and a good all-rounder, although its thrusters and stabilizers are now well behind current Jupiter Arms technology.",
    "class": "Assault",
    "size": "Medium",
    "tier": 2
@@ -45,6 +50,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_DreadnoughtMedium_T2_PrecastLoadout_BP",
    "name": "Nav",
    "subclass": "Dreadnought",
+   "description": "A legend born in Akula's wartime shipyards, the Nav is the classic Akula Dreadnought. It has stormed the Solar System, from the harshest atmospheres of Mercury to the cold space around Trans Neptune Objects. Functional, practical, straightforward.",
    "class": "Dreadnought",
    "size": "Medium",
    "tier": 2
@@ -53,6 +59,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_ScoutLight_T2_PrecastLoadout_BP",
    "name": "Dover",
    "subclass": "Corvette",
+   "description": "The Dover is the original super fast Corvette. A light scouting vessel that gives your fleet a decisive edge on the battlefield, it has been designed to deliver a pinpoint solution for battlefield situations calling for speed and maneuverability. It is the first line of response in forward-presence and power-projection missions.",
    "class": "Scout",
    "size": "Light",
    "tier": 2
@@ -61,6 +68,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_SniperLight_T2_PrecastLoadout_BP",
    "name": "Furia",
    "subclass": "Artillery Cruiser",
+   "description": "Lifted directly from House Oberon's shipyards before it was fully assembled, the Furia is a factory standard Artillery Cruiser series '10489 mu', agile but light on armor. Commissioned by the head of Oberon's Doctrine Promulgation Division, the volatile Captain Paladin, its helm is inscribed with the phrase \"Anger is a short madness.\"",
    "class": "Sniper",
    "size": "Light",
    "tier": 2
@@ -69,6 +77,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_SniperMedium_T2_PrecastLoadout_BP",
    "name": "Tugarin",
    "subclass": "Artillery Cruiser",
+   "description": "Commissioned by Akula's ambassador to the PCC, Viktor Grigory, the Tugarin was stolen from its ceremonial ship launch while the coating on its hull was still drying. A fine example of  state-of-the-art Akula Artillery Cruiser factory settings, Sinley Bay Akula modders have added a few flourishes of extreme tech to give you a taste of what's in store if you care to invest in further projects.",
    "class": "Sniper",
    "size": "Medium",
    "tier": 2
@@ -77,6 +86,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T2/VH_SupportMedium_T2_PrecastLoadout_BP",
    "name": "Orcus",
    "subclass": "Tactical Cruiser",
+   "description": "The Orcus is an evolution of the Cerberus. It fills the role of support vessel with esoteric determination and wisdom, urging your opponents accept your dominance as \"Loss is nothing else but change\".",
    "class": "Support",
    "size": "Medium",
    "tier": 2
@@ -85,6 +95,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_AssaultHeavy_T3_PrecastLoadout_BP",
    "name": "Dola",
    "subclass": "Destroyer",
+   "description": "A grand tourer of the Solar System, the Dola has been put through its paces by the sadistic Captain Mercer Vit. Like all things Vit touched, it is scarred but unbroken. Since its commandeering, Akula Tuners have applied their magic. The Dola was upgraded with vastly superior firepower and armor, so it now runs like the fast, maneuverable, long-endurance ship it was always meant to be.",
    "class": "Assault",
    "size": "Heavy",
    "tier": 3
@@ -93,6 +104,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_AssaultMedium_T3_PrecastLoadout_BP",
    "name": "Otranto",
    "subclass": "Destroyer",
+   "description": "The Otranto was under the command of Shiphead Irk until it was lifted during heist on Triton's dry docks. A stock Jupiter Arms Destroyer, it has been designed to perform as an all-rounder. Very characteristic of Jupiter Arms' utilitarian approach, it is fast, but not Corvette-fast and it is heavy, but not Dreadnought heavy.",
    "class": "Assault",
    "size": "Medium",
    "tier": 3
@@ -101,6 +113,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_DreadnoughtLight_T3_PrecastLoadout_BP",
    "name": "Gravis",
    "subclass": "Dreadnought",
+   "description": "This is Gravis. \"Hasten slowly\" is the quote carved into the helm. The classic Oberon Dreadnought, it is a lithe brute on the battlefield.",
    "class": "Dreadnought",
    "size": "Light",
    "tier": 3
@@ -109,6 +122,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_DreadnoughtMedium_T3_PrecastLoadout_BP",
    "name": "Chernobog",
    "subclass": "Dreadnought",
+   "description": "The Chernobog model is a battlecruiser built on a legend, stronger and more robust. Built like a tank but handling more like a roadster, the legend became capable of even more.",
    "class": "Dreadnought",
    "size": "Medium",
    "tier": 3
@@ -117,6 +131,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_ScoutHeavy_T3_PrecastLoadout_BP",
    "name": "Kreshnik",
    "subclass": "Corvette",
+   "description": "",
    "class": "Scout",
    "size": "Heavy",
    "tier": 3
@@ -125,6 +140,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_ScoutLight_T3_PrecastLoadout_BP",
    "name": "Machias",
    "subclass": "Corvette",
+   "description": "The Machias is an evolution of the classic Jupiter Arms Corvette.  Designed to overmatch your adversaries' fastest ships, the Machias puts speed and responsiveness in the hands of every Captain.",
    "class": "Scout",
    "size": "Light",
    "tier": 3
@@ -133,6 +149,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_ScoutMedium_T3_PrecastLoadout_BP",
    "name": "Fulgora",
    "subclass": "Corvette",
+   "description": "This is Fulgora. Oberon's original Corvette applies the basics of Transhuman technological discoveries to create a durable take on the classic battlefield speedster.  Each model comes with the helm inscription \"If it is not right do not do it\".",
    "class": "Scout",
    "size": "Medium",
    "tier": 3
@@ -141,6 +158,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_SniperHeavy_T3_PrecastLoadout_BP",
    "name": "Ballista",
    "subclass": "Artillery Cruiser",
+   "description": "The Ballista is a stock Jupiter Arms Artillery Cruiser, captained by Shiphead Kong until its capture by raiders on Ceres.",
    "class": "Sniper",
    "size": "Heavy",
    "tier": 3
@@ -149,6 +167,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_SniperLight_T3_PrecastLoadout_BP",
    "name": "Virtus",
    "subclass": "Artillery Cruiser",
+   "description": "The Virtus was a factory standard Artillery Cruiser series 4377 nu. During its prep for delivery to the Mab Outpost on the orders of Padre General Derveni, it was seized by Sinley Bay raiders from the main Oberon shipyard on Ariel. Its thrusters, weapon and stabilizers have all been boosted by Oberon Forge. Its helm inscription reads  \"Execute every act of thy life as though it were thy last.\"",
    "class": "Sniper",
    "size": "Light",
    "tier": 3
@@ -157,6 +176,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_SniperMedium_T3_PrecastLoadout_BP",
    "name": "Vucari",
    "subclass": "Artillery Cruiser",
+   "description": "The Vucari is a sublime beast, savage but precise. It has been crafted as a powerful and poised sharpshooter and is able to turn on a dime.",
    "class": "Sniper",
    "size": "Medium",
    "tier": 3
@@ -165,6 +185,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_SupportLight_T3_PrecastLoadout_BP",
    "name": "Palos",
    "subclass": "Tactical Cruiser",
+   "description": "The infamously unstable Shiphead Foil took command of the Palos after the founding of Sinley Bay. As the capital ship on Jupiter Arms' convoys in PCF frontier patrols, it could outrun even the lightest raider ships. The Tac Cruiser ended up on the blackmarket after Foil went AWOL and has since been upgraded by Jupiter Mods modder faction.",
    "class": "Support",
    "size": "Light",
    "tier": 3
@@ -173,6 +194,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T3/VH_SupportMedium_T3_PrecastLoadout_BP",
    "name": "Ceres",
    "subclass": "Tactical Cruiser",
+   "description": "Let the Ceres cast its spell on you. Inheriting the power of the Orcus, this new generation of Tactical Cruiser heavily influenced by Transhuman design. It's superior automated ability grant you the power to \"integrate your actions with myriad forms.\"",
    "class": "Support",
    "size": "Medium",
    "tier": 3
@@ -181,6 +203,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_AssaultHeavy_T4_PrecastLoadout_BP",
    "name": "Blud",
    "subclass": "Destroyer",
+   "description": "The Blud is a heavily armored Destroyer, enhanced by Akula Tuner's thruster and weapon mods. It found its way onto the Sinley Bay blackmarket after Captain Orlok Graff, head of Akula Industries Internal Relations division and a notorious gambler, lost it in a bet with an unknown raider Captain. The Blud is slow and sturdy with a range of modules added by Akula Tuners.",
    "class": "Assault",
    "size": "Heavy",
    "tier": 4
@@ -189,6 +212,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_AssaultLight_T4_PrecastLoadout_BP",
    "name": "Vindicta",
    "subclass": "Destroyer",
+   "description": "The Vindicta is a powerful Destroyer once captained by Oberon's Highpriest of Biz Dev, General Aemilius. It's overclocked thrusters push the ship's motility well beyond factory settings, and modded armor and weapons keep it a well-rounded warship. Aemilius engraved \"Despise not death, but welcome it, for nature wills it like all else.\" into its helm. No doubt this was advice for his enemies.",
    "class": "Assault",
    "size": "Light",
    "tier": 4
@@ -197,6 +221,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_AssaultMedium_T4_PrecastLoadout_BP",
    "name": "Vigo",
    "subclass": "Destroyer",
+   "description": "",
    "class": "Assault",
    "size": "Medium",
    "tier": 4
@@ -205,6 +230,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtHeavy_T4_PrecastLoadout_BP",
    "name": "Jutland",
    "subclass": "Dreadnought",
+   "description": "",
    "class": "Dreadnought",
    "size": "Heavy",
    "tier": 4
@@ -213,6 +239,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtLight_T4_PrecastLoadout_BP",
    "name": "Lorica",
    "subclass": "Dreadnought",
+   "description": "This is Lorica. Its helm is etched with \"An eternity of endless space\". It looks every bit as powerful as it is.",
    "class": "Dreadnought",
    "size": "Light",
    "tier": 4
@@ -221,6 +248,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_DreadnoughtMedium_T4_PrecastLoadout_BP",
    "name": "Voronezh",
    "subclass": "Dreadnought",
+   "description": "The Voronezh is the evolution of a legend. The balance of maneuverability and strong armor results in ferocious functionality.",
    "class": "Dreadnought",
    "size": "Medium",
    "tier": 4
@@ -229,6 +257,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_ScoutHeavy_T4_PrecastLoadout_BP",
    "name": "Stribog",
    "subclass": "Corvette",
+   "description": "A first rate ship, the Stribog was originally commissioned by Akula's Head of Statecraft, Captain Mikhail Bulgakivv. Bulgakivv is notorious for his love of \"Hunting\". Tricked out with powerful modules, thrusters and armor, he intended to use the Stribog to lead a pack of Corvettes to take out smuggler convoys for pleasure. The Perun was destined for better things, however, as the raider Operation \"Hunter becomes the Hunted\" succeeded in nabbing the ship for the black market.",
    "class": "Scout",
    "size": "Heavy",
    "tier": 4
@@ -237,6 +266,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_ScoutLight_T4_PrecastLoadout_BP",
    "name": "Valcour",
    "subclass": "Corvette",
+   "description": "The Valcour's light armor and 90 degree arc firing range take the speed and agility of the Jupiter Arms family of Corvettes to a new extreme. It gives a clear, decisive and overwhelming advantage over adversarial forces in today's threat environment.",
    "class": "Scout",
    "size": "Light",
    "tier": 4
@@ -245,6 +275,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_ScoutMedium_T4_PrecastLoadout_BP",
    "name": "Medusa",
    "subclass": "Corvette",
+   "description": "This is the Medusa. A Corvette with flexible firing and a balanced armor to speed ratio. Thanks to breakthroughs in Transhuman tech applications by Oberon Research and Development teams, it easily out performs other well-armed Corvettes on the market. The helm is etched with \"The best revenge is to be unlike him who performed the injury.\"",
    "class": "Scout",
    "size": "Medium",
    "tier": 4
@@ -253,6 +284,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SniperHeavy_T4_PrecastLoadout_BP",
    "name": "Onager",
    "subclass": "Artillery Cruiser",
+   "description": "The Onager - a one shot, one kill weapon in the shape of a ship with superior mobility and strong armor catering to the destruction needs of the modern fleet.",
    "class": "Sniper",
    "size": "Heavy",
    "tier": 4
@@ -261,6 +293,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SniperLight_T4_PrecastLoadout_BP",
    "name": "Nox",
    "subclass": "Artillery Cruiser",
+   "description": "The Nox is an agile sharpshooter for long distance sleight of hand, designed for all the ways you fight from the back lines. The Nox let's you retreat with ease to evade an incoming blow. \"The best plan is to profit by the folly of others.\"",
    "class": "Sniper",
    "size": "Light",
    "tier": 4
@@ -269,6 +302,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SniperMedium_T4_PrecastLoadout_BP",
    "name": "Murometz",
    "subclass": "Artillery Cruiser",
+   "description": "The Murometz is a cold, silent, camouflaged hunter with a very good 'eye'. Shoot your enemy in the face from a mile away without blinking.",
    "class": "Sniper",
    "size": "Medium",
    "tier": 4
@@ -277,6 +311,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SupportHeavy_T4_PrecastLoadout_BP",
    "name": "Koschei",
    "subclass": "Tactical Cruiser",
+   "description": "Legend has it that the audacious Ambassador Spinoza Dek always flew the Koschei right to the front of skirmishes, although the traditional position of a Tac Cruiser is at the back. As a tribute to Captain Dek's hubris, Akula Tuners on Sinley Bay have modded the pure support ship into an ironclad tactical cruiser right at home on the frontlines.",
    "class": "Support",
    "size": "Heavy",
    "tier": 4
@@ -285,6 +320,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SupportLight_T4_PrecastLoadout_BP",
    "name": "Harwich",
    "subclass": "Tactical Cruiser",
+   "description": "",
    "class": "Support",
    "size": "Light",
    "tier": 4
@@ -293,6 +329,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T4/VH_SupportMedium_T4_PrecastLoadout_BP",
    "name": "Aion",
    "subclass": "Tactical Cruiser",
+   "description": "",
    "class": "Support",
    "size": "Medium",
    "tier": 4
@@ -301,6 +338,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_AssaultHeavy_T5_PrecastLoadout_BP",
    "name": "Gora",
    "subclass": "Destroyer",
+   "description": "The Gora has seen action since its commission from before the Battle of Venus and throughout the rise of the Megacorps. Intensively maintained and enhanced by Akula Captain Brin Addamski, the Gora is a combat vet with an intense service record. Since its \"liberation\" from PCC space, this legend of the Akula fleet has been tuned to the opposite of \"street legal\", souped up to the max by Akula Tuners.",
    "class": "Assault",
    "size": "Heavy",
    "tier": 5
@@ -309,6 +347,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_AssaultLight_PrecastLoadout_T5_BP",
    "name": "Brutus",
    "subclass": "Destroyer",
+   "description": "Meet Brutus. A tough Destroyer completely at home in the middle of the fray.  Meticulously refined for greater responsiveness, arcane Transhuman engineering beats at the heart of this beast. \"Death, like birth, is a secret of Nature.\"",
    "class": "Assault",
    "size": "Light",
    "tier": 5
@@ -317,6 +356,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_AssaultMedium_T5_PrecastLoadout_BP",
    "name": "Athos",
    "subclass": "Destroyer",
+   "description": "The Athos was already the finest Destroyer in the Jupiter Arms fleet before it ended up on Sinley Bay in the Jupiter Mods dry docks. Originally captained by Shiphead Bellow, head of Jupiter Arms aggressive recruitment division, the Athos was escorting a convoy of Dreadnoughts to crush a rebellion on Ganymede when the crew mutinied. Luckless Bellow was cast into space in a fighter jet. The crew abandoned their mission and flew straight to Sinley Bay, handing the ship over in exchange for asylum.",
    "class": "Assault",
    "size": "Medium",
    "tier": 5
@@ -325,6 +365,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtHeavy_T5_PrecastLoadout_BP",
    "name": "Monarch",
    "subclass": "Dreadnought",
+   "description": "",
    "class": "Dreadnought",
    "size": "Heavy",
    "tier": 5
@@ -333,6 +374,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtLight_T5_PrecastLoadout_BP",
    "name": "Invictus",
    "subclass": "Dreadnought",
+   "description": "This is Invictus. The fastest Dreadnought in the Solar System. The helm motto reads: \"Power has no limits.\"",
    "class": "Dreadnought",
    "size": "Light",
    "tier": 5
@@ -341,6 +383,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_DreadnoughtMedium_T5_PrecastLoadout_BP",
    "name": "Zmey",
    "subclass": "Dreadnought",
+   "description": "The Zmey is the epitome of stable and robust reliability.  This dragon is feared throughout the Solar System as a brutal tank. A monster bursting with firepower, its armor and speed has been tweaked and balanced to the point of utilitarian symmetry.",
    "class": "Dreadnought",
    "size": "Medium",
    "tier": 5
@@ -349,6 +392,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_ScoutHeavy_T5_PrecastLoadout_BP",
    "name": "Netron",
    "subclass": "Corvette",
+   "description": "",
    "class": "Scout",
    "size": "Heavy",
    "tier": 5
@@ -357,6 +401,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_ScoutLight_T5_PrecastLoadout_BP",
    "name": "Nevis",
    "subclass": "Corvette",
+   "description": "The Nevis is the fastest and lightest ship on the market. Its powerful thruster system are all easily kicked into maximum effect at the Captain's behest. Harness Jupiter Arm's highest technological innovations to deter and defeat your adversaries.",
    "class": "Scout",
    "size": "Light",
    "tier": 5
@@ -365,6 +410,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_ScoutMedium_T5_PrecastLoadout_BP",
    "name": "Mithras",
    "subclass": "Corvette",
+   "description": "Behold Mithras. The closest Oberon has come to the glory of a Transhuman scout ship. The top performer in the widest variety of disciplines, this is an elegant speedster balanced with durability. \"Entering the water, he makes not a ripple.\"",
    "class": "Scout",
    "size": "Medium",
    "tier": 5
@@ -373,6 +419,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SniperHeavy_T5_PrecastLoadout_BP",
    "name": "Grenada",
    "subclass": "Artillery Cruiser",
+   "description": "The jewel in the crown of Jupiter Arms fleet of Artillery Cruisers, this ship was designed during territorial expansions into the Jovian system after the War. One of toughest and most precise sharpshooters available for modern fleet attack needs.",
    "class": "Sniper",
    "size": "Heavy",
    "tier": 5
@@ -381,6 +428,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SniperLight_T5_PrecastLoadout_BP",
    "name": "Stabia",
    "subclass": "Artillery Cruiser",
+   "description": "The Stabia is a revolution. The zenith of Oberon long range aggression. Profoundly mobile with an astonishing maximum artillery range verging on the numinous. The Stabia's inscription reads \"Awareness is the greatest agent for change.\"",
    "class": "Sniper",
    "size": "Light",
    "tier": 5
@@ -389,6 +437,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SniperMedium_T5_PrecastLoadout_BP",
    "name": "Svarog",
    "subclass": "Artillery Cruiser",
+   "description": "The Svarog, as it name suggests, is a mythical beast. Firey, scaley and supremely flyable, this muscle machine was commandeered by Sinley Bay's finest ship thieves. On a job known as the \"Dragon Heist\", the pride and joy of Akula's vice president, Stanislov Krowbart, was lifted from Akula's Principle Dry Docks outpost during armor polish detail. The jewel encrusted hull has since been scavenged, but Sinley Bay's Akula Tuner House tuned the armor, speed and weapon power to almost breaking point. Feel the burn!",
    "class": "Sniper",
    "size": "Medium",
    "tier": 5
@@ -397,6 +446,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SupportHeavy_T5_PrecastLoadout_BP",
    "name": "Ohkta",
    "subclass": "Tactical Cruiser",
+   "description": "The Ohkta is the overlord of support vessels, unmatched by any of our competitors in terms of strength. This Tactical Cruiser from the Akula shipyards dishes out unparalleled repair and defense, while soaking up damage like a tank. A real heavyweight.",
    "class": "Support",
    "size": "Heavy",
    "tier": 5
@@ -405,6 +455,7 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SupportLight_T5_PrecastLoadout_BP",
    "name": "Cattaro",
    "subclass": "Tactical Cruiser",
+   "description": "Robust, advanced technology make the Cattaro an overpowered combat support vessel for aggressive fleet formation. It repairs and damages like no other Tactical Cruiser in the Jupiter Arms' fleet, optimized to deliver the fastest support solution.",
    "class": "Support",
    "size": "Light",
    "tier": 5
@@ -413,10 +464,12 @@
    "asset": "/Game/Generic/Loadouts/Precast/T5/VH_SupportMedium_T5_PrecastLoadout_BP",
    "name": "Feronia",
    "subclass": "Tactical Cruiser",
+   "description": "",
    "class": "Support",
    "size": "Medium",
    "tier": 5
   }
  ],
- "hull_count": 52
+ "hull_count": 52,
+ "hulls_without_description": 8
 }
