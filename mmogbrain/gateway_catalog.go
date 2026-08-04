@@ -326,9 +326,11 @@ func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, strin
 // "finding the real source of m_softCurrency/m_hardCurrency is still open";
 // that was true when it was written and is not any more.
 //
-// Confirmed live on 2026-08-03: an admin grant that took the balance to
-// 1,010,300 moved the pushed frame from 100 to 102 bytes, i.e. the two extra
-// digits, on the same login that reached the hangar.
+// NOT confirmed, despite what this comment said until 2026-08-04: an admin grant
+// to 1,010,300 moved the pushed frame from 100 to 102 bytes, which proves only
+// that the number WE sent changed. No balance has ever appeared in game. See
+// buildMmogRewardCurrenciesPayload for the mapped handler path and what remains
+// unestablished.
 //
 // Other gateway fields in this payload are likewise absent from the binary and
 // therefore dead: owned_items, player_id, catalog_version, starter_ship_ids and

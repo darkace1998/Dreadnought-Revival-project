@@ -682,11 +682,35 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				// The client has no currency field in YA_PlayerGet at all, so
 				// its credit and GP balances can only arrive through
 				// YA_RewardCurrencies. Its handler assigns rather than adds, so
-				// pushing the current balance here is idempotent. Correlate to
-				// this request so it arrives after the player data it reflects.
+				// pushing the current balance here is idempotent.
+				//
+				// A FRESH request id, like the YA_FleetUpdate push above. This
+				// used to reuse the incoming YA_PlayerGet id, on the theory that
+				// correlating it would order it after the player data. That is
+				// the only structural difference between this push, which has
+				// never been seen to take effect, and the fleet push, which
+				// works -- and a duplicate response id is a plausible reason for
+				// a frame to be dropped before it is ever dispatched.
+				//
+				// Stated plainly because it is not proven: everything downstream
+				// of delivery IS verified. The dispatcher selects this handler by
+				// strcmp on the RT string (0x142A2C360), so the id cannot affect
+				// ROUTING; the handler requires result=="ok" as a plain string
+				// (0x142A2C432), reads "Credits" then "Points", and stores them
+				// as int32 at [obj+0x3be4] and [obj+0x3be0]; and the UI reads
+				// that same array back through GetCurrency(type) at 0x1405B9310
+				// as [obj + type*4 + 0x3be0], with index 1 landing in
+				// FPlayerCurrencyAmountsData::m_softCurrency. Our payload matches
+				// every one of those. What is NOT established is whether the
+				// frame is accepted at all, which is what this changes.
+				currencyID, err := uuid.NewRandom()
+				if err != nil {
+					log.WithError(err).Warn("mmog: failed to generate currency push id")
+					currencyID = frame.RequestID
+				}
 				currencies := buildMmogRewardCurrenciesPayload(state.playerPID)
-				currencyFrame := protocol.BuildResponseFrame(frame.RequestID, frame.MsgType, currencies)
-				if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, "YA_RewardCurrencies", currencyFrame, appEncoder, encryptResponses, "currency push failed", "sent YA_RewardCurrencies push"); err != nil {
+				currencyFrame := protocol.BuildResponseFrame(currencyID, frame.MsgType, currencies)
+				if err := writeMmogAppResponse(log, conn, remote, currencyID, "YA_RewardCurrencies", currencyFrame, appEncoder, encryptResponses, "currency push failed", "sent YA_RewardCurrencies push"); err != nil {
 					return err
 				}
 				if err := handlePlayerGetSatisfied(log, conn, remote, appEncoder, encryptResponses, state, "client-request"); err != nil {
