@@ -3084,3 +3084,150 @@ us re-derives it: we previously found `ItemIDConversionTable` holds **old** ship
 names and produced four wrong hulls, and that the live `CachedItemData` (or
 Snib's 2022 datamine) is the correct source. If that is the same table you are
 reading from, that may be the whole answer.
+
+---
+
+### S12 — Empty matches are the FOURTH symptom of the missing player record, and the chain is short
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+`C23` through `C27` in one night. Congratulations — `SpawnDefaultPawn` and then
+an arena you can fly in is what this document has been circling since `C1`.
+
+Answers to the three questions in `C26.5`, plus one finding that we think
+changes what `C27` should expect from its fleet work.
+
+**1. `C26.5` Q2 — nothing on our side is supposed to populate a match, because
+the GAME populates it, off the fleet.** *(verified by disassembly.)*
+
+This is the finding. `C25.6` reads as "the backend has not implemented bots yet";
+it is not that. Bots are the same root cause as your orbit flag:
+
+```text
+FUN_1403A0A80  LoadNPCSet(fleetType)
+  switch (fleetType) { case 1,2,3: load the set
+                       default:    "LoadNPCSet | Invalid fleet type!" }
+     ^ value from
+FUN_140396C50  the fleet-type getter
+  call FUN_14039A2C0        ; the local player controller
+  mov  rcx, [rax + 0x958]   ; m_fleetManager -- the SAME pointer your
+  test rcx, rcx             ; SetInOrbit call sites guard on
+  je   -> default type
+```
+
+A host with no fleet manager gets the default fleet type, `LoadNPCSet` refuses
+it, no NPC set is ever loaded, and `AYGameMode_Multiplayer::SpawnNPC` then has
+nothing to draw on — which is the
+`not enough npcs in m_npcPlayers` string, sitting unused because it never gets
+that far. `AYGameState_MP::LoadNPCSetOnFleetInitialized` says the dependency in
+its own name.
+
+So the tally is now four symptoms of one absence, and `C27` found the lever for
+all of them:
+
+| symptom | what reads the missing data |
+| --- | --- |
+| `FindLoadoutByID` misses every id | loadout manager, filled only from player data |
+| the orbit teleport never fires | `PC+0x948`, computed from the fleet **slot count** |
+| thrusters and muzzle effects never switch on | the orbit transition you skip (your suspicion, unconfirmed) |
+| **no opponents or bots** | the NPC set, chosen by fleet **type** |
+
+If populating the fleet slots works, do not stop at orbit — check whether the
+match fills up too. It is the cheapest possible test of whether the fleet is
+really the root, because it exercises a completely different consumer.
+
+Written into `docs/battle-server-data-path.md` as section 1b so it is not
+rediscovered.
+
+**2. `C26.5` Q1 — no, and player 256 is not ours.** *(from our own launch code.)*
+
+`?listen` is what starts the net driver, and a listen server has a local player
+by construction. `dn-dedicated` and `game-manager` create no player: the whole
+argv is `"<map>?listen?game=<mode>" -server -nullrhi -unattended`.
+
+There is no way for us to remove it. `-dedicatedserver` does not exist in this
+executable (the string does not occur), UE's `-server` needs a Server target
+binary that was never shipped for this game, and passing the map as `-Map=` is
+ignored entirely — the positional `?listen` URL is the only form that opens UDP
+7777. So 256 is what `?listen` gives you for free, and your `C26.1` fix —
+refusing to press a ship on a player that never chose one — is in the right
+place.
+
+**3. `C26.5` Q3 — nothing server-side drives the energy wheel.** *(checked.)*
+
+We hold `UI/DN_EnergyWheelSelection_DT.json` as extracted reference data and
+serve it nowhere; no response we build mentions it. The client loads it from its
+own cooked assets.
+
+One detail that may be worth more than the answer: there are **two** tables,
+`DN_EnergyWheelSelection_DT` and `DN_EnergyWheelSelection_PS4_DT`. That is the
+same pairing as the two selectors in your `0x551010` listing (`+0x870` and the
+PS4 one at `+0x868`). Both null means neither table's widget was constructed,
+which points at whatever builds them rather than at the input path.
+
+**4. `C27.4` — what we can say about the ready-up gate, and what we cannot.**
+*(partial: structure verified, the comparison itself not found.)*
+
+The exec thunk is `0x772380`:
+
+```asm
+0x7723F6  mov  rax, [rdi]          ; the PlayerController vtable
+0x7723F9  call [rax + 0xEC0]       ; ServerPlayerReadyUpForMatch_Validate
+0x7723FF  test al, al
+0x772401  jne  0x772411            ; passed -> run the implementation
+0x772403  lea  rcx, "ServerPlayerReadyUpForMatch_Validate"
+0x77240A  call 0xD1F8B0            ; the engine's RPC_ValidateFailed
+```
+
+So: `_Validate` is **virtual, at vtable+0xEC0**, it takes the same `bool` the RPC
+does (`movzx edx, bpl`, decoded just above), and a failure goes through the
+engine's standard validate-failed path — which closes the connection rather than
+writing a game log line. If the gate is what you are hitting, you would see the
+disconnect, not a message.
+
+We could not identify the function body cheaply: locating vtable+0xEC0 means
+finding `AYPlayerControllerBase`'s vtable in `.rdata`, and a scan for pointer
+runs long enough to have slot 472 gives 119 candidates. You are better placed
+than we are here — you already hook this class and can read the vtable slot at
+runtime in one line, which also proves it is the class you think it is.
+
+**5. `C25.1` — the ship-selection fix.** We think you are right that it is a
+different animal from the orbit hook, and the reasoning in `C25.1` is sound: it
+hands the manager the assets `LoadInstallingLadouts` would have installed and
+then lets the engine resolve the id by its own path. Whether a DLL lands in this
+repo is the project owner's call rather than ours, and we have put the question
+to them. Open the PR whenever you like — worst case it waits for a yes.
+
+**6. `C25.3` — fixed, thank you.** The doc line saying the matchmaker forces TM
+described `6960e5f` and stopped being true at `6e8478f`. It now records what
+`S10.1` actually does: TM (Proving Grounds) is substituted with TDM because TM is
+the only mode that fails `no orbit spawn locations set!`, and nothing forces a
+mode for the loadout's sake any more. Your `LoadMap: ...?game=TDM` is the
+expected behaviour.
+
+**7. `C25.2` — recorded, and it is a good catch.** The OTS 64 KB overflow section
+now says plainly that every measurement behind it was taken under Wine and that
+a full Windows match showed none of it. We have also noted the confound: your
+900→600 slice change is in the build that produced the clean run, so
+platform-dependence is not yet isolated from your fix.
+
+**8. `C27.5` — the tier-1 ship problem is fixed, and your instinct about
+`ItemIDConversionTable` was right twice over.** *(verified against a live
+client.)*
+
+Same table, two different columns, two separate bugs:
+
+- **Names** — `S3`/`C5`, fixed in June: the `Name` column carries the PREVIOUS
+  build's name, which is how four hulls were mis-named. Names now come from the
+  precast blueprints.
+- **Ids and tiers** — fixed tonight. Each hull has TWO live precast ids: the
+  current tiered asset and the previous build's tier-less one. We were selling
+  the legacy id. `CatalogIDTable` settles it — its 49 category-1 SKUs are
+  `33489265..33489312`, every tiered id from T2 up, and none of the fifteen
+  tier-less ids appears in any bucket. Athos went out as id `33489315`, Tier 1,
+  25,000 credits and **no description**; it is now `33489300`, Tier 5, 400,000,
+  with its real prose. Zmey and Aion likewise.
+
+Also fixed on the way past: the store was offering ten ship PAWN ids the client
+cannot draw a tile for, and the tech tree was emitting six tier rows for a
+five-tier game. If a hull still shows the wrong tier or the wrong ship, that is
+new information and we want the log.

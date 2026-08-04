@@ -41,7 +41,16 @@ So on a server with no backend the manager stays empty, and the ids the client
 sends can never match. The one loadout source that still works is
 `AYGameMode::GetGameModeLoadout` (vtable +0x880), overridden **only** by
 `AYGameMode_TrainingMatch` (`m_trainingMatchLoadout`). The resolver is
-`GetLoadoutForPlayer` = `FUN_140370970`. That is why the matchmaker forces TM.
+`GetLoadoutForPlayer` = `FUN_140370970`.
+
+**That is no longer why the matchmaker picks a mode.** This line used to end
+"which is why the matchmaker forces TM", and that was true of `6960e5f` only.
+Forcing TM broke orbit and ship selection, `6e8478f` reverted it, and `S10.1`
+replaced it with a single substitution -- TM (Proving Grounds) is routed to TDM
+because TM is the one mode that fails `no orbit spawn locations set!`. Matches
+run as TDM, and the client side confirmed it from the host's own
+`LoadMap: ...?listen?game=TDM` (AGENT-CHAT C25.3). Nothing forces a game mode
+for the loadout's sake any more.
 
 **A fix exists, and it is not here.** The client-side team hooks
 `GetLoadoutForPlayer` (`FUN_140370970`) in their DLL: call the original, and only
@@ -59,6 +68,43 @@ and still nothing when the process is handed
 `-GatewayAddress/-GatewayPort/-YFirmamentAddress/-YFirmamentPort` exactly as
 dn-launcher passes them to the client. The backend connection is driven by the
 frontend login flow, and a process booted straight into a map never runs it.
+
+## 1b. The same absence, three more times: orbit, thrusters and an empty match
+
+The empty loadout manager is not one bug. It is the first of at least four
+symptoms of one fact -- **the host has no player record** -- and each was found
+separately before the shape became obvious. Recording them together so the next
+one is recognised on sight.
+
+| symptom | what actually reads the missing data |
+| --- | --- |
+| `FindLoadoutByID` misses every id | loadout manager, filled only from player data (above) |
+| the teleport out of orbit never fires | `PlayerController+0x948` = `EYOrbitReadyState`, computed by `FUN_140346C20` from the fleet **slot count**; count 0 returns 0 |
+| thrusters and muzzle effects never switch on | suspected: the orbit transition that the forced flag skips (client side, unconfirmed) |
+| **the match has no opponents or bots** | the NPC set is chosen by FLEET TYPE (below) |
+
+The bot chain, verified by disassembly:
+
+```text
+FUN_1403A0A80  LoadNPCSet(fleetType)
+  switch (fleetType) { case 1,2,3: load the set; default: "LoadNPCSet | Invalid fleet type!" }
+     ^
+FUN_140396C50  the fleet-type getter
+  ...
+  call FUN_14039A2C0        ; the local player controller
+  mov  rcx, [rax + 0x958]   ; m_fleetManager -- the SAME pointer the orbit gate checks
+  test rcx, rcx / je -> default   ; null fleet manager -> default type -> no NPC set
+```
+
+So a host with no fleet manager gets the default fleet type, `LoadNPCSet` refuses
+it, no NPC set is ever loaded, and `AYGameMode_Multiplayer::SpawnNPC` then has
+nothing to draw on ("not enough npcs in m_npcPlayers"). The empty match is not a
+missing feature on the backend: **the game populates matches itself, off the
+fleet.** `AYGameState_MP::LoadNPCSetOnFleetInitialized` says as much in its name.
+
+That makes populating the host's fleet slots the single lever for all of it --
+which is what the client side reached independently in AGENT-CHAT C27 from the
+orbit side alone.
 
 ## 2. OTS: the client uploads its tune data, and gets kicked for it
 
@@ -86,6 +132,14 @@ Received corrupted packet data from client 10.0.0.26.  Disconnecting.
   bunches × 501 B ≈ **69.6 KB** — 6% over the cap.
 - Measured from one join: 78 slices, ~2.6 MB, over 4 seconds, then the kick
   about 13 s after the client connected.
+
+**It does not reproduce on Windows.** The client side ran a full match against a
+Windows host with zero `Final partial bunch too large`, zero `Bunch.IsError`,
+zero `corrupted packet data` and no disconnect (AGENT-CHAT C25.2). Every
+measurement above was taken under Wine. Before anyone spends more on this, note
+that the bug may be platform-dependent -- and that the client side's 900->600
+slice change (C11) is in the build that produced the clean run, so the two are
+not independent.
 - **The host survives it.** The instance that logged the overflow at 22:29:20
   went on running until 22:44:41 and exited only to a SIGKILL from the harness --
   15m42s later. So the oversized bunch disconnects the player; it does not crash
