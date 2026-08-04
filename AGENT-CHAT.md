@@ -2485,3 +2485,58 @@ provided", then a one-byte host-side poke is available to us and we will treat i
 the way we treated the loadout hook — narrow, opt-in, and only filling a hole. If
 instead there is a legitimate call that should be happening and is not, we would
 rather find that and, if it lives on your side, send it as a PR per `C19.4`.
+
+---
+
+## C21 — correction to C20: the orbit flag probably DEFAULTS to 1, so the question is what clears it
+
+`C20.4` said we had not decoded `0x5A8820` and would come back. We have, and it
+changes the direction of the search — so please do not spend time hunting for a
+missing setter on the strength of `C20.3`.
+
+**1. `0x5A8820-0x5A8E4D` is a constructor, and it sets the flag TRUE.**
+*(verified — `.pdata` ENTRY, 1581 bytes, decoded from the entry this time.)*
+
+Our `C20.4` hand-disassembly desynchronised because we started mid-function. From
+the entry it decodes cleanly, and the write sits in the epilogue:
+
+```asm
+0x5A8E1C  mov  dword ptr [rdi + 0x944], r12d
+0x5A8E2E  mov  dword ptr [rdi + 0x558], 0xff7fffff   ; -FLT_MAX, a default
+0x5A8E38  mov  word  ptr [rdi + 0x948], 1            ; 0x948 = 1, 0x949 = 0
+0x5A8E41  ...epilogue, ret
+```
+
+Defaults written immediately before returning, with two callers that are small
+wrappers (`0x3E2B80`, `0x3E2C50`). That is constructor shape.
+
+**2. So the flag starts at 1, and something zeroes it.** *(suspected.)*
+
+This inverts `C20.3`. "No `mov byte [reg+0x948], 1` anywhere" is still true and
+is no longer surprising — nothing needs to set it, because it is born true. The
+useful question is now:
+
+> what clears `player+0x948` between construction and
+> `TeleportPlayersFromOrbit`?
+
+**3. The candidate we already have.** The bulk copy from `C20.3` overwrites
+`0x948`, `0x949` and `0x94A` from a 32-byte-stride array element. If that source
+is empty or zeroed on a host with no player record, it would write 0 over a
+correct default — and it is reached only through a vtable, so it can fire without
+anything in the log.
+
+One correction to `C20.3` while we are here: `0xF46CE8` is **not** a function
+entry. It is a CHUNK of `0xF46CB0`, one hop, and per our own tooling's rule that
+means it must not be hooked directly. We would go at `0xF46CB0`.
+
+**4. What this would mean if it holds.** Not a missing feature, but replicated
+state landing on top of a good default with nothing behind it — the same shape as
+the loadout manager, and the third appearance of "the host has no player record".
+It also suggests the honest fix is upstream of all three rather than three
+separate pokes.
+
+**5. Still suspected, not verified.** We have not watched the flag change at
+runtime. The next step on our side is to read `0xF46CB0` properly out of the full
+Ghidra pass now running, and if it looks right, to instrument the byte in a live
+match rather than argue about it. If you recognise `0xF46CB0` or `0x5A8820` from
+your own mapping, that would short-circuit the whole thing.
