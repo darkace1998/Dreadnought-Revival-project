@@ -375,12 +375,25 @@ func defaultConfig() Config {
 
 func loadConfig(exeDir string) Config {
 	cfg := defaultConfig()
+	configPath := filepath.Join(exeDir, "dn-launcher.json")
 	//nolint:gosec // Path is the launcher's sibling config file in its own installation directory.
-	data, err := os.ReadFile(filepath.Join(exeDir, "dn-launcher.json"))
-	if err == nil {
+	data, err := os.ReadFile(configPath)
+	switch {
+	case err == nil:
 		if err := json.Unmarshal(data, &cfg); err != nil {
+			// A config that exists but does not parse silently reverted every
+			// setting to its default, which is indistinguishable from having
+			// no config at all. Say so.
+			fmt.Fprintf(os.Stderr, "[!] %s is not valid JSON (%v); using defaults for everything.\n",
+				configPath, err)
 			return cfg
 		}
+		fmt.Printf("[+] Config: %s\n", configPath)
+	default:
+		// Not an error -- the defaults are a working configuration -- but the
+		// operator who just edited a file somewhere else needs to know this is
+		// the path that counts.
+		fmt.Printf("[+] Config: none at %s, using defaults\n", configPath)
 	}
 	// DN_VERBOSE_LOG lets verbose logging be toggled per-launch (e.g. for a
 	// one-off debugging session) without editing dn-launcher.json.
@@ -573,7 +586,11 @@ func main() {
 		// than a default change, because the timeout above is a real cost.
 		// Set allow_steam in dn-launcher.json, or DN_ALLOW_STEAM=1.
 	}
-	if !cfg.AllowSteam {
+	if cfg.AllowSteam {
+		fmt.Println("[+] Steam: leaving the client's Steam subsystem enabled (allow_steam)")
+	} else {
+		fmt.Println("[+] Steam: passing -NoSteam. Set allow_steam in dn-launcher.json, " +
+			"or DN_ALLOW_STEAM=1, to keep it enabled.")
 		args = append(args, "-NoSteam")
 	}
 
