@@ -46,6 +46,17 @@ func main() {
 	if v, err := strconv.Atoi(os.Getenv("PLAYERS_PER_MATCH")); err == nil && v > 0 {
 		playersPerMatch = v
 	}
+	if playersPerMatch == 1 {
+		// Worth shouting about now that players can actually spawn. With 1, a
+		// match forms the moment ANYONE queues, so two people queueing together
+		// get two separate battle servers and can never meet. Combined with a
+		// PvP mode -- which has no bots at all; our host logs only ever show
+		// AYAICombatSceneManager::StartCombat under Training Match -- that is an
+		// empty map with nothing to do in it, reported as a server bug in
+		// AGENT-CHAT C25.6 when it is this setting.
+		log.Warn("PLAYERS_PER_MATCH=1: every player gets a PRIVATE match and " +
+			"will never meet another player. Set it to 2 or more for PvP.")
+	}
 
 	database, err := db.Open(dbPath)
 	if err != nil {

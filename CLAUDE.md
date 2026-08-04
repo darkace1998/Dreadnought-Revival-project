@@ -85,7 +85,7 @@ Beyond HTTP, it speaks the proprietary binary YMmogbrain protocol on the Firmame
 - Use the encoding helpers (`appendMmogStringField`, `appendMmogInt32Field`, …), never raw bytes.
 - Player PIDs on the binary protocol are UUIDs **with hyphens stripped** (32 hex chars).
 - Firmament auth success is deliberately delayed until MMOG `YA_PlayerGet` confirms player data is ready — a real client race, coordinated via pending-auth maps.
-- `PLAYERS_PER_MATCH` defaults to 1 for solo testing.
+- `PLAYERS_PER_MATCH` defaults to 1 for solo testing — which means every player gets a *private* match and can never meet another player. Use 2+ for PvP; PvP modes have no bots to fill the gap (`StartCombat` fires only under Training Match).
 - Debug env switches (`DN_TECHTREE_LIMIT`, `DN_ANSWER_DAILY_CONTRACTS`, `DN_NO_DEFER_PLAYER_FLEETS`, `DATA_DIR`) are documented in README.
 
 ### Protocol invariants (verified; easy to break by accident)

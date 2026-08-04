@@ -3626,3 +3626,63 @@ to delete rather than keep.
 
 Good work. This one moved the project from "a player can enter a match" to "a
 player has a ship in it".
+
+---
+
+### S17 — `C25.6` answered: the empty match is two settings of ours, and neither is a missing feature
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+`S13.3` handed you a `StartCombat` grep and said we would chase it from our side.
+We did, across every battle-server log in this repo, and the answer is not the
+one either of us was looking for.
+
+**1. `StartCombat` fires under Training Match and nothing else.** *(verified,
+five host logs, every mode we have run.)*
+
+| host log | mode | `StartCombat` | `Sync loading NPC set.` |
+| --- | --- | --- | --- |
+| 08-02 22:08 | TDM | 0 | 0 |
+| 08-02 22:28 | **TM** | **1** | 0 |
+| 08-03 01:29 | **TM** | **1** | 0 |
+| 08-03 23:02 | BC | 0 | 2 |
+| 08-03 23:34 | Onslaught | 0 | 2 |
+
+Two things fall out. The AI combat scene manager starts combat only in Training
+Match — the mode built around AI. And the NPC set loads in BC and Onslaught but
+not in TDM or TM, so "an NPC set loaded" and "combat started" are separate
+things, which is why `S12` conflated them into a wrong chain.
+
+**You have been testing TDM.** `C25.3` confirmed it from the host's own
+`LoadMap: ...?game=TDM`, and `C28.2`'s two matches were TDM. TDM is PvP: there
+are no bots in it, on our server or on the original one. An empty TDM map with
+one player in it is the correct behaviour of a correctly working match.
+
+If you want something to shoot at solo, queue **Onslaught** — the mode whose NPC
+set our host demonstrably loads. That is a five-minute test and it splits
+`C25.6` cleanly: opponents appear and the question is closed, or they do not and
+we have a real bug with a loaded NPC set sitting next to it.
+
+**2. And even in PvP you could not have met anyone, because of a default of
+ours.** *(verified; fixed as far as a default can be.)*
+
+`scripts/start-services.sh` exports `PLAYERS_PER_MATCH=1`. A match forms the
+instant **anyone** queues — so two people queueing together get two separate
+battle servers. Solo testing needed that when nobody could spawn at all; now
+that they can, it guarantees an empty map.
+
+Nothing to fix in the code — 2 has always worked and the code default is 2 — so
+what we changed is how impossible it is to miss:
+
+- mmogbrain logs a warning at startup when it is 1
+- `start-services.sh` prints the consequence after the health checks
+- `README.md`, `AGENTS.md` and `CLAUDE.md` say it where the variable is described
+
+**Export `PLAYERS_PER_MATCH=2` before `start-services.sh` and queue two clients.**
+That is the PvP test, and with `#64` merged both of them should now get a ship.
+
+**3. Why we are not calling this closed.** Between them these two explain an
+empty TDM match completely, and we would rather hand you a test than a
+conclusion. `S12` was a chain of reasoning that turned out to be wrong because
+nobody ran the five-minute check first; this time the five-minute check is the
+whole recommendation. Onslaught for bots, two clients for players, and if either
+comes back empty we have a genuine bug and much better ground to stand on.

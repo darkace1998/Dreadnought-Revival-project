@@ -244,7 +244,7 @@ Set in `run/secrets.env` unless noted.
 | `SERVER_IP` | game-manager | auto-detected | Address handed to clients for battle servers |
 | `GAME_BINARY` | game-manager | — | Path to `DreadGame-Win64-Shipping.exe` |
 | `WINE_EXE` | game-manager | `wine` | Wine executable; `none` on Windows |
-| `PLAYERS_PER_MATCH` | mmogbrain | `1` | Queued players needed to form a match |
+| `PLAYERS_PER_MATCH` | mmogbrain | `1` | Queued players needed to form a match. **1 gives every player a private match** — two people queueing together get two servers and never meet. Use 2+ for PvP. |
 | `MASTER_URL` | game-manager | `http://127.0.0.1:8084` | Master server URL |
 | `GAME_MGR_URL` | mmogbrain | `http://127.0.0.1:8085` | Game manager URL |
 | `DN_FORCE_GAME_MODE` | mmogbrain | *(unset — the queued mode runs)* | Forces every match into one game mode. A mode name, or `1` for `TM`. Off by default: TM is the only mode whose host logs `no orbit spawn locations set!`, and a player in it never reaches the ship selection screen. TM is also the only mode that supplies a loadout, so the two failures are mutually exclusive — see `docs/battle-server-data-path.md` |

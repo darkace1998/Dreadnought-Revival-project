@@ -106,7 +106,16 @@ if [ "$GAME_DISPLAY" = ":99" ] && ! pgrep -f "Xvfb :99" >/dev/null 2>&1; then
 fi
 
 # One player forms a match, so a single tester can reach a battle server without
-# a second client. Raise it for real play.
+# a second client.
+#
+# THE COST, now that players can actually spawn: a match forms the instant
+# anyone queues, so two people queueing together get two SEPARATE battle servers
+# and can never meet. In a PvP mode that is an empty map -- and PvP modes have no
+# bots to fill it; across our host logs AYAICombatSceneManager::StartCombat fires
+# only under Training Match. "There is nothing to do in matches" (AGENT-CHAT
+# C25.6) is this setting plus a PvP mode, not a missing backend feature.
+#
+# Set PLAYERS_PER_MATCH=2 (or more) for anything other than solo testing.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
 
 # FALLBACK for how long mmogbrain holds YA_Connect back after a match forms.
@@ -276,3 +285,8 @@ done
 echo "=== Listening sockets ==="
 ss -lntp 2>/dev/null | grep -E ':(80|443|8081|8082|8083|8084|8085|48843|65443)\b' || true
 echo "=== Done (PLAYERS_PER_MATCH=$PLAYERS_PER_MATCH SERVER_IP=$SERVER_IP) ==="
+if [ "$PLAYERS_PER_MATCH" = "1" ]; then
+    echo "    NOTE: PLAYERS_PER_MATCH=1 gives every player a PRIVATE match."
+    echo "          Two people queueing together get two servers and never meet."
+    echo "          Export PLAYERS_PER_MATCH=2 before this script for PvP."
+fi

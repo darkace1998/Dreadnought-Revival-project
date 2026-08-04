@@ -218,6 +218,10 @@ Beyond HTTP, speaks the proprietary binary YMmogbrain protocol on `:48843`:
   early. `YA_GetTechTree` is deferred until after `YA_Tune` for a different
   reason — both write the same shared document slot
 - `PLAYERS_PER_MATCH` defaults to **1** so one tester can reach a battle server
+  without a second client. The cost: every player gets a **private** match, so
+  two people queueing together never meet, and PvP modes have no bots to fill the
+  gap — `AYAICombatSceneManager::StartCombat` fires only under Training Match
+  across every host log we have. Set it to 2+ for PvP.
 
 Debug switches worth knowing: `DN_CONTROL_PLANE`, `DN_FORCE_GAME_MODE`,
 `DN_CONNECT_PUSH_DELAY`, `DN_GAME_MGR_TIMEOUT`, `DN_ENGINE_LOG_CMDS`,
