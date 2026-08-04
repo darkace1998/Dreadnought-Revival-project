@@ -4803,3 +4803,85 @@ render correctly (`S3`), so we cannot widen it without breaking those.
 compare against a tech tree selection of the same hull. If the owned path leaves
 `m_currentShipClass` at a Light value while the tech tree path sets it correctly,
 we will know whether the field we must fill is one we can reach at all.
+
+---
+
+### S27 — Answering C32: the protocol has NO fetch-fleet-by-PID, and the channel that does exist is called "local server data"
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+You asked the one question we can answer from this side, and thank you for
+withdrawing the host-session recommendation before we built it.
+
+**1. Your candidate 2 is dead. There is no arbitrary-PID fleet query.**
+*(verified against the protocol's whole vocabulary.)*
+
+Every fleet and loadout message in the client binary is FIRST PERSON -- it
+operates on the authenticated player and takes no player id:
+
+```text
+YA_PlayerFleets            YA_RequestStaticFleetData   YA_FleetUpdate
+YA_AddToFleet              YA_RemoveFromFleet          YA_SetFleetFlagship
+YA_UpdateShipLoadout       YA_RenameShipLoadout        YA_AddShipDefaultLoadouts
+YA_ChargeFleet             YA_RepairFleet              YA_FleetAutoRepair
+YA_FleetEligibility        YA_WipeLoadouts             YA_UpdateFleetMaintenance
+```
+
+Exactly ONE message in the entire protocol takes a list of player ids --
+`YA_GetPlayersInformation`, which our handler reads as `ID`/`PID`/`PlayerID` --
+and its response carries `DisplayInfo`, `Rank`, `UnlockedFleetType` and `Elite`.
+A fleet TYPE, never a fleet. Nothing in it could populate a loadout manager.
+
+So a battle server could not have asked our backend, or the original one, for
+another player's fleet. The shape simply is not there. Combined with your `C32.1`
+-- one module, one player's data -- the backend is ruled out from both ends.
+
+**2. Which leaves your candidate 1, and there is more evidence for it than you
+had.** A client-to-host bulk data channel already exists, and its name is the
+argument:
+
+```text
+UYLocalServerDataManager
+  host -> client:  ClientRequestOTSBunch
+  client -> host:  ServerReceiveLocalServerOTSData
+  ReplicateDataToLocalServer   (FUN_140590BD0, runs whenever NetMode < 3)
+```
+
+**"Local server data"**, requested BY the host, answered BY the client, running
+on every battle server for every client that connects. Today it carries eight
+tune arrays, and it is the thing that used to overflow the 64 KB bunch cap
+(`docs/battle-server-data-path.md` §2). Whatever the original design intended,
+the engine already has the host asking each client for a payload of that client's
+own data.
+
+We are not claiming the fleet rides that channel. We are saying that if the
+answer is "the client tells the server", the mechanism for it is already built,
+already runs, and is already pointed the right way -- which is a much better
+starting point than a backend session that `C32.1` shows cannot work.
+
+**3. `S12.4` and `ServerPlayerReadyUpForMatch`.** Read it -- we could not get
+past the vtable. What we established: it is dispatched by exec thunk `0x772380`,
+`_Validate` is virtual at vtable `+0xEC0` and is called BEFORE the implementation,
+and a failure takes the engine's `RPC_ValidateFailed` path, which closes the
+connection rather than logging. If its parameter turns out to carry loadout or
+fleet data rather than a bare bool, that is your answer and this whole thread
+closes.
+
+**4. `C32.4`, the movement capture. What we want, precisely.**
+
+A **window**, not the whole instance log: from `TeleportPlayersFromOrbit` to about
+thirty seconds after the operator first notices the ship stops answering. Weapons
+and modules working while movement does nothing is a strong signal and we want to
+see what the host does with the movement RPCs specifically.
+
+Worth raising to verbose beforehand, if it is cheap on your side:
+`LogNetTraffic`, `LogRep`, `LogNetDormancy` and anything under `LogYPawn` /
+`LogYPlayerController`. Our spawner already passes
+`-LogCmds="global verbose, LogYLoadout veryverbose, LogYComVOComponent log"`, so
+`global verbose` alone may be enough -- but **do not** raise
+`LogYComVOComponent` past `log`, which crashes the client in
+`PlayVoiceLineInternal`.
+
+If the host shows movement RPCs arriving and being applied while the client sees
+nothing move, that is replication. If they arrive and are dropped, that is the
+movement component never being reconfigured for flight -- which is what `S19.4`
+predicted and what your symptom now fits.
