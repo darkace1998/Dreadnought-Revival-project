@@ -3360,3 +3360,133 @@ FName ... -> after registering: FOUND` was worth more than any explanation in
 manager fills itself, we delete this together and the directory goes away. That
 is the outcome we would both prefer, and accepting the PR does not make it less
 likely — it makes players able to play while you chase it.
+
+---
+
+## C28 â€” the PR is up (#64), verified against an entirely unmodded client, and that client told us something about ship select
+
+**1. `battle-server-mod` PR is open: #64.** Written fresh against the contract in
+your `README.md` rather than ported from our tree, so nothing outside the
+accepted scope could ride along: one source file, one hook, no other behaviour.
+Standalone `build.bat`, not in `go.work`, opt-in via `dn_server_loadout.txt`,
+MinHook vendored with its licence, RVAs and evidence in the commit body.
+
+**2. It was tested ALONE.** *(verified, two matches, real backend, full stack via
+`scripts/start-services.sh`.)*
+
+This is the part we want on the record. We did not run it alongside our client
+mod â€” we **replaced** our client mod with it. For the whole test the player's
+client had no injected code at all. So everything below is the DLL by itself,
+against the unmodded client your `CONTRIBUTING.md` protects.
+
+```text
+[dn-host-loadout] battle server detected and enabled. module base 0x7FF7587D0000
+[dn-host-loadout] installed: FindLoadoutByID hooked at RVA 0x340340
+[dn-host-loadout] resolved UClass class object at 0x...9D80 (Class)
+[dn-host-loadout] 4/4 precast loadouts resolved
+[dn-host-loadout] register VH_AssaultMedium_T1 with manager 0x... -> ok      (x4)
+[dn-host-loadout] FindLoadoutByID miss for FName 0x21F0F
+                  (Default__VH_SupportMedium_T1_PrecastLoadout_BP_C) -> FOUND
+```
+
+And the claim that actually matters â€” **the lookup follows the player's
+choice**, two matches, two ship classes:
+
+| picked | class | host requested |
+| --- | --- | --- |
+| Rurik | Artillery Cruiser | `Default__VH_SniperMedium_T1_...` â†’ FOUND |
+| Cerberus | Tactical Cruiser | `Default__VH_SupportMedium_T1_...` â†’ FOUND |
+
+Sniper and Support are the internal names for those two classes, so both
+resolved to the correct hull. A pawn is created and possessed: the camera moves
+to sit behind the player's own ship.
+
+The client gate was measured too: the launched client's command line has no
+`-MatchID`, no log file was created, and no hook installed.
+
+**3. It is necessary but NOT sufficient, and we would rather say so than have
+you merge it expecting a flyable match.** The pawn spawns and is possessed, and
+the player then sits in orbit permanently. The transition is gated on
+`PlayerController+0x948`, which the engine computes from the fleet slot count
+(`C27`), and the host's is 0. Forcing that byte is excluded by your `README.md`
+and we agree with the exclusion. Populating the fleet is the real fix and it is
+what we are on now â€” `UYFleetManager::AddLoadoutToFleet` (`0x338660-0x33892D`)
+looks like the engine's own way in.
+
+**4. What an unmodded client told us about ship select, which is a question for
+you.** *(verified.)*
+
+We first wrote in the PR that an unmodded client **loses** the in-orbit ship
+preview and its stats card. That was wrong and we have corrected it there. What
+actually happens:
+
+- ship select runs and produces **zero** server-side `FindLoadoutByID` calls â€”
+  the entire match logs exactly one, at spawn
+- the timer expires, the first lookup misses, we register the four precasts
+- the preview and the stats card **start working from that moment on**, and keep
+  working; the player can switch hulls and see each one
+
+So the client does not lose the feature. **The data arrives too late for it.**
+Two consequences:
+
+1. That is a fixable shortcoming of our PR, not a client-side casualty.
+   Registering when the loadout manager first exists, rather than on the first
+   missed lookup, would plausibly give an unmodded client its ship-select
+   preview. We would rather do that than leave it.
+2. **Ship select reaches loadout data by a path that is not `FindLoadoutByID`**,
+   or we would have seen a second miss when the player changed hulls during
+   selection. We do not know what that path is. If you know what the ship-select
+   screen asks the server for, that saves us finding it the slow way.
+
+One more, offered because our hook is provably idle for it: once the manager
+holds all four, changing ships **despawns** the current preview and it takes a
+*second* change to spawn the new one â€” a consistent one-step lag, with fully
+populated data and nothing of ours running.
+
+**5. Correction we would pass on, because it nearly cost us the conclusion.**
+**FName indices are per-process.** `GNames` is built at runtime in load order, so
+the same index means different names in different hosts. Both matches above
+logged index `0x21F0F` and resolved to **different** hulls. We briefly read the
+repeated hex as evidence the client was sending one id whatever the player
+clicked â€” the exact opposite of the truth. We now log the resolved text, and we
+would not trust a bare FName value in any host log, including yours.
+
+**6. `S13.3`, the `StartCombat` grep. Answered, with a caveat that changes the
+question.** *(verified, 20 host logs.)*
+
+| line | ours |
+| --- | --- |
+| `AYAICombatSceneManager::LoadNPCSet \| Request sync. load for NPCSet!` | 20/20 present |
+| `LogYGameState_MP: LoadNPCSet \| Sync loading NPC set.` | **0/20** |
+| `StartCombat - starting combat` | **0/20** |
+| any NPC error string | **0/20** |
+
+So we differ from your host at exactly that step. **But before anyone acts on
+it:** the missing `Sync loading NPC set.` literal lives in a **cold chunk**.
+
+```text
+0x3A0A80  ENTRY of AYGameState_MP::LoadNPCSet (46 bytes)
+0x3A0AAE  CHUNK 0x3A0AAE-0x3A0B2B of 0x3A0A80 (1 hop)   <- the literal is HERE
+```
+
+Its absence does not prove the function did not run. The 46-byte primary is:
+
+```asm
+0x3A0A8E  call 0x396C50          ; fleetType (your FUN_140396C50)
+0x3A0A99  call 0x1726F50         ; GetNetMode(this) -- checked AGAIN, here
+0x3A0A9E  cmp  eax, 3            ; NM_Client
+0x3A0AA1  je   0x3A0CF5          ; -> bare epilogue + ret
+0x3A0AA7  cmp  byte [rip+..], 5  ; UE_LOG verbosity gate -- skips the LOG only
+```
+
+The fleetType switch is downstream of the verbosity gate and runs whether or not
+the line prints. Three possibilities remain and we cannot yet separate them:
+NetMode read as `NM_Client`, the category below `Log` at that instant, or
+`AYGameState_MP::LoadNPCSet` never called at all â€” note the AICombatSceneManager
+function of the same name is a different function (`0x23B370`). We have not
+checked whether the `StartCombat` literal is in a cold chunk either.
+
+This is the same trap that produced `S12`, and it has now caught us twice â€”
+`UpdateWeaponSettings` in `C26`. It may be worth a line in `CONTRIBUTING.md`
+next to "read the log first": *a missing log line is not a missing execution
+until you know which chunk it lives in.*
