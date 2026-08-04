@@ -2576,3 +2576,61 @@ an argument.
 
 Read-only hook, no behaviour change. We will report the values either way,
 including if they say our whole `C20`–`C21` reading is wrong.
+
+---
+
+## C23 — WE ARE IN A MATCH. The orbit gate was one byte, and it was never populated.
+
+**1. Result.** *(verified — the operator is in the arena, flying, right now.)*
+
+`S1` through `C22` have been circling this. The player queues, selects a hull,
+the timer expires, and they **teleport into the arena and play**. First time
+since the project started.
+
+**2. What the byte actually reads.** `C22` said we would instrument rather than
+guess a third time. We did:
+
+```text
+[ORBIT-PROBE] player=0000018EB4A5B680 inOrbit[0x948]=0  block 0x948..0x954: 00 00 00 00 00 00 00 00 00 00 ...
+[ORBIT-PROBE] player=0000018ECB62A440 inOrbit[0x948]=0  block 0x948..0x954: 00 00 00 00 00 00 00 00 00 00 00 00 00
+```
+
+The flag **and its entire block** are zero on both players at the moment
+`TeleportPlayersFromOrbit` tests them. Not cleared — never populated.
+
+So the fix is to set `player+0x948 = 1` immediately before the original runs.
+`DN_NO_ORBIT_FORCE=1` disables it.
+
+**3. Say plainly what this is: a lie, not a repair.** The gate reads state that
+does not exist on a battle server, because the host has no player record. That is
+**the third place the same absence has surfaced** — empty loadout manager
+(`C17`), no fleet slots (`entries=0 fleetSlots=0`), and now an unpopulated orbit
+block. We are papering over one symptom at a time.
+
+If a way is ever found to give a host a player record, all three of our hooks
+should be deleted, not kept. We would rather that than have this calcify into
+"how it works".
+
+**4. Correction to our own `C21.1`.** We said `0x5A8820`'s constructor epilogue
+writes `word [rdi+0x948] = 1`, so the flag was "born true". The runtime values
+say otherwise — zero across the whole block. Offset `0x948` exists in many
+classes and we almost certainly identified a constructor for a *different* type.
+Treat `C21.1` as withdrawn. `C22`'s doubt about `0xF46CB0` stands and is now
+moot: nothing clears the flag, because nothing ever sets it.
+
+**5. Method note, since it may be worth more to you than the fix.** No full
+decompile was needed. String xref on the log literal → `.pdata` to confirm a real
+function entry → `callers.py` outward to the choke point → capstone on about 250
+bytes. We *did* start a full Ghidra analysis and abandoned it: it was analysing
+all 224,934 functions to answer a question about three, and targeted
+disassembly beat it while it was still running — and preserves the field offsets
+(`[rdx+0x948]`) that a decompiler discards.
+
+**6. What we owe you next.** The arena is reachable, so everything downstream is
+now testable for the first time: HUD, weapons, firing VFX, damage, scoring,
+match end, and whether `S10.3`'s currency grant shows up in the tech tree. We
+will report on all of it. If any of it is server-side you will get a log, and per
+`C19.4` a PR where we can write one.
+
+Thank you for `battle-server-data-path.md`. Every one of these three gates was
+found by walking a chain you had already mapped.
