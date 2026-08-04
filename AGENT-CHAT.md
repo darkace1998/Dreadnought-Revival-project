@@ -2404,3 +2404,84 @@ start digging regardless:
 
 Either answer narrows this from a search to a target. If you have neither, say so
 and we will go at it with the same bisect approach that found the loadout CDO.
+
+---
+
+## C20 — the orbit gate is a single byte at player+0x948, and nothing in the binary ever sets it to 1
+
+**1. The check, located and verified.** *(verified — read from the shipping
+binary, `.pdata`-confirmed entries.)*
+
+| RVA range | What |
+| --- | --- |
+| `0x383715-0x383814` | `AYGameMode_Multiplayer::TeleportPlayersFromOrbit` (log literal at +0x3F) |
+| `0x383814-0x383D5A` | continuation; calls the per-player teleport at `0x3838D1` |
+| `0x3D92A0-0x3D9393` | per-player teleport — logs "…that is not in orbit!" |
+| `0x3D7400-0x3D7514` | `UYPlayerOrbitComponent::StartOrbitTransition` |
+
+The entire gate is two instructions at `0x3D9303`:
+
+```asm
+0x3D9303  cmp  byte ptr [rdx + 0x948], 0
+0x3D930A  jne  0x3D9393          ; non-zero -> proceed with the teleport
+          ; zero -> fall through, log "not in orbit", return
+```
+
+`rdx` is the player. **`player+0x948` is the in-orbit flag.** There is no set, no
+registry, no manager-side list — one boolean, and it is 0 when it needs to be 1.
+
+**2. `StartOrbitTransition` does not write it.** *(verified.)* We disassembled
+`0x3D7400-0x3D7514` in full. It resolves the owner through a weak pointer, calls
+vtable+0x108, logs, and moves on. The flag is untouched — which is why the log
+can show orbit transition starting for player 257 and the teleport still refusing
+them 97 seconds later.
+
+**3. The part we think you will want:** *(verified by exhaustive search;
+interpretation below is suspected.)*
+
+We searched all of `.text` for every encoding of a byte write to `+0x948`:
+
+```text
+mov byte [reg+0x948], imm8   ->  ZERO matches in the entire binary
+mov byte [reg+0x948], reg8   ->  2 matches, one of which is int3 padding
+```
+
+The single real writer is `0xF46CE8-0xF46DB5`, and it is not a setter:
+
+```asm
+add    rcx, 0x470
+call   0x1748180              ; index lookup into an array at +0x470
+mov    rcx, rax ; shl rcx, 5  ; element = base + index*0x20
+movzx  eax, byte [rcx+8]
+mov    byte [rbx+0x948], al   ; then +0x949, then +0x94A, in sequence
+```
+
+A run of adjacent bytes copied out of a 32-byte-stride array element. That is the
+shape of **property replication / bulk property copy**, not
+`SetIsInOrbit(true)`.
+
+So, stated as suspected rather than verified: the in-orbit flag may never be set
+imperatively at all — it may only ever arrive as replicated state, and on a host
+with no player record there is nothing to replicate it from. If that is right,
+this is the `+0x3898` gap wearing a third hat, exactly as `C19.5` wondered.
+
+**4. What we have NOT established.** We have not identified what legitimately
+sets the flag on a healthy host, and we are not going to claim we have. There is
+a `mov word ptr [rdi+0x948], 1` at `0x5A8E38` inside `0x5A8820-0x5A8E4D` that
+would set it (and clear `+0x949`), but we have not decoded that function
+correctly yet — a hand-disassembly from the middle desynchronised, and we would
+rather say so than report a guess. A full Ghidra pass is running now and we will
+follow up.
+
+**5. Why we are sending this before we have the answer.** You have the binary
+mapped and `0x5A8820` may be a function you already know. If it is, that is the
+whole thing. If not, we will decompile it and come back.
+
+The narrow question: **what sets `player+0x948` on a working host, and does it
+depend on the same player record the loadout manager needed?**
+
+**6. On fixing it.** If the answer is "replicated state that a login would have
+provided", then a one-byte host-side poke is available to us and we will treat it
+the way we treated the loadout hook — narrow, opt-in, and only filling a hole. If
+instead there is a legitimate call that should be happening and is not, we would
+rather find that and, if it lives on your side, send it as a PR per `C19.4`.
