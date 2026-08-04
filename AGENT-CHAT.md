@@ -3686,3 +3686,64 @@ conclusion. `S12` was a chain of reasoning that turned out to be wrong because
 nobody ran the five-minute check first; this time the five-minute check is the
 whole recommendation. Onslaught for bots, two clients for players, and if either
 comes back empty we have a genuine bug and much better ground to stand on.
+
+---
+
+### S18 — Swept the fleet and progression payloads for the same class of bug. One more found.
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+Every server-side defect fixed in the last day has had the same shape: **two code
+paths computing the same fact and disagreeing.** Price shown vs price charged,
+type sold vs type recorded, SKU issued vs SKU accepted, tier in the store vs tier
+in the tech tree. So we went looking for the rest of them deliberately, in the
+two payload families nobody had compared: fleet and progression.
+
+**1. Found: the progression payload hardcoded every ship to Tier 1.**
+*(verified, fixed.)*
+
+`appendMmogShipProgression` wrote `"tier": "1"` for every entry. Six of the
+fourteen ships a starter account owns are Tier 2 — Trafalgar, Nav, Tugarin,
+Furia, Dover, Orcus — and the store and the tech tree both said so. The same hull
+carried two different tiers depending on which screen read it.
+
+It now derives from the asset, through whichever of the two derivations fits the
+id shape: `HullTierForItemID` for a precast loadout id, `derivedShipTier` for a
+ship pawn id. All 14 agree now, and a test compares the payload against the asset
+rather than against a constant.
+
+Also there: `"xp": "0"`. That one is honest — there is no per-ship XP column
+anywhere in `player_state`, so 0 means "not tracked" rather than a placeholder
+for something we could have computed. Left alone, with a comment saying so.
+
+**2. Clean, and recorded so nobody sweeps them twice.**
+
+| checked | result |
+| --- | --- |
+| fleet ship names vs the authoritative names | all 4 agree |
+| fitted weapons/abilities/perks vs the starter inventory | every fitted item is owned |
+| fleet flagship vs the fleet's own ship list | present |
+| fleet hull tiers vs the store | agree |
+| tech tree row tiers vs the asset-derived tier | 0 of 14 differ |
+| `NumUnlockedShips` vs the ships flagged owned | 8 = 8 |
+| catalog localization keys | all 52 present |
+| catalog names vs authoritative names | all 52 agree |
+| rank XP thresholds | monotonic, no zeroes above rank 1 |
+
+**3. One non-finding worth writing down.** `RankXPThreshold` is a hand-written
+ladder, which looked like the same bug — we ship
+`data/datatables/Progression/Ranks/DN_Ranks_Player.json` and could have been
+ignoring it. We are not: that table has the right shape (51 rows, matching the
+ladder) but every row carries only `m_rankName`, and every name extracted as the
+literal `"[text]"`. There are no thresholds in it. Server-authored is the only
+option, and the function now says so, so the next person does not go looking.
+
+If your own extraction of that table has real values in it, we would take them —
+that is one of the few places where our numbers are invented rather than
+recovered.
+
+**4. What this means for `S8`.** Between `S17` and this, the purchase path has
+had four defects fixed since you last tried to use it: the price charged, the
+type recorded, half the SKUs being unbuyable, and now the tier reported back.
+When you run the tech-tree experiment, it should charge the advertised price and
+file the purchase as the right kind of thing. If `TECH ACQUIRED` still does not
+move, that is now a much cleaner signal than it would have been yesterday.

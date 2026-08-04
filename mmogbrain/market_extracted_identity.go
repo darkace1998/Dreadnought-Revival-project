@@ -23,14 +23,14 @@ type extractedStarterLoadoutIdentity struct {
 }
 
 var (
-	extractedShipIDAthos   = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Athos").ItemID
-	extractedShipIDZmey    = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Zmey").ItemID
-	extractedShipIDAion    = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Aion").ItemID
-	extractedShipIDValcour = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Valcour").ItemID
-	extractedShipIDSvarog  = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Svarog").ItemID
+	extractedShipIDAthos     = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Athos").ItemID
+	extractedShipIDZmey      = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Zmey").ItemID
+	extractedShipIDAion      = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Aion").ItemID
+	extractedShipIDValcour   = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Valcour").ItemID
+	extractedShipIDSvarog    = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Svarog").ItemID
 	extractedShipIDTrafalgar = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Trafalgar").ItemID
-	extractedShipIDNav = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Nav").ItemID
-	extractedShipIDCeres   = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Ceres").ItemID
+	extractedShipIDNav       = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Nav").ItemID
+	extractedShipIDCeres     = dreadconfig.MustItemByTypeAndDisplayName(dreadconfig.ItemTypeShip, "Ceres").ItemID
 )
 
 func extractedMarketItemMetadataForID(itemID int32) (extractedMarketItemMetadata, bool) {

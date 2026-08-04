@@ -1837,12 +1837,37 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	return b
 }
 
+// shipTierForID resolves a tier for either shape of ship id this server deals
+// in, so that progression, the tech tree and the store cannot disagree about the
+// same hull.
+//
+// Two derivations, both already trusted elsewhere and neither covering the other:
+// HullTierForItemID reads a precast LOADOUT id (category 1), including the
+// name-join that rescues the fifteen ids ItemIDRegister still points at the
+// previous build's tier-less asset; derivedShipTier reads a ship PAWN id
+// (category 10) out of /Ships/<Class>/<Size>/T<n>/.
+func shipTierForID(itemID int32) int32 {
+	if tier, ok := dreadconfig.HullTierForItemID(itemID); ok && tier >= 1 {
+		return int32(tier)
+	}
+	if tier, ok := derivedShipTier(itemID); ok && tier >= 1 {
+		return int32(tier)
+	}
+	return 1
+}
+
 func appendMmogShipProgression(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// Same int32-blind parser as the rest of this payload family.
 	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(ship.id)))
+	// Per-ship XP is genuinely not tracked -- there is no column for it
+	// anywhere in player_state -- so 0 is "we do not know", not a placeholder
+	// standing in for something we could compute.
 	b = protocol.AppendStringField(b, "xp", "0")
-	b = protocol.AppendStringField(b, "tier", "1")
+	// The tier was hardcoded "1" for every ship. Six of the fourteen a starter
+	// account owns are Tier 2, and the store and tech tree both said so, so the
+	// same hull carried two different tiers depending on which screen read it.
+	b = protocol.AppendStringField(b, "tier", strconv.Itoa(int(shipTierForID(ship.id))))
 	// "owned" does not exist in the client binary -- zero occurrences as a
 	// standalone wide string, checked with `strings -n 2` (the 4-char default
 	// hides it). The property the client actually carries is m_isOwned, which

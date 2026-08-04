@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/matchmaker"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -382,6 +382,14 @@ func normalizeForDB(userID string) string {
 
 // RankXPThreshold returns the XP required to advance from the given rank.
 // Based on Dreadnought 51-rank progression ladder.
+//
+// SERVER-AUTHORED, and it has to be: data/datatables/Progression/Ranks/
+// DN_Ranks_Player.json has the right shape -- 51 rows, matching the ladder --
+// but every row carries only m_rankName, and every name extracted as the literal
+// "[text]". There are no thresholds in it to use. Checked while sweeping for
+// places where two sources disagree about one fact (AGENT-CHAT S18); this is not
+// one of those, because there is only one source. If a better extraction of that
+// table ever appears, this is what it replaces.
 func RankXPThreshold(rank int32) int32 {
 	if rank < 2 {
 		return 0
@@ -546,7 +554,7 @@ func getHavocRewardForScore(score int32) (xp int32, gp int32) {
 		// Default fallback rewards
 		return score / 10, score / 5
 	}
-	
+
 	// Find the highest reward tier that the score qualifies for
 	var highestXP, highestGP int32
 	for _, reward := range rewards {
@@ -569,13 +577,13 @@ func getHavocRewardForScore(score int32) (xp int32, gp int32) {
 		} else if strings.Contains(reward.Title, "7") {
 			multiplier = 7
 		}
-		
+
 		// Calculate reward based on multiplier
 		// Note: This is a simplified implementation
 		// A full implementation would use the actual reward type and value
 		rewardXP := score / 10 * multiplier
 		rewardGP := score / 5 * multiplier
-		
+
 		if rewardXP > highestXP {
 			highestXP = rewardXP
 		}
@@ -583,14 +591,14 @@ func getHavocRewardForScore(score int32) (xp int32, gp int32) {
 			highestGP = rewardGP
 		}
 	}
-	
+
 	if highestXP == 0 {
 		highestXP = score / 10
 	}
 	if highestGP == 0 {
 		highestGP = score / 5
 	}
-	
+
 	return highestXP, highestGP
 }
 
@@ -603,27 +611,27 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 	if bossKills < 1 {
 		bossKills = 0
 	}
-	
+
 	// Calculate score using PvE scoring tables
 	killScore := calculatePvEKillScore()
 	wave := kills / 5 // Estimate wave based on kills
 	if wave < 1 {
 		wave = 1
 	}
-	
+
 	waveScore := int32(0)
 	if strings.Contains(gameMode, "Havoc") {
 		waveScore = calculateHavocWaveScore(wave)
 	} else {
 		waveScore = calculatePvEWaveScore(wave)
 	}
-	
-	totalScore := killScore * kills + waveScore
-	
+
+	totalScore := killScore*kills + waveScore
+
 	// Calculate rewards based on score
 	bonusXP := int32(0)
 	bonusGP := int32(0)
-	
+
 	if strings.Contains(gameMode, "Havoc") {
 		// Use Havoc reward tiers
 		bonusXP, bonusGP = getHavocRewardForScore(totalScore)
@@ -632,13 +640,13 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 		bonusXP = totalScore / 10
 		bonusGP = totalScore / 5
 	}
-	
+
 	// Add boss kill bonuses
 	if bossKills > 0 {
 		bonusXP += bossKills * 500
 		bonusGP += bossKills * 1000
 	}
-	
+
 	if bonusXP > 0 {
 		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, bonusXP, bonusXP/2, pid)
 	}
@@ -694,7 +702,7 @@ func CompletePvEWave(db *sql.DB, pid, gameMode string, wave, kills, bossKills, s
 	// K4: Calculate rewards using PvE scoring tables
 	rewardXP := int32(0)
 	rewardGP := int32(0)
-	
+
 	if strings.Contains(gameMode, "Havoc") {
 		// Use Havoc-specific scoring
 		waveScore := calculateHavocWaveScore(wave)
@@ -710,7 +718,7 @@ func CompletePvEWave(db *sql.DB, pid, gameMode string, wave, kills, bossKills, s
 		rewardXP = totalScore / 10
 		rewardGP = totalScore / 5
 	}
-	
+
 	// Add boss kill bonuses
 	if bossKills > 0 {
 		rewardXP += bossKills * 500
@@ -718,7 +726,7 @@ func CompletePvEWave(db *sql.DB, pid, gameMode string, wave, kills, bossKills, s
 	}
 
 	// Award rewards
-	_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, soft_currency=soft_currency+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, 
+	_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, soft_currency=soft_currency+?, free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`,
 		rewardXP, rewardGP, rewardXP/2, pid)
 }
 
