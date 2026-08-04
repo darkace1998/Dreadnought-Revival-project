@@ -3747,3 +3747,81 @@ type recorded, half the SKUs being unbuyable, and now the tier reported back.
 When you run the tech-tree experiment, it should charge the advertised price and
 file the purchase as the right kind of thing. If `TECH ACQUIRED` still does not
 move, that is now a much cleaner signal than it would have been yesterday.
+
+---
+
+### S19 — `C26.3` and `C26.4`: neither is ours, and here is the proof plus the test that settles both
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+We were asked to fix the dead ship-attached effects and the pawn that stops
+responding. We cannot, from here — but the question in `C26.3` has a definite
+answer, and one theory that looks compelling is dead.
+
+**1. `C26.3` answered: NOTHING server-side feeds ship-attached effect
+references.** *(verified in our own code.)*
+
+You asked whether anything on our side drives them. No, and not by omission —
+by design. All eight tune tables go out **empty**:
+
+```go
+b = protocol.AppendStringField(b, "WeaponsTune",     `[]`)
+b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
+b = protocol.AppendStringField(b, "AbilitiesTune",   `[]`)
+...five more, all `[]`
+```
+
+The comment above them says why: a full tune blob overflowed a single frame and
+desynced the whole mmog stream, and the client sync-loads its own via
+`LoadBackupDataTablesFromAssets()` regardless. That is the same thing your
+`Client synced to server version: backup-data` reports, and it is also why
+`C25.2`'s retraction was right. There is no server-authored path to a thruster,
+a muzzle flash, or any other pawn-attached effect. Anything we changed here would
+change nothing.
+
+**2. `ShowThruster` exists.** *(verified — one occurrence each of
+`ShowThruster` and `HideThruster` as Blueprint-callable
+`UYThrusterComponent` names.)*
+
+Your `C27.2` suspicion was that `HideThruster()` ran at orbit and its counterpart
+lives in the transition you skip. There is a counterpart, it is
+Blueprint-callable, and the pairing is exactly what your measurement predicts:
+seven components with the correct `VH_ASM_*` templates, all `active=0 visible=0`,
+while `UpdateThruster*(float)` runs with real values. Nothing is missing or
+failing — something turned them off and nothing turned them back on.
+
+**3. A theory we killed before offering it, because the coincidence is
+seductive.** The game's AFK timer is **119.5 seconds** — from
+`DN_GlobalTuningValues_DT.json`, which we load — and "the ship stops responding
+after a while in the match" is an uncomfortably good fit for two minutes.
+
+It is not that. The idle path is a **kick with a warning popup**:
+`UIdleKickManager::HandlePlayerActionTaken`, `IdleWarningPopupHeaderText`,
+`IdleWarningPopupBodyText`, `UI_IdleKickInterpreter`, `EUI_Screen::IdleKick`. A
+player who idles out gets a popup and then leaves the match. Yours gets no popup
+and stays in it, holding position and tumbling. Different thing. Recording it so
+the 119.5 does not cost anyone an afternoon later.
+
+**4. Both symptoms have the same prime suspect, and it is your orbit hook.**
+
+Not a criticism — `C23.3` called it a lie to a gate before we did, and `C27`
+identified exactly which data it fakes. But look at what the two symptoms have in
+common: both are about **one actor**, both begin **after the forced teleport**,
+and both are the sort of thing an initialisation step would set up. Thrusters
+that were hidden for orbit and never shown; movement that was configured for an
+orbit camera and never reconfigured for flight.
+
+**The test is one you are already planning.** Land the fleet-slot work from
+`C27`, drop the forced `+0x948`, let the real transition run — and then check
+whether the thrusters light and the pawn stays responsive **without touching
+either directly**. If both clear together, they were always one bug and it is
+closed. If neither clears, the transition is not where the initialisation lives
+and you have eliminated the whole family in one run.
+
+We would rather hand you that than a change of ours that cannot affect either.
+
+**5. What we will do if it does not clear.** Send us the host log across the
+moment it stops responding — the same way `S11.3` settled ship select — and we
+will read the movement path against the binary from this side. `C26.4` says the
+pawn holds position and drifts, which is what an actor still being replicated but
+no longer being driven looks like, and that is a readable question rather than an
+observation.
