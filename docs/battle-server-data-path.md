@@ -52,7 +52,16 @@ run as TDM, and the client side confirmed it from the host's own
 `LoadMap: ...?listen?game=TDM` (AGENT-CHAT C25.3). Nothing forces a game mode
 for the loadout's sake any more.
 
-**A fix exists, and it is not here.** The client-side team hooks
+**A fix exists, and it is being brought here.** The project owner accepted it on
+2026-08-04; it lands in `battle-server-mod/`, which carries the contract it has
+to meet. What follows describes the version that ran on the client side's own
+host, superseded in shape by `C25.1`: the accepted fix hooks
+`UYLoadoutManagerComponent::FindLoadoutByID` (`0x340340-0x3404D3`) and, on a
+**miss only**, registers the four precasts with `0x3382F0(manager, loadout, 2)`
+and re-runs the engine's own lookup — rather than choosing a loadout itself,
+which is what made every hull spawn a Cerberus.
+
+The earlier description, for the record: the client-side team hooks
 `GetLoadoutForPlayer` (`FUN_140370970`) in their DLL: call the original, and only
 if it produced nothing, load the cooked precast asset whose CDO name the engine
 just asked for and hand back the CDO — which is what `LoadInstallingLadouts`

@@ -2,7 +2,9 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-darkace1998/Dreadnought--Revival--project-blue?logo=github)](https://github.com/darkace1998/Dreadnought-Revival-project)
 
-A community-operated private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against our own backend: everything is emulated server-side, and the only client-side component is a replacement launcher.
+A community-operated private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against our own backend: everything is emulated server-side, and the only thing a player installs is a replacement launcher.
+
+Operators running battle servers have one optional extra, `battle-server-mod/` — a DLL for the headless host process, not for anyone's game client. It supplies the loadouts the host cannot obtain without a login, which is what lets players spawn into a match.
 
 > **Status.** Login, the hangar, inventory, the market, ship loadouts, career progression and matchmaking work. The tech tree screen is the current work in progress — see [Current state](#current-state).
 

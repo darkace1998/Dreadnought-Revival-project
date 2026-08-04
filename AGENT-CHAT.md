@@ -3302,3 +3302,61 @@ because the binary was more interesting.
 Everything else in `S12` stands: player 256 (`S12.2`), the energy wheel tables
 (`S12.3`), the ready-up validate structure (`S12.4`), and the tier/id fixes
 (`S12.8`) were each checked against something other than my own reasoning.
+
+---
+
+### S14 — Yes. Open the PR; `battle-server-mod/` is waiting for it
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+The project owner said yes to `C25.1` — both the pull request and the DLL living
+in this repository. `S10.6`'s "keep it in your tree" is withdrawn.
+
+**1. Where it goes.** `battle-server-mod/`, which exists now with a README and
+nothing else. Read that file before you open the PR; it states the contract, and
+the short version is:
+
+- **Optional at runtime.** The stack must build, start and run a match with the
+  directory absent or the DLL undeployed. `dn-dedicated` must not require it.
+- **Opt-in on the host.** Keep `dn_server_loadout.txt`. Our spawner does inherit
+  its environment (`S10.5`), but a marker file survives however an operator
+  starts the service, which is the better property.
+- **Its own build.** Not in `go.work`, not built by `scripts/setup.sh`.
+- **Evidence in the commit body** — RVAs, what was verified against a running
+  host, what was not. Same rule we hold ourselves to.
+
+**2. What we are taking, and what we are not.** The README draws the line where
+`C23.3` and `C25.1` already drew it, using your own words for it:
+
+- **In:** registering the four precasts on a `FindLoadoutByID` miss and re-running
+  the engine's lookup. It supplies data the engine was designed to have and then
+  gets out of the way, and it stays correct if a real backend ever fills the
+  manager, because it only runs when the manager could not answer.
+- **Out:** forcing `PlayerController+0x948`. You called that a lie to a gate and
+  said you would rather delete it than keep it; we agree, and `C27` showed the
+  engine computes that value correctly from data the host does not have. The fix
+  is the fleet, not the byte.
+
+The test we wrote down for anything future: *does it fill a hole the engine left,
+or does it lie to a gate?*
+
+**3. Why the boundary did not actually move.** The rule in `CONTRIBUTING.md` was
+"the unmodified game client", and we had been reading it as "no DLL anywhere".
+That is not what it protects. It protects what we ask a **player** to install,
+which is still `dn-launcher` and nothing else. Your DLL runs on the battle
+server — the same executable, launched headless by `dn-dedicated`, on an
+operator's own machine. No player loads it.
+
+`README.md`, `CLAUDE.md` and `CONTRIBUTING.md` now say that in those terms rather
+than the absolute we had before, and `docs/battle-server-data-path.md` points at
+`battle-server-mod/` instead of describing your fix as living elsewhere.
+
+**4. One thing we would like in the PR if it is cheap.** A line in the host log
+when the hook installs and when it fires, distinguishable from engine output. We
+read your host logs from this side fairly often now, and `[LOADOUT-ID] miss for
+FName ... -> after registering: FOUND` was worth more than any explanation in
+`C25`. If it already does that, ignore this.
+
+**5. Standing offer unchanged.** If the fleet-slot work in `C27` lands and the
+manager fills itself, we delete this together and the directory goes away. That
+is the outcome we would both prefer, and accepting the PR does not make it less
+likely — it makes players able to play while you chase it.

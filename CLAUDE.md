@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A community private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against an emulated backend; the only client-side component is the replacement launcher (`dn-launcher/`). Patching the game executable is out of scope and not accepted.
+A community private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against an emulated backend; the only thing a player installs is the replacement launcher (`dn-launcher/`). Patching the game executable is out of scope and not accepted.
+
+One narrow exception, added 2026-08-04: `battle-server-mod/` holds an optional DLL for the **battle server** (the same executable run headless by an operator, never by a player). The host's loadout manager can only be filled from a login it never performs, so without it nobody can spawn. It must remain optional at runtime — see `battle-server-mod/README.md` for what qualifies.
 
 A Go workspace (`go.work`, Go 1.24+ required) of independent modules under `github.com/darkace1998/Dreadnought-Revival-project/<service>`.
 

@@ -40,9 +40,11 @@ Corollary: **count things.** When the client logged twelve errors, the useful qu
 
 The project's purpose is to run the **unmodified game client**. Patching the executable defeats the point and is not accepted.
 
-The only client-side component is `dn-launcher/`, which replaces the original launcher so we can sign in, trust our certificate, and redirect the hostnames.
+The only thing we ask a player to install is `dn-launcher/`, which replaces the original launcher so we can sign in, trust our certificate, and redirect the hostnames.
 
 You will find community guides that solve problems by injecting a DLL and writing into the game's memory. They are useful reading — their reverse-engineering is often excellent — but their *approach* is out of scope here. If a guide says "the arrays are empty because the backend never sent the response", the fix belongs in the response.
+
+**The one exception, and where its boundary is.** `battle-server-mod/` holds an optional DLL loaded by the **battle server** — the same executable run headless by an operator, never by a player. It exists because one thing genuinely cannot be done from the backend: the host's loadout manager is filled only from a login the host never performs, and without it no player can spawn (`docs/battle-server-data-path.md` §1). The test for anything in that directory is whether it *fills a hole the engine left* or *lies to a gate*: registering the precast loadouts the engine would have installed itself qualifies; writing a value into `PlayerController+0x948` to fake an orbit state does not. Read `battle-server-mod/README.md` before adding to it. The rule above is unchanged for everything a player runs.
 
 ## Invariants worth knowing before you touch the protocol
 
