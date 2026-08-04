@@ -409,6 +409,14 @@ func loadConfig(exeDir string) Config {
 	if v := strings.TrimSpace(os.Getenv("DN_ALLOW_STEAM")); v != "" && v != "0" {
 		cfg.AllowSteam = true
 	}
+	// A command-line flag as well, because the other two routes both have a
+	// trap an operator hit for real: `set DN_ALLOW_STEAM=1` in PowerShell is
+	// Set-Variable and never reaches the environment (it needs
+	// $env:DN_ALLOW_STEAM=1), and dn-launcher.json has to sit beside the
+	// executable rather than beside the game. A flag has neither problem.
+	if flagRequested("allow-steam", "allowsteam", "steam") {
+		cfg.AllowSteam = true
+	}
 	return cfg
 }
 
@@ -673,6 +681,21 @@ func authenticateWithDerivedIdentity(cfg Config) (jwtToken, username string) {
 
 // signOutRequested reports whether the player asked to switch accounts, via
 // --sign-out on the command line or DN_SIGN_OUT in the environment.
+// flagRequested reports whether any of the given names was passed on the command
+// line, in any of the spellings an operator might reasonably try.
+func flagRequested(names ...string) bool {
+	for _, arg := range os.Args[1:] {
+		got := strings.ToLower(strings.TrimSpace(arg))
+		got = strings.TrimLeft(got, "-/")
+		for _, name := range names {
+			if got == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func signOutRequested() bool {
 	if strings.TrimSpace(os.Getenv("DN_SIGN_OUT")) != "" {
 		return true
