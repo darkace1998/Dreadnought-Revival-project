@@ -2855,3 +2855,129 @@ The most recent host log shows one spawn each for players 256 and 257, rather
 than two for 257 and none for 256. That would mean both players now get a ship
 and the orphan is gone. We are not claiming it: it is a single run of a mode we
 have not tested before, and `C24.1` stands until we check it properly in TDM.
+
+---
+
+## C26 — retracting C24.1. The duplicate ship was ours, but not for the reason we gave you.
+
+**1. `C24.1` was wrong. The second motionless ship is not an orphaned orbit
+pawn.** *(verified.)*
+
+We told you it was the ship-select pawn, left behind because our forced orbit
+teleport skips whatever disposes of it, and we said it was "a direct cost of our
+fix". We were confident and we were wrong. Twice, actually — a second theory
+that it was flying out of an unloaded `MP_Highlands_INTRO` streaming level is
+also dead, disproved below.
+
+What it actually is: **a listen server holds a player slot of its own.** In a
+live match the human is player 257 and the host's own local player is 256. From
+one match, in order:
+
+```
+257  [LOADOUT-ID] miss for FName 0x21F0F -> after registering: FOUND
+     SpawnDefaultPawn | Spawning a pawn for player 257     <- the human
+
+256  [SPAWN] no loadout from engine
+     [SPAWN] host fallback: chosen=... (arbitrary default, choice was lost)
+     SpawnDefaultPawn | Spawning a pawn for player 256     <- the phantom
+```
+
+Player 256 has no human, no player record, and no choice to lose. Our fallback
+handed it a ship anyway, and it looked like a clone of the human's ship only
+because the first entry in our precast array is the Assault Medium — the same
+hull the player happened to pick.
+
+**So we created it.** Before any of the loadout work, 256 simply failed to spawn.
+That was correct behaviour and we broke it.
+
+Fixed by removing the invented default rather than adding anything:
+`m_activeLoadout` is still honoured, but a player with nothing to fly no longer
+gets a ship pressed on it. Real players never reach that branch any more, which
+is the tell we should have noticed earlier — 257 logs `FOUND` and never appears
+in the fallback at all. `DN_HOST_DEFAULT_LOADOUT=1` restores the old behaviour.
+
+**Question for you, and it is the one that matters:** should player 256 exist at
+all? We do not know whether that slot is something `game-manager` creates, or
+just what `?listen` gives you for free. If a battle server is not supposed to
+have a local player, that is a cleaner place to fix this than our end.
+
+**2. Two hypotheses of ours died this session. Recording both so nobody spends
+time on them again.**
+
+*The pawn is in a dead streaming level.* We built a probe for this because the
+host timeline looked damning — the human's pawn spawns at ship-select time, only
+256 gets a pawn after the teleport, and `MP_Highlands_INTRO`/`INTRO02` are
+deactivated two seconds later, while the client logs
+`AYLevelScriptActor::CallOnPlayerSpawned: Pawn does not belong to a world`. The
+probe says otherwise:
+
+```
+[ORBIT-PAWN] BEFORE player=... pawn=... VH_AssaultM_Pawn_T1_BP_C
+             MP_Highlands_P.MP_Highlands_P.PersistentLevel.VH_AssaultM_Pawn_T1_BP_C_1
+[ORBIT-PAWN] AFTER  player=... pawn=...   (identical)
+```
+
+`PersistentLevel`, which is never unloaded. The teleport also does not replace
+the pawn, and the other player reads `pawn=NULL` both before and after — so the
+spawn ordering that looked meaningful was not. The client-side "does not belong
+to a world" is about the client's replicated copy at that instant, since the
+server's pawn is demonstrably fine.
+
+*The client has no weapons.* Also dead. Probing
+`AYPlayerController::UpdateWeaponSettings` (verified primary `0x5A4600`; the
+`Invalid active weapon` literal lives in its **cold chunk**, so that log line
+never proved the function ran) gives:
+
+```
+[WEAPON] activeIndex=0 count=0 arr=NULL   <- at spawn, this is what logs the error
+[WEAPON] activeIndex=1 count=2 arr=...    <- later
+[WEAPON] activeIndex=0 count=2 arr=...
+```
+
+The weapons do reach the client. The error is a transient at spawn, not a state.
+
+One useful by-product: the hull class is confirmed end to end as
+`VH_AssaultM_Pawn_T1_BP_C`, which is the hull the player chose. The `C25` ship
+selection fix holds up under a second run.
+
+**3. The VFX problem is now much sharper, and it is not a VFX problem.**
+*(verified by eye.)*
+
+The player sees **impact effects where their shots land**, but no muzzle flashes
+and no thruster trails. All three come from the same weapon system, so this is
+not about weapons, assets, scalability or the particle system:
+
+- impacts are spawned at a world location
+- muzzle flashes and thruster trails are **attached to the ship**
+
+**World-spawned effects work. Pawn-attached effects do not.** Nothing errors —
+`UGameplayStatics::SpawnEmitterAttached: NULL AttachComponent specified!` never
+appears once in a full session, so attachment is not failing loudly either.
+
+Also ruled out this session: `DN.MuzzleEffectsCullDistance` forced to 1000000 via
+`[SystemSettings]` changed nothing (reverted), and the client's own energy was at
+55, not 0, which killed a theory that thrust was starved of power.
+
+If you know of anything server-side that feeds ship-attached effect references —
+as opposed to the effect assets themselves, which are clearly present and
+working — that would be the fastest way to close this.
+
+**4. A related symptom we cannot yet place.** *(verified by eye.)*
+
+After a while in the match the player's ship stops responding: it holds position,
+drifts slowly downward, and tumbles. Their words: *"the movement itself is laggy,
+but the game is not"* — full framerate, one broken actor. That reads as transform
+desync on that pawn specifically. It may share a cause with the attached-effects
+failure, since both are about that one actor rather than the world; we are not
+claiming they do.
+
+**5. Questions, since you asked us to flag what we need.**
+
+1. Should a battle server have a local player at all (the 256 above)?
+2. Is anything expected to populate a match with opponents or bots yet? `C25.6`
+   reported empty matches and we still do not know whether that is unimplemented
+   or broken.
+3. Does anything server-side drive `UI/DN_EnergyWheelSelection_DT.json`? The
+   energy wheel still does not open, and our probe on the HUD selection path
+   (`0x551010`) never fired at all — though that function may only run on a
+   selection *change*, so it does not prove the input never arrived.
