@@ -2981,3 +2981,106 @@ claiming they do.
    energy wheel still does not open, and our probe on the HUD selection path
    (`0x551010`) never fired at all — though that function may only run on a
    selection *change*, so it does not prove the input never arrived.
+
+---
+
+## C27 — the orbit flag is DERIVED from the fleet slots. Our forced value was covering an empty fleet, and we can now show what that costs.
+
+**1. The in-orbit flag is not a flag we failed to find being set. It is a value
+the engine computes correctly from data the host does not have.** *(verified by
+disassembly, and it explains `C23`.)*
+
+`PlayerController+0x948` is **`EYOrbitReadyState`** — `EYORS_Orbit_NotReady = 0`,
+`EYORS_Orbit_Ready = 1` — not a bool. It sits inside `AYPlayerControllerBase`'s
+unnamed `UnknownData_HQUM[0x18]` gap (`0x940..0x958`), so it is a plain native
+member: never replicated, never in Blueprint, absent from any generated SDK.
+`m_fleetManager` at `0x958` pins the surrounding offsets.
+
+The chain, all verified:
+
+| RVA | What it is |
+| --- | --- |
+| `0x5C2820` | `SetInOrbit(pc, value)` — a 7-byte **leaf**: `mov byte [rcx+0x948], dl / ret`. Its `NO UNWIND RECORD` is the legitimate leaf case, not padding. |
+| `0x4D4277` | call site, **cold chunk** of `0x4D39B0` (3 hops) |
+| `0x545D02` | call site, **cold chunk** of `0x545500` (1 hop) |
+| `0x346C20` | supplies the value. `movsxd rdx,[rcx+0x38]` — the fleet slot **count**; `test edx,edx` → **count 0 returns 0**; otherwise walks the slots at `[rcx+0x30]`, stride `0x50` |
+
+Both call sites additionally guard on `[rax+0x958]` (`m_fleetManager`) being
+non-null and skip `SetInOrbit` entirely when it is null.
+
+So:
+
+```
+fleet slots empty -> 0x346C20 returns 0 -> SetInOrbit(pc, 0)
+                  -> the gate at 0x3D9303 refuses the teleport
+```
+
+Our own host logs have said `fleetSlots=0` this whole time. **The engine was
+computing the flag correctly.** `C23` described our `= 1` as "a lie to a gate
+whose backing data does not exist", and that turns out to be exactly right for a
+more specific reason than we knew: the backing data is the fleet slot array. (The
+value 1 is, coincidentally, the correct enum member.)
+
+**This makes the orbit gate the same root cause as the empty loadout manager**,
+not a separate bug — which means the honest fix is to populate the host's fleet
+slots, exactly as we populated the loadout manager in `C25`. After that,
+`SetInOrbit` runs on its own and everything the real transition initialises runs
+with it. That is what we intend to try next, and it would let us delete the
+`0x3D92A0` hook rather than keep it.
+
+**2. What the lie costs, measured.** *(verified at runtime.)*
+
+The player's ship has no thruster or muzzle effects. We can now show that
+nothing is missing and nothing is failing — it is simply never switched on:
+
+```
+[PSC]    ParticleSystemComponent_3  template=VH_ASM_ThrustersBack01_PS   active=0 visible=0
+         ... 7 of these, all correct VH_ASM_* assets for the chosen hull ...
+[THRUST] m_thruster=7  displayInfos=7
+[THRUST]   thruster[3] m_oldVal=1.000   thruster[6] m_oldVal=-1.000
+[MOVE]   steering=1.000 turnRight=100.000 ... later throttle=0.277
+```
+
+So: input reaches the vehicle, `UpdateThruster*(float)` runs with real values,
+all seven thrusters are registered with the correct particle assets — and every
+component stays `active=0 visible=0`, sampled while the player was actively
+flying.
+
+Leading explanation, stated as a suspicion: `UYThrusterComponent::HideThruster()`
+runs when the ship is placed in orbit, and its counterpart lives in the
+transition we skip by forcing the flag. If populating the fleet slots lets the
+real transition run, this should fix itself — which would also make it the
+second symptom we have traced back to the same missing player record.
+
+**3. Corrections to our own earlier reporting.**
+
+- `C24.2` (tune tables) was already retracted in `C26`. Also now dead:
+  scalability, particle asset loading, `DN.MuzzleEffectsCullDistance`, energy
+  starvation (the player's energy read 55, not 0), and the entire
+  `SpawnEmitterAttached` path — that function is called **twice** in a whole
+  session, both times for the warp gate, both with valid arguments. Ship effects
+  do not use it.
+- The `ServerReadyForJoining` line in the host log is the initial join
+  handshake (`bFirstOrbitSpawn = 1`), **not** the ship-select ready toggle. We
+  briefly read it as evidence the toggle was accepted. It is not evidence either
+  way.
+
+**4. On your Discord note about the ready-state gate.** The toggle RPC is
+`ServerPlayerReadyUpForMatch`, and it has a `ServerPlayerReadyUpForMatch_Validate`.
+A failing `_Validate` discards the call silently — no log, while the client UI
+still shows "ready" — which matches what we see: the timer runs to zero with the
+player readied. **Which comparison does that gate perform?** If it checks the
+loadout *id* we are fine, because the engine resolves the player's own id since
+`C25`. If it compares the loadout object or its contents, our precast **CDO**
+substitution could fail it, and that would be a latent fault sitting underneath
+our fix. Knowing which would tell us whether to change our approach.
+
+We have not confirmed the gate is what you are seeing, incidentally — the other
+candidate is that the match simply will not start early while the listen
+server's own local player (the 256 from `C26`) never readies up.
+
+**5. Tier 1 ships displaying wrong** — we have this on our list. Before either of
+us re-derives it: we previously found `ItemIDConversionTable` holds **old** ship
+names and produced four wrong hulls, and that the live `CachedItemData` (or
+Snib's 2022 datamine) is the correct source. If that is the same table you are
+reading from, that may be the whole answer.
