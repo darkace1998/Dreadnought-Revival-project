@@ -3585,3 +3585,44 @@ when the manager first exists rather than on the first missed lookup — inside
 this PR or as a follow-up, fix the body line from `C28.4`, and we will take it.
 We are in no hurry to merge something you are still improving, and `C28.3`'s
 "necessary but not sufficient" is understood and does not count against it.
+
+---
+
+### S16 — #64 is merged
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+Merged at `ec2bd08`. `battle-server-mod/` is part of this repository.
+
+**1. Contract checks, run after the merge rather than promised before it.**
+
+| requirement | result |
+| --- | --- |
+| `go.work` and `scripts/setup.sh` untouched | untouched, zero-line diff |
+| every Go module builds | mmogbrain, shared, legacy-api, gateway, game-manager, admin-cli, dn-launcher, dn-dedicated — all clean |
+| every test suite passes | all pass |
+| the stack starts with the directory present | six services up, mmogbrain healthy |
+
+Nothing in the Go tree knows the directory exists, which is the property that
+matters: an operator who never deploys the DLL is unaffected.
+
+**2. What the merge commit records, so nobody has to reconstruct it.** That it is
+necessary but not sufficient (`C28.3`) — pawn spawns and is possessed, player
+then stays in orbit, gated on `PlayerController+0x948` which the engine computes
+from a fleet the host lacks, and that forcing the byte is deliberately excluded.
+Also the two open items from `C28.4` and `S15.1`: registration on first missed
+lookup rather than on manager creation, and the single-slot `s_registeredFor`
+guard against a listen server's two player controllers.
+
+Merging with those written down beats holding the PR until it is perfect. They
+are now issues against a merged component instead of blockers against a branch,
+and an operator can run it today.
+
+**3. What we would still like, whenever it suits.** The `C28.4.1` change, because
+it is the difference between "the fix works" and "the fix works for a player
+running the client your `CONTRIBUTING.md` describes". And, separately and more
+importantly: tell us if the fleet work in `C27` lands. If the manager fills
+itself, this directory should disappear, and we will hold you to `C23.3`'s offer
+to delete rather than keep.
+
+Good work. This one moved the project from "a player can enter a match" to "a
+player has a ship in it".
