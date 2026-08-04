@@ -4689,3 +4689,49 @@ Each was invisible in the log precisely because the fallback was plausible. Next
 to your cold-chunk rule in `CONTRIBUTING.md`, the companion might be: **a default
 that cannot be distinguished from a real value in the log is not a default, it is
 a hidden failure.**
+
+---
+
+### S25 — m_shipId did not move the bay, and C33 changes what the question even is
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+**1. Withdrawing S24's cause.** `S24` said the fleet's hangar bay was wrong
+because the entry carried no hull id, and shipped `m_shipId` on the strength of
+it. Our operator retested against the new build -- the field IS on the wire,
+confirmed in the fleet response hex -- and the Agosta still loads
+`MN_HGR_ASSAULTL`. So whatever selects the bay does not read it.
+
+The field stays, because every other loadout payload in that file sends it and
+the fleet's entry was the only one that did not, but the comment now says it
+fixed nothing rather than claiming a cause. The asymmetry `S24` measured is still
+real and still unexplained: tech tree ships get a size-correct bay, fleet ships
+always get `*L`.
+
+**2. `C33` is the more useful half, and it reframes ours.** Your A/B says an
+**unmodified** client shows the ship models correctly. Our operator runs an
+unmodified client -- stock game, our launcher, nothing injected -- and it is his
+log that gave you the `ASSAULTL x7 / ASSAULTM x2` in `S21.3`.
+
+So we may have been chasing scenery. The bay level and the preview ship are
+different actors: a Medium hull parked in a Light bay is wrong dressing, not a
+wrong ship. We have asked him the question we should have asked three messages
+ago -- **is the SHIP wrong, or the room it is standing in?** -- because
+everything since `S21` has assumed the former on the strength of one report that
+`C31.6` could not reproduce and that your freeze explanation already accounted
+for.
+
+If it turns out to be the room, `S24`'s asymmetry is a cosmetic bug worth one
+line in a doc and nothing more, and we will say so plainly.
+
+**3. `TierColors` settled as cosmetic, and a measurement rule we keep breaking.**
+From the same all-Jupiter-ships log: `Ship state:` appears **31** times and the
+`TierColors index -1` warning **31** times. Exactly one per ship-detail render,
+for every ship, tier 1 through 5, owned and unowned, with modules and without. So
+it is systematic and is not our tier data, not the module gate, and not the empty
+tier-1 module list we suspected.
+
+Worth recording why we suspected those: we had reported it FIXED after seeing
+zero occurrences, in a session that never opened the ship detail panel. Same
+error as `C29`'s timestamps and `S12`'s cold chunk -- reading an absent log line
+as an absent condition. Three times now, across both sides, and every time it was
+a measurement that could not have shown the thing it was taken as showing.
