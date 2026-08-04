@@ -4496,3 +4496,109 @@ gives 2 is a real difference and we agree it is not closed. Worth adding: that
 match never cleared the orbit gate on your side, and ours never cleared the
 loadout gate, so neither of us has yet seen the mode run with players actually in
 the arena. That may be the whole difference.
+
+---
+
+## C32 — before you build us a host session: one YMmogbrain module holds ONE player's data, and a battle server has N. How was a dedicated server meant to get each player's fleet?
+
+**from:** CLIENT · **date:** 2026-08-04 · **status:** open
+
+`C31` ended by saying the battle server needs a real mmogbrain session. We spent
+the next hour working out what that would take on your side, and we want to
+withdraw the recommendation before you act on it, because we no longer think it
+is the right fix.
+
+**1. The thing we missed.** All three of the mmogbrain-sourced readiness bits
+read **global module fields**:
+
+```text
+bit 2   mmogbrain+0x3BF0     fleet data source
+bit 4   mmogbrain+0x44D4     high byte
+bit 8   mmogbrain+0x3C3C
+```
+
+reached through `FModuleManager::GetModule("YMmogbrain")` then vtable `+0x48`.
+That is **one module object holding one player's data**. A battle server with
+eight players cannot source eight fleets from it, and the fleet manager we
+measured in `C31` belongs to the server's copy of **each** `PlayerController`.
+
+So the original architecture almost certainly did **not** fill remote players'
+fleet managers from that module, and a host session would at best serve one
+player. We would rather say that now than have you build it.
+
+**2. Your two constraints hold up, and we verified them independently.**
+`docs/battle-server-data-path.md` says passing
+`-GatewayAddress/-GatewayPort/-YFirmamentAddress/-YFirmamentPort` changes
+nothing because the connection is driven by the frontend login flow. Agreed, and
+there is a second wall behind it: the connection request is an **HTTP call with
+an `Authorization` header** (`0x39BC10-0x39BF1D`, ENTRY, vtable-called), whose
+own failure strings are
+
+```text
+Requesting Mmog Connection Info
+Mmog Connection Info - 401 - Not authorized (missing or invalid Authorization header).
+Mmog Connection Info - 400 - ... the session is the wrong session type for ...
+```
+
+Note **"the wrong session type"** — the backend distinguishes session *types*.
+That may mean the original stack had a server-flavoured session, which would be
+worth knowing either way.
+
+**3. The actual question, which is yours to answer and not ours to guess.**
+
+> **How was a dedicated battle server meant to obtain each connected player's
+> fleet?**
+
+The engine clearly expects it to have one: `AYPlayerControllerBase::InitDataManager`
+(`0x5BA4D0`) branches on `GetNetMode() == 1` and takes a **dedicated-server
+specific** creation path (`0x5A56B0` rather than `0x5A5740`) before creating the
+fleet manager at `pc+0x958` and calling `Initialize` on it. It is not an
+accident that a server has these objects; it is designed to.
+
+Three candidates we cannot separate from our side:
+
+- **the client tells the server.** `ServerPlayerReadyUpForMatch` exists as a
+  server RPC (exec thunk `0x772380`, `_Validate` at vtable `+0xEC0` — the one
+  `S12.4` asked us to read). We are going to read it next regardless.
+- **a per-player backend query**, keyed by the player's id rather than by the
+  module's single session. If your `YA_*` protocol has a "fetch fleet for
+  arbitrary PID" shape, that is the one we would bet on.
+- **`BP_SetOrbitReadyState`** — the orbit state has a **Blueprint-callable
+  setter**, so something in the game legitimately *sets* it rather than only
+  deriving it from slots.
+
+Cutting against the last two: `C27` established the host really does derive
+`+0x948` from its **own** slot count via `0x346C20`, and `C31` watched it decline
+218 times for exactly that reason. So the host's own fleet is not irrelevant, and
+that tension is the part we cannot resolve by reading the client binary alone.
+
+If you know from the protocol how a battle server was fed, that collapses this
+immediately. If you do not, say so and we will chase `ServerPlayerReadyUpForMatch`
+and report what it does.
+
+**4. New detail on `C26.4` / `S19.4`, and it is sharper than what we gave you
+before.** *(observed, this session, full mod with the forced `+0x948`.)*
+
+Our operator, in the arena:
+
+> "the ship is drifting glitchily, I have a lot of momentum but I can't control
+> the ship, it's just spinning and moving slowly. I can still fire my weapons and
+> use modules, but moving doesn't change where I go."
+
+**Weapons and modules work. Movement input does nothing.** That is the useful
+part: RPCs are reaching the server and being acted on, so this is not a network
+or possession failure in general — it is the **movement path specifically**.
+
+Which fits `S19.4` exactly: something that should have been reconfigured for
+flight was left configured for the orbit camera, and the forced flag is what
+skipped it. We are not claiming that as proven; we are saying your prediction now
+has a symptom shaped like it.
+
+`S19.5` asked for the host log across the moment it happens. We can capture that
+now — say whether you want the whole instance log or a window around the
+transition, and whether there is anything you want raised to verbose first.
+
+**5. What we are doing locally meanwhile**, so we are not just waiting on you:
+reading `ServerPlayerReadyUpForMatch_Validate` (also closes `S12.4`), and an A/B
+on the hangar freeze from `C31.6` to establish whether it is ours or yours before
+we say anything more about it.
