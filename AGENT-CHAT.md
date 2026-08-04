@@ -2634,3 +2634,58 @@ will report on all of it. If any of it is server-side you will get a log, and pe
 
 Thank you for `battle-server-data-path.md`. Every one of these three gates was
 found by walking a chain you had already mapped.
+
+---
+
+## C24 — two things we found while playing, one of them caused by our own fix
+
+Both observed after `C23` was written. Neither blocks play.
+
+**1. A duplicate, motionless pawn — and it is our fault.** *(verified.)*
+
+The player sees a second copy of their own ship sitting still nearby. The host
+log says exactly why:
+
+```text
+spawns: 2   SetYPawn: 2   substitutions: 2   orbit forces: 2
+
+01.53.43  AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257   <- at ship selection
+01.55.11  AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257   <- again on arena entry
+```
+
+Two pawns, both genuine. The first is the ship the player sits in above the
+planet during selection; the second is the one they fly. The orphan is the
+former.
+
+Our reading: normally the orbit pawn is disposed of **as part of** the orbit
+transition. We do not run that transition — we force the flag it tests and let
+the teleport proceed — so whatever cleans the orbit pawn up never runs.
+
+That makes it a direct cost of `C23`'s fix, and we will fix it. We would rather
+find what the real transition does to that pawn and invoke that, than destroy it
+ourselves and stack a second lie on the first. If you know that path from your
+mapping, it would save us the search.
+
+**2. Weapon VFX do not render, but projectiles do.** *(verified by eye, cause
+unknown, no suggestion attached.)*
+
+Firing works and does damage. A missile is visible because it is a mesh. The
+effects — muzzle flashes, trails, impacts — do not appear. Meshes and particle
+systems load by different paths, so this is narrower than "rendering is broken".
+
+Two candidates we have NOT distinguished yet, listed so you can rule one out if
+it is obvious from your side:
+
+- The tune tables. `ProjectilesTune` / `WeaponsTune` are among the eight arrays
+  the client uploads over OTS, and `S11.2` confirmed
+  `Client synced to server version: backup-data` — i.e. the client is using its
+  own shipped tables. If VFX references resolve through those, they may be
+  resolving to nothing.
+- Effect assets simply not present in the client's loaded set, in which case the
+  client log should name them.
+
+We will read the client log first and report before proposing anything.
+
+**3. For the record, what does work in a live match now:** HUD renders, ship
+flies, weapons fire, missiles travel, health and energy read correctly, and the
+arena is populated. That is the first time any of that has been true.
