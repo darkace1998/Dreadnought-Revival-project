@@ -2225,7 +2225,19 @@ type slotVariant struct {
 //	                  ^class   ^size      ^line
 var (
 	techTreeAbilityAsset = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/T(\d+)/`)
-	techTreeWeaponAsset  = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
+	// The same line, but at the PREVIOUS build's tier-less path. ItemIDRegister
+	// points a number of ability ids at these -- every Tier 5 hull's four fitted
+	// abilities among them, e.g.
+	// /Abilities/Assault/Pri_Missile_Repeater/AB_AS_Pri_Missile_Repeater_Abi_BP
+	// -- and the tiered pattern above cannot see them. That made a Tier 5 hull's
+	// fitted abilities unknown to the slot index, so the ship resolved to no
+	// group and was offered no ability alternatives at all: two modules in its
+	// whole tech tree, all of them weapons.
+	//
+	// Exactly the trap that gave three hulls the wrong tier and the wrong id
+	// (CanonicalPrecastLoadoutID); the register describes an older build.
+	techTreeAbilityAssetUntiered = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/[A-Za-z0-9_]+$`)
+	techTreeWeaponAsset          = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
 )
 
 // techTreeSlotGroup indexes every registered slot asset by family group, then
@@ -2278,6 +2290,23 @@ func techTreeBuildSlotIndex() {
 					continue
 				}
 				add(m[1]+"/"+m[2], m[3], int32(tier), entry.ItemID)
+				continue
+			}
+			if m := techTreeAbilityAssetUntiered.FindStringSubmatch(entry.Path); m != nil && category == 4 {
+				// Group and line only. The tier is NOT recorded and the item is
+				// NOT added to the line's tier chain, because this path does not
+				// state one and guessing would put an unknown-tier module in
+				// front of a player. Indexing the key is enough for the ship
+				// that fits it to find its sibling lines, which is what was
+				// missing.
+				key := techTreeSlotKey{group: m[1] + "/" + m[2], line: m[3]}
+				if _, known := techTreeSlotOf[entry.ItemID]; !known {
+					techTreeSlotOf[entry.ItemID] = key
+					if techTreeSlotIndex[key] == nil {
+						techTreeSlotIndex[key] = map[int32]int32{}
+						techTreeSlotLines[key.group] = append(techTreeSlotLines[key.group], key.line)
+					}
+				}
 				continue
 			}
 			if m := techTreeWeaponAsset.FindStringSubmatch(entry.Path); m != nil {
@@ -2343,11 +2372,27 @@ func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 	// loadout twice -- and the equipped LINE is excluded entirely, because a
 	// module's tier is not a separate node.
 	//
-	// Alternatives are deliberately not tier-gated: the sibling lines mostly
-	// have no low-tier variant (Assault's Pri group has Missile_Super at T0,
-	// but Ram_Dmg and Torpedo_Ultra start at T2 and four more exist only at
-	// T5), so capping them at the hull's tier left the tier-1 starters with
-	// nothing to research at all. The XP cost does the gating.
+	// Each line contributes the variant nearest the hull's tier FROM BELOW, and
+	// a line whose lowest variant is above the hull contributes nothing.
+	//
+	// This used to take the lowest variant of every line regardless of tier, on
+	// the reasoning that most Assault sibling lines have no low-tier variant and
+	// gating "left the tier-1 starters with nothing to research at all". The
+	// cost of that was reported from a live client: the Tier 1 Agosta's tech
+	// tree offered Tier 5 modules -- Blast Ram, Missile Repeater, Flashpoint
+	// Torpedo Salvo -- which is what "the module tech tree shows the wrong
+	// modules for each ship" means.
+	//
+	// The earlier observation was right about the data and wrong about which
+	// answer is worse. Measured over every hull: a Tier 1 hull has 0-2 of ~26
+	// sibling lines available at or below its tier, a Tier 3 hull has 13-17 of
+	// ~25. So a sparse Tier 1 tree is what the game's own assets say, and
+	// showing a starter ship a Tier 5 module to fill the space is inventing an
+	// upgrade path that does not exist. There is no authority to appeal to here
+	// -- the tech tree is composed entirely server-side
+	// (HandleTechTreeDataReceived; no shipped table) -- so this is a judgement,
+	// and DN_TECHTREE_UNGATED=1 restores the old behaviour for comparison.
+	ungated := os.Getenv("DN_TECHTREE_UNGATED") == "1"
 	var out []slotVariant
 	for _, line := range techTreeSlotLines[key.group] {
 		if line == key.line {
@@ -2356,7 +2401,11 @@ func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 		sibling := techTreeSlotKey{group: key.group, line: line}
 		best, bestTier := int32(0), int32(-1)
 		for tier, id := range techTreeSlotIndex[sibling] {
-			if bestTier < 0 || tier < bestTier {
+			if !ungated && tier > hullTier {
+				continue
+			}
+			// Nearest from below when gated; lowest overall when not.
+			if bestTier < 0 || (ungated && tier < bestTier) || (!ungated && tier > bestTier) {
 				best, bestTier = id, tier
 			}
 		}

@@ -322,12 +322,24 @@ func TestTechTreeModulesAreAlternativesOnly(t *testing.T) {
 		}
 	}
 
-	// A tier-1 hull must still get alternatives -- gating them by hull tier left
-	// the starter ships with nothing to research, because the sibling lines
-	// mostly have no T0/T1 variant.
+	// ASSERTION CHANGED 2026-08-04, and the reason matters. This used to require
+	// a tier-1 hull to get at least four alternatives, on the reasoning that
+	// gating by hull tier "left the starter ships with nothing to research".
+	// That is true, and it is the correct answer: measured across the assets, a
+	// tier-1 hull has 0-2 of ~26 sibling lines available at or below its tier,
+	// because the Assault, Dreadnought and Support lines have no variant below
+	// tier 2. Filling the gap with the lines' lowest variants is what put Tier 5
+	// modules -- Blast Ram, Missile Repeater -- in the Tier 1 Agosta's tech
+	// tree, reported from a live client as "the module tech tree shows the wrong
+	// modules for each ship".
+	//
+	// So a starter hull may legitimately offer none. What must still hold is
+	// that whatever IS offered is a real alternative of the right category.
 	starter := techTreeSlotUpgrades(agosta.abilities[0], agosta.tier)
-	if len(starter) < 4 {
-		t.Errorf("Agosta (tier 1) ability slot offers only %d alternatives: %+v", len(starter), starter)
+	for _, v := range starter {
+		if v.tier > agosta.tier {
+			t.Errorf("Agosta (tier 1) is offered a tier %d module (%d)", v.tier, v.itemID)
+		}
 	}
 	for _, v := range starter {
 		if v.itemID == agosta.abilities[0] {

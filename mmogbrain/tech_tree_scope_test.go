@@ -33,16 +33,24 @@ func TestTechTreeIsSharedWithinAClassAndNotAcrossClasses(t *testing.T) {
 		}
 		return out
 	}
-	rurik, furia, agosta := ids("Rurik"), ids("Furia"), ids("Agosta")
+	// PAIR CHANGED 2026-08-04: Rurik (tier 1) and Furia (tier 2) no longer
+	// overlap, and should not. Module alternatives are gated to the hull's tier
+	// now (techTreeSlotUpgrades), so hulls of the same class but different tiers
+	// draw from different parts of the pool -- which is what a tier means. The
+	// property this test exists for, that the pool is shared by CLASS and never
+	// across classes, is unchanged; it just has to be measured between hulls of
+	// the same tier.
+	vucari, ballista, agosta := ids("Vucari"), ids("Ballista"), ids("Agosta")
+	rurik := ids("Rurik")
 
 	shared := 0
-	for id := range rurik {
-		if furia[id] {
+	for id := range vucari {
+		if ballista[id] {
 			shared++
 		}
 	}
 	if shared == 0 {
-		t.Errorf("Rurik and Furia are both Artillery Cruisers and share %d items; the class pool is not reaching them", shared)
+		t.Errorf("Vucari and Ballista are both tier-3 Artillery Cruisers and share %d items; the class pool is not reaching them", shared)
 	}
 	for id := range rurik {
 		if agosta[id] {

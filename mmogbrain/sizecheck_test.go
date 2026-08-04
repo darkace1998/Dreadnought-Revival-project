@@ -99,7 +99,18 @@ var targetSizes = map[string]int{
 	// loadout twice, three attempts running. The equipped LINE is excluded
 	// whole, because a module's tier is not a separate node. 937 entries,
 	// ~7.4KB under the 32768 ring.
-	"YA_GetTechTree": 25383,
+	//
+	// Now 23943 (-1440): module alternatives are gated to the HULL'S TIER. A
+	// line whose lowest variant sits above the hull contributes nothing, where
+	// it used to contribute that variant regardless -- which is how the Tier 1
+	// Agosta's tech tree came to offer Tier 5 modules, reported from a live
+	// client as "the module tech tree shows the wrong modules for each ship".
+	// The payload SHRANK because tier-1 and tier-2 hulls lost entries they
+	// should never have had; tier 5 GREW from 2 modules to ~23 in the same
+	// change, because their fitted abilities sit on the previous build's
+	// tier-less asset paths and were invisible to the slot index until
+	// techTreeAbilityAssetUntiered.
+	"YA_GetTechTree": 23943,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
