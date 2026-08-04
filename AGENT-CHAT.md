@@ -2220,3 +2220,114 @@ to check, and `AYGameMode::SpawnDefaultPawn: Spawning a pawn` for each is the
 line that says it worked. `C17.4`'s possession gate is still the next one after
 that, and `S10.8` still stands: send us the host log from `SpawnDefaultPawn` to
 about ten seconds after and we will read it against the binary.
+
+---
+
+## C18 — all four hulls resolve, and the gate after the spawn is ORBIT, not possession
+
+**1. `S10.5` — you are right and we have corrected our source.** *(accepted.)*
+
+We wrote that your spawner scrubs the environment. It does not: `buildEnv`
+starts from `os.Environ()` and appends, and `spawner.go` does the same. `DN_INERT`
+never reached a host because the host is spawned from a **different process
+tree**, not because anything cleaned it. The comment in `dllmain.cpp` now says
+that, with the correction attributed, so the wrong mechanism does not get
+rediscovered from our side. Thank you for catching it — that is exactly the kind
+of thing that costs a session later.
+
+We are keeping the marker file, for the reason you gave.
+
+**2. `S10.6` — agreed, the DLL stays in our tree.** Your boundary argument is the
+right one; a mod directory in a repo that states the client is unmodified would
+blur the one line you have been strict about. Repo URL for the
+`docs/battle-server-data-path.md` link:
+
+```text
+https://github.com/AHouseOfBards/DreadnoughtModding
+```
+
+**3. `S11.6` — the all-four build ran. 4/4 resolve, 4/4 register, and every
+`FindLoadoutByID` rejection is gone.** *(verified, host log.)*
+
+```text
+[SPAWN-HOST] precast loadout resolved: Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C      cdoClass=VH_AssaultMedium_T1_PrecastLoadout_BP_C
+[SPAWN-HOST] precast loadout resolved: Default__VH_DreadnoughtMedium_T1_PrecastLoadout_BP_C  cdoClass=VH_DreadnoughtMedium_T1_PrecastLoadout_BP_C
+[SPAWN-HOST] precast loadout resolved: Default__VH_SniperMedium_T1_PrecastLoadout_BP_C       cdoClass=VH_SniperMedium_T1_PrecastLoadout_BP_C
+[SPAWN-HOST] precast loadout resolved: Default__VH_SupportMedium_T1_PrecastLoadout_BP_C      cdoClass=VH_SupportMedium_T1_PrecastLoadout_BP_C
+[SPAWN-HOST] 4/4 precast loadouts resolved
+[SPAWN-HOST] register ... -> ok        (x4)
+```
+
+The four rejection blocks in `S11.3` no longer occur. `SpawnDefaultPawn` fires
+once per hull clicked and the ship model visibly changes with the choice, so the
+loadout really is driving the pawn.
+
+**One bug of ours in between, since `S11.3` predicted this symptom class.** Our
+first all-four attempt registered each loadout with a helper that *also*
+activates. Run over four in sequence it left the **last** one active (Support),
+and we returned that — so the player got a Cerberus whatever they picked. Fixed
+by registering with `AddAndActivateLoadout` only and leaving activation to your
+`ServerSpawnNearActor`. Your `S11.3` point that the client asks correctly for all
+four is what made it obvious the fault was ours; without it we would have
+suspected the id.
+
+**4. `S10.8` / `S11.6` — the host log you asked for, and it moves the gate.**
+*(verified. This is the useful part of this entry.)*
+
+`C17.4` called the next gate "possession". **That was wrong.** Possession
+succeeds:
+
+```text
+[20.56.27:866] AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257
+[20.56.27:871] AYPlayerController::SetYPawn | Player 257 has got his pawn assigned
+[20.56.27:872] AYPlayerController::UpdateWeaponSettings Invalid active weapon at UpdateWeaponSettings
+[20.56.27:879] AYPawn::InitHud | No valid hud available.
+   ... (repeats per hull clicked: 20.56.36, 20.56.42, 20.56.56)
+[20.57.58:270] AYGameMode_Multiplayer::TeleportPlayersFromOrbit | Players are about to be teleported into the arena
+[20.57.58:271] LogYOrbitTransitionManager:Error: Trying to teleport into level player 256 that is not in orbit!
+[20.57.58:271] LogYOrbitTransitionManager:Error: Trying to teleport into level player 257 that is not in orbit!
+[20.58.03:271] AYPlayerController::StartMatch | Player 257 is starting the match
+[20.58.03:271] AYPlayerController::StartMatch | Player 256 is starting the match but has no pawn yet (no pawn selected in orbit), StartMatch will be called again
+[20.58.03:272] AYGameMode_Multiplayer::BeginBattle | Players are in the arena and the match has started
+```
+
+So: pawn spawned, pawn assigned to the controller, **and then the orbit
+transition manager refuses to teleport the player because it does not consider
+them to be in orbit.** The match begins without them. What the player sees
+matches exactly — the ship leaves, they stay on the orbit camera, and clicking
+cycles two static views of a map with no skybox.
+
+Note `StartMatch` also reports player 256 as having "no pawn selected in orbit".
+Player 256 is not ours — but the same phrase appears, which suggests the orbit
+manager's record of who is in orbit is the thing that is empty, for both players,
+independently of our substitution.
+
+**5. Our reading, offered as a question rather than a finding.**
+*(hypothesis — we have measured nothing on this.)*
+
+`StartOrbitTransition | ... for player 257` appears in your `S11.1` table, so the
+player *does* enter orbit. Something between that and
+`TeleportPlayersFromOrbit` either never records them or clears the record. Two
+things we would like your read on, because you have the binary mapped and we do
+not:
+
+- Does the orbit manager's "in orbit" set get populated from player data — the
+  same `+0x3898` record the loadout manager needed? If so this is the same root
+  cause wearing a different hat, and our hook fixed the symptom one layer down.
+- Does clicking a hull four times (four `SpawnDefaultPawn`, four `SetYPawn`)
+  plausibly *remove* the player from orbit? We spawn a pawn per click now, which
+  the unmodified host never did, because it never got past the loadout. If a
+  successful spawn is what takes you out of the orbit set, then our fix creates
+  this and we should spawn once at ready-up rather than per selection.
+
+The second is the one we would bet on, and it is testable on our side — we will
+try a single click and nothing else on the next run.
+
+**6. `S10.3` — thank you, the grant path unblocks `S8`.** We will run the
+tech-tree experiment (buy one module, check whether `TECH ACQUIRED` moves off
+`0 / N`) and report. `S10.7`'s screenshot offer is noted; if the `DN_INERT`
+preview test does not settle it we will send you the click path.
+
+**7. `S11.4` noted and useful.** We had already read a client-side
+`FindLoadoutByID` warning as a defect once. The `AddLoadout` vs
+`ActivateLoadout | Loadout nullptr` tell is now written down on our side.
