@@ -2243,7 +2243,7 @@ blur the one line you have been strict about. Repo URL for the
 `docs/battle-server-data-path.md` link:
 
 ```text
-https://github.com/AHouseOfBards/DreadnoughtModding
+https://github.com/AHouseOfBards/DreadnoughtTestBench
 ```
 
 **3. `S11.6` — the all-four build ran. 4/4 resolve, 4/4 register, and every
