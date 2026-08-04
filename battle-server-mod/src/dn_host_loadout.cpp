@@ -84,6 +84,17 @@ static void LogOpen() {
   g_logFile = _fsopen(path, "a", _SH_DENYWR);
 }
 
+// Wall-clock stamp on every line. C29 cost us a day: the log recorded the four
+// precast resolutions with no times, so an 88-second hole sat in the middle of
+// it unnoticed and we published a wrong cause built on top of it. A line that
+// cannot be placed in time cannot be used as evidence.
+static void LogStamp(char *out, size_t n) {
+  SYSTEMTIME st;
+  GetLocalTime(&st);
+  _snprintf_s(out, n, _TRUNCATE, "%02u:%02u:%02u.%03u", st.wHour, st.wMinute,
+              st.wSecond, st.wMilliseconds);
+}
+
 static void Logf(const char *fmt, ...) {
   char buf[1024];
   va_list ap;
@@ -91,12 +102,23 @@ static void Logf(const char *fmt, ...) {
   _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, ap);
   va_end(ap);
 
-  printf("[dn-host-loadout] %s\n", buf);
+  char ts[32];
+  LogStamp(ts, sizeof(ts));
+
+  printf("[dn-host-loadout] %s %s\n", ts, buf);
   fflush(stdout);
   if (g_logFile) {
-    fprintf(g_logFile, "[dn-host-loadout] %s\n", buf);
+    fprintf(g_logFile, "[dn-host-loadout] %s %s\n", ts, buf);
     fflush(g_logFile);
   }
+}
+
+// Milliseconds, for attributing cost to a phase rather than guessing at it.
+static double NowMs() {
+  LARGE_INTEGER f, c;
+  QueryPerformanceFrequency(&f);
+  QueryPerformanceCounter(&c);
+  return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,22 +327,68 @@ static bool g_precastAttempted = false;
 // short name "Default__..._C" cannot be matched against UObject::GetFullName,
 // which is what an earlier version tried, and it made all four report "could not
 // resolve" before we knew whether the load itself had worked.
-static UObjectMin *FindCDOForClass(UObjectMin *cls) {
+// ONE pass over GObjects for all four classes, and no VirtualQuery inside it.
+//
+// This function used to be called once per precast and used IsReadable -- i.e. a
+// VirtualQuery syscall -- twice per object, over an array that holds millions of
+// entries once a map is loaded. Four scans x ~2M objects x 2 syscalls is roughly
+// 8 million syscalls, and it measured ~21.6 seconds per precast: the whole of
+// C29's 90-second game-thread stall, misattributed at the time to
+// StaticLoadClass, which the log could not distinguish because it had no
+// timestamps.
+//
+// Per-object SEH replaces the per-object syscall. On x64 __try is table-driven
+// and costs nothing when nothing faults, so a bad pointer still cannot take the
+// host down -- it just skips that entry instead of aborting the scan.
+static int FindCDOsForClasses(UObjectMin **classes, UObjectMin **cdosOut,
+                              int count) {
+  for (int i = 0; i < count; ++i)
+    cdosOut[i] = nullptr;
+
   FUObjectArrayMin *arr = GObjects();
   if (!IsReadable(arr, sizeof(*arr)))
-    return nullptr;
-  int32_t count = arr->NumElements;
-  for (int32_t i = 0; i < count; ++i) {
-    FUObjectItemMin *item = &arr->Objects[i];
-    if (!IsReadable(item, sizeof(*item)))
+    return 0;
+
+  int32_t num = arr->NumElements;
+  FUObjectItemMin *items = arr->Objects;
+  if (num <= 0 || !IsReadable(items, sizeof(FUObjectItemMin)))
+    return 0;
+
+  int found = 0;
+  for (int32_t i = 0; i < num && found < count; ++i) {
+    UObjectMin *o = nullptr;
+    UObjectMin *ocls = nullptr;
+    __try {
+      o = items[i].Object;
+      if (o)
+        ocls = o->Class;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
       continue;
-    UObjectMin *o = item->Object;
-    if (!o || o == cls || !IsReadable(o, sizeof(*o)))
+    }
+    if (!o || !ocls)
       continue;
-    if (o->Class == cls)
-      return o;
+
+    for (int c = 0; c < count; ++c) {
+      if (cdosOut[c] || !classes[c] || o == classes[c] || ocls != classes[c])
+        continue;
+      // Prefer the class default object explicitly rather than relying on it
+      // being the only instance. That held while this ran before any pawn
+      // spawned; it stops holding the moment resolution moves earlier or later,
+      // and a live instance would be silently registered in its place.
+      const char *n = nullptr;
+      __try {
+        n = NameText(o->Name);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        n = nullptr;
+      }
+      if (n && strncmp(n, "Default__", 9) != 0)
+        continue;
+      cdosOut[c] = o;
+      ++found;
+      break;
+    }
   }
-  return nullptr;
+  return found;
 }
 
 static void ResolvePrecastLoadouts() {
@@ -337,7 +405,12 @@ static void ResolvePrecastLoadouts() {
   tStaticLoadClass StaticLoadClass =
       (tStaticLoadClass)(g_base + RVA_STATIC_LOAD_CLASS);
 
+  // Phase 1: load the four classes. Timed individually, because C29 blamed this
+  // call for the whole stall without ever measuring it.
+  UObjectMin *classes[4] = {};
+  double loadTotal = 0.0;
   for (int i = 0; i < kPrecastCount; ++i) {
+    double t0 = NowMs();
     UObjectMin *cls = nullptr;
     __try {
       cls = (UObjectMin *)StaticLoadClass(uclassClass, nullptr,
@@ -346,28 +419,45 @@ static void ResolvePrecastLoadouts() {
     } __except (EXCEPTION_EXECUTE_HANDLER) {
       cls = nullptr;
     }
+    double dt = NowMs() - t0;
+    loadTotal += dt;
 
     if (!IsReadable(cls, sizeof(UObjectMin))) {
-      Logf("precast %s: StaticLoadClass returned nothing", kPrecastLabels[i]);
+      Logf("precast %s: StaticLoadClass returned nothing (%.0f ms)",
+           kPrecastLabels[i], dt);
       continue;
     }
     PinToRootSet(cls);
+    classes[i] = cls;
+    Logf("precast %s: class=%p (StaticLoadClass %.0f ms)", kPrecastLabels[i],
+         cls, dt);
+  }
 
-    UObjectMin *cdo = FindCDOForClass(cls);
-    if (!cdo) {
+  // Phase 2: one scan of GObjects for all four default objects.
+  UObjectMin *cdos[4] = {};
+  double t0 = NowMs();
+  int found = FindCDOsForClasses(classes, cdos, kPrecastCount);
+  double scanMs = NowMs() - t0;
+
+  for (int i = 0; i < kPrecastCount; ++i) {
+    if (!classes[i])
+      continue;
+    if (!cdos[i]) {
       Logf("precast %s: class loaded at %p but no default object found",
-           kPrecastLabels[i], cls);
+           kPrecastLabels[i], classes[i]);
       continue;
     }
-    PinToRootSet(cdo);
-
-    g_precastCDO[g_precastResolved++] = cdo;
-    const char *n = NameText(cdo->Name);
-    Logf("precast %s: class=%p cdo=%p (%s)", kPrecastLabels[i], cls, cdo,
+    PinToRootSet(cdos[i]);
+    g_precastCDO[g_precastResolved++] = cdos[i];
+    const char *n = NameText(cdos[i]->Name);
+    Logf("precast %s: cdo=%p (%s)", kPrecastLabels[i], cdos[i],
          n ? n : "<unnamed>");
   }
 
-  Logf("%d/%d precast loadouts resolved", g_precastResolved, kPrecastCount);
+  Logf("%d/%d precast loadouts resolved "
+       "(StaticLoadClass %.0f ms total, one CDO scan %.0f ms, %d/%d matched)",
+       g_precastResolved, kPrecastCount, loadTotal, scanMs, found,
+       kPrecastCount);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,14 +475,28 @@ static bool AddLoadoutGuarded(void *mgr, void *loadout) {
   }
 }
 
+// S15.1: this guard was a single pointer, so a listen server -- which has two
+// player controllers, the human and the local player 256 -- could alternate
+// between two managers and re-register on every alternation. A small set holds
+// all of them.
+static void *g_registeredFor[8] = {};
+static int g_registeredCount = 0;
+
+static bool AlreadyRegistered(void *mgr) {
+  for (int i = 0; i < g_registeredCount; ++i)
+    if (g_registeredFor[i] == mgr)
+      return true;
+  return false;
+}
+
 static void RegisterPrecastLoadouts(void *mgr) {
-  static void *s_registeredFor = nullptr;
-  if (!mgr || s_registeredFor == mgr)
+  if (!mgr || AlreadyRegistered(mgr))
     return;
   ResolvePrecastLoadouts();
   if (g_precastResolved == 0)
     return;
-  s_registeredFor = mgr;
+  if (g_registeredCount < (int)(sizeof(g_registeredFor) / sizeof(void *)))
+    g_registeredFor[g_registeredCount++] = mgr;
   for (int i = 0; i < g_precastResolved; ++i) {
     bool ok = AddLoadoutGuarded(mgr, g_precastCDO[i]);
     Logf("register %s with manager %p -> %s", kPrecastLabels[i], mgr,
