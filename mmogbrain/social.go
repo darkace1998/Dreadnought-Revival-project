@@ -719,14 +719,19 @@ func chatMessageNotice(method string, channel string, sender map[string]any, bod
 // player's, so it never filled that slot.
 func firmamentSelfProfile(playerID, peerID string) map[string]any {
 	guid := dashedPlayerGUID(playerID)
+	// name/nickname went out as "" for every player. The account's real name is
+	// known -- it arrives in the JWT's "username" claim at gateway login and is
+	// stored on the player row from there (rememberPlayerDisplayName) -- so an
+	// empty string here was a gap, not an absence of data.
+	name := mmogPlayerStateForPID(playerID).displayName
 	return map[string]any{
 		"pid":      guid,
 		"PID":      guid,
 		"guid":     guid,
 		"user_id":  guid,
 		"peer_id":  peerID,
-		"name":     "",
-		"nickname": "",
+		"name":     name,
+		"nickname": name,
 		"status":   "online",
 		"message":  "",
 		"online":   true,

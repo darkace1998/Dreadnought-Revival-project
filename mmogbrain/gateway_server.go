@@ -221,6 +221,11 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 	sessions[sessionID] = gatewaySession{UserID: userID, Username: username, createdAt: time.Now()}
 	sessionsMu.Unlock()
 
+	// This is the only place the account's real name is in scope. player_state
+	// seeds display_name to the constant "Local" and nothing ever replaced it,
+	// so every account was called "Local" and the client had no name to show.
+	rememberPlayerDisplayName(userID, username)
+
 	w.Header().Set("Authorization", "Session "+sessionID+", "+username)
 
 	gwJSON(w, map[string]any{

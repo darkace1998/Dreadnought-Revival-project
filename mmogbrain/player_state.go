@@ -1255,3 +1255,40 @@ func grantUnlockedShipLoadout(tx *sql.Tx, playerPID string, precastLoadoutID int
 	}
 	return nil
 }
+
+// rememberPlayerDisplayName stores the account's login name on the player row.
+//
+// The name reaches this server exactly once, in the "username" claim of the JWT
+// the client presents at gateway login, and it was being dropped there: the row
+// is seeded with the constant "Local" (defaultMmogPlayerState) and nothing ever
+// wrote over it. Every account on this server was called "Local", which is why
+// no player name appeared in game.
+//
+// Deliberately does NOT overwrite a name the player has chosen. The only other
+// writer is persistCaptainDisplayInfo, which stores what the client sends from
+// the captain customisation screen; if a player has set something there it
+// outranks their login name. So this fills the blank and the default, nothing
+// else.
+func rememberPlayerDisplayName(playerPID, username string) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	if pid == "" {
+		return
+	}
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		return
+	}
+	// A failure here costs a display name, not a login, so it is not worth
+	// failing the request over -- and the caller is the gateway login path.
+	_, _ = database.Exec(
+		`UPDATE player_state SET display_name=?, updated_at=datetime('now')
+		 WHERE user_id=? AND (display_name IS NULL OR display_name='' OR display_name='Local')`,
+		username, pid)
+}

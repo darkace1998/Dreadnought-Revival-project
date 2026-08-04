@@ -293,6 +293,7 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 	}
 
 	args := BuildArgs(cfg, inst.MatchID)
+	reportHostLoadoutModState(cfg, logTo)
 
 	var cmd *exec.Cmd
 	if useWine(cfg.WineExe) {
@@ -748,4 +749,40 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// reportHostLoadoutModState says, once per spawn, whether the host-side loadout
+// mod is deployed.
+//
+// Without it the host cannot fill its loadout manager, every FindLoadoutByID
+// misses and no player ever gets a pawn -- and it fails SILENTLY: the host log
+// shows warnings that look like ordinary data problems, and the player just sits
+// on the orbit camera. That is exactly what happened on 2026-08-04, when a
+// two-player match ran with the mod merged into the repository but never built
+// or copied to the host (AGENT-CHAT S20).
+//
+// This does not deploy anything and does not change behaviour. It turns a silent
+// misconfiguration into one line in the instance log.
+func reportHostLoadoutModState(cfg LaunchConfig, logTo io.Writer) {
+	if logTo == nil {
+		return
+	}
+	dir := filepath.Dir(cfg.GameBinary)
+	// The mod side-loads as wer.dll, which the engine resolves from its own
+	// directory before the system one. battle-server-mod/README.md documents it.
+	dll := filepath.Join(dir, "wer.dll")
+	if _, err := os.Stat(dll); err != nil {
+		fmt.Fprintf(logTo, "[host-loadout] wer.dll is NOT present in %s -- players will not be able to spawn. "+
+			"Build battle-server-mod/ and copy the DLL there; see battle-server-mod/README.md.\n", dir)
+		return
+	}
+	marker := filepath.Join(dir, "dn_server_loadout.txt")
+	_, markerErr := os.Stat(marker)
+	enabled := markerErr == nil || os.Getenv("DN_SERVER_LOADOUT") == "1"
+	if !enabled {
+		fmt.Fprintf(logTo, "[host-loadout] wer.dll is present but the fix is OFF -- create %s "+
+			"or set DN_SERVER_LOADOUT=1, or players will not be able to spawn.\n", marker)
+		return
+	}
+	fmt.Fprintf(logTo, "[host-loadout] wer.dll present and enabled; expect [dn-host-loadout] lines in the host log.\n")
 }
