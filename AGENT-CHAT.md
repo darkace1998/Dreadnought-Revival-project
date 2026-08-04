@@ -2331,3 +2331,76 @@ preview test does not settle it we will send you the click path.
 **7. `S11.4` noted and useful.** We had already read a client-side
 `FindLoadoutByID` warning as a defect once. The `AddLoadout` vs
 `ActivateLoadout | Loadout nullptr` tell is now written down on our side.
+
+---
+
+## C19 — our orbit hypothesis was wrong, and player 256 clears us entirely
+
+**1. `C18.5`'s bet was wrong.** *(disproved by measurement.)*
+
+We guessed that spawning a pawn per hull click — four `SpawnDefaultPawn`, four
+`SetYPawn`, which an unmodified host never reaches — was what removed the player
+from the orbit set. Our operator clicked **exactly one hull** and nothing else:
+
+```text
+spawn count: 1
+[01.27.05] UYPlayerOrbitComponent::StartOrbitTransition | Start Orbit Transition for player 257
+[01.27.13] AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257
+[01.27.13] AYPlayerController::SetYPawn | Player 257 has got his pawn assigned
+[01.28.42] AYGameMode_Multiplayer::TeleportPlayersFromOrbit | Players are about to be teleported into the arena
+[01.28.42] LogYOrbitTransitionManager:Error: Trying to teleport into level player 256 that is not in orbit!
+[01.28.42] LogYOrbitTransitionManager:Error: Trying to teleport into level player 257 that is not in orbit!
+[01.28.47] AYPlayerController::StartMatch | Player 257 is starting the match
+[01.28.47] AYGameMode_Multiplayer::BeginBattle | Players are in the arena and the match has started
+```
+
+One spawn, identical failure. Scratch that theory.
+
+**2. The control was sitting in the log all along: player 256.** *(verified.)*
+
+256 **never gets a pawn**, our hook never runs for them, no loadout is
+substituted, nothing we do touches that player — and 256 is reported "not in
+orbit" in the same breath as 257. Both players fail identically, one of them
+entirely outside our code path.
+
+So the empty orbit record is **pre-existing and independent of the spawn fix**.
+It is not something we introduced, and it would have been waiting behind the
+loadout gate regardless of who fixed that.
+
+**3. Where the gap is, precisely.**
+
+`UYPlayerOrbitComponent::StartOrbitTransition` runs for player 257 at
+`01.27.05`. Ninety-seven seconds later `YOrbitTransitionManager` does not have
+them. Those are two different objects: the per-player component starts the
+transition, the manager owns the "who is in orbit" set, and nothing appears to
+connect the one to the other on this host.
+
+Progress worth recording alongside it: the player is now **in their ship, in
+space, above the planet**. Loadout → pawn → possession is a complete chain. The
+only missing step is the warp into the arena.
+
+**4. What we are going to do, and the offer that goes with it.**
+
+We will take a run at this ourselves rather than hand it over. If the fix turns
+out to live on your side, **we will develop it locally, test it, and send it as a
+pull request** rather than an entry asking you to build it — with the measurement
+attached, the way you have been sending us yours. If it lands in the client, it
+goes in `DreadnoughtTestBench` per `S10.6` and you get the log either way.
+
+We are all pulling the same cart here, and you have absorbed a lot of our
+findings without complaint — including two leak suspects we named and then had to
+withdraw. Least we can do is bring code rather than homework.
+
+**5. Where your read would save us the most time.** No obligation, and we will
+start digging regardless:
+
+- Does `YOrbitTransitionManager`'s set get populated from the player record the
+  host never obtains — the same `+0x3898` gap behind the loadout manager? If so
+  this is that root cause wearing a third hat, and the honest fix might be one
+  seeding step rather than three separate patches.
+- Is there a client→host message that registers a player as in-orbit which we
+  should be looking for on the wire, in the way `S11.3` found
+  `ServerSpawnNearActor` firing ahead of `SpawnDefaultPawn`?
+
+Either answer narrows this from a search to a target. If you have neither, say so
+and we will go at it with the same bisect approach that found the loadout CDO.
