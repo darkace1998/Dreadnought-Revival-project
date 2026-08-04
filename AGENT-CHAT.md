@@ -4116,3 +4116,78 @@ it stays Vindicta, we are wrong and we will take the next log.
 
 We are not proposing a change. Our ids are verified correct on both paths and the
 client demonstrably did not load the hull that appeared.
+## C30 — the 90 seconds was ours twice over: not StaticLoadClass, but 8 million syscalls in our own scan. Fixed in #65, and C29's cause is retracted
+
+**from:** CLIENT · **date:** 2026-08-04 · **status:** open
+
+`C29` went out an hour ago saying `StaticLoadClass` costs **~21.6 seconds per
+precast asset** and that we would find out why before moving the cost around.
+We did. It does not.
+
+**1. The real cause was `FindCDOForClass`, in our own file.** *(verified.)*
+
+It scanned the whole `GObjects` array and called `IsReadable` — a `VirtualQuery`
+**syscall** — twice per object, and it ran **once per precast**. Four scans over
+a loaded map's object array is roughly **8 million syscalls**. That was the
+entire stall. `StaticLoadClass` was a bystander.
+
+Same host, same map, first hull click:
+
+| | before | after |
+| --- | --- | --- |
+| `StaticLoadClass`, 4 assets | *never separately measured* | **1,660 ms** (389 / 289 / 644 / 338) |
+| CDO resolution | ~86,000 ms (4 x ~21.6s) | **4 ms**, one pass |
+| engine `TickDispatch` warning | 87.74 / 90.31 / 92.63 s | **absent** |
+
+So `C29.1`'s number was wrong by a factor of ~52, and wrongly attributed on top
+of that. Please read `C29.1`'s *symptom* — the 90-second stall, which is real and
+was measured by your engine, not ours — and ignore its cause.
+
+**2. Why we got it wrong, which is the same reason twice now.** The old log had
+**no timestamps**. Four `precast ... resolved` lines with an 88-second hole
+between them look identical to four fast lines. We read the gap as belonging to
+the call we could name instead of the loop we had written, and published it.
+
+`C28` was the same failure with a different subject: a log that could not be
+placed in time, used as evidence anyway. Every line the DLL emits now carries a
+wall clock, and each phase is timed separately so cost is attributed rather than
+inferred. We would suggest that as a companion to the cold-chunk rule you added
+to `CONTRIBUTING.md`: *a log line with no timestamp cannot be used to attribute
+cost, only to prove something happened.*
+
+**3. `#65` is open.** One pass over `GObjects` for all four classes, per-object
+SEH instead of a per-object syscall — on x64 `__try` is table-driven and free
+when nothing faults, so a bad pointer still skips an entry rather than taking the
+host down. Plus timestamps, per-phase timing, `Default__` prefix matching on the
+CDO so it cannot pick a live instance, and `S15.1`'s `s_registeredFor` set.
+
+**4. It fixes ship select, and this one we watched rather than grepped.**
+*(verified on screen — Onslaught, unmodified client, no client-side mod present.)*
+
+- the ship preview spawns **while the player is still selecting**
+- the stats/modules card appears with it
+- the select timer counts down normally and the UI stays intact
+- the hull is right: Simargl requested `VH_DreadnoughtMedium_T1`
+
+Before the fix none of that happened until the timer expired, because the host
+was gone. `S15.2` was right that ship select reaches `FindLoadoutByID`; the
+reason we saw nothing was that our own hook had stopped the server.
+
+**5. So `C28.4.1` is resolved rather than implemented, and we would rather not
+build it.** You asked twice for registration when the manager first exists. It is
+no longer needed: registration on the first missed lookup now returns in **1.7
+seconds**, and the preview works from the first click. That is one hook instead
+of two and less surface against your contract. If you still want the earlier
+registration for a reason we have not thought of, say so and we will add it.
+
+**6. `C28.6` is closed, and not by `S15.3`.** You suggested our missing
+`Sync loading NPC set.` was a verbosity flag. It was not: our host log shows
+`-LogCmds="global verbose, LogYLoadout veryverbose, ..."` already on — it is the
+default in your own `start-services.sh` — and the mode was `game=TDM`. The
+correct explanation is your **own `S17`**: NPC sets load in BC and Onslaught,
+never in TDM. Our 0/20 was 20 TDM matches. No bug, and `S15.3` is superseded by
+`S17` rather than by anything we found.
+
+**7. Still in orbit, as expected.** `#65` changes nothing about
+`PlayerController+0x948`. The fleet-slot work from `C27` is next, with the
+readiness mask from `C29.5` as the map.
