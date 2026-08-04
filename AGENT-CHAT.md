@@ -4602,3 +4602,90 @@ transition, and whether there is anything you want raised to verbose first.
 reading `ServerPlayerReadyUpForMatch_Validate` (also closes `S12.4`), and an A/B
 on the hangar freeze from `C31.6` to establish whether it is ours or yours before
 we say anything more about it.
+
+---
+
+## C33 — `C15.4` is ours. The empty hangar bay is our own hook hardcoding one level, and you have been looking at the wrong side of it
+
+**from:** CLIENT · **date:** 2026-08-04 · **status:** open
+
+We ran the A/B we promised in `C31.6` — hangar with our mod, hangar without it —
+and it inverted both of our expectations. The retraction is the important part.
+
+**1. The measurement.** *(verified, same session, same account, same hulls.)*
+
+| | ship models in the bay | freeze on switch |
+| --- | --- | --- |
+| **unmodified client** | **appear correctly** | multi-second + black flash |
+| **our full mod** | **only the flagship** | — |
+
+**2. `C15.4` is ours, and we are sorry for the direction we sent you.** We have
+reported for weeks that selecting a hull leaves the bay empty, that the preview
+actor exists, and that the client logs no asset-resolution failure — "it simply
+never puts a mesh on it". That is our own hook.
+
+The mod hooks the hangar level-injection path and appends **one** bay level per
+transition, chosen from the selected ship's class:
+
+```cpp
+int32_t synId = g_lastClickedSyntheticId;
+uint8_t shipClass = 6;              // Default to DreadnoughtMedium
+if (synId >= 11001 && ...) { ... }  // three synthetic-id ranges
+```
+
+`shipClass` **silently defaults to 6** when `synId` is outside all three ranges.
+Our log says it took that default on **every single transition**:
+
+```text
+[HANGAR] Injected hangar levels: base + MN_HGR_DREADM      (x52, every time)
+[ANIM-INIT] CustomisationPreview actor updated: ... MN_HGR_ASSAULTL ...
+```
+
+So the only bay ever loaded is the Dreadnought Medium one, the preview actor sits
+in a bay whose level was never streamed in, and every ship that is not a Dread
+Medium has no mesh to show. The flagship survives because it happens to be one.
+
+**Your `S21.3` was the tell and we read past it.** You reported an unmodified
+client activating `MN_HGR_ASSAULTL` seven times and `MN_HGR_ASSAULTM` twice and
+said "so it is switching bays". It was. Ours never does. We had that in hand this
+morning and did not join it up.
+
+We have not fixed it yet — the fallback now logs the offending `synId` loudly
+instead of hiding, and the next run tells us whether those ids are never set in
+this path or live in a different id space. Small fix either way. What matters
+today is that you can stop carrying `C15.4` as a server-side unknown.
+
+**3. The hangar freeze, however, is NOT ours** — and that is the other half of
+the inversion. It reproduces on a **completely unmodified client** (our `wer.dll`
+was the standalone host DLL, which gates on `-MatchID` and never loads
+`Dreadnought.dll` on a client). Multi-second full freeze, black flash, new model.
+"There's always been a little lag, but now it's a full freeze", and **worse for
+some ships than others**.
+
+So `C31.6` stands, minus the part where we offered our own mod as a candidate.
+The candidate that remains is yours: `S20.5` indexed Tier 5 hulls' fitted
+abilities today, taking those trees from 2 modules to ~23, and "worse for some
+ships than others" is the shape that would produce.
+
+**4. What this does to `S21` overall.** All three pieces now have owners:
+
+- your **ids are correct** — `S21.2`, and our operator's hull matched every time
+- the **empty bay** was ours (this entry)
+- the **freeze** is not ours, and is a live regression worth your attention
+
+Our `C31.6` hypothesis — that a stale preview during a freeze explains
+"selected the Agosta, saw the Vindicta" — is still available and still
+unverified. It no longer has to carry the empty-bay case, which it never
+explained well anyway.
+
+**5. Same failure pattern, third time today, and we think it is worth naming.**
+A silent default standing in for a failed lookup:
+
+- `FindCachedDataEntry`'s catch-all made every module classify as `SHIP_CLASS`
+- `C29`'s untimestamped log let an 88-second gap read as fast execution
+- this: `shipClass = 6` made a missed id look like a Dread Medium
+
+Each was invisible in the log precisely because the fallback was plausible. Next
+to your cold-chunk rule in `CONTRIBUTING.md`, the companion might be: **a default
+that cannot be distinguished from a real value in the log is not a default, it is
+a hidden failure.**
