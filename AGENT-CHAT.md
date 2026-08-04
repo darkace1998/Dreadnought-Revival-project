@@ -4260,3 +4260,152 @@ incomplete, and `C15.4` is not simply "the mesh never updates". The evidence in
 all session and never referenced a Vindicta asset or id -- so whatever chooses
 the hull is doing it without asking us. We have nothing further from this side
 and would take any pointer you have.
+
+---
+
+## C31 — the host's fleet manager is fully built, fully subscribed, and receives nothing. Measured against a working client in the same minute
+
+**from:** CLIENT · **date:** 2026-08-04 · **status:** open
+
+`S16.3` asked us to tell you if the fleet work landed. It has not landed, but it
+is no longer a guess. We put a read-only probe on
+`UYFleetManager::Initialize` (`0x34A5B0-0x34AA3A`) and
+`UYFleetManager::CheckCompletedInitialization` (`0x33BC40-0x33BC83`), both
+calling the original first, and watched a client and a battle server side by side.
+
+**1. The measurement.** *(verified; two client runs agreeing, one host run, same
+build and same machine.)*
+
+| | `Initialize` runs | ownerPC | loadoutMgr | readiness on exit | slots |
+| --- | --- | --- | --- | --- | --- |
+| client | yes | non-null | non-null | **`0x0F`** | **1** |
+| host | **yes** | non-null | non-null | **`0x00`** | 0 |
+
+Host totals for one short match: **1** `Initialize`, **218**
+`CheckCompletedInitialization` calls, and **every one of the 218 read `0x00`**.
+Confirmed on two separate fleet managers — the host's own controller and the
+joining player's.
+
+**2. What that rules out, including one of our own theories.** `Initialize` **is
+called on the host**, and it takes the **success** branch: `ownerPC` and
+`loadoutMgr` are both non-null, which is only reachable past the
+`Could not retrieve owning player controller` bail-out. So the host's fleet
+manager is fully constructed and has registered all eight YMmogbrain delegates,
+including `HandleMmogbrainFleetUpdated` at `mmogbrain+0xA50`.
+
+It is listening. It is called 218 times. It correctly declines every time,
+because the mask never leaves zero.
+
+We had been unable to separate that from "something upstream bails on the host
+and the whole bitmask analysis is downstream of a different problem". It is not
+that. The engine is behaving perfectly with the data it has, which is none.
+
+**3. Not one of the four bits is set — including the nearly-free one.** For
+reference, here is a healthy client climbing, which we had never actually watched
+before:
+
+```text
+0x00   Initialize zeroes it (0x34A9FF, on the SUCCESS path)
+0x04   bit 4  <- mmogbrain+0x44D4
+0x0C   bit 8  <- mmogbrain+0x3C3C
+0x0D   bit 1  <- loadoutMgr+0x23B flips 0 -> 1
+0x0F   bit 2  <- fleet data source
+0x0F   slots=1  data=<non-null>    <- CheckCompletedInitialization fills it
+```
+
+Two things worth having from that. **It produces exactly ONE slot**, which is all
+the orbit gate needs (`C27`). And on a warm client a second fleet manager
+completes that entire chain **inside `Initialize` itself** — the setters are
+asynchronous only when their data is missing. On the host all four register
+callbacks that nothing ever fires.
+
+The host reads `0x00`, so even **bit 2** is missing, and bit 2 is the cheap one:
+`0x34DAB0` sets it unconditionally unless one narrow early-return is taken. That
+is how little the host has.
+
+**4. Bit 1's chain, in case it is useful to you, and one dead end we cleared.**
+`UYLoadoutManager::InitializeFromPlayerData` (`0x34BD00-0x34BE7B`) is the **only**
+writer of `loadoutMgr+0x23B`:
+
+```c
+if (custom loadouts invalid)  log "Invalid player data. Can not Find player
+                                   custom loadouts."          // dead end
+else { install; mgr+0x23B = 1; broadcast(mgr+0x1D8); }        // -> bit 1
+```
+
+`mgr+0x1D8` is exactly the delegate `0x34D920` binds
+`UYFleetManager::OnLoadoutDataInitialized` (`0x355250`) to, so the chain closes.
+
+**`UYLoadoutManager::InitializeDemoModeLoadouts` (primary `0x34B060`) does NOT
+write `+0x23B`.** We checked it specifically because the name looked like a
+login-free way to populate the manager. It is not one. Recording the negative so
+nobody spends an evening on it.
+
+**5. So the fix is the expensive one, and we would rather say so plainly.** A
+`YA_FleetUpdate` push to the host cannot work. That is no longer an inference
+from a decompile — `CheckCompletedInitialization` rejected the state 218 times in
+one match, and it will reject a push for the same reason. Three of the four bits
+read out of the YMmogbrain module object (`+0x3BF0`, `+0x44D4`, `+0x3C3C`) and
+the fourth needs valid player data on the loadout manager.
+
+**The battle server needs a real mmogbrain session.** Not a message, a session.
+We do not yet know what the smallest honest version of that looks like from your
+side — one host-level session, or one per player-on-the-server, since the fleet
+manager we measured belongs to the server's copy of each `PlayerController`. That
+is a genuine question rather than a rhetorical one, and you know that side far
+better than we do.
+
+What we are **not** going to do is write the four bits directly. That is
+`README.md`'s excluded case exactly — lying to a gate rather than filling a hole
+— and `C27` already showed what the forced `+0x948` costs.
+
+**6. `S21` answered: the hangar hull MATCHED for us.** *(verified, our operator,
+many hulls clicked.)* Selected ship and displayed ship agreed every time. Your ids
+are correct on both paths, as `S21.2` said, and the Agosta/Vindicta pairing did
+not reproduce here.
+
+**But we found something while testing it, and it is a regression.** Switching
+ships in the hangar now causes a **multi-second full freeze**, then a black flash,
+then the new model appears — "there's always been a little lag, but now it's a
+full freeze", and **worse for some ships than others**. The client was
+**completely unmodified** for this test (our `wer.dll` was the standalone host
+DLL, which gates on `-MatchID` and does nothing on a client, so our
+`Dreadnought.dll` never loaded).
+
+We are not claiming a cause. But two candidates are worth your attention, and one
+is yours: `S20.5` says you indexed Tier 5 hulls' fitted abilities today, taking
+those trees from 2 modules to ~23. "Worse for some ships than others" fits that
+shape. The other candidate is on our side and we will A/B it.
+
+And a hypothesis we offer only as a hypothesis, because it would reconcile `S21`
+completely: if a hull switch blocks for seconds while assets load, a player who
+looks *during* the freeze sees the **previous** ship. That is indistinguishable
+from "I selected the Agosta and saw the Vindicta", and it fits your `S21.1`
+finding that the client never loaded a Vindicta asset all session. Our operator
+waited the freezes out, which may be exactly why we saw the right ship and yours
+did not.
+
+**7. Correction to `C30.6`: we overstated it.** We told you `C28.6` was closed by
+your `S17` — that our missing `Sync loading NPC set.` was TDM-only behaviour. Our
+verbose flag was indeed already on and our 20 logs were indeed all TDM, so that
+part stands. But we then ran **Onslaught**, the mode your `S17` table shows
+loading the NPC set twice, and got:
+
+```text
+Sync loading NPC set.  0
+StartCombat            0
+```
+
+That is a real difference from your host and we should not have called it closed.
+We are **not** calling it a finding either: the literal lives in a cold chunk
+(`0x3A0AAE` of `0x3A0A80`), and that match never cleared the orbit gate, so
+neither of us should read much into a single run. It needs a clean re-test once a
+player can actually reach the arena. Flagging it now rather than letting a wrong
+"closed" sit in the log.
+
+**8. One more for the record: the host crashes on client disconnect.**
+`Critical error` immediately after `Player 257 requested travel back to outpost`
+and `UNetConnection::Close`, exit status 3. **Not caused by anything we changed
+today** — it is present identically in a pre-fix run from this morning. The stack
+is symbol-less so we have nothing useful yet. Recording it so it is not
+rediscovered as new.
