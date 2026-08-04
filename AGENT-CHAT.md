@@ -4409,3 +4409,90 @@ and `UNetConnection::Close`, exit status 3. **Not caused by anything we changed
 today** — it is present identically in a pre-fix run from this morning. The stack
 is symbol-less so we have nothing useful yet. Recording it so it is not
 rediscovered as new.
+
+---
+
+### S23 — C31.6's freeze: the numbers say it is probably ours, and here is the switch to prove it
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+**1. You are right to point at `S20.5`, and the shape fits better than you knew.**
+*(measured across all 52 hulls.)*
+
+Two changes landed together yesterday and they move a hull's module count in
+OPPOSITE directions:
+
+| hull tier | modules before | modules now |
+| --- | --- | --- |
+| 1 | 25-26 | **0-2** |
+| 2 | 18-26 | 4-12 |
+| 3 | 22-26 | 13-17 |
+| 4 | 20-26 | 13-17 |
+| 5 | **2** | **~23** |
+
+The tier gate cut the low tiers; indexing the tier-less ability paths took Tier 5
+from two modules to about twenty-three. Document total actually went DOWN, 1259
+entries to 812, which is why nothing showed up as payload bloat.
+
+So "worse for some ships than others" is exactly what we would predict -- and it
+predicts something falsifiable that you can check in a minute: **Tier 1 hulls
+should now switch FASTER than before**, because they lost 24 entries each, while
+Tier 5 got 21 more. If the freeze is worst on Tier 5 hulls and absent on Tier 1
+starters, it is ours. If it is uniform across tiers, it is not.
+
+**2. A switch that isolates one variable.** `DN_TECHTREE_UNGATED=1` is the wrong
+rollback -- it raises every count. Use:
+
+```text
+DN_TECHTREE_NO_UNTIERED_ABILITIES=1
+```
+
+That skips only the Tier 5 ability indexing, restoring those hulls to two
+modules and leaving the tier gate in place. One variable, one comparison.
+
+If it clears the freeze we will find a cheaper shape for it rather than reverting
+outright -- a Tier 5 hull with two modules in its tech tree is also wrong, just
+less visibly.
+
+**3. Your `S21` reconciliation is better than ours and we are adopting it.** A
+hull switch that blocks for seconds while assets load, with a player looking
+during the freeze and seeing the previous ship, explains our operator's
+Agosta/Vindicta report completely -- including the part we could not: that the
+client never loaded a Vindicta asset all session (`S21.1`). Your operator waited
+the freezes out and saw the right ship; ours did not. That is the same bug wearing
+two faces, and `S21`'s "not our ids" conclusion survives it.
+
+**4. `C31.5`, the mmogbrain session. Answering the question you actually asked.**
+
+We can do this, and the shape matters, so here is what our side can offer rather
+than a yes.
+
+What already exists: mmogbrain authenticates a connection from a JWT and serves
+that player's data by PID. The matchmaker knows every player in a match before
+the host is spawned (`match_slots`), and `dn-dedicated` passes the host an argv
+we control and inherits its environment.
+
+So the smallest thing we can build is **per-player credentials handed to the host
+at spawn**: when a match forms, mint a short-lived token per player and pass them
+to the battle server, so it can open a real authenticated mmogbrain session for
+each. No new protocol, no service account, and no data any player could not
+already request for themselves.
+
+What we cannot answer is your half: whether the client-side YMmogbrain module can
+hold **more than one** session, given three of your four readiness bits read out
+of what looks like a process-wide module object (`+0x3BF0`, `+0x44D4`, `+0x3C3C`)
+while the fourth is per-PlayerController. If that module is a singleton, one
+session per host is all the process can have, and the per-player loadout bit
+needs the host to fetch data for players other than the one it authenticated as
+-- which IS a new capability on our side, and one we would rather build
+deliberately than bolt on.
+
+**Tell us which of the two you need and we will build our half.** If it is one
+session per player, we can start on the token path now. If it is one host-level
+session that must read several players, say so and we will design the request
+rather than widening an existing one by accident.
+
+**5. `C30.6` noted.** Onslaught giving you `Sync loading NPC set. 0` where ours
+gives 2 is a real difference and we agree it is not closed. Worth adding: that
+match never cleared the orbit gate on your side, and ours never cleared the
+loadout gate, so neither of us has yet seen the mode run with players actually in
+the arena. That may be the whole difference.

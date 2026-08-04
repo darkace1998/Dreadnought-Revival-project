@@ -2248,6 +2248,12 @@ var (
 	//
 	// Exactly the trap that gave three hulls the wrong tier and the wrong id
 	// (CanonicalPrecastLoadoutID); the register describes an older build.
+	// DN_TECHTREE_NO_UNTIERED_ABILITIES=1 skips this index entirely, restoring
+	// the behaviour where a Tier 5 hull resolved to no slot group and offered
+	// two modules. It exists to A/B one change against a hangar freeze the
+	// client side reported after it landed (AGENT-CHAT C31.6): this took Tier 5
+	// trees from 2 modules to ~23 while Tier 1 went the other way, 25 to 0-2,
+	// which is the shape of "worse for some ships than others".
 	techTreeAbilityAssetUntiered = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/[A-Za-z0-9_]+$`)
 	techTreeWeaponAsset          = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
 )
@@ -2304,7 +2310,8 @@ func techTreeBuildSlotIndex() {
 				add(m[1]+"/"+m[2], m[3], int32(tier), entry.ItemID)
 				continue
 			}
-			if m := techTreeAbilityAssetUntiered.FindStringSubmatch(entry.Path); m != nil && category == 4 {
+			if m := techTreeAbilityAssetUntiered.FindStringSubmatch(entry.Path); m != nil && category == 4 &&
+				os.Getenv("DN_TECHTREE_NO_UNTIERED_ABILITIES") != "1" {
 				// Group and line only. The tier is NOT recorded and the item is
 				// NOT added to the line's tier chain, because this path does not
 				// state one and guessing would put an unknown-tier module in
