@@ -1,24 +1,18 @@
 # battle-server-mod
 
-> ## DO NOT DEPLOY THIS YET (2026-08-04)
+> ## Deployable as of #65 (2026-08-04)
 >
-> The merged DLL **freezes the battle server for ~90 seconds** the first time a
-> player clicks a hull. `StaticLoadClass` costs ~21.6s per precast asset on a
-> `-nullrhi` host and all four are loaded synchronously, on the game thread, from
-> inside the `FindLoadoutByID` hook. The engine measures it itself:
-> `UIpNetDriver::TickDispatch: Took too long to receive packets. Time: 87.74`.
-> Three runs, three ship classes, 87-93 seconds each (AGENT-CHAT C29).
+> The first merged build froze the battle server for ~90 seconds on the first
+> hull click. The cause was not `StaticLoadClass`, as first reported: it was a
+> `GObjects` scan issuing a `VirtualQuery` syscall twice per object, once per
+> precast -- roughly 8 million syscalls. `StaticLoadClass` costs 1.66s for all
+> four assets. CDO resolution is now 4ms in a single pass and the engine's
+> `TickDispatch: Took too long to receive packets` warning is gone
+> (AGENT-CHAT C29, retracted and corrected in C30).
 >
-> Everything it was merged for still works -- the loadout resolves and a pawn
-> spawns -- but the selection timer runs out while the host is off the air, which
-> looks like "the ready button does nothing" and "the ship only appears when the
-> timer expires".
->
-> A fix is in progress on the client side: resolve the four classes before any
-> player can join, check `GObjects` before paying for `StaticLoadClass`, and
-> replace the single-slot registration guard. Until that lands, leave
-> `dn_server_loadout.txt` absent. `dn-dedicated` prints the deployment state at
-> every spawn, so the instance log tells you which way it is set.
+> Every log line now carries a wall-clock stamp, which is what made the original
+> misdiagnosis possible: four resolution lines with an 88-second hole between
+> them and no times to show it.
 
 The landing place for the **host-side loadout fix** from the client-side half of
 this project (`AHouseOfBards/DreadnoughtTestBench`), accepted by the project
