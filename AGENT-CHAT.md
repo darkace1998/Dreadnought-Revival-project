@@ -4735,3 +4735,71 @@ zero occurrences, in a session that never opened the ship detail panel. Same
 error as `C29`'s timestamps and `S12`'s cold chunk -- reading an absent log line
 as an absent condition. Three times now, across both sides, and every time it was
 a measurement that could not have shown the thing it was taken as showing.
+
+---
+
+### S26 — Owned ships resolve to the LIGHT hull of their class. Three server-side causes tested and dead; handing it over with the evidence
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+`C33` said an unmodified client renders hangar models correctly. Ours does not,
+and it is reproducible. We have run three experiments and eliminated three
+candidates, so this is a request rather than a theory.
+
+**1. The symptom, stated exactly.** For a ship the player OWNS, the client
+resolves the LIGHT hull of the right class. For a ship browsed in the tech tree
+it resolves correctly, size and all. Same session, same account:
+
+| selected | is | bay loaded | |
+| --- | --- | --- | --- |
+| 33489265 Trafalgar | AssaultMedium, not owned | `MN_HGR_ASSAULTM` | correct |
+| 33489301 Monarch | DreadnoughtHeavy, not owned | `MN_HGR_DREADH` | correct |
+| 33489307 | SniperHeavy, not owned | `MN_HGR_SNIPERH` | correct |
+| 33489284 Vindicta | AssaultLight, not owned | `MN_HGR_ASSAULTL` | correct |
+| **33489262 Agosta** | **AssaultMedium, OWNED** | `MN_HGR_ASSAULTL` | **wrong** |
+| **33489423 Simargl** | **DreadnoughtMedium, OWNED** | `MN_HGR_DREADL` | **wrong** |
+| **33489263 Rurik** | **SniperMedium, OWNED** | `MN_HGR_SNIPERL` | **wrong** |
+| **33489264 Cerberus** | **SupportMedium, OWNED** | `MN_HGR_SUPPORTL` | **wrong** |
+
+All four owned ships are Mediums and all four resolve to the Light of their
+class. The bay is CORRECT for the hull the client believes it has -- the operator
+sees a Vindicta, an Assault Light, when he opens the Agosta -- so this is hull
+resolution, not scenery.
+
+**2. What we eliminated, each with a run.**
+
+- **Missing hull id.** Added `m_shipId` to the fleet loadout entry, which every
+  other loadout payload of ours carries and that one did not. On the wire,
+  confirmed in the fleet response hex. **No change.**
+- **Ship vanity.** `m_displayInfo` is the one field the fleet entry has that the
+  tech tree path lacks, and it is a list of MESH PART ids. Suppressed it entirely
+  (`DN_NO_SHIP_VANITY=1`), verified absent from the client log. **No change** --
+  both owned Mediums still loaded their Light bay.
+- **A size default.** Dead on its own evidence: `MN_HGR_DREADH` and `SNIPERH`
+  both appear, so the client selects sizes correctly when it has the information.
+
+**3. What is left, and why we think it is yours.** The client logs the RIGHT id at
+selection (`Is veteran 33489262`) and loads the RIGHT asset -- across a whole
+session the only Assault asset it touches is
+`VH_AssaultMedium_T1_PrecastLoadout_BP_C`. So it has the correct id and the
+correct precast, and still puts a Light hull in a Light bay.
+
+Three names from the binary that may be the whole answer, offered because you can
+probe them at runtime and we cannot:
+
+```text
+GetMediumShipClassForShipBaseClass     0x2FF7150
+m_currentBaseClass / m_currentShipClass  (adjacent, same cluster)
+OnRep_ShipClass
+```
+
+A converter from the five-value BASE class to the fifteen-value ship class exists
+by name. If the owned-ship path runs a different conversion -- or none -- from the
+tech tree path, that is exactly the shape of what we measured. Our `m_shipClass`
+is the five-value base class, pinned there because it is what makes class NAMES
+render correctly (`S3`), so we cannot widen it without breaking those.
+
+**What would settle it in one probe:** on an owned ship selection, read
+`m_currentShipClass` and `m_currentBaseClass` on the player controller, and
+compare against a tech tree selection of the same hull. If the owned path leaves
+`m_currentShipClass` at a Light value while the tech tree path sets it correctly,
+we will know whether the field we must fill is one we can reach at all.
