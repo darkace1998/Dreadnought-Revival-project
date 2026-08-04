@@ -4772,7 +4772,17 @@ func purchasePriceForItem(itemID int32) int32 {
 func purchasedItemType(itemID int32) string {
 	category, ok := dreadconfig.GetCategoryForItemID(itemID)
 	if !ok {
-		return dreadconfig.ItemTypeShip
+		// ItemIDTable is an incomplete index -- it has known orphans -- and the
+		// old fallback here was "ship", which is both the least likely answer
+		// and the most consequential one: it files a module purchase as a hull.
+		// Vulture Missiles (83825291) is exactly that case, and it was the ONE
+		// item out of 52 in the catalog recorded under a type it was not sold
+		// as.
+		//
+		// The category law does not have orphans: the top byte of an id IS its
+		// ItemIDTable CategoryID, verified across 3437 ids with 0 disagreeing
+		// (CONTRIBUTING.md). Use it when the table cannot answer.
+		return itemTypeFromCategoryLaw(itemID)
 	}
 	switch category {
 	case "YWeapon":
@@ -4785,6 +4795,29 @@ func purchasedItemType(itemID int32) string {
 		return dreadconfig.ItemTypeLoadout
 	default:
 		return dreadconfig.ItemTypeShip
+	}
+}
+
+// itemTypeFromCategoryLaw derives an item type from the top byte of an id, which
+// IS the item's ItemIDTable CategoryID. Unlike the table itself this is total,
+// so it is the right thing to fall back to rather than a guess.
+func itemTypeFromCategoryLaw(itemID int32) string {
+	switch (itemID >> 24) & 0xff {
+	case mmogItemCategoryShipLoadoutPrecast, mmogItemCategoryShipLoadoutHero:
+		return dreadconfig.ItemTypeLoadout
+	case 4:
+		return dreadconfig.ItemTypeAbility
+	case 5:
+		return dreadconfig.ItemTypeWeapon
+	case 6:
+		return dreadconfig.ItemTypePerk
+	case mmogItemCategoryShipPawn:
+		return dreadconfig.ItemTypeShip
+	default:
+		// Vanity, boosters, character customisation and the rest. "ship" would
+		// be a confident wrong answer; the loadout/ship distinction is what
+		// downstream ownership reads, so neither is safe to invent here.
+		return dreadconfig.ItemTypeItem
 	}
 }
 
@@ -4906,6 +4939,20 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	return b
 }
 
+// itemIDFromPurchaseOffer resolves the SKU string a client may send instead of a
+// numeric ItemID.
+//
+// It used to scan two small hardcoded lists -- the T1 ships and the starter
+// inventory -- which covered 27 of the 52 SKUs the store actually advertises.
+// The other 25 answered "missing ItemID for purchase": every ability except the
+// starter four, and every hull above Tier 1 including the three the store lists
+// at 200,000-400,000 credits. Nothing had ever been bought before S10.3 added a
+// way to get credits, so nothing had ever exercised it.
+//
+// Every SKU this server issues ends in "_<itemID>" (extractedMarketItemExternalID),
+// so the id is recoverable from the string. It is not TRUSTED from the string:
+// the recovered id is fed back through the same generator and the result must
+// equal the SKU that arrived, which rejects anything we did not issue.
 func itemIDFromPurchaseOffer(offer string) int32 {
 	if offer == "" {
 		return 0
@@ -4918,6 +4965,25 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 	for _, item := range starterOwnedInventorySeeds() {
 		if offer == item.externalID || offer == extractedMarketItemExternalID(item.itemID, "") || offer == strconv.FormatInt(int64(item.itemID), 10) {
 			return item.itemID
+		}
+	}
+	if id, err := strconv.ParseInt(offer, 10, 32); err == nil && id > 0 {
+		return int32(id)
+	}
+	if idx := strings.LastIndex(offer, "_"); idx >= 0 && idx+1 < len(offer) {
+		id, err := strconv.ParseInt(offer[idx+1:], 10, 32)
+		if err != nil || id <= 0 {
+			return 0
+		}
+		// Round-trip check: only a SKU this server would have issued for that id
+		// is accepted, so a hand-crafted "loadout_free_33489300" is not.
+		if extractedMarketItemExternalID(int32(id), "") == offer {
+			return int32(id)
+		}
+		for _, seed := range gatewayItemCatalogSeeds("") {
+			if seed.itemID == int32(id) && seed.externalID == offer {
+				return int32(id)
+			}
 		}
 	}
 	return 0

@@ -12,6 +12,11 @@ const (
 	ItemTypeWeapon  = "weapon"
 	ItemTypeAbility = "ability"
 	ItemTypePerk    = "perk"
+	// ItemTypeItem is for ids whose category is real but has no gameplay type
+	// of its own -- vanity, boosters, character customisation. It exists so
+	// that "I do not know" has a value: the alternative was defaulting to
+	// ItemTypeShip, which files a module purchase as a hull.
+	ItemTypeItem = "item"
 
 	// The four starter hulls' names, from ItemIDConversionTable via the precast
 	// loadout that names each ship (see authoritative_names.go). These used to
