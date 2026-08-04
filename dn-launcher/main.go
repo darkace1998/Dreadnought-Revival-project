@@ -354,6 +354,9 @@ type Config struct {
 	GamePath       string `json:"game_path"`
 	VerboseLogging bool   `json:"verbose_logging"`
 	SkipOnboarding bool   `json:"skip_onboarding"`
+	// AllowSteam drops the -NoSteam switch, letting the client keep its Steam
+	// online subsystem alive. See the note where the switch is built.
+	AllowSteam bool `json:"allow_steam"`
 	// PlayerID pins the account identity. Leave empty to derive it from this
 	// machine and user; set it to carry an account to another machine, or to
 	// recover one after the identity file was lost.
@@ -389,6 +392,9 @@ func loadConfig(exeDir string) Config {
 	// experience they had on the live servers.
 	if v := strings.TrimSpace(os.Getenv("DN_SKIP_ONBOARDING")); v != "" && v != "0" {
 		cfg.SkipOnboarding = true
+	}
+	if v := strings.TrimSpace(os.Getenv("DN_ALLOW_STEAM")); v != "" && v != "0" {
+		cfg.AllowSteam = true
 	}
 	return cfg
 }
@@ -547,7 +553,28 @@ func main() {
 		// block on a long timeout rather than failing fast — -NoSteam skips
 		// Steam subsystem init entirely, matching the flag the project's own
 		// dedicated-server launch command already uses (see README.md).
-		"-NoSteam",
+		//
+		// SUSPECTED COST, and the reason for allow_steam: the player's name and
+		// avatar come from Steam, not from us. There is no name field anywhere
+		// in the mmog protocol -- YA_PlayerGet has none, and
+		// YA_GetPlayersInformation's is exactly
+		// infos/DisplayInfo/UnlockedFleetType/Elite/Rank -- so nothing we send
+		// can fill them. A client log from an operator with Steam running shows
+		// the subsystem loading, receiving stats for the real persona, and then
+		// shutting down:
+		//
+		//	STEAM: Loading Steam SDK 1.32
+		//	STEAM: FOnlineAsyncEventSteamStatsReceived bWasSuccessful: 1
+		//	       User: [DC-Lan Party] DARKACE
+		//	STEAM: OnlineSubsystemSteam::Shutdown()
+		//
+		// If the UI reads the persona through that subsystem, this switch is why
+		// the name and the avatar are blank. Unproven -- hence opt-in rather
+		// than a default change, because the timeout above is a real cost.
+		// Set allow_steam in dn-launcher.json, or DN_ALLOW_STEAM=1.
+	}
+	if !cfg.AllowSteam {
+		args = append(args, "-NoSteam")
 	}
 
 	if cfg.SkipOnboarding {
