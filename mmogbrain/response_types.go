@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
@@ -116,6 +117,19 @@ const noShipVanityDisplayInfo = "-1#-1#-1#-1;-1;-1;-1;-1"
 // one pattern and four hull mesh parts per hull line, and the ship maker's base
 // coating. See shared/dreadgameconfig/ship_vanity.go for where each comes from.
 func (loadout mmogShipLoadoutSeed) displayInfo() string {
+	// DN_NO_SHIP_VANITY=1 sends "nothing customised" for every ship.
+	//
+	// It exists to settle one question with one run. An operator reports that
+	// OWNED ships render as the wrong hull (an Agosta showing as a Vindicta, an
+	// Assault Light) while unowned ships browsed in the tech tree render
+	// correctly. The vanity string is the one thing the fleet entry carries and
+	// the tech tree path does not, and it is a list of MESH PART ids -- the
+	// items that decide what the hull physically looks like. If suppressing it
+	// restores the right hull, the default appearance we compute is wrong; if
+	// nothing changes, vanity is not involved and the search moves on.
+	if os.Getenv("DN_NO_SHIP_VANITY") == "1" {
+		return noShipVanityDisplayInfo
+	}
 	// What the player actually chose wins over the computed default. Without
 	// this every customisation was answered with the stock appearance on the
 	// next load, so the ship the player built was never the ship they got back.
