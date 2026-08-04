@@ -34,6 +34,8 @@ When something does not work, the productive order is:
 
 Symptom-first debugging has a bad record here. The tech tree screen was empty for months; the cause was one field (`ClassId`) failing one gate (`(id >> 24) & 0xff` had to be 1 or 3). No amount of reasoning about the *screen* would have found that — reading the store gate did, in an afternoon.
 
+**A missing log line is not a missing execution.** MSVC splits functions: cold and unlikely paths get moved far away and receive their own `.pdata` record chained back to the primary. A literal that lives in one of those chunks sits *past* the early-return guards, so the function can run to completion without ever reaching it. Check which chunk a literal is in — `python .claude/skills/dreadnought-rva/scripts/pdata.py <rva>` resolves the chain — before concluding anything from its absence. This has now cost three separate diagnoses across both halves of the project: a tune handler reported as "never called", `UpdateWeaponSettings` read as a state when it was a transient, and `S12`'s retracted claim about NPC sets. The inverse holds too: a line that *does* print proves only that its own chunk ran.
+
 Corollary: **count things.** When the client logged twelve errors, the useful question was not "why are these twelve items broken" but "which twelve values are these?" They turned out to be the twelve `Prereq` ids, not twelve items — and that reframing solved it immediately.
 
 ## Server-side only

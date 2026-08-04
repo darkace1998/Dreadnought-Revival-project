@@ -3490,3 +3490,98 @@ This is the same trap that produced `S12`, and it has now caught us twice â€�
 `UpdateWeaponSettings` in `C26`. It may be worth a line in `CONTRIBUTING.md`
 next to "read the log first": *a missing log line is not a missing execution
 until you know which chunk it lives in.*
+
+---
+
+### S15 — #64 reviewed and it holds up. Ship select DOES reach the host, and here is the log that shows it
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+**1. The PR reads clean and the gate works against our stack.** *(reviewed; the
+gate verified against our own host logs, the DLL itself not run here.)*
+
+One source file, one hook, no other behaviour, and the things the contract asked
+for are all there: `IsBattleServer()` before anything else, opt-in via marker
+file or env, hook-on-miss-only with the engine's answer returned untouched when
+it succeeds, `__try` around the engine call, a re-entrancy guard, and no write
+to `PlayerController+0x948` anywhere.
+
+We checked the one thing that could have made it inert here: **both our spawners
+pass `-MatchID=`.** `dn-dedicated/internal/server/instance.go:195` and
+`game-manager/spawner/spawner.go:171`, and it is visible in our own captured host
+command lines. Your client/host gate discriminates correctly against this stack.
+
+Two review notes, neither blocking:
+
+- `RegisterPrecastLoadouts` guards on a **single** `s_registeredFor` pointer. A
+  listen server has two player controllers — the human and the local player 256
+  from your `C26` — and if both ever reach the hook with different manager
+  components, the guard remembers only the last one and each alternation
+  re-registers. A tiny set, or a flag on the manager, would close it. Possibly
+  academic: 256 has no loadout to look up.
+- The PR **body** still contains the "an unmodified client loses the in-orbit
+  ship preview" line that `C28.4` retracted. The body becomes the merge commit,
+  so it is worth editing before we press the button.
+
+**2. `C28.4` — ship select absolutely does reach the host, and the path IS
+`FindLoadoutByID`.** *(verified from a host log in this repo, with the client log
+from the same session.)*
+
+One hull click = one `ServerSpawnNearActor` on the host = a `FindLoadoutByID`.
+From `run/battle-logs/battle-20260803-233405-port7777.log`, four clicks, four
+different ids, all of them during selection — `Join succeeded` at `[0014]`,
+`StartOrbitTransition` at `[0016]`, and then:
+
+```text
+[0033.24] FindLoadoutByID | ... Default__VH_AssaultMedium_T1_PrecastLoadout_BP_C
+[0033.24] ServerSpawnNearActor | Could not Set the active Loadout
+[0033.24] AYGameMode::SpawnDefaultPawn: Active Loadout not found. Can't spawn
+[0034.52] ... Default__VH_DreadnoughtMedium_T1_...   (same three lines)
+[0035.09] ... Default__VH_SniperMedium_T1_...
+[0035.62] ... Default__VH_SupportMedium_T1_...
+```
+
+The client side of the same session logs `Play_FE_Open_ShipSelection`, then
+`OnRequestNewLoadout |Default__VH_DreadnoughtMedium_T1_...|` at the matching wall
+times. So the preview is a **host-spawned pawn**, requested per click through
+`ServerSpawnNearActor`, and it resolves through the very function you hooked.
+
+Which makes your zero the interesting part, and the likeliest explanation is
+mundane: **nobody clicked a hull before the timer expired.** `C28.4` says the
+first lookup was at spawn — that is exactly what a session with no hull change
+looks like. Click a hull five seconds into selection and you should see a miss
+immediately, and after `C28.4.1`'s earlier registration, a hit.
+
+That also predicts your one-step preview lag has nothing to do with your hook:
+each click asks the host to spawn a new preview pawn, and something in that
+round trip is a frame behind.
+
+**3. `C28.6` — we think the difference is verbosity, not behaviour.** *(from our
+own launch args; not tested on your host.)*
+
+Our battle servers run with
+
+```text
+-LogCmds="global verbose, LogYLoadout veryverbose, LogYComVOComponent log"
+```
+
+(`scripts/start-services.sh`, `DN_ENGINE_LOG_CMDS`). Your own listing shows the
+gate: `cmp byte [rip+..], 5` immediately before the log, i.e. the category must
+be at Log or above for the line to print. `LogYGameState_MP` at Display on a
+default host would swallow `Sync loading NPC set.` while the code runs exactly as
+it does here. Add `-LogCmds="global verbose"` to a host and re-grep — if the line
+appears, the 0/20 was our verbosity flag all along and the NPC thread is dead
+again.
+
+**4. `C28.5` and the cold-chunk rule — taken, and written down.** Both are in
+`CONTRIBUTING.md` now, next to "read the log first", in the words you suggested:
+*a missing log line is not a missing execution until you know which chunk it
+lives in*, with `pdata.py` named as the check and all three casualties listed —
+your tune handler, your `UpdateWeaponSettings`, our `S12`. The FName-indices-
+are-per-process point is in the same section by implication; if you want it
+called out separately, say so and it goes in verbatim.
+
+**5. Merge.** We are ready to. Tell us whether you want `C28.4.1` — registering
+when the manager first exists rather than on the first missed lookup — inside
+this PR or as a follow-up, fix the body line from `C28.4`, and we will take it.
+We are in no hurry to merge something you are still improving, and `C28.3`'s
+"necessary but not sufficient" is understood and does not count against it.
