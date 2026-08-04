@@ -69,42 +69,57 @@ and still nothing when the process is handed
 dn-launcher passes them to the client. The backend connection is driven by the
 frontend login flow, and a process booted straight into a map never runs it.
 
-## 1b. The same absence, three more times: orbit, thrusters and an empty match
+## 1b. The same absence, three more times: orbit and thrusters
 
-The empty loadout manager is not one bug. It is the first of at least four
-symptoms of one fact -- **the host has no player record** -- and each was found
-separately before the shape became obvious. Recording them together so the next
-one is recognised on sight.
+The empty loadout manager is not one bug. It is one symptom of one fact -- **the
+host has no player record** -- and the client side has since found two more.
+Recording them together so the next one is recognised on sight.
 
 | symptom | what actually reads the missing data |
 | --- | --- |
 | `FindLoadoutByID` misses every id | loadout manager, filled only from player data (above) |
 | the teleport out of orbit never fires | `PlayerController+0x948` = `EYOrbitReadyState`, computed by `FUN_140346C20` from the fleet **slot count**; count 0 returns 0 |
 | thrusters and muzzle effects never switch on | suspected: the orbit transition that the forced flag skips (client side, unconfirmed) |
-| **the match has no opponents or bots** | the NPC set is chosen by FLEET TYPE (below) |
 
-The bot chain, verified by disassembly:
+That makes populating the host's fleet slots the single lever for the last two,
+which is what the client side reached independently in AGENT-CHAT C27.
+
+### Empty matches are NOT on that list, and here is the disproof
+
+`S12.1` claimed they were: that `LoadNPCSet` (`FUN_1403A0A80`) switches on a
+fleet type, that the type comes from `PlayerController+0x958` (`m_fleetManager`,
+the same pointer the orbit gate checks), and that a host without one therefore
+loads no NPCs. **That is wrong, and this repo's own battle-server logs say so:**
 
 ```text
-FUN_1403A0A80  LoadNPCSet(fleetType)
-  switch (fleetType) { case 1,2,3: load the set; default: "LoadNPCSet | Invalid fleet type!" }
-     ^
-FUN_140396C50  the fleet-type getter
-  ...
-  call FUN_14039A2C0        ; the local player controller
-  mov  rcx, [rax + 0x958]   ; m_fleetManager -- the SAME pointer the orbit gate checks
-  test rcx, rcx / je -> default   ; null fleet manager -> default type -> no NPC set
+LogYAICombatSceneManager: AYAICombatSceneManager::LoadNPCSet | Request sync. load for NPCSet!
+LogYGameState_MP: LoadNPCSet | Sync loading NPC set.
 ```
 
-So a host with no fleet manager gets the default fleet type, `LoadNPCSet` refuses
-it, no NPC set is ever loaded, and `AYGameMode_Multiplayer::SpawnNPC` then has
-nothing to draw on ("not enough npcs in m_npcPlayers"). The empty match is not a
-missing feature on the backend: **the game populates matches itself, off the
-fleet.** `AYGameState_MP::LoadNPCSetOnFleetInitialized` says as much in its name.
+The NPC set loads. No `Invalid fleet type!`, no `No NPCSet data loaded!`, no
+`FStringAssetReference is not valid!` in any host log we have.
 
-That makes populating the host's fleet slots the single lever for all of it --
-which is what the client side reached independently in AGENT-CHAT C27 from the
-orbit side alone.
+The reading error is worth keeping, because it is an easy one to repeat. The
+fleet-type getter `FUN_140396C50` has two branches:
+
+```asm
+call 0x1726F50          ; GetNetMode(this)
+cmp  eax, 3             ; NM_Client
+jne  0x396CDE           ; NOT a client -> read the GAME STATE
+...                     ; client path: local PC -> [+0x958] m_fleetManager
+0x396CDE: movzx eax, byte [rbx+0x1D48]   ; server path: GameState+0x1D48
+```
+
+The `m_fleetManager` path is the **client** branch. A server reads
+`GameState+0x1D48`, which `FUN_1403A55E0` sets to 1, 2 or 3 -- and `LoadNPCSet`
+accepts all three. So the host's fleet type is valid, and it was never the
+reason a match is empty.
+
+What is still true and unexplained: matches have no opponents. The set loads,
+`AYGameMode_Multiplayer::SpawnNPC` exists, and
+`AYAICombatSceneManager::StartCombat - starting combat` appears in some of our
+host logs but not others. That is the next thread, and it starts at `StartCombat`
+rather than at the fleet.
 
 ## 2. OTS: the client uploads its tune data, and gets kicked for it
 

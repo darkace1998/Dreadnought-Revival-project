@@ -3231,3 +3231,74 @@ Also fixed on the way past: the store was offering ten ship PAWN ids the client
 cannot draw a tile for, and the tech tree was emitting six tier rows for a
 five-tier game. If a hull still shows the wrong tier or the wrong ship, that is
 new information and we want the log.
+
+---
+
+### S13 — Retracting S12.1. The NPC set loads on our host, and I read the wrong branch
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+`S12.1` went out an hour ago claiming empty matches were the fourth symptom of
+the missing player record, and told you to check whether bots appear once the
+fleet slots are populated. **Do not spend anything on that.** It is wrong, and
+this repo's own battle-server logs already contained the disproof.
+
+**1. What our host actually logs.** *(verified, five host logs, every one of
+them.)*
+
+```text
+LogYAICombatSceneManager: AYAICombatSceneManager::LoadNPCSet | Request sync. load for NPCSet!
+LogYGameState_MP: LoadNPCSet | Sync loading NPC set.
+```
+
+The NPC set loads. Not one `LoadNPCSet | Invalid fleet type!`, not one
+`No NPCSet data loaded!`, not one `FStringAssetReference is not valid!` anywhere.
+The mechanism I described could not have been happening while those lines were
+being written.
+
+**2. The reading error, since it is an easy one to repeat.** The fleet-type
+getter `FUN_140396C50` has two branches and I quoted the wrong one:
+
+```asm
+call 0x1726F50          ; GetNetMode(this)
+cmp  eax, 3             ; NM_Client
+jne  0x396CDE           ; NOT a client -> read the GAME STATE
+...                     ; client path: local PC -> [+0x958] m_fleetManager
+0x396CDE: movzx eax, byte [rbx+0x1D48]     ; server path: GameState+0x1D48
+```
+
+`m_fleetManager` is the **client** path. It caught my eye precisely because
+`C27` had just made that offset significant, and I stopped reading at the match.
+A server takes the other branch: `GameState+0x1D48`, which `FUN_1403A55E0` sets
+to 1, 2 or 3 (from a mode value: 4 -> 2, 5 -> 3, anything else -> 1), and
+`LoadNPCSet` accepts all three. The host's fleet type is valid and always was.
+
+So the tally in `S12.1` is three symptoms, not four, and `docs/battle-server-data-path.md`
+has been corrected to say so with this disproof attached.
+
+**3. What is still true, and a better thread than the one I gave you.** Matches
+really are empty, the NPC set really does load, and `SpawnNPC` never runs. The
+interesting line is one further on:
+
+```text
+LogYAICombatSceneManager:Display: AYAICombatSceneManager::StartCombat - starting combat
+```
+
+That appears in our 2026-08-02 host logs and **not** in the 08-03 ones, on the
+same stack. Something decides whether combat starts at all, and it is downstream
+of a set that loaded correctly. If you have host logs from your live matches,
+`grep StartCombat` is one command and it splits the question in half: present
+means the AI system started and has no NPCs to place, absent means it never
+started. We will chase it from our side either way — flagging it now because you
+are the ones with matches running.
+
+**4. On the process, not the content.** `S12` shipped a causal chain built from
+disassembly without checking it against logs sitting in this repo, and the chain
+was confident and specific enough to be worth acting on. You have retracted your
+own findings four times in this document and always with the measurement that
+killed them attached; this is us doing the same. The rule this broke is the one
+in our own `CONTRIBUTING.md` — read the log first, then the binary — and it broke
+because the binary was more interesting.
+
+Everything else in `S12` stands: player 256 (`S12.2`), the energy wheel tables
+(`S12.3`), the ready-up validate structure (`S12.4`), and the tier/id fixes
+(`S12.8`) were each checked against something other than my own reasoning.
