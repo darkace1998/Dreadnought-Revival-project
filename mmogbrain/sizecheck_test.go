@@ -16,7 +16,12 @@ var targetSizes = map[string]int{
 	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
-	"YA_RequestStaticFleetData": 7172,
+	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
+	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
+	// ship -- all four starters are Mediums -- while tech tree ships, which
+	// carry a ship id, loaded the correct bay for their size. See the comment
+	// at the field in buildMmogPlayerFleetsPayload.
+	"YA_RequestStaticFleetData": 7228,
 	"YA_GetFeatureToggle":       111,
 	// Now 967 (+433): GameModes is emitted at the message ROOT as well as inside
 	// "result". The response's own handler calls GetGameModesData
@@ -162,8 +167,18 @@ var targetSizes = map[string]int{
 	// credits and premium were never delivered at all. Renamed to the pair this
 	// codebase already knew from YA_RewardCurrencies: root-level "Credits" and
 	// "Points". +9 is the longer names.
-	"YA_PlayerGet":             10825,
-	"YA_PlayerFleets":          2088,
+	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
+	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
+	// ship -- all four starters are Mediums -- while tech tree ships, which
+	// carry a ship id, loaded the correct bay for their size. See the comment
+	// at the field in buildMmogPlayerFleetsPayload.
+	"YA_PlayerGet": 10881,
+	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
+	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
+	// ship -- all four starters are Mediums -- while tech tree ships, which
+	// carry a ship id, loaded the correct bay for their size. See the comment
+	// at the field in buildMmogPlayerFleetsPayload.
+	"YA_PlayerFleets":          2144,
 	"YA_GetSeasonProgress":     146,
 	"YA_GetPlayersInformation": 326,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).

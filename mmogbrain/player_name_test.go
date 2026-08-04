@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+)
 
 // Every account on this server was called "Local". player_state seeds
 // display_name to that constant and nothing ever wrote over it, so the client
@@ -61,6 +66,26 @@ func TestFirmamentSelfProfileCarriesTheName(t *testing.T) {
 	for _, key := range []string{"name", "nickname"} {
 		if got, _ := profile[key].(string); got != "123" {
 			t.Errorf("profile[%q] = %q, want %q", key, got, "123")
+		}
+	}
+}
+
+// Every fleet ship must carry its hull id. Without m_shipId the hangar loaded
+// the LIGHT bay for all four owned starters -- every one of them a Medium --
+// while tech tree ships, which do carry a ship id, loaded the correct bay
+// (AGENT-CHAT S24).
+func TestFleetEntriesCarryTheirShipID(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	payload := string(buildMmogPlayerFleetsPayload("00000000000000000000000000000001"))
+	for _, loadout := range starterFleetState().shipLoadouts {
+		want := loadout.effectiveFleetShipID()
+		if want == 0 {
+			t.Errorf("%s has no ship id to send", loadout.loadoutName)
+			continue
+		}
+		if !bytes.Contains([]byte(payload), protocol.AppendInt32Field(nil, "m_shipId", want)) {
+			t.Errorf("%s (ship %d) is missing m_shipId in the fleet payload", loadout.loadoutName, want)
 		}
 	}
 }

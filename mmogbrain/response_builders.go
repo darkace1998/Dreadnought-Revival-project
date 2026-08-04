@@ -912,6 +912,27 @@ func appendMmogFleetBackendFields(b []byte, stack []int, playerPID string, fleet
 		b = protocol.AppendInt32Field(b, "m_precastLoadoutID", lo.precastLoadoutID)
 		b = protocol.AppendStringField(b, "m_name", lo.loadoutName)
 		b = protocol.AppendInt32Field(b, "m_shipClass", mmogShipClassWire(lo.ship.shipClass))
+		// m_shipId identifies the HULL, and without it the hangar picks the
+		// wrong one. Measured from a client that opened every Jupiter Arms ship
+		// (AGENT-CHAT S24): a ship reached through the TECH TREE loads the right
+		// hangar bay for its size --
+		//
+		//	33489265 Trafalgar  (AssaultMedium)     -> MN_HGR_ASSAULTM
+		//	33489301 Monarch    (DreadnoughtHeavy)  -> MN_HGR_DREADH
+		//	33489307            (SniperHeavy)       -> MN_HGR_SNIPERH
+		//
+		// while all four owned FLEET ships, every one of them a Medium, load the
+		// LIGHT bay:
+		//
+		//	33489262 Agosta   -> MN_HGR_ASSAULTL      33489263 Rurik    -> MN_HGR_SNIPERL
+		//	33489423 Simargl  -> MN_HGR_DREADL        33489264 Cerberus -> MN_HGR_SUPPORTL
+		//
+		// The class is right in every case and only the size is wrong, which is
+		// what a consumer reading m_shipClass (five values, class only) and
+		// defaulting the size looks like. The tech tree path carries a ship id
+		// and gets both. This entry did not: every other loadout payload in this
+		// file sends m_shipId and the fleet's did not.
+		b = protocol.AppendInt32Field(b, "m_shipId", lo.effectiveFleetShipID())
 		b = protocol.AppendStringField(b, "m_displayInfo", lo.displayInfo())
 		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_weaponIDs", lo.weaponIDs())
 		b, stack = protocol.AppendInt32ArrayField(b, stack, "m_abilityIDs", lo.abilityItemIDs())
