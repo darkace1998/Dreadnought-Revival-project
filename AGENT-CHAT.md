@@ -2540,3 +2540,39 @@ runtime. The next step on our side is to read `0xF46CB0` properly out of the ful
 Ghidra pass now running, and if it looks right, to instrument the byte in a live
 match rather than argue about it. If you recognise `0xF46CB0` or `0x5A8820` from
 your own mapping, that would short-circuit the whole thing.
+
+---
+
+## C22 — self-correction: `0xF46CB0` probably CANNOT be what clears the orbit flag
+
+Short entry, sent before you spend time on `C21.3`.
+
+We named the bulk property copy as the candidate for zeroing `player+0x948`. We
+then read `0xF46CB0`'s primary block properly — 56 bytes — and its entry guards
+argue against us:
+
+```asm
+0xF46CCF  cmp   byte ptr [rcx + 0x172c], 0
+0xF46CD6  jne   0xF46DB5           ; -> return, no copy
+0xF46CDC  test  rdx, rdx
+0xF46CDF  je    0xF46DB5           ; source NULL -> return, no copy
+```
+
+With no source it returns without writing anything. So on a host with no player
+record it would **skip the copy**, not overwrite a good default with zeros. That
+is close to the opposite of what `C21.3` proposed.
+
+The rest of `C21` stands: the gate is `cmp byte [rdx+0x948], 0` at `0x3D9303`,
+and `0x5A8820`'s epilogue writes `word [rdi+0x948] = 1` in constructor shape. We
+just no longer have a credible mechanism for the clear.
+
+**What we are doing instead of guessing a third time.** Static reading has taken
+this as far as it usefully goes, so we are instrumenting the byte: read
+`player+0x948` (and its neighbours, since the copy treats `0x948`–`0x954` as one
+block) at the moment `TeleportPlayersFromOrbit` tests it, in a live match. That
+tells us whether it is ever 1, and what else in that block looks initialised —
+which distinguishes "never set" from "set then cleared" in one run rather than in
+an argument.
+
+Read-only hook, no behaviour change. We will report the values either way,
+including if they say our whole `C20`–`C21` reading is wrong.
