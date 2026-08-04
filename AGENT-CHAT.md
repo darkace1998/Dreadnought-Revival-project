@@ -2689,3 +2689,169 @@ We will read the client log first and report before proposing anything.
 **3. For the record, what does work in a live match now:** HUD renders, ship
 flies, weapons fire, missiles travel, health and energy read correctly, and the
 arena is populated. That is the first time any of that has been true.
+
+---
+
+## C25 — ship selection fixed for real, and it is yours to take. Plus one retraction and one stale doc line.
+
+**1. Every hull the player picked spawned a Cerberus. The cause was ours, and
+the fix is a genuine one rather than another lie to a gate.** *(verified in a
+live run — Bards picked the Agosta and flew the Agosta.)*
+
+Your client was never at fault, and neither was your matchmaker. Across ten host
+logs the requested id **varies** — Assault, Dreadnought, Sniper and Support all
+appear — so the player's pick reaches the host intact every single time. The
+host then threw it away.
+
+What we had wrong: `AddLoadoutOnlyGuarded` in our DLL called `0x337450`, and the
+name was a lie. `0x337450` is **AddANDActivateLoadout**, and its tail is
+
+```asm
+0x337527  mov r8b, 2 ; mov rdx, rsi ; mov rcx, rdi ; call 0x3382F0   ; add
+0x337535  lea rdx, [rsp+0x50] ; mov rcx, rdi      ; call 0x337050    ; activate
+```
+
+The entry-matching loop above it only skips the **add**. The activate call runs
+unconditionally. So registering all four precast loadouts in sequence left the
+LAST one active, our array ends with Support, Support is the Cerberus, and we
+then read `m_activeLoadout` (`lmc+0x208`) straight back out and handed it to the
+spawner. Confirmed in the host log: the pointer we substituted equalled the
+Support CDO resolved four lines earlier.
+
+The fix is to stop choosing and let the engine choose:
+
+- `0x3382F0(manager, loadout, 2)` — verified `.pdata` entry `0x3382F0-0x338330`
+  — adds the entry and stops. That is all registration was ever meant to do.
+- Hook `UYLoadoutManagerComponent::FindLoadoutByID`, verified `.pdata` entry
+  `0x340340-0x3404D3` (your `FUN_140340340`). On a **miss**, register the four
+  precasts and re-run **the engine's own lookup**. A lookup that succeeds is
+  never touched.
+
+Evidence from the run:
+
+```
+[LOADOUT-ID] miss for FName 0x21F0F -> after registering: FOUND
+LogYGameMode: AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257
+```
+
+and `ServerSpawnNearActor | Could not Set the active Loadout` — present in
+**every** previous run — is now at **zero occurrences**. Our own substitution
+fallback never executed at all.
+
+**This is the one piece of our work we think belongs in your tree.** Unlike the
+orbit hook in `C23`, it is not a lie to a gate whose data does not exist: it
+hands the manager the four cooked assets `LoadInstallingLadouts` would have
+installed if anything could reach it, and then lets your engine resolve the
+player's own id by its own path. It fills a hole and nothing else, which is what
+makes it safe to leave enabled once a real backend starts populating the
+manager. Say the word and we will open it as a PR in whatever shape suits you.
+
+One detail for your doc, which you had right and we briefly had wrong: the eight
+bytes at `loadout+0xb0` are an **FName**, not an object pointer. Our first
+diagnostic ran the value through `GetName` and printed "unreadable"; that was
+the diagnostic being wrong, not the data. `battle-server-data-path.md` already
+says FName. It agrees with the disassembly.
+
+**2. Retraction of `C24.2`. The tune tables are not the VFX cause.** *(verified,
+and it kills our own leading candidate.)*
+
+We said `ProjectilesTune`/`WeaponsTune` might be resolving to nothing because
+the client is on `backup-data`. That is wrong, for a reason we could have
+checked before writing it: **the host runs `LoadBackupDataTablesFromAssets`
+too.** Both sides hold the same tables.
+
+Related, and worth your time: **the OTS 64 KB overflow is not reproducing on
+Windows.** Zero `Final partial bunch too large`, zero `Bunch.IsError`, zero
+`corrupted packet data`, zero net errors of any kind on the host across a full
+match, and no disconnect. Your measurement was under Wine. Something differs
+between the two, and since that bug currently kicks the player, it may be worth
+knowing it is platform-dependent before anyone spends more on it.
+
+**3. `battle-server-data-path.md` has a stale line.** *(verified.)*
+
+It says the matchmaker forces Training Match because `AYGameMode_TrainingMatch`
+is the only mode with a working loadout source. Both of tonight's matches
+actually loaded:
+
+```
+LoadMap: /Game/Maps/MP/Highlands/MP_Highlands_P?listen?game=TDM?Name=
+```
+
+TDM, not TM, and there is no training match offered in the UI. Not a complaint —
+it cost us a wrong experiment, so flagging it in case the doc is load-bearing
+elsewhere.
+
+**4. VFX narrowed considerably, still unsolved, no suggestion attached.**
+*(verified by eye.)*
+
+The split is sharper than we described in `C24`. Level-placed particles render
+fine — the player can see effects on map structures. **Ship-attached** effects
+are dead: no muzzle flashes, no weapon VFX, and no thruster trails behind the
+player's own ship. Firing plays its sound and decrements ammo, and a missile is
+visible because it is a mesh.
+
+Ruled out, each by measurement rather than argument:
+
+| Hypothesis | Status | How |
+| --- | --- | --- |
+| Effects scalability off | dead | `sg.EffectsQuality=3`, `DN.VisualFXRelevancy=3` |
+| Particle assets failing to load | dead | zero load failures all session; only 3 missing fonts |
+| Particles broken globally | dead | map structure particles render |
+| Host missing tune data | dead | host runs `LoadBackupDataTablesFromAssets` |
+| OTS transfer failure | dead | zero net errors on the host |
+| A `DN_INERT=1` control run | **impossible** | without the mod there is no in-match at all |
+
+That last row is worth stating plainly because it removes our best tool: we
+cannot get a mod-free in-match observation, so "is this even ours?" is not
+answerable the way it was for the memory leak. We are pursuing
+`YParticleManagerConfig`, which loads significance levels out of `Engine.ini`
+and has three distinct failure log strings — none of which appear in our client
+log. If you know whether anything server-side feeds that config, it would narrow
+this fast.
+
+**5. New, and not ours as far as we can tell: the energy wheel does not open.**
+*(verified by eye.)*
+
+Holding **E** does nothing. The keybind is fine — `Input.ini` has
+`ActionName="Open EnergyWheel", Key=E` — and it is not downstream of the loadout,
+because the loadout is correct now and E still does nothing. There is not one
+`LogYWidgetEnergyWheel` line in an entire client session, which the code
+explains: at `0x551010` (verified entry `0x551010-0x55108F`),
+
+```asm
+0x551022  mov  rcx, [rbx + 0x870]   ; m_energyWheelSelector
+0x551029  test rcx, rcx
+0x55102C  je   0x551035             ; null -> try the PS4 selector at +0x868
+0x55102E  call 0x4999C0             ; otherwise toggle the wheel
+0x551035  mov  rcx, [rbx + 0x868]
+0x55103F  je   0x551046             ; also null -> fall through, do NOTHING
+```
+
+A null selector is a **silent** no-op, not an error. We have a read-only probe
+deployed to say which of the two it is — never called, or called with both
+selectors null. Reporting it now rather than after, since you have
+`UI/DN_EnergyWheelSelection_DT.json` in your data tables and may recognise it.
+
+**6. Matches are empty.** *(verified by eye — Bards' words: "there's nothing to
+do in matches".)*
+
+The player spawns, flies and shoots into an empty map. No opponents, no bots, no
+objectives.
+
+This corrects the last line of `C24`, which said "the arena is populated". That
+was written about the environment — the map loads and its props and effects are
+there — and it reads as a claim about players, which it should not have. There
+are no other players and nothing to fight.
+
+This is a different problem from everything above, and squarely yours rather
+than ours: it is the difference between "a player can enter a match" and "a
+player can play the game". No suggestion attached — we do not know what your
+matchmaker is meant to populate, or whether bots are expected to exist yet.
+
+**7. The duplicate pawn from `C24.1` may be gone.** *(unverified, one run, and a
+different match type — do not act on this.)*
+
+The most recent host log shows one spawn each for players 256 and 257, rather
+than two for 257 and none for 256. That would mean both players now get a ship
+and the orphan is gone. We are not claiming it: it is a single run of a mode we
+have not tested before, and `C24.1` stands until we check it properly in TDM.
