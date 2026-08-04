@@ -137,6 +137,10 @@ func newSocialPeer(playerID, peerID string, conn net.Conn) *socialPeer {
 	peer := &socialPeer{
 		playerID: playerID,
 		peerID:   peerID,
+		// Without this every presence entry, chat user and friend listing went
+		// out with name:"" -- presenceEntry copies peer.name, and nothing ever
+		// assigned it.
+		name:     mmogPlayerStateForPID(playerID).displayName,
 		conn:     conn,
 		out:      make(chan []byte, socialPeerQueueDepth),
 		closed:   make(chan struct{}),
@@ -736,4 +740,43 @@ func firmamentSelfProfile(playerID, peerID string) map[string]any {
 		"message":  "",
 		"online":   true,
 	}
+}
+
+// searchUsers returns the players whose display name matches a search term.
+//
+// Case-insensitive, substring, and it always includes the searcher when their
+// own name matches -- the client's automatic user.search at login is looking for
+// itself, so excluding the requester (the usual instinct for a people search)
+// would answer the one question it is actually asking with nothing.
+func (h *socialHub) searchUsers(terms, requesterID string) []any {
+	terms = strings.ToLower(strings.TrimSpace(terms))
+	if terms == "" {
+		return []any{}
+	}
+
+	seen := map[string]bool{}
+	out := []any{}
+	add := func(playerID string) {
+		if playerID == "" || seen[playerID] {
+			return
+		}
+		name := mmogPlayerStateForPID(playerID).displayName
+		if name == "" || !strings.Contains(strings.ToLower(name), terms) {
+			return
+		}
+		seen[playerID] = true
+		out = append(out, h.presenceEntry(playerID))
+	}
+
+	add(requesterID)
+	h.mu.Lock()
+	ids := make([]string, 0, len(h.peers))
+	for id := range h.peers {
+		ids = append(ids, id)
+	}
+	h.mu.Unlock()
+	for _, id := range ids {
+		add(id)
+	}
+	return out
 }

@@ -14,6 +14,7 @@ package main
 // alternative is a silent empty panel.
 
 import (
+	"os"
 	"strings"
 )
 
@@ -71,8 +72,82 @@ func handleSocialMethod(r socialRequest) (map[string]any, bool) {
 		strings.HasPrefix(r.method, "presence.pending_friends."),
 		strings.HasPrefix(r.method, "presence.ignore"):
 		return handlePresenceSocialMethod(r), true
+	case strings.HasPrefix(r.method, "user."):
+		return handleUserMethod(r), true
 	}
 	return nil, false
+}
+
+// handleUserMethod answers the user.* family.
+//
+// These used to fall through to the generic `{"status":"success"}` reply, which
+// is the shape of "your request was fine" and NOT of "here are the users". The
+// client sends `user.search` seventeen times during a single login with the
+// player's own STEAM PERSONA as the search term:
+//
+//	{"method":"user.search","params":{"terms":"DARKACE","limit":100,"offset":0}}
+//
+// That is the only place the client ever tells this server who Steam thinks it
+// is -- there is no name field anywhere in the mmog protocol, YA_PlayerGet has
+// none, and YA_GetPlayersInformation carries only
+// infos/DisplayInfo/UnlockedFleetType/Elite/Rank. Answering "success, no users"
+// left the client with no profile for itself, and the player's name blank.
+func handleUserMethod(r socialRequest) map[string]any {
+	switch r.method {
+	case "user.search":
+		terms := strings.TrimSpace(stringParam(r.params, "terms", "term", "query"))
+		adoptSteamPersona(r, terms)
+
+		users := r.hub.searchUsers(terms, r.peer.playerID)
+		// Several aliases for one list, the same defensive shape the chat
+		// handlers use: the key the client reads is not recoverable from the
+		// binary (user.search appears only as a literal, with no result parser
+		// near it), and an extra key it ignores costs nothing while a missing
+		// one costs the whole feature.
+		return socialOK(map[string]any{
+			"users":   users,
+			"results": users,
+			"listing": users,
+			"total":   len(users),
+		})
+	}
+	// Everything else in the family keeps the old behaviour rather than
+	// inventing a shape for it.
+	return socialOK(nil)
+}
+
+// adoptSteamPersona records the name the client just told us Steam knows it by.
+//
+// The original backend authenticated through Steam and would have had this from
+// the ticket; we only ever see it here. It is taken as the player's display name
+// when the stored one is still a placeholder or their bare login name, and never
+// over a name they set themselves in captain customisation.
+//
+// It is a CLAIM -- the connection is authenticated but the string is not -- so
+// it is length- and content-checked, and DN_NO_STEAM_PERSONA=1 turns it off.
+func adoptSteamPersona(r socialRequest, terms string) {
+	if terms == "" || os.Getenv("DN_NO_STEAM_PERSONA") == "1" {
+		return
+	}
+	if len([]rune(terms)) > 32 || strings.ContainsAny(terms, "\r\n\t") {
+		return
+	}
+	rememberPlayerDisplayName(r.peer.playerID, terms)
+	if name := mmogPlayerStateForPID(r.peer.playerID).displayName; name != "" {
+		r.peer.mu.Lock()
+		r.peer.name = name
+		r.peer.mu.Unlock()
+	}
+}
+
+// stringParam reads the first present string parameter under any of the names.
+func stringParam(params map[string]any, names ...string) string {
+	for _, name := range names {
+		if v, ok := params[name].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func handleChatMethod(r socialRequest) map[string]any {
