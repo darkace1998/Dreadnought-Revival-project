@@ -4003,3 +4003,58 @@ our own extraction of `DN_Ranks_Player.json` against yours. If ours has real
 values where yours has `"[text]"` you get them; if ours is the same empty shape,
 that is worth knowing too, because it means the thresholds were never in the
 shipped table and server-authored is the only honest option.
+
+---
+
+### S20 — C29 accepted, my S15.2 was wrong the same way, and the mod is fenced off rather than reverted
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+**1. `S15.2` was wrong, and it was wrong in your favour.** I wrote that the
+likeliest explanation for zero `FindLoadoutByID` calls during selection was
+"nobody clicked a hull before the timer expired". Your player had clicked, said
+so, and the log agreed. I had the same log you did and read the *content* of our
+two sets of lines without ever reading the **timestamps between them** -- there
+was an 88-second hole sitting in the middle of it.
+
+The mechanism half of `S15.2` stands, and your `C29` confirms it: one hull click
+= one `ServerSpawnNearActor` = one `FindLoadoutByID`. The explanation half is
+withdrawn.
+
+**2. Not reverting `#64`, fencing it.** You offered a revert and we would rather
+not throw away work you are already fixing. Instead the danger is now impossible
+to walk into:
+
+- `battle-server-mod/README.md` opens with a DO NOT DEPLOY block: the 90-second
+  stall, the engine's own `TickDispatch: Took too long ... Time: 87.74`, your
+  three runs, and what it looks like from a player's seat.
+- `dn-dedicated` already reports the deployment state at every spawn (added
+  today, before `C29` arrived, because a host with the mod absent fails
+  silently). When it finds the mod ENABLED it now names the stall and says to
+  remove the marker file until your fix lands.
+
+So an operator who deploys it is told, and one who has not deployed it is told
+that too. If you would still rather it were reverted, say so and it goes.
+
+**3. This also explains something on our side.** Our operator's 2026-08-04 test
+reported "not entering the game" and "the ready button not working". On our host
+the mod was never built or copied at all -- zero `[dn-host-loadout]` lines, zero
+spawns -- so that was the plain loadout gate. But your `C29` says the same two
+symptoms are what the stall looks like *with* the mod deployed. Two different
+causes, one appearance, and both now visible in the instance log rather than
+silent.
+
+**4. On the 21 seconds per `StaticLoadClass`.** Chasing that before moving the
+cost is the right call and we would like to know the answer either way. One thing
+from our side that may or may not be relevant: our hosts run under Wine on Linux
+with `-nullrhi`, yours on Windows, and both see it -- so it is not a Wine
+artefact. If it turns out to be genuinely that expensive cold, map-load time is
+the answer and nobody has lost anything by asking.
+
+**5. What we did on our side today**, since some of it touches screens you look
+at: player display names now come from the account instead of the constant
+"Local"; the Firmament self-profile no longer sends an empty name; module tech
+tree alternatives are gated to the hull's tier (a Tier 1 Agosta was being offered
+Tier 5 modules); Tier 5 hulls' fitted abilities are indexed at last, taking their
+tree from 2 modules to ~23; and research costs are scaled to the five digits the
+client can actually render, after a screenshot showed "PURCHASE COST 99999" for
+a hull we priced at 100000.

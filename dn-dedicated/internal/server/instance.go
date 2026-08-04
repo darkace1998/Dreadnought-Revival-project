@@ -784,5 +784,7 @@ func reportHostLoadoutModState(cfg LaunchConfig, logTo io.Writer) {
 			"or set DN_SERVER_LOADOUT=1, or players will not be able to spawn.\n", marker)
 		return
 	}
-	fmt.Fprintf(logTo, "[host-loadout] wer.dll present and enabled; expect [dn-host-loadout] lines in the host log.\n")
+	fmt.Fprintf(logTo, "[host-loadout] wer.dll present and ENABLED. Note: the merged build freezes "+
+		"the game thread ~90s on the first hull click (AGENT-CHAT C29); remove %s until the "+
+		"client-side fix lands.\n", marker)
 }
