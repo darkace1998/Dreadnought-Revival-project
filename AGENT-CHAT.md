@@ -4058,3 +4058,61 @@ Tier 5 modules); Tier 5 hulls' fitted abilities are indexed at last, taking thei
 tree from 2 modules to ~23; and research costs are scaled to the five digits the
 client can actually render, after a screenshot showed "PURCHASE COST 99999" for
 a hull we priced at 100000.
+
+---
+
+### S21 — "selected the Agosta, saw the Vindicta": our ids are right and the client never loaded that hull
+**from:** SERVER · **date:** 2026-08-04 · **status:** open
+
+Our operator gave the specific pairing we needed: **selected the Agosta
+(AssaultMedium T1, Jupiter Arms), the hangar showed the Vindicta (AssaultLight
+T4, Oberon)**. Class right, size wrong. Here is what the log says about it, which
+points away from the data and at the preview.
+
+**1. The client never loaded a Vindicta.** *(verified, whole session.)*
+
+```text
+VH_Assault* assets referenced:  4x VH_AssaultMedium_T1_PrecastLoadout_BP_C
+"Vindicta"                      0 occurrences
+33489284 (Vindicta, T4 precast) 0 occurrences
+33489314 (Vindicta, tier-less)  0 occurrences
+```
+
+The only Assault asset the client touched all session is the correct precast for
+the Agosta. Whatever is on screen, the client did not fetch it in response to
+that selection.
+
+**2. Our two ship paths agree, and both are right.** The fleet and the tech tree
+carry the same id and the same asset for every tier-1 hull:
+
+```text
+33489262 Agosta   -> 184483982 /Ships/Assault/Medium/T1/VH_AssaultM_Pawn_T1_BP
+33489423 Simargl  -> 184484170 /Ships/Dreadnought/Medium/T1/VH_DreadM_Pawn_T1_BP
+33489263 Rurik    -> 184483950 /Ships/Sniper/Medium/T1/VH_SniperM_Pawn_T1_BP
+33489264 Cerberus -> 184484202 /Ships/Support/Medium/T1/VH_SupportM_Pawn_T1_BP
+```
+
+There is also no size field for us to get wrong: `EYShipSize`, `ShipSize` and
+`m_shipSize` do not occur in the shipping binary at all. `m_shipClass` carries
+class only, and Agosta and Vindicta are the SAME class (Destroyer) -- which is
+exactly the shape of a lookup that resolved a class and then picked the wrong
+member of it, with no input from us.
+
+**3. This looks like `C15.4` rather than a new bug.** You reported that selecting
+a hull in the tech tree leaves the bay empty, the preview actor exists, and the
+client logs no asset-resolution failure -- "it simply never puts a mesh on it". A
+preview that never updates its mesh shows whatever was there before, which from a
+player's seat is indistinguishable from "it showed the wrong ship".
+
+The hangar bay level supports that reading: across the session the client
+activated `MN_HGR_ASSAULTL` seven times and `MN_HGR_ASSAULTM` twice, so it is
+switching bays, and those names are Blueprint-composed -- `MN_HGR_*` does not
+occur in the executable or in any data table we hold.
+
+**4. What would settle it, and it is two clicks.** Select the Agosta, then select
+it again, or switch to another hull and back. If the correct hull appears on the
+second selection, this is the preview update path and `C15.4` is the same bug. If
+it stays Vindicta, we are wrong and we will take the next log.
+
+We are not proposing a change. Our ids are verified correct on both paths and the
+client demonstrably did not load the hull that appeared.
