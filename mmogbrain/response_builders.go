@@ -4723,6 +4723,46 @@ var catalogPrices = map[int32]int32{
 	100598592: 2000, // /Game/Generic/Abilities/Dreadnought/Pri_BS_Plasma/T0/AB_DN_Pri_BS_Plasma_Weapon_T0_BP
 }
 
+// purchasePriceForItem is what a purchase actually costs.
+//
+// It must be the price the STORE advertised for the same item, and for a long
+// time it was not. The catalog prices every entry with
+// gatewayMarketCreditPrice(itemType, tier) -- 25,000 for a Tier 1 hull, doubling
+// per tier -- while this path read a hand-written map of about twenty ids and
+// fell back to a flat 1000 for everything else. So the shelf and the till
+// disagreed on every item in the game:
+//
+//	Athos           store 400,000   charged 1,000   (not in the map at all)
+//	Repeater Turrets store   5,000   charged 2,000
+//
+// The catalog's own derivation is the authority, because it is what the player
+// was shown, and it is repeated here from the same inputs rather than
+// re-implemented: extractedMarketItemMetadataForID for the item type (NOT
+// purchasedItemType, which reads the ItemIDTable category and disagrees -- it
+// called Vulture Missiles a ship and would have charged 25,000 for a 5,000
+// module) and gatewayMarketItemTier for the tier.
+//
+// catalogPrices survives only for ids the catalog does not carry at all. It must
+// not take precedence: it prices eight weapons at 2,000-3,500 that the store
+// advertises at 5,000, and letting it win would keep exactly the bug this
+// function exists to remove. It is kept rather than deleted because its per-item
+// values were researched (issue #36 corrected four mislabelled categories in it)
+// and a real price table, if one is ever found, belongs there.
+func purchasePriceForItem(itemID int32) int32 {
+	// Derive it exactly as the catalog entry did -- same itemType source, same
+	// tier source, same function -- so the two agree by construction rather
+	// than by two tables being kept in step by hand.
+	if meta, ok := extractedMarketItemMetadataForID(itemID); ok {
+		if price := gatewayMarketCreditPrice(meta.itemType, gatewayMarketItemTier(itemID)); price > 0 {
+			return price
+		}
+	}
+	if price, ok := catalogPrices[itemID]; ok && price > 0 {
+		return price
+	}
+	return 1000
+}
+
 // purchasedItemType derives the item_type recorded for a purchase from the
 // authoritative ItemIDTable.json category (via dreadconfig.GetCategoryForItemID,
 // which covers the full ~6600-item table, not just the small hardcoded
@@ -4796,11 +4836,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	if quantity <= 0 {
 		quantity = 1
 	}
-	price, ok := catalogPrices[itemID]
-	if !ok {
-		price = 1000
-	}
-	price *= quantity
+	price := purchasePriceForItem(itemID) * quantity
 	itemType := purchasedItemType(itemID)
 	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
 	if currency == "" {

@@ -1187,7 +1187,11 @@ func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
 	if err := seedMmogPlayerState(database, playerPID); err != nil {
 		t.Fatalf("seed player state: %v", err)
 	}
-	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, playerPID); err != nil {
+	// 20,000 used to cover a Trafalgar because the purchase path charged from a
+	// hand-written table (5,000) while the store advertised
+	// gatewayMarketCreditPrice. Those now agree, so a Tier 2 hull costs what the
+	// shelf says: 50,000. See purchasePriceForItem.
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=200000 WHERE user_id=?`, playerPID); err != nil {
 		t.Fatalf("seed currency: %v", err)
 	}
 	offer := extractedMarketItemExternalID(extractedShipIDTrafalgar, "")
@@ -1219,7 +1223,9 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 	if err := seedMmogPlayerState(database, playerPID); err != nil {
 		t.Fatalf("seed player state: %v", err)
 	}
-	if _, err := database.Exec(`UPDATE player_state SET soft_currency=20000 WHERE user_id=?`, playerPID); err != nil {
+	// See the note in TestPurchaseItemAcceptsClientOfferShape: the price a hull
+	// costs is now the price the store shows for it.
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=200000 WHERE user_id=?`, playerPID); err != nil {
 		t.Fatalf("seed currency: %v", err)
 	}
 
