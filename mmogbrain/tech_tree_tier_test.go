@@ -184,3 +184,33 @@ func TestTopTierHullsResolveTheirAbilitySlots(t *testing.T) {
 		}
 	}
 }
+
+// The client's cost field renders five digits. A live client showed
+// "PURCHASE COST 99999" for a hull we priced at 100000, so anything at or above
+// that displays as 99999 -- the player is told a price that is not the price.
+func TestNoTechTreeCostExceedsWhatTheClientCanShow(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+
+	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+		if item.xpCost > techTreeMaxDisplayableCost {
+			t.Errorf("item %d costs %d XP, which the client renders as %d",
+				item.id, item.xpCost, techTreeMaxDisplayableCost)
+		}
+		if item.xpCost < 0 {
+			t.Errorf("item %d has a negative cost %d", item.id, item.xpCost)
+		}
+	}
+	for tier, cost := range techTreeXPCostByTier {
+		if cost > techTreeMaxDisplayableCost {
+			t.Errorf("tier %d hull costs %d, above the five digits the client can show", tier, cost)
+		}
+	}
+}
+
+// Tier 1 must stay free: the four starter hulls are owned from the start, and
+// charging for them would make the tree unusable from the first screen.
+func TestTierOneHullsAreFree(t *testing.T) {
+	if got := techTreeXPCostByTier[1]; got != 0 {
+		t.Errorf("tier 1 hull cost = %d, want 0", got)
+	}
+}

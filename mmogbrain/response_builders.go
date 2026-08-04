@@ -2206,7 +2206,19 @@ func techTreeModuleXPCost(tier int32) int32 {
 	if tier <= 0 {
 		return 0
 	}
-	return tier * 1000
+	return capTechTreeCost(tier * 1000)
+}
+
+// capTechTreeCost keeps a cost inside what the client can render. A value the
+// player cannot read correctly is worse than a smaller one they can.
+func capTechTreeCost(cost int32) int32 {
+	if cost > techTreeMaxDisplayableCost {
+		return techTreeMaxDisplayableCost
+	}
+	if cost < 0 {
+		return 0
+	}
+	return cost
 }
 
 // slotVariant is one researchable entry for a slot.
@@ -2424,7 +2436,18 @@ func techTreeSlotUpgrades(itemID int32, hullTier int32) []slotVariant {
 // rather than dressed up as recovered data -- the previous code sent a flat
 // 5000 for everything researchable, which at least was consistent, and this is
 // the same kind of guess with a shape.
-var techTreeXPCostByTier = map[int32]int32{1: 0, 2: 5000, 3: 15000, 4: 40000, 5: 100000}
+//
+// ONE HARD CONSTRAINT, which is not a guess: the client's cost field renders at
+// most FIVE digits. A screenshot from a live client (2026-08-04) shows
+// "PURCHASE COST 99999" -- our tier 5 value of 100000, clamped. Anything at or
+// above 100000 therefore displays as 99999 and is a lie to the player about what
+// they are about to pay. The ladder is scaled to stay inside that, keeping the
+// same shape.
+var techTreeXPCostByTier = map[int32]int32{1: 0, 2: 2500, 3: 7500, 4: 20000, 5: 50000}
+
+// techTreeMaxDisplayableCost is the largest value the client's cost field can
+// show. Five digits, established from the clamped 99999 above.
+const techTreeMaxDisplayableCost = 99999
 
 // techTreeBaseItems turns the base hull roster into tech tree nodes.
 //
@@ -2529,7 +2552,7 @@ func techTreeBaseItems() []techTreeItem {
 			manufacturer: manufacturerID,
 			position:     columnOf[hull.hullLine],
 			tier:         hull.tier,
-			xpCost:       techTreeXPCostByTier[hull.tier],
+			xpCost:       capTechTreeCost(techTreeXPCostByTier[hull.tier]),
 			prereq:       prereq,
 		})
 		// ...and its modules, which go into the OTHER array of the same record.
