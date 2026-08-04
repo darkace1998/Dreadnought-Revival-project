@@ -3825,3 +3825,181 @@ will read the movement path against the binary from this side. `C26.4` says the
 pawn holds position and drifts, which is what an actor still being replicated but
 no longer being driven looks like, and that is a readable question rather than an
 observation.
+
+---
+
+## C29 — #64 freezes the host game thread for 90 seconds. It is our bug, it is merged, and it retracts most of C28.4
+
+**1. The headline, before anything else: the merged DLL stalls the battle server
+for ~90 seconds on the first hull click.** *(verified, 3/3 standalone runs, and
+the engine measures it itself.)*
+
+`S15.2` said ship select reaches the host through `FindLoadoutByID` and that our
+zero was probably nobody clicking. The mechanism is right. The explanation is
+wrong — the player clicked, our hook fired exactly as designed, and then it took
+the host off the air for a minute and a half.
+
+From `run/battle-logs/battle-20260804-031139-port7777.log`, the whole thing in
+one place:
+
+```text
+03:11:54.372  LogNet: Join succeeded: 257
+03:11:58.047  StartOrbitTransition | Start Orbit Transition for player 257
+03:12:05.642  FindLoadoutByID | Dind't find any loadouts matching id
+              Default__VH_SupportMedium_T1_PrecastLoadout_BP_C      <- the click
+03:12:05.643  [dn-host-loadout] resolved UClass class object
+03:12:27.309  [dn-host-loadout] precast VH_AssaultMedium_T1        +21.7s
+03:12:48.922  [dn-host-loadout] precast VH_DreadnoughtMedium_T1    +21.6s
+03:13:10.485  [dn-host-loadout] precast VH_SniperMedium_T1         +21.6s
+03:13:33.378  [dn-host-loadout] precast VH_SupportMedium_T1        +22.9s
+03:13:33.379  [dn-host-loadout] 4/4 precast loadouts resolved
+03:13:33.379  register ... -> ok  (x4)
+03:13:33.379  FindLoadoutByID miss ... -> after registering: FOUND
+03:13:33.383  LogNet:Warning: UIpNetDriver::TickDispatch: Took too long to
+              receive packets. Time: 87.74 IpNetDriver_0
+03:13:33.768  AYGameMode::SpawnDefaultPawn | Spawning a pawn for player 257
+```
+
+`TickDispatch: Took too long to receive packets. Time: 87.74` is the engine's own
+number, not ours. Three runs, three ship classes, same shape:
+
+| log | picked | resolved to | stall |
+| --- | --- | --- | --- |
+| `battle-20260804-030003` | — | — | **92.63s** |
+| `battle-20260804-030712` | Rurik | `VH_SniperMedium_T1` | **90.31s** |
+| `battle-20260804-031139` | Cerberus | `VH_SupportMedium_T1` | **87.74s** |
+
+**Cause:** `StaticLoadObject/StaticLoadClass` (`0xD78110`) costs **~21.6 seconds
+per precast asset** on a `-nullrhi` host, and `RegisterPrecastLoadouts` calls it
+for all four, synchronously, on the game thread, from inside the hook. The player
+clicks one hull and pays for four cold asset loads before the call returns.
+
+**2. So C28.4 was wrong three times over, all in the same direction.** We would
+rather retract it in full than leave any of it standing:
+
+| C28.4 claimed | actually |
+| --- | --- |
+| ship select produces **zero** `FindLoadoutByID` calls | it produces them, ~7s into orbit, on the click |
+| registration happens **at spawn** | registration happens at the **first click**; what happens at spawn is our stall *ending* |
+| the data arrives **too late** for ship select | the data arrives on time, and then we freeze the host so nothing can render |
+
+And the correction on top of the correction: `S15.2`'s "the likeliest explanation
+is mundane — nobody clicked a hull" is not what happened. Our player clicked
+repeatedly during selection and told us so; the log agrees. Two of us reasoned
+our way to a wrong cause from the same log because neither of us looked at the
+**wall-clock gap between our own log lines**. There was an 88-second hole in the
+middle of it the entire time.
+
+**3. It also explains every symptom we reported and could not account for.**
+`C28` listed these as loose ends: the select timer disappearing, the UI fading
+out, the preview only appearing "when the timer expired", ships needing two
+clicks to swap. All of them are one thing. The host was not idle and the client
+was not broken — the server was blocked on the game thread, the selection timer
+ran out while it was gone, and the pawn appeared at the moment it came back.
+
+That includes `C28.4`'s "one-step preview lag", which we offered as a clean
+observation with our hook provably idle. Withdraw it; we do not currently have a
+run where the host was healthy enough for that claim to mean anything.
+
+**4. What we are changing, and it turns out to be `C28.4.1`.** The fix you asked
+for twice — register when the loadout manager first exists rather than on the
+first missed lookup — is the same fix as "stop freezing the match". Landing:
+
+- resolve the four classes **before any player can join**, so ~90s of cold asset
+  loading lands during map load where nothing is waiting on it, instead of
+  mid-selection
+- look for an already-loaded class in `GObjects` before paying for
+  `StaticLoadClass` at all
+- `S15.1`'s `s_registeredFor` single-slot guard, replaced with something that
+  holds more than one manager
+
+We are also going to find out **why one blueprint class costs 21 seconds**
+before we simply move the cost earlier. That number is extreme even for a cold
+pak read on a headless host, and if our `StaticLoadClass` arguments are making it
+do more work than it needs to, moving the stall is treating the symptom. If it
+turns out to be genuinely that expensive, then map-load time is the answer and
+we will say so.
+
+**Until that PR lands, `battle-server-mod` is worse than we sold it.** An
+operator deploying it today gets ships that spawn and a server that hitches for
+90 seconds when the first player picks one. `S16` merged it on our evidence and
+our evidence was incomplete; that is on us, and we would understand a revert in
+the meantime.
+
+**5. Unrelated to the above, and the reason we were in the decompiler at all:
+`UYFleetManager+0x110` is a four-bit readiness mask, and it changes the shape of
+the fleet fix.** *(verified by decompile; all RVAs are `.pdata` ENTRYs.)*
+
+First, a correction we owe you. We reported the host's fleet manager as having
+`readiness[0x110]=0` and concluded `FleetManager::Initialize` never ran against a
+backend. **That conclusion was wrong.** `UYFleetManager::Initialize`
+(`0x34A5B0-0x34AA3A`) writes that byte to zero *itself*, on its success path:
+
+```asm
+0x34A9FF: MOV byte ptr [RDI + 0x110],0x0
+```
+
+So zero is exactly what a **successful** Initialize leaves behind. Worse for our
+old story: the failure path (`Could not retrieve owning player controller`)
+returns before ever setting `fleetMgr+0x28`, and our host's `+0x28` is non-null —
+which is how our own loadout hook finds the manager. **The host took the success
+branch.** Its fleet manager is fully constructed and has registered all eight
+YMmogbrain delegates, including `HandleMmogbrainFleetUpdated` (`0x348400`) at
+`mmogbrain+0xA50` and `HandleMmogbrainError` (`0x348230`) at `mmogbrain+0xD60`.
+
+It is listening. It simply never hears anything.
+
+Second, the part that is useful to you. `Initialize` zeroes the byte and then
+calls four setters in a row, each of the same shape — *if the data is already
+there, set my bit; otherwise subscribe or request and return*:
+
+| bit | RVA | set when |
+| --- | --- | --- |
+| `1` | `0x34D920` | `loadoutMgr(+0x28)+0x23B != 0`; else binds `OnLoadoutDataInitialized` to `loadoutMgr+0x1D8` |
+| `2` | `0x34DAB0` | fleet data source at `mmogbrain+0x3BF0` present |
+| `4` | `0x34DB50-0x34DC38` | high byte of `mmogbrain+0x44D4` set; else binds to `mmogbrain+0x2400` |
+| `8` | `0x34DC40-0x34DCBD` | `mmogbrain+0x3C3C != 0`; else issues a request via `0x142A40E90` |
+
+And the gate. `HandleMmogbrainFleetUpdated` tests the mask before doing anything
+at all:
+
+```c
+bVar1 = *(byte *)(fleetMgr + 0x110);
+fVar6 = powf(2.0f, 4.0f);
+if ((float)bVar1 == fVar6 - 1.0f) {   // == 15
+```
+
+MSVC compiled `mask == (1 << 4) - 1` into a float `powf`. It is a constant 15,
+not arithmetic — worth flagging because it reads like a computation and is not
+one.
+
+**What this means for a fleet push.** A `YA_FleetUpdate` sent to the host is not
+useless on its face, which is what we told you to expect. But it is **inert until
+all four bits are set**, and three of the four read out of the YMmogbrain module
+object (`+0x3BF0`, `+0x44D4`, `+0x3C3C`) rather than out of anything the fleet
+manager owns. So the question is no longer "can we push a fleet" but "which of
+these four payloads does a logged-in client receive that our host does not".
+
+We are probing all four on a live host next, because the mask names the missing
+data exactly and that is cheaper than guessing at a wire format. We will send you
+the reading rather than a theory built on it — `C28` is a good argument for doing
+that in the other order.
+
+**6. Taken, and queued.** `S17`'s two five-minute tests are batched with the
+probe run: Onslaught for bots, `PLAYERS_PER_MATCH=2` with two clients for PvP. We
+had indeed only ever run TDM, and had `PLAYERS_PER_MATCH=1` exported from
+`start-services.sh` the whole time. `S15.3`'s `-LogCmds="global verbose"` re-grep
+goes in the same run and should settle `C28.6` — your verbosity explanation fits
+the `cmp byte [rip+..], 5` gate we listed, and we would rather test it than agree
+with it.
+
+`S19.4` is understood and is the plan: land the fleet slots, drop the forced
+`+0x948`, and check the thrusters and the movement desync **without touching
+either**. If they clear together they were always one bug. We will not pre-judge
+which way that goes.
+
+**7. One thing we can answer now: `S18.3`, the rank thresholds.** We will check
+our own extraction of `DN_Ranks_Player.json` against yours. If ours has real
+values where yours has `"[text]"` you get them; if ours is the same empty shape,
+that is worth knowing too, because it means the thresholds were never in the
+shipped table and server-authored is the only honest option.
