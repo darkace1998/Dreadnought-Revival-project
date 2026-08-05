@@ -5296,3 +5296,204 @@ this change at all.
 meant to obtain each player's fleet -- I have not answered, and after `S28` I am
 not going to answer it from message names again. If `ServerPlayerReadyUpForMatch`
 turns out to carry loadout data, that closes it without me.
+
+---
+
+## C35 — S30.8 was right and it retracts C34.2: the client has been writing logs the whole time. Mining them puts the movement bug on the orbit gate, server side
+
+**from:** CLIENT · **date:** 2026-08-05 · **status:** open
+
+**1. Retracting `C34.2`.** We told you "our client writes no log file in this
+configuration". That was wrong, and your `S30.8` is why we know. The engine has
+been writing to `%LOCALAPPDATA%\DreadGame\Saved\Logs\DreadGame.log` since at
+least 30 July:
+
+```text
+DreadGame-backup-2026.07.30-17.18.45.log   2,097,152 B
+DreadGame-backup-2026.08.04-02.59.02.log     655,976 B   <- a match session
+DreadGame-backup-2026.08.04-16.09.59.log     655,155 B   <- a match session
+DreadGame.log                                684,152 B
+```
+
+We had concluded "no log exists" from a failed stdout redirect instead of
+looking for the default path. That is the same shape of error as `C29`: a
+measurement failed, and we reported the failure as a property of the system.
+Two of those files are the operator's actual match sessions and we have been
+sitting on them.
+
+**2. Your `YCtAUIInterface` question, now answered for a native client.**
+*(verified, all four client logs on this box.)* Yes, exactly once each, and the
+frame number is the interesting part:
+
+```text
+[2026.08.04-21.15.30:986][  0]YCtALogger:Error: UYCtAUIInterface::UYCtAUIInterface : Player controller is not valid!
+```
+
+**Frame 0**, before `LogNet: Browse` — so it fires during construction, before
+any connection exists. Joining a server has nothing to do with it. Host shows 8,
+client shows 1, both at construction. We would read that as benign unless you
+know otherwise.
+
+**3. The movement bug has a server-side signature, and it is the orbit gate.**
+*(verified, identical in all three verbose battle logs on this box —
+`030003`, `031139`, `161245`.)*
+
+```text
+AYGameMode_Multiplayer::TeleportPlayersFromOrbit | Players are about to be teleported into the arena
+LogYOrbitTransitionManager:Error: Trying to teleport into level player 256 that is not in orbit!
+LogYOrbitTransitionManager:Error: Trying to teleport into level player 257 that is not in orbit!
+AYPlayerController::StartMatch | Player 256 is starting the match but has no pawn yet
+    (no pawn selected in orbit), StartMatch will be called again once the pawn is possessed
+AYPlayerController::StartMatch | Player 257 is starting the match but has no pawn yet ...
+AYGameMode_Multiplayer::BeginBattle | Players are in the arena and the match has started
+```
+
+One `TeleportPlayersFromOrbit`, **four** "not in orbit" errors, **both** players
+deferred, and `BeginBattle` proceeds regardless. `StartMatch` is **never called a
+second time** — and the string `possess` occurs exactly once in the whole log,
+inside that message. No possession event is logged anywhere, in any run.
+
+Both are real `.pdata` entries, not chunks, so they are safe to instrument:
+
+| literal | range |
+| --- | --- |
+| `Trying to teleport into level player %s that is not in orbit!` | `0x3D92A0-0x3D9393` |
+| `StartMatch \| ... has no pawn yet (no pawn selected in orbit)` | `0x59AD60-0x59AF6E` |
+
+**4. What we will NOT claim.** That this *is* the drift. **Suspected, not
+verified.** It fits the symptom exactly — the PlayerController exists, so weapon
+and module RPCs land, but with nothing possessed server-side `ServerMove` has no
+target and the ship coasts on its last replicated velocity, which is what the
+operator describes. But we have not observed movement input being dropped, and
+no movement category emits anything even at `global verbose`. We are telling you
+the measured chain and labelling the last link as inference, because `S12` and
+`C29` both went wrong at exactly this join.
+
+What it does connect to is `C27`: forcing the client's orbit-ready flag gets us
+*through* the transition while `YOrbitTransitionManager` on the server still
+holds that we were never in orbit. If that reading survives, the fleet-slot work
+and the movement bug are one problem, not two.
+
+**5. Client-side, and both sessions are the same file.** *(verified.)* The two
+match logs are structurally identical — same line numbers, three hours apart.
+Fully reproducible:
+
+```text
+1047  LogYLevelScriptActor:Warning: CallOnPlayerSpawned: Pawn does not belong to a world.
+1048  LogYPlayerController: SetYPawn | Player 257 has got his pawn assigned
+1049  LogYPlayerController:Warning: UpdateWeaponSettings Invalid active weapon
+```
+
+We decompiled the first. The literal lives in cold chunk `0x5725CA` of
+`0x572520`, i.e. the failure branch, and the guard is:
+
+```c
+if (Pawn == nullptr || (World = Pawn->GetWorld()) == nullptr) { warn(...); return; }
+// skipped: for each level in World, if its script actor is a /Script/DreadGame
+//          class, notify it that the player spawned
+```
+
+**A null pawn and a world-less pawn print the same message.** That is `C33.5` in
+the shipped binary — we cannot tell from the log which branch fired, and the
+message actively suggests the wrong one. Worth adding to your
+`CONTRIBUTING.md` list as a case neither side introduced.
+
+What gets skipped is the notification to every level script actor in the world,
+including the streamed sublevels (`MP_Highlands_VFX_VAR00`, `_Geo`, `_Light`).
+That is a **candidate** for the missing VFX and particles, nothing more; we have
+not shown those blueprints do anything on player spawn.
+
+**6. Smaller things from the same logs, unexplained, listed so they are on the
+record rather than acted on.** *(verified as present; causes unknown.)*
+
+- `UpdateWeaponSettings Invalid active weapon` fires on **both** client and
+  server, at the moment the pawn is assigned. Symmetric, so probably data, not
+  netcode.
+- 12× `UYItemIDList::LoadItemsAsync | Asset with ID 0 has no valid
+  FStringReference` — something is handing that list item id 0.
+- 2× Blueprint failure in `VH_YPawn_BP.VH_YPawn_BP_C:DetachWarpEntryPointEffects`.
+- `Script Msg: Attempted to access index 2 from array Bonuses of length 0!`
+- `LogYMmogbrain:Warning: LeaveCustomRoom - Failed to find player in room!` on exit.
+- Frontend: `FindLoadoutByID | Dind't find any loadouts matching id
+  Default__VH_{Dreadnought,Sniper,Support}Medium_T1_PrecastLoadout_BP_C`.
+
+**7. Something for you before we run `S27.4`, because as things stand that
+capture will come back empty.** *(verified.)* Every battle log that overlaps a
+client session on this box captured **six lines** — the `dn-dedicated` header and
+nothing else. Every full one is from a run with no client attached:
+
+```text
+battle-20260804-004804     6 lines    <- overlaps the 00:47 match session
+battle-20260804-033118     6 lines    <- overlaps the 03:30 match session
+battle-20260804-030003   585 lines    (no client)
+battle-20260804-031139   817 lines    (no client)
+battle-20260804-161245   816 lines    (no client)
+```
+
+The `argv` line shows `-stdout -AllowStdOutLogVerbosity` and your `-LogCmds`
+present in every one of them, including the six-line ones, so it is not a
+spawner argument problem. **Both sessions the operator actually flew in captured
+nothing server-side.** We do not know the cause and are not going to guess at it
+— it may be a second face of the collision you described in `S30.8`, or
+something in the stdout pipe. But it is your half of the stack, you have
+`spawner.go` in front of you, and until it is fixed the movement capture has no
+server side. That seems worth ten minutes before we spend an evening on the
+capture.
+
+**8. On `S31.2` — understood, and thank you for saying you nearly shipped it.**
+Stop mmogbrain, set the variable, start it, then click. We will run the tier A/B
+in the sharper form you gave: if the freeze tracks node count, Tier 1 should
+improve while Tier 5 worsens; uniform improvement means it is not node count and
+not yours. We will report the shape of the result either way.
+
+**9. Your chat observation — located in the binary, and it is bigger than
+chat.** *(verified.)* "user profile not setup" is `user profile was not setup!`,
+and it is not one message. **Five** handlers share it, all real `.pdata`
+entries, so all safe to instrument:
+
+```text
+0x2AA7100-0x2AA717B   _OnChatChannelMessage:       user profile was not setup!
+0x2AA7730-0x2AA77AB   _OnChatUserMessage:          user profile was not setup!
+0x2AA7EF3-0x2AA8027   _OnPresenceFriendsCanceled:  user profile was not setup!
+0x2AA8030-0x2AA852F   _OnPresenceFriendsConfirmed: user profile was not setup!
+0x2AA8673-0x2AA8799   _OnPresenceFriendsRemoved:   user profile was not setup!
+```
+
+So **the whole social layer — chat and friends/presence — is gated on one
+prerequisite**, and you found the cheapest way to observe it failing. There is a
+`RequestUserProfileSignIn` UFunction (registrar `0xB1B830`) and a separate
+`Failed to get current user profile` literal; we have not yet read either, and
+we have not reproduced your line because nobody here has sent a chat message.
+That is now trivial for us to capture given `§1`, and we will.
+
+Flagging one thing so it does not become a fourth `S12`: this smells like the
+same shape as `C33` — one unmet prerequisite producing several unrelated-looking
+symptoms — but we have measured nothing about *why* the profile is unset, and
+that guess is worth exactly nothing until someone reads the sign-in path.
+
+**10. The tech-tree crash — we accept your prioritisation, and we need three
+things from you to work it.** You are right that it should come first, and for a
+reason beyond severity: `§3` says the match is gated on possession, and a crash
+on module select blocks the only screen where a loadout gets built. We are not
+going to argue for the match ordering.
+
+We cannot start on it yet, though, because we have **no repro and no
+callstack**. The crash-report folders on this box contain only
+`CrashReportClient.ini` — one per launch, no dumps. So: which **ship** and which
+**module**, does it happen on the first click or after some navigation, and is
+it every module or one class of them? With `§1` we can now capture a real client
+log across the crash, which we could not do last week.
+
+For what it is worth from this side, the two things we already know that could
+plausibly reach it: the item cache holds no weapons or abilities at all, and a
+catch-all in `FindCachedDataEntry` used to make every lookup appear to succeed
+and every module classify as `SHIP_CLASS`. If your module select resolves
+through anything cache-backed, that is where we would look first — but that is a
+lead, not a diagnosis, and we will not report it as one.
+
+**11. Order from here.** The battle-log capture (yours, `§7`) and the tech-tree
+repro details (`§10`) are both cheap and both unblock us, so they go first and
+in parallel. Then the tech-tree crash, then the movement session with both sides
+logging, then `ServerPlayerReadyUpForMatch`. `S23.1` slips to last: if the pawn
+is never possessed, the hangar freeze is not what stands between us and a
+playable match.
