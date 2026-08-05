@@ -1872,14 +1872,33 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 // name-join that rescues the fifteen ids ItemIDRegister still points at the
 // previous build's tier-less asset; derivedShipTier reads a ship PAWN id
 // (category 10) out of /Ships/<Class>/<Size>/T<n>/.
+// The fallback is 1, which is indistinguishable from a real Tier 1 hull in
+// every payload and every log -- and "tier 1 for everything" is precisely the
+// bug this function was written to remove (appendMmogShipProgression hardcoded
+// it). A silent default that cannot be told apart from a real value is a hidden
+// failure, not a default (AGENT-CHAT C33.5), so the fallback is reported and
+// TestNoShippedHullFallsBackToTierOne fails the build if anything we actually
+// send reaches it.
 func shipTierForID(itemID int32) int32 {
-	if tier, ok := dreadconfig.HullTierForItemID(itemID); ok && tier >= 1 {
-		return int32(tier)
+	tier, derived := shipTierForIDChecked(itemID)
+	if !derived {
+		logrus.WithField("item_id", itemID).
+			Warn("mmog: no tier derivation for ship id; falling back to tier 1")
 	}
-	if tier, ok := derivedShipTier(itemID); ok && tier >= 1 {
-		return int32(tier)
+	return tier
+}
+
+// shipTierForIDChecked reports whether the tier was actually derived. Callers
+// that can act on "unknown" should use this; shipTierForID is the wire path,
+// which has to send something.
+func shipTierForIDChecked(itemID int32) (tier int32, derived bool) {
+	if t, ok := dreadconfig.HullTierForItemID(itemID); ok && t >= 1 {
+		return int32(t), true
 	}
-	return 1
+	if t, ok := derivedShipTier(itemID); ok && t >= 1 {
+		return int32(t), true
+	}
+	return 1, false
 }
 
 func appendMmogShipProgression(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
@@ -4878,19 +4897,36 @@ var catalogPrices = map[int32]int32{
 // function exists to remove. It is kept rather than deleted because its per-item
 // values were researched (issue #36 corrected four mislabelled categories in it)
 // and a real price table, if one is ever found, belongs there.
+// The 1000 at the end is the same hidden failure C33.5 names: a player charged
+// 1,000 for an underivable item looks exactly like a player charged 1,000 for a
+// 1,000-credit item, in the payload and in the log alike. That is how the Athos
+// came to cost 1,000 instead of 400,000 without anything looking wrong. It is
+// now reported, and TestEveryCatalogItemHasADerivedPrice fails the build if any
+// SKU we actually offer reaches it.
 func purchasePriceForItem(itemID int32) int32 {
+	price, derived := purchasePriceForItemChecked(itemID)
+	if !derived {
+		logrus.WithFields(logrus.Fields{"item_id": itemID, "charged": price}).
+			Warn("mmog: no price derivation for item; charging the flat fallback")
+	}
+	return price
+}
+
+// purchasePriceForItemChecked reports whether the price was actually derived
+// rather than defaulted.
+func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 	// Derive it exactly as the catalog entry did -- same itemType source, same
 	// tier source, same function -- so the two agree by construction rather
 	// than by two tables being kept in step by hand.
 	if meta, ok := extractedMarketItemMetadataForID(itemID); ok {
-		if price := gatewayMarketCreditPrice(meta.itemType, gatewayMarketItemTier(itemID)); price > 0 {
-			return price
+		if p := gatewayMarketCreditPrice(meta.itemType, gatewayMarketItemTier(itemID)); p > 0 {
+			return p, true
 		}
 	}
-	if price, ok := catalogPrices[itemID]; ok && price > 0 {
-		return price
+	if p, ok := catalogPrices[itemID]; ok && p > 0 {
+		return p, true
 	}
-	return 1000
+	return 1000, false
 }
 
 // purchasedItemType derives the item_type recorded for a purchase from the
