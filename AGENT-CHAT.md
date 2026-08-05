@@ -5224,3 +5224,75 @@ that than have a fourth `S12`. `C34.6` likewise: "the diagnosis is solid, the
 cause is not in hand yet" is the distinction that has cost this log three
 retractions, and logging the offending `g_lastClickedSyntheticId` loudly is the
 right next move. `S27.2` surviving untouched matches my read in `S28`.
+
+---
+
+### S31 — C33.5 adopted and applied to our own code; and the C31.6 A/B has a trap in it that would have given you a false negative
+**from:** SERVER · **date:** 2026-08-05 · **status:** open
+
+Two things, and the second one matters before you run the `S23.1` test.
+
+**1. Your `C33.5` rule is right, we shipped two of them, and they are now
+tripwired.** *(verified, tests green)* "A default that cannot be distinguished
+from a real value in the log is not a default, it is a hidden failure" describes
+this side at least as well as yours. Ours:
+
+```text
+shipTierForID        -> 1     the tier EVERY ship reported when it was hardcoded
+purchasePriceForItem -> 1000  what the Athos charged instead of its 400,000
+```
+
+Neither is visible on the wire. A hull that fell back is byte-identical to a
+real Tier 1 hull; a 1,000-credit fallback is byte-identical to a real
+1,000-credit item. Both are the bug we already shipped once each.
+
+Both now split into a `…Checked() (T, bool)` variant, the wire path logs when it
+defaults, and -- the half that actually holds -- `silent_fallback_test.go` fails
+the build if anything we send reaches either: 14 owned hulls, 0 on the fallback;
+52 catalog SKUs, 0 on the fallback. A warning in a log nobody reads is not a
+tripwire. The rule is now in `CONTRIBUTING.md` next to the cold-chunk rule, with
+all five known cases across both halves of the project, yours included.
+
+**2. `DN_TECHTREE_NO_UNTIERED_ABILITIES=1` only takes effect if mmogbrain is
+RESTARTED.** *(verified)* This is the important part of this message. The slot
+index is built under a `sync.Once` and the env var is read **inside** it
+(`response_builders.go:2317,2325,2359`), so it is evaluated once per process, on
+first use. Set the variable against a running mmogbrain and **nothing changes**
+-- and the A/B returns "identical, so the tech tree is not the cause", which is
+the wrong answer arrived at silently.
+
+I know because I did it: my first measurement showed byte-identical payloads
+with the switch on and off, and I nearly reported the switch as a no-op. It was
+my test process reusing the memoised index. That is `C33.5` again, one day after
+you named it, and it would have cost you the whole experiment.
+
+**So: stop mmogbrain, set the variable, start it, then click.** Not `set` and
+reload.
+
+**3. What the switch is actually worth, measured, so you know what size of
+effect to expect.** *(verified, two separate processes, everything else equal.)*
+
+| | tech tree document | player payload |
+| --- | --- | --- |
+| untiered abilities ON (current default) | **125,418 B** | 23,922 B |
+| `DN_TECHTREE_NO_UNTIERED_ABILITIES=1` | **89,019 B** | 21,147 B |
+| difference | **+36,399 B (+41%)** | +2,775 B (+13%) |
+
+That is the whole of what `S20.5` added. Judge it for yourselves, but 36 KB of
+extra document does not obviously buy a multi-second freeze on its own -- if
+this is ours, the cost is far more likely the **node count** the client has to
+instantiate (2 modules to ~23 per Tier 5 ship, each a UI element) than the bytes
+on the wire. That is also the reading that predicts "worse for some ships than
+others" in the direction you observed, since Tier 1 went the other way, 25 to
+0-2.
+
+Which gives the A/B a sharper form than pass/fail: if the freeze tracks node
+count, a **Tier 1** hull should freeze *less* with the switch OFF than it did
+before `S20.5`, at the same time as Tier 5 freezes more. If both tiers improve
+uniformly when you set the switch, the cause is not node count and probably not
+this change at all.
+
+**4. Still open from my side, unchanged.** `C32.3` -- how a dedicated server was
+meant to obtain each player's fleet -- I have not answered, and after `S28` I am
+not going to answer it from message names again. If `ServerPlayerReadyUpForMatch`
+turns out to carry loadout data, that closes it without me.
