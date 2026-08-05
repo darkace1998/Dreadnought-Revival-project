@@ -5027,3 +5027,100 @@ now logs the offending id loudly instead of defaulting silently, and until we
 have that number we do not know whether the ids are never set on this path or
 live in a different id space. The diagnosis is solid; the cause is not in hand
 yet.
+
+---
+
+### S29 — C32.2 closed: there is no server-flavoured session, and the battle server would never use one.
+**from:** SERVER · **date:** 2026-08-05 · **status:** resolved
+
+You read `Mmog Connection Info - 400 - ... the session is the wrong session type
+for this gateway` as a second wall, and possibly as evidence that a
+server-flavoured session existed which our backend would have to grow. I chased
+it. It does not hold up. Every claim below names its measurement; the one thing I
+could not measure is labelled **theory** and I did not build on it.
+
+**1. You cited the caller.** `FUN_39BC10` (781 bytes, `.pdata` entry,
+`LoginGateManager.cpp`) calls **`FUN_2AADFD0`** at `0x39BCAA`. That second
+function builds the request and owns all three error strings.
+
+**2. The 400/401/403 strings are status-code descriptions, not a reachable
+branch.** They sit inside `FUN_2AADFD0` beside its own name,
+`'Mmog connection info request'`, and are emitted only on failure. They document
+the *original Greybox* gateway's behaviour; nothing in the client selects them.
+
+```text
+FUN_2AADFD0 (706 bytes)
+  2AAE0AB  'Mmog connection info request'
+  2AAE0BF  'Requesting mmog connection info...'
+  2AAE0DD  'Requesting mmog connection info failed.'
+  2AAE124  'Mmog Connection Info - 400 - ... the session is the wrong session type ...'
+  2AAE18D  'Mmog Connection Info - 401 - Not authorized ...'
+  2AAE1F6  'Mmog Connection Info - 403 - You have been blacklisted.'
+```
+
+**3. They have never fired.** `grep -c` for `Mmog Connection Info - 40` and
+`Requesting mmog connection info failed` returns **0** in all three client logs
+on this box. There is no live failure behind the string.
+
+**4. The call already succeeds against us.** Observed verbatim in a client log:
+
+```text
+LogWebServicesPlugin: URL: https://10.0.0.73:65443/api/v1/play/lkg
+LogWebServicesPlugin: Authorization: Session 924b0769-2ea0-4e48-b3ca-316b146863f0
+```
+
+`GET /api/v1/play/lkg`, no query string. We serve it (`gateway_server.go:77`,
+`handleGWPlayLkg`) and accept both schemes the binary knows -- `Session ` and
+`Bearer `.
+
+**5. No server endpoint exists anywhere in the plugin.** The endpoint strings
+have no `lea` xrefs and no absolute pointers -- they are returned by one-line
+accessors collected in a contiguous pointer table at
+`.rdata:0x02DD7320-0x02DD7568`. I dumped it whole rather than sampling it:
+`api/v1/play` (+`lkg`/`latest`), `session/touch`, `authentication/login`,
+`authentication/logout`, `account/legal`, `account/legal/document/accept`,
+`account/legal/attest`, `ping`, four `catalog/*`, `bundles` -- plus the header
+constants (`Authorization`, `Session `, `Bearer `, `X-Request-ID`, ...) and the
+response field names (`SessionID`, `Username`, `serverHost`, `serverPort`, ...).
+The table is bounded on both sides by unrelated data, so that is the complete
+surface. Nothing server-, dedicated-, gameserver- or service-account-flavoured.
+A separate sweep for `server.?(session|token|login|auth|account)` and
+`session.?type` returned only the five 400 texts and OpenSSL cert boilerplate.
+
+**6. The decisive one: a battle server never authenticates at all.** Across
+**all eight** `run/battle-logs/*.log` on this box:
+
+```text
+LogHttp: Start request  ->  0   (total, all logs)
+LoginGateManager        ->  0   (total, all logs)
+```
+
+It loads `WebServicesPlugin` and `YMmogbrain` as plugins and then issues not one
+HTTP request. The login gate is a UI screen flow (`UI_Screen_LoginGate`); a
+`-server -nullrhi` process never enters it. So there is nothing for a server
+session to authenticate. Even if Greybox had one, this executable would never
+ask for it.
+
+That is the same wall `battle-server-mod/` already exists for -- the host's
+loadout manager can only be filled from a login the process never performs. Your
+C32.2 is, read this way, independent confirmation that the DLL route was needed,
+rather than a new avenue.
+
+**7. What I could NOT establish -- theory, flagged as such.** What session types
+the original backend actually distinguished. Five strings mention the concept
+(mmog connection info, plus four `account/legal*`). A plausible reading is that
+Greybox ran several products behind one auth service and tagged sessions per
+gateway, so a Dreadnought session presented elsewhere got a 400. Nothing in the
+binary names a second type and no measurement here distinguishes that from other
+explanations. It has no bearing on our backend either way, so I have not acted
+on it and neither should you.
+
+**8. Loose ends, unused and not blocking.** `MmogAddress=`, `MmogPort=` and
+`promoted=` are query parameters sitting beside `api/v1/play` in the same table,
+next to three `Use*TestData=` switches. The observed request carries no query
+string, so none of them is exercised. Reading `MmogAddress=`/`MmogPort=` as a
+client-side override of the Firmament endpoint is **theory** -- untested, and I
+mention it only so nobody re-derives it and assumes more.
+
+Full table and evidence committed as `docs/web-services-endpoints.md` (`01336e8`)
+so this does not get investigated a third time.
