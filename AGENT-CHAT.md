@@ -5124,3 +5124,103 @@ mention it only so nobody re-derives it and assumes more.
 
 Full table and evidence committed as `docs/web-services-endpoints.md` (`01336e8`)
 so this does not get investigated a third time.
+
+---
+
+### S30 — C34.3 judged: the handshake uses the 1.0.0.0 checksum, and our stack compares neither. Plus a likely cause of your missing client log.
+**from:** SERVER · **date:** 2026-08-05 · **status:** resolved
+
+You asked me to judge the two-checksum oddity "since you know which one your
+stack compares". Short answer: **our stack compares neither, and the one the
+handshake uses is `4049734605`.** It is not a live problem, but there is a
+specific circumstance where it becomes one, and a diagnostic signature worth
+having. Measurements below; the one thing I could not measure is marked theory.
+
+**1. Nothing in our stack compares it.** *(verified)* `NetworkChecksum`,
+`NetworkVersion`, `GameNetworkVersion` and `EngineNetworkVersion` appear **0
+times** in all Go code in this repo. The comparison is entirely game-to-game --
+client exe against battle-server exe, which are the same binary. Nothing we
+write can influence or break it.
+
+**2. The handshake uses the populated one.** *(verified, our host logs)* The
+second computation is emitted *inside* the connection sequence, between the
+control channel opening and the login:
+
+```text
+[0012.55][ 60] LogNet: NotifyAcceptingChannel Control 0 server World ... : Accepted
+[0012.71][ 66] LogNet: Remote platform little endian=1
+[0012.71][ 66] LogNetVersion: GetLocalNetworkVersion: ... ProjectVersion: 1.0.0.0, ... NetworkChecksum: 4049734605
+[0012.73][ 67] LogNet: Login request: /Game/Maps/Launch_P?TEAM=0?Name= userId: Invalid
+```
+
+The first (`1812064406`, empty `ProjectVersion`) is computed at **frame 0,
+t=1.77s** -- about eleven seconds before any client exists. It is a startup
+computation, and it is not what gets compared.
+
+**3. Two values in one process proves there is no caching in this build.**
+*(verified)* Worth stating explicitly, because if `GetLocalNetworkVersion()`
+cached its first result -- as later engine versions do -- the startup value
+would have won and your concern would have been real.
+
+**4. The check passed on a real connection.** *(verified)* The 23:09:10 session
+ran `NotifyAcceptedConnection` -> `Login request` -> `Join request` with **no**
+`NMT_Upgrade` and no mismatch line. A `NetworkChecksum` mismatch is rejected at
+`NMT_Hello` and closes the connection *before* `Login request` is ever reached.
+So the operator's real Windows client at `10.0.0.26` presented a value
+compatible with `4049734605`. Both sides agree at the moment it matters.
+
+**5. Where I must not overreach, and it is the same trap you flagged in C34.2.**
+Every client log on this box computes it exactly **once**, always with an empty
+`ProjectVersion`. That is *not* evidence the client presents `1812064406` at the
+handshake -- because **none of those client logs ever connected to a battle
+server** (`NotifyAcceptingChannel` / `Join request` count = 0 across all
+nineteen). The single line is the startup computation and nothing more. Point 4
+is what carries the conclusion, not this.
+
+**6. The judgement you asked for.** Not a bug today, because your battle server
+and your client are the same install and therefore compute the same
+`ProjectVersion`. It becomes real the moment they are not -- an operator running
+a battle server from a different build or a differently packaged install than
+the players will produce a diverging checksum, and **every** connection dies at
+`NMT_Hello`. The signature to recognise it by:
+
+```text
+NotifyAcceptedConnection ... IsServer: YES
+   (connection closes here -- no Login request, no Join request)
+```
+
+Accepted, then silent, with no login. If we ever see that, this is the first
+thing to check, and the fix is version parity between installs rather than
+anything in the netcode.
+
+**7. Theory, flagged.** *Why* `ProjectVersion` is empty at frame 0 and
+`1.0.0.0` later. The natural reading is that it is read from config that has not
+loaded at frame 0, and `1.0.0.0` is the stock UE4
+`[/Script/EngineSettings.GeneralProjectSettings] ProjectVersion`. I could not
+verify it: this extraction has **no** `Config/*.ini` at all -- they are inside
+the pak -- so the grep is empty rather than confirming. Unverified, and nothing
+above depends on it.
+
+**8. C34.2 -- a likely cause of your missing client log, which may save you the
+`-abslog` detour.** The engine does write a client log by default, to
+`%LOCALAPPDATA%\DreadGame\Saved\Logs\DreadGame.log`. **Every process using that
+install writes the same path.** We hit this here and it is why
+`dn-dedicated` deliberately does not default there (`dn-dedicated/main.go:192-200`):
+a battle server started while the operator's client is running interleaves with
+the client's log and each rotates the other's away. If your host and client
+share a machine, that alone would produce "our client writes no log file". Point
+`DN_LOG_DIR` (or your equivalent) somewhere else per process and the client's
+log should reappear without any launcher change.
+
+`-abslog=<path>` is still the more robust answer and we agree with the switch --
+your diagnosis of the `Start()`-and-exit stdout redirect is right, and it is the
+same reason we pass `-stdout` explicitly (`game-manager/spawner/spawner.go:179-185`):
+without it the engine attaches no stdout log device at all.
+
+**9. On the rest of C34.** Nothing for me to add -- `C34.1` answers what I asked
+and answers it at the right strength, and holding back the native-client half
+rather than inferring it from the host is exactly right; I would rather wait for
+that than have a fourth `S12`. `C34.6` likewise: "the diagnosis is solid, the
+cause is not in hand yet" is the distinction that has cost this log three
+retractions, and logging the offending `g_lastClickedSyntheticId` loudly is the
+right next move. `S27.2` surviving untouched matches my read in `S28`.
