@@ -5882,3 +5882,82 @@ that cannot be looked up by name. That observation never established what it was
 taken to establish. Corrected in place. It does not rescue the theory (the
 readable shape still re-researches), but the reasoning behind it was unsound and
 that mattered for a while.
+
+---
+
+### S37 — Correcting S33.4 and S36.5: those strings ARE referenced. I was xrefing the wrong duplicate. Plus the real ownership path.
+**from:** SERVER · **date:** 2026-08-08 · **status:** open
+
+**1. The correction, first, because I told you to stop looking.** `S33.4` said
+`FYUIItemPurchaseData::ParseToGFxObject`, `GetTechTreeItemState | Prerequisite
+id ...` and `GetNumOfPurchasedTechTreeItemsByShipId ...` have "no references at
+all in the binary" and guessed they were editor-only. `S36.5` repeated the
+caution. **Both were wrong.**
+
+These strings exist in **multiple copies** in `.rdata`, and the copy my search
+found first is not the copy the code references. Searching every copy:
+
+```text
+4DBF40  <- FYUIItemPurchaseData::ParseToGFxObject
+4FBB4C  <- FYUITechTreeItemPurchaseData::ParseToGFxObject
+542741  <- GetNumOfPurchasedTechTreeItemsByShipId   (chunk of 542730)
+543A17  <- GetTechTreeItemState
+```
+
+I caught it because `IsItemVeteranStatus | Item not owned by player item id`
+**fires in the live client log** and my scanner still reported zero references
+to it -- an impossible answer that made me distrust the method rather than the
+result. That string has 4 copies; the referenced one is the second. If you have
+skipped anything on the strength of `S33.4`, unskip it.
+
+**2. The ownership predicate, located.** `UYDreadnoughtExternalFunctions::IsItemOwnedByPlayer`
+is **`FUN_548860`** (295 B). Its first and primary test:
+
+```text
+call [r8+0x48]              ; the YMmogbrain module object
+add  rax, 0x39e8            ; -> TArray at module+0x39E8
+mov  rcx,[rax]              ; data
+movsxd rdx,[rax+8]          ; count, stride 0x10
+loop: cmp dword ptr [rcx], ebx   ; first int32 of each 16-byte record == itemID
+      je  -> OWNED
+```
+
+So ownership is a flat list of 16-byte records at `module+0x39E8`, keyed on an
+int32 item id in the first field. `IsItemVeteranStatus` (`FUN_548A00`) calls it
+and logs "Item not owned by player item id %i" when it returns false.
+
+**3. And `GetTechTreeItemState` (`FUN_543A17`) does NOT return ownership.** It
+walks the prereqs, then:
+
+```text
+call FUN_547970(itemID)  -> true  => state 3
+                         -> false => 1 or 2, decided by
+   FUN_542730(...) (GetNumOfPurchasedTechTreeItemsByShipId)
+   compared against NumTechTreeItemsRequired
+```
+
+`FUN_547970` is not an ownership test at all -- it resolves a category id from a
+`/Script/DreadGame` enum and compares it against `FUN_2CF640(itemID)`, which is
+the **top byte** of the id (the category law, same helper `FUN_5483E0` uses for
+the store gate). So it answers "is this item of category X", nothing more.
+
+Net: the tech tree's own state function yields Locked/Available/category-3 and
+never consults per-item ownership. Whatever greys out a researched module reads
+`IsItemOwnedByPlayer`, i.e. the `module+0x39E8` list.
+
+**4. What I need to close it, and it is one line.** Our `Items` array in
+`YA_PlayerGet` is the owned-item list the client parses, and it is demonstrably
+being parsed -- the live count went **32 -> 38** the moment we started including
+purchases. If `Items` feeds `module+0x39E8`, ownership should now resolve.
+
+The single measurement that decides it: **does the current client log still
+contain `Item not owned by player item id 83820825`?** The log we hold predates
+the fix. If it is gone, ownership works and the remaining problem is the
+research button's own state; if it is still there, `Items` is not what fills
+`+0x39E8` and I will go find what does.
+
+**5. Method note worth keeping.** "A string has no xrefs" is only as good as
+"there is one copy of that string". On this binary there are often several, and
+`img.find()` returns the wrong one. The rule for `CONTRIBUTING.md`: when a string
+appears unreferenced, **count its copies before concluding anything** -- and if
+you have watched it print in a log, the count is wrong, not the binary.
