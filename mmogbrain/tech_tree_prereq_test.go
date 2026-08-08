@@ -87,28 +87,42 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 	for _, item := range items {
 		rows[item.id] = true
 	}
+	// ClassId <= 0 is dropped by that same gate, and since 2026-08-08 we send
+	// it deliberately for line roots and heroes -- see
+	// TestLineRootsAndHeroesAreTheOnlyDroppedNodes for why that trade is worth
+	// making and what it costs.
 	for _, item := range items {
-		if item.classID <= 0 {
-			t.Fatalf("item %d has ClassId %d; the gate rejects anything <= 0", item.id, item.classID)
+		if item.classID == 0 {
+			continue // knowingly dropped; counted and justified elsewhere
+		}
+		if item.classID < 0 {
+			t.Fatalf("item %d has ClassId %d; negative is never intended", item.id, item.classID)
 		}
 		if category := (item.classID >> 24) & 0xff; category != 1 && category != 3 {
 			t.Fatalf("item %d has ClassId %d (category %d); only 1 (precast) and 3 (hero) are stored",
 				item.id, item.classID, category)
 		}
-		// The class root is a node in this same document -- a column has to
-		// point at a row that exists, or the UI groups against nothing.
+		// A ClassId that names a row is what keeps a module filed under a ship
+		// that exists. Hull nodes now name their PREREQUISITE, which is also a
+		// row, so this still holds for everything we send.
 		if !rows[item.classID] {
 			t.Errorf("item %d has ClassId %d, which names no row in the document", item.id, item.classID)
 		}
 	}
 
-	// ClassId must equal the item's OWN id -- for SHIP nodes. The loader keys
-	// the array at manager+0x48 on ClassId, and the client looks that array up
-	// by SHIP ID (FUN_1403f5050 / FindShipTechTreeData, called by
-	// ComposeModuleUiDataForShip), so any ship whose ClassId is not its own id
-	// cannot resolve its modules. A previous version shared the hull line's
-	// root id across the line, which left every tier above the root logging
-	// "Modules not found for ship id".
+	// A ship node must NOT name itself. This reverses what this test asserted
+	// until 2026-08-08, and the reversal is the whole of the module-click
+	// crash: the client recurses into the item its ClassId names, so a hull
+	// pointing at itself never terminates (EXCEPTION_STACK_OVERFLOW, 16,382
+	// frames of FUN_3F4880 calling itself at 0x3F499B).
+	//
+	// The old belief -- that a ship's modules resolve only when its ClassId is
+	// its own id -- was wrong about WHICH entry keys the record. The per-ship
+	// array at manager+0x48 is created and filled by the MODULE entries, each
+	// of which carries its hull's id; the hull node's own ClassId was never
+	// what made the lookup work. Verified live: with hull nodes pointing
+	// elsewhere, 12 module panels opened and "Modules not found for ship id"
+	// appeared 0 times.
 	//
 	// MODULE entries are the deliberate exception, and they are the reason that
 	// array is keyed this way at all: a module carries the HULL's id as its
@@ -125,9 +139,9 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 			}
 			continue
 		}
-		if item.classID != item.id {
-			t.Fatalf("ship node %d has ClassId %d; it must be the item's own id or "+
-				"ComposeModuleUiDataForShip cannot find its modules", item.id, item.classID)
+		if item.classID == item.id {
+			t.Fatalf("ship node %d names ITSELF in ClassId; the client recurses into "+
+				"ClassId and will stack-overflow on any module click", item.id)
 		}
 	}
 

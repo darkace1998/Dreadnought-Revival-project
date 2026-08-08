@@ -115,7 +115,23 @@ var targetSizes = map[string]int{
 	// change, because their fitted abilities sit on the previous build's
 	// tier-less asset paths and were invisible to the slot index until
 	// techTreeAbilityAssetUntiered.
-	"YA_GetTechTree": 23943,
+	//
+	// Now 23762 (-181): hull nodes no longer name THEMSELVES in ClassId. The
+	// client recurses into the item its ClassId names (FUN_3F4880 ->
+	// FUN_3F51A0 -> FUN_3F4880), so a hull pointing at itself was an infinite
+	// loop and a guaranteed EXCEPTION_STACK_OVERFLOW on any module click. A
+	// hull now points at its prerequisite, and a line root or hero at 0. The
+	// shrink is those roots and heroes carrying "0" instead of an 8-digit id.
+	//
+	// KNOWN COST, accepted deliberately: the loader gate drops ClassId <= 0
+	// (TEST R15D,R15D / JLE skip), so those 63 nodes are not stored. Verified
+	// live on 2026-08-08 that the tree still works -- 12 module panels opened,
+	// zero crashes, and none of the symptoms dropped nodes used to cause
+	// ("Could not find a manufacturer with id", "TreeWidgetList of length 0")
+	// appeared. TestLineRootsAndHeroesAreTheOnlyDroppedNodes pins the 63 so it
+	// cannot grow quietly; giving roots a category-1 id that is not a tree row
+	// would recover them and is the open refinement.
+	"YA_GetTechTree": 23762,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

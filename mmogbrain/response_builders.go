@@ -2837,11 +2837,12 @@ func buildMmogTechTreeDocument() []byte {
 
 // techTreeHullClassID returns the ClassId a hull node goes out with.
 //
-// ClassId carries two jobs that are in direct conflict, and the second one was
-// only found on 2026-08-08 from a full-memory dump of a crashed client:
+// It must NOT be the hull's own id. Found 2026-08-08 from a full-memory dump of
+// a crashed client, and confirmed live the same evening.
 //
-//  1. It keys the per-ship record, which is why a ship's own modules resolve
-//     only when it equals the hull's own id (see the block above this).
+// ClassId has two consumers, and they looked like they were in conflict:
+//
+//  1. It keys the per-ship record that a ship's modules resolve through.
 //  2. It is the id the client RECURSES INTO. UYTechTreeManager's walk at
 //     FUN_3F4880 reads the current item's ClassId (item+0x28), asks
 //     FUN_3F51A0 for an item whose Id equals it, and if one exists calls
@@ -2861,16 +2862,29 @@ func buildMmogTechTreeDocument() []byte {
 // to its hull (one hop, correct), and the hull then walks to itself forever.
 // It is not the module's data, which is why no single item or ship isolates it.
 //
-// The self-reference is STILL THE DEFAULT, because removing it is what job (1)
-// forbids and nothing here has been shown to survive that. DN_TECHTREE_NO_SELF_CLASSID=1
-// breaks the cycle -- ClassId becomes the hull's prerequisite (its parent in the
-// line, which is what a "recurse into ClassId" walk most plausibly meant) or 0
-// at the root -- so the crash and its cost can be A/B'd on a live client.
-// Setting it is expected to stop the crash and may empty the modules list; both
-// outcomes are informative and neither is yet measured.
+// The conflict turned out to be imaginary, and that is the important part.
+// Consumer (1) is fed by the MODULE entries, which each carry the hull's id in
+// their own ClassId -- that is what creates and fills the per-ship record. The
+// hull node's own ClassId was never what made a ship's modules resolve. So the
+// hull node can safely point somewhere else, and only the recursion changes.
+//
+// VERIFIED LIVE 2026-08-08, operator's client, this switched on:
+//
+//	Critical error / EXCEPTION_STACK_OVERFLOW ...  0 (was a guaranteed crash)
+//	module detail panels opened .................. 12 (ModuleVideos)
+//	"Modules not found for ship id" .............. 0
+//	log ending ................................... "LogExit: Exiting." (clean quit)
+//
+// So the crash is gone AND the modules still resolve. This is now the default;
+// DN_TECHTREE_SELF_CLASSID=1 restores the old self-referencing behaviour, which
+// crashes the client on any module click and exists only to re-measure that.
+//
+// The hull's prerequisite is used as the parent -- its predecessor in the line,
+// which is what a "recurse into ClassId" walk most plausibly meant -- and 0 at a
+// line root and for heroes, where the lookup fails and the walk stops.
 func techTreeHullClassID(ownID int32, prereq []int32) int32 {
-	if os.Getenv("DN_TECHTREE_NO_SELF_CLASSID") != "1" {
-		return ownID
+	if os.Getenv("DN_TECHTREE_SELF_CLASSID") == "1" {
+		return ownID // the crashing shape, kept only for A/B
 	}
 	if len(prereq) > 0 && prereq[0] != ownID {
 		return prereq[0]

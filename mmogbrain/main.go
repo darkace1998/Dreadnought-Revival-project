@@ -317,7 +317,7 @@ const defaultMmogPlayerPID = "00000000000000000000000000000001"
 // asked what it is actually doing, rather than inferred from what somebody
 // meant to set.
 var techTreeSwitches = []string{
-	"DN_TECHTREE_NO_SELF_CLASSID",
+	"DN_TECHTREE_SELF_CLASSID",
 	"DN_TECHTREE_NO_UNTIERED_ABILITIES",
 	"DN_TECHTREE_UNGATED",
 	"DN_TECHTREE_LIMIT",

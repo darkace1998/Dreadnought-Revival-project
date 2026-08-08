@@ -17,7 +17,7 @@ func (c *capture) Write(p []byte) (int, error) { return c.b.Write(p) }
 // were invisible from outside the process. The startup line exists so "did the
 // experiment actually run?" is answerable from the log.
 func TestStartupSaysWhenASwitchIsActive(t *testing.T) {
-	t.Setenv("DN_TECHTREE_NO_SELF_CLASSID", "1")
+	t.Setenv("DN_TECHTREE_SELF_CLASSID", "1")
 	log := logrus.New()
 	cap := &capture{}
 	log.SetOutput(cap)
@@ -26,7 +26,7 @@ func TestStartupSaysWhenASwitchIsActive(t *testing.T) {
 	logTechTreeSwitches(log)
 	out := cap.b.String()
 
-	if !strings.Contains(out, "DN_TECHTREE_NO_SELF_CLASSID") {
+	if !strings.Contains(out, "DN_TECHTREE_SELF_CLASSID") {
 		t.Errorf("startup log does not name the active switch: %s", out)
 	}
 	if !strings.Contains(out, "ACTIVE") {

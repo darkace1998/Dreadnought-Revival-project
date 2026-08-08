@@ -1,9 +1,6 @@
 package main
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
 // The client crashes with EXCEPTION_STACK_OVERFLOW (C00000FD) when the operator
 // clicks any module on any ship. Diagnosed 2026-08-08 from a 3.1 GB full-memory
@@ -28,14 +25,19 @@ import (
 // and copies +0x20..+0x40 out on a hit, including the ProxyType byte at +0x3c.
 //
 // So an item whose ClassId is its own Id finds itself and never terminates.
-// Every hull node we emit does exactly that, deliberately -- ClassId doubles as
-// the per-ship record key and modules only resolve when it equals the hull's own
-// id. That is why the crash is universal rather than tied to one item: clicking
-// a module walks one correct hop to its hull, and the hull then walks to itself.
+// Every hull node we emitted did exactly that, on the since-disproved belief
+// that ClassId had to equal the hull's own id for its modules to resolve. That
+// is why the crash was universal rather than tied to one item: clicking a module
+// walks one correct hop to its hull, and the hull then walks to itself.
 //
-// This test does not assert the self-reference away, because the conflicting
-// requirement is real and unresolved. It pins the measurement so the count
-// cannot drift silently, and asserts the escape hatch actually works.
+// FIXED and VERIFIED LIVE 2026-08-08 with the operator's client: 0 crashes, 12
+// module detail panels opened, 0 "Modules not found for ship id", clean exit.
+// The conflict was imaginary -- the per-ship record is created and filled by the
+// MODULE entries, each of which still carries its hull's id, so the hull node's
+// own ClassId was never what made modules resolve.
+//
+// Not self-referencing is now the DEFAULT. DN_TECHTREE_SELF_CLASSID=1 restores
+// the crashing shape and exists only to re-measure it.
 
 func techTreeSelfReferencingHulls(t *testing.T) (selfRef int, total int) {
 	t.Helper()
@@ -54,43 +56,37 @@ func techTreeSelfReferencingHulls(t *testing.T) (selfRef int, total int) {
 	return selfRef, len(items)
 }
 
-// The default still self-references. If this number ever changes, the crash
-// surface changed with it and somebody should know why.
-func TestHullNodesStillSelfReferenceByDefault(t *testing.T) {
-	if os.Getenv("DN_TECHTREE_NO_SELF_CLASSID") == "1" {
-		t.Skip("escape hatch is on; TestNoSelfClassIDSwitchBreaksTheCycle covers that")
-	}
+// NOTHING may name itself by default. This is the crash, and it is a hard fail.
+func TestNothingSelfReferencesByDefault(t *testing.T) {
 	selfRef, total := techTreeSelfReferencingHulls(t)
 	t.Logf("%d of %d tech tree items have ClassId == their own resolvable Id", selfRef, total)
-	if selfRef == 0 {
-		t.Fatal("no item self-references any more -- if that was deliberate, delete this test " +
-			"and the DN_TECHTREE_NO_SELF_CLASSID hatch; if it was not, the tech tree changed shape")
+	if selfRef != 0 {
+		t.Errorf("%d items name themselves via ClassId; the client recurses into ClassId "+
+			"(FUN_3F4880 -> FUN_3F51A0 -> FUN_3F4880) and will stack-overflow on any "+
+			"module click, which is the crash fixed on 2026-08-08", selfRef)
 	}
-	// Every one of them is a hull node, not a module. A self-referencing MODULE
-	// would be a different bug and is worth failing on.
-	items := append(techTreeBaseItems(), techTreeHeroItems()...)
-	for _, it := range items {
+}
+
+// The A/B switch must still reproduce the crashing shape, or we cannot re-measure it.
+func TestSelfClassIDSwitchRestoresTheCrashingShape(t *testing.T) {
+	t.Setenv("DN_TECHTREE_SELF_CLASSID", "1")
+	selfRef, total := techTreeSelfReferencingHulls(t)
+	t.Logf("with DN_TECHTREE_SELF_CLASSID=1: %d of %d items self-reference", selfRef, total)
+	if selfRef == 0 {
+		t.Error("the A/B switch no longer reproduces the self-reference, so the crash " +
+			"cannot be re-measured; either wire it back up or delete it")
+	}
+	// Only hull nodes, never modules -- a self-referencing module would be a
+	// different bug.
+	for _, it := range append(techTreeBaseItems(), techTreeHeroItems()...) {
 		if it.classID == it.id && it.module {
-			t.Errorf("module %d self-references via ClassId; only hull nodes should", it.id)
+			t.Errorf("module %d self-references via ClassId; only hull nodes ever did", it.id)
 		}
 	}
 }
 
-// The escape hatch has to actually break the cycle, or the A/B measures nothing.
-func TestNoSelfClassIDSwitchBreaksTheCycle(t *testing.T) {
-	t.Setenv("DN_TECHTREE_NO_SELF_CLASSID", "1")
-	selfRef, total := techTreeSelfReferencingHulls(t)
-	t.Logf("with the hatch on: %d of %d items self-reference", selfRef, total)
-	if selfRef != 0 {
-		t.Errorf("%d items still name themselves with DN_TECHTREE_NO_SELF_CLASSID=1; "+
-			"the client would still recurse forever", selfRef)
-	}
-}
-
-// And with the hatch on, following ClassId as a chain must terminate -- breaking
-// the self-loop is worthless if it leaves a longer cycle behind.
-func TestClassIDChainTerminatesWithTheHatchOn(t *testing.T) {
-	t.Setenv("DN_TECHTREE_NO_SELF_CLASSID", "1")
+// Breaking the self-loop is worthless if it leaves a longer cycle behind.
+func TestClassIDChainTerminates(t *testing.T) {
 	items := append(techTreeBaseItems(), techTreeHeroItems()...)
 	next := map[int32]int32{}
 	for _, it := range items {
@@ -113,4 +109,48 @@ func TestClassIDChainTerminatesWithTheHatchOn(t *testing.T) {
 		}
 	}
 	t.Logf("%d ClassId chains, all terminate", len(next))
+}
+
+// The price of the fix, pinned so it cannot grow quietly.
+//
+// The loader gate drops any item whose ClassId is <= 0:
+//
+//	MOVSXD R15,[RBP-0x78]   ; ClassId
+//	TEST R15D,R15D / JLE skip
+//
+// A line root has no prerequisite to point at and a hero has no line at all, so
+// both go out with 0 and are NOT stored. That is a real cost and it is accepted
+// on purpose: the alternative is the self-reference, which crashes the client on
+// every module click. Verified live 2026-08-08 that the tree still works with
+// these dropped -- 12 module panels opened, 0 crashes, and none of the symptoms
+// dropped nodes used to cause ("Could not find a manufacturer with id",
+// "TreeWidgetList of length 0") appeared in the client log.
+//
+// The open refinement is to give roots and heroes a category-1 id that is NOT a
+// tree row: it would pass the gate, keep the node stored, and still terminate
+// the walk because FUN_3F51A0 would not find it. Nothing has established which
+// id the shipped data used, so that is not invented here.
+func TestLineRootsAndHeroesAreTheOnlyDroppedNodes(t *testing.T) {
+	items := append(techTreeBaseItems(), techTreeHeroItems()...)
+	dropped := 0
+	for _, it := range items {
+		if it.classID > 0 {
+			continue
+		}
+		dropped++
+		if it.module {
+			t.Errorf("MODULE %d has ClassId %d and will be dropped by the loader gate; "+
+				"only hull line roots and heroes may be", it.id, it.classID)
+		}
+	}
+	t.Logf("%d of %d items are dropped by the ClassId <= 0 gate", dropped, len(items))
+
+	// 15 line roots (five classes x three sizes) plus the heroes. If this
+	// moves, the roster changed or the fix regressed -- either way, look.
+	const want = 63
+	if dropped != want {
+		t.Errorf("%d nodes dropped, want %d. If the tech tree roster genuinely changed, "+
+			"update this number and say why; if it did not, something is emitting "+
+			"ClassId 0 that should not be.", dropped, want)
+	}
 }
