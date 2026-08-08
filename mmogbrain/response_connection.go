@@ -717,6 +717,26 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 					return err
 				}
 			}
+			if requestName == "YA_UnlockItem" {
+				// The client has NO handler for YA_UnlockItem's response -- the
+				// dispatcher references YA_ClaimItem and not YA_UnlockItem -- so
+				// the answer we just sent is discarded and the research button
+				// never changes. YA_ClaimItem's handler is the one that parses a
+				// fresh inventory, so push one. See
+				// buildMmogClaimItemPushPayload for the measurements.
+				claimID, err := uuid.NewRandom()
+				if err != nil {
+					log.WithError(err).Warn("mmog: failed to generate claim-item push id")
+				} else {
+					claimFrame := protocol.BuildResponseFrame(claimID, frame.MsgType,
+						buildMmogClaimItemPushPayload(state.playerPID))
+					if err := writeMmogAppResponse(log, conn, remote, claimID, "YA_ClaimItem", claimFrame,
+						appEncoder, encryptResponses, "claim item push failed",
+						"sent YA_ClaimItem push"); err != nil {
+						return err
+					}
+				}
+			}
 			if requestName == "YA_LeaveMatchmaking" {
 				// The response is only an ack. The client sets matchmaking state
 				// 7 ("awaiting a cancellation response") when it sends the

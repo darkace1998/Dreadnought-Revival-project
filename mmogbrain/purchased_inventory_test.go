@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -99,4 +100,50 @@ func TestFreshAccountInventoryIsUnchanged(t *testing.T) {
 		t.Fatal("no starter items checked")
 	}
 	t.Logf("%d starter items present", seen)
+}
+
+// The client has no handler for YA_UnlockItem's response, so the only way to
+// refresh ownership mid-session is an unsolicited YA_ClaimItem frame -- that
+// handler (FUN_2A38C49) reads result.status=="succeeded", inventory and
+// addedLoadouts, and runs inventory through the same owned-item parser
+// YA_PlayerGet's "Items" uses.
+func TestClaimItemPushCarriesTheUpdatedInventory(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	const bought int32 = 83820825
+
+	mmogPlayerStateForPID(pid)
+	if _, err := currentMmogPlayerStateDB().Exec(
+		`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+		 VALUES(?,?,?,?,?)`, pid, bought, "ability", 1000, "freexp"); err != nil {
+		t.Fatalf("record purchase: %v", err)
+	}
+
+	push := string(buildMmogClaimItemPushPayload(pid))
+
+	// The fields the handler reads, in the shape it reads them.
+	for _, want := range []string{"YA_ClaimItem", "result", "succeeded", "inventory", "addedLoadouts", "reason"} {
+		if !strings.Contains(push, want) {
+			t.Errorf("push is missing %q, which FUN_2A38C49 reads", want)
+		}
+	}
+	// "ok" belongs to the other dispatcher; this handler compares "succeeded".
+	if countWireStringField(push, "status", "ok") != 0 {
+		t.Error(`push uses status "ok"; YA_ClaimItem's handler compares against "succeeded"`)
+	}
+	if countWireStringField(push, "ItemID", strconv.Itoa(int(bought))) == 0 {
+		t.Errorf("the newly bought item %d is not in the pushed inventory", bought)
+	}
+	// And it must agree with YA_PlayerGet, or the two paths disagree about
+	// what the player owns.
+	get := string(buildMmogPlayerGetPayload(pid))
+	for _, seed := range starterOwnedInventorySeeds() {
+		if seed.itemID == 0 {
+			continue
+		}
+		id := strconv.Itoa(int(seed.itemID))
+		if (countWireStringField(push, "ItemID", id) > 0) != (countWireStringField(get, "ItemID", id) > 0) {
+			t.Errorf("item %s is in one of PlayerGet/ClaimItem but not the other", id)
+		}
+	}
 }

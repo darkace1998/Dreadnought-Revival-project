@@ -1696,32 +1696,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// to module ownership. Reported live as "tried to buy it but it never
 	// updated". See purchasedInventoryItemIDs.
 	b, stack = protocol.AppendArrayStart(b, stack, "Items")
-	emitted := map[int32]bool{}
-	appendInventoryEntry := func(b []byte, stack []int, itemID, amount int32) ([]byte, []int) {
-		if amount <= 0 {
-			amount = 1
-		}
-		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
-		b = protocol.AppendStringField(b, "Amount", strconv.Itoa(int(amount)))
-		b = protocol.AppendStringField(b, "NewPromotionID", "0")
-		b = protocol.AppendStringField(b, "Credits", "0")
-		return protocol.AppendObjectEnd(b, stack)
-	}
-	for _, item := range starterOwnedInventorySeeds() {
-		if item.itemID == 0 || emitted[item.itemID] {
-			continue
-		}
-		emitted[item.itemID] = true
-		b, stack = appendInventoryEntry(b, stack, item.itemID, item.quantity)
-	}
-	for _, itemID := range purchasedInventoryItemIDs(playerPID) {
-		if emitted[itemID] {
-			continue // a starter item bought again is still one entry
-		}
-		emitted[itemID] = true
-		b, stack = appendInventoryEntry(b, stack, itemID, 1)
-	}
+	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
@@ -5718,5 +5693,94 @@ func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
 	b = protocol.AppendStringField(b, "result", "ok")
 	b = protocol.AppendStringField(b, "Credits", strconv.Itoa(int(state.softCurrency)))
 	b = protocol.AppendStringField(b, "Points", strconv.Itoa(int(state.premiumCurrency)))
+	return b
+}
+
+// appendOwnedInventoryEntries writes the player's owned-item entries into an
+// already-open container: the starter seeds plus everything they have bought,
+// de-duplicated.
+//
+// Shared by YA_PlayerGet's "Items" and the YA_ClaimItem push's "inventory",
+// because both are parsed by the SAME client function (FUN_2A6CED0) into the
+// same owned-item list -- the one IsItemOwnedByPlayer scans at module+0x39E8.
+// Two emitters would be two chances to disagree about what the player owns.
+func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byte, []int) {
+	emitted := map[int32]bool{}
+	entry := func(b []byte, stack []int, itemID, amount int32) ([]byte, []int) {
+		if amount <= 0 {
+			amount = 1
+		}
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
+		b = protocol.AppendStringField(b, "Amount", strconv.Itoa(int(amount)))
+		b = protocol.AppendStringField(b, "NewPromotionID", "0")
+		b = protocol.AppendStringField(b, "Credits", "0")
+		return protocol.AppendObjectEnd(b, stack)
+	}
+	for _, item := range starterOwnedInventorySeeds() {
+		if item.itemID == 0 || emitted[item.itemID] {
+			continue
+		}
+		emitted[item.itemID] = true
+		b, stack = entry(b, stack, item.itemID, item.quantity)
+	}
+	for _, itemID := range purchasedInventoryItemIDs(playerPID) {
+		if emitted[itemID] {
+			continue // a starter item bought again is still one entry
+		}
+		emitted[itemID] = true
+		b, stack = entry(b, stack, itemID, 1)
+	}
+	return b, stack
+}
+
+// buildMmogClaimItemPushPayload is the frame that tells a client, mid-session,
+// that its inventory changed.
+//
+// The client has NO response handler for YA_UnlockItem. Measured: the message
+// names live as ASCII literals, and xrefing every copy gives exactly three --
+// FUN_2A4C340 builds the YA_UnlockItem REQUEST, FUN_2A16A80 builds the
+// YA_ClaimItem request, and the 58KB response dispatcher (FUN_2A236C2)
+// references YA_ClaimItem at 0x2A2C86E and YA_UnlockItem nowhere at all. So the
+// research button fires, the request is answered, and the answer is discarded:
+// no shape of YA_UnlockItem response can ever update the UI. That is exactly the
+// operator's report -- "it does not unlock the item researched if i press the
+// button", while the purchase lands correctly server-side every time.
+//
+// YA_ClaimItem's handler is FUN_2A38C49 (YMmogClient.cpp). It reads, in order:
+//
+//	result -> status (compared against "succeeded") -> inventory -> addedLoadouts
+//	       -> reason, logged as "YA_ClaimItem failed for item [%d] (reason: %s)"
+//
+// and it calls FUN_2A6CED0, the same owned-item parser YA_PlayerGet's "Items"
+// goes through. So an unsolicited YA_ClaimItem frame is the one path that
+// refreshes ownership without a relog.
+//
+// status is "succeeded" here and NOT "ok" on purpose: "ok" is what the big
+// dispatcher checks for its own handlers (YA_RewardCurrencies at 0x2A2C432),
+// while this handler's own comparison is against "succeeded". Both strings are
+// real; they belong to different handlers.
+//
+// UNVERIFIED against a live client. The handler, its field names and its parser
+// are read from the binary; that the client accepts this frame unsolicited is
+// not established -- the same caveat the currency push carries.
+func buildMmogClaimItemPushPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+
+	b = protocol.AppendStringField(b, "RT", "YA_ClaimItem")
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
+	b = protocol.AppendStringField(b, "reason", "")
+	b, stack = protocol.AppendArrayStart(b, stack, "inventory")
+	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	// Empty, and deliberately present rather than omitted: a module grants no
+	// loadout, and hulls get theirs through grantUnlockedShipLoadout, which the
+	// client learns from YA_PlayerFleets. Sending a wrong loadout here would be
+	// inventing one.
+	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }
