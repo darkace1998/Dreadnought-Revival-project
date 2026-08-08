@@ -121,6 +121,14 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Say out loud which behaviour switches are in force. An A/B against a
+	// running server has now silently measured nothing twice -- once because a
+	// switch is read inside a sync.Once and needs a restart, once because the
+	// binary predated the change and the variable was never set. Neither was
+	// visible from outside the process, which is the same hidden-failure shape
+	// as everything else in CONTRIBUTING.md's list.
+	logTechTreeSwitches(log)
+
 	go func() {
 		log.WithField("addr", addr).Info("mmogbrain starting")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -303,3 +311,49 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 const defaultMmogPlayerPID = "00000000000000000000000000000001"
+
+// techTreeSwitches are the env switches that change what the tech tree looks
+// like on the wire. They are listed in one place so a running server can be
+// asked what it is actually doing, rather than inferred from what somebody
+// meant to set.
+var techTreeSwitches = []string{
+	"DN_TECHTREE_NO_SELF_CLASSID",
+	"DN_TECHTREE_NO_UNTIERED_ABILITIES",
+	"DN_TECHTREE_UNGATED",
+	"DN_TECHTREE_LIMIT",
+	"DN_TECHTREE_NO_MODULES",
+}
+
+// logTechTreeSwitches prints the build stamp and every tech-tree switch at
+// startup, so "did the experiment actually run?" is answerable from the log.
+func logTechTreeSwitches(log *logrus.Logger) {
+	fields := logrus.Fields{"build": buildStamp()}
+	on := 0
+	for _, name := range techTreeSwitches {
+		v := os.Getenv(name)
+		fields[name] = v
+		if v != "" && v != "0" {
+			on++
+		}
+	}
+	entry := log.WithFields(fields)
+	if on == 0 {
+		entry.Info("tech tree switches: all default")
+		return
+	}
+	entry.Warn("tech tree switches ACTIVE -- this server is not serving default data")
+}
+
+// buildStamp reports when this executable was built, which is the other half of
+// the question: a switch cannot take effect in a binary that predates it.
+func buildStamp() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "unknown"
+	}
+	fi, err := os.Stat(exe)
+	if err != nil {
+		return "unknown"
+	}
+	return fi.ModTime().UTC().Format(time.RFC3339)
+}
