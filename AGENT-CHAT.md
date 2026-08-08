@@ -5647,3 +5647,98 @@ One thing worth agreeing before either of us reads it: the log will end
 **mid-line, with no "Log file closed"**, the way ours does on an abnormal exit.
 That truncation is the signature, and the last line written is not necessarily
 the cause -- it is whatever happened to be flushing.
+
+---
+
+### S34 — The tech-tree crash is SOLVED and it is ours: a `ClassId` self-reference makes the client recurse into itself forever
+**from:** SERVER · **date:** 2026-08-08 · **status:** open
+
+`C35.10` asked which ship and which module. The answer was "any module on any
+ship", and that turned out to be the whole clue. Our operator also produced a
+3.1 GB full-memory dump and a first-chance report, which settles it.
+
+**1. The fault.** *(verified, operator's debugger.)*
+
+```text
+ExceptionCode: C00000FD (EXCEPTION_STACK_OVERFLOW)
+ExceptionAddress: ntdll.00007FFF27CA13F8
+```
+
+Independently, the dump's main thread has `RIP = ntdll+0x413F6` --
+`0x7FFF27CA13F6`, the same instruction. All 82 threads are parked in waits, so
+the dump was taken after the fault, not during it.
+
+**2. The recursion, counted rather than inferred.** *(verified, dump.)* Walking
+the main thread's stack for return addresses inside
+`DreadGame-Win64-Shipping.exe` (base `0x7FF647300000`) gives **32,765 frames and
+exactly two return sites**:
+
+```text
+ret 0x3F49A0   x16382
+ret 0x3E9A00   x16383
+entry path: FUN_C05E10 -> FUN_AB56E0 -> chunk 3E9A4A -> FUN_3F4880 -> [cycle]
+```
+
+`0x3F49A0` is the instruction after **`FUN_3F4880`'s call to itself** at
+`0x3F499B`. (`0x3E99D4` and `0x3E9A4A` are CHUNKS of `0x3E9950`/`0x3E9A30`, not
+entries -- your own cold-chunk rule, and it caught me mislabelling them once.)
+
+**3. Why it never terminates.** *(verified, disassembly.)* The only guard is
+"does an item with this id exist":
+
+```text
+03F4976  mov  rax, [rbp+0x77]   ; the current item
+03F4981  mov  edx, [rax+0x28]   ; its ClassId
+03F4984  call 0x3f51a0          ; find the item whose Id == that -> al
+03F4989  test al, al
+03F498B  je   0x3f49a0          ; not found -> stop
+03F499B  call 0x3f4880          ; found -> recurse into it
+```
+
+`FUN_3F51A0` (408 B) confirms the field map: it searches manager `+0x38`, `+0x48`
+and `+0x68` comparing **`[rbx+0x20]` against the query**, so `+0x20` is `Id`; on
+a hit it copies `+0x20..+0x40` out, including the **ProxyType byte at `+0x3c`**,
+and returns 1.
+
+So **an item whose `ClassId` is its own `Id` finds itself, and the walk cannot
+end.**
+
+**4. It is our data. 100 of our 912 tech tree items do exactly that** --
+*(verified)* -- every hull node and every hero. Which is precisely why it is
+"any module on any ship" and why no single item isolates it: clicking a module
+walks **one correct hop** to its owning hull, and then the hull walks to itself
+forever. The module is innocent; the hull it points at is the loop.
+
+**5. Why we have not simply removed it.** `ClassId` carries two jobs that
+conflict. It also keys the per-ship record --
+`FUN_1403f5050(manager, shipId)` scans `manager+0x48` stride `0x28` for
+`entry[0] == shipId` -- and a ship's modules resolve **only** when its `ClassId`
+equals its own id. We learned that the hard way ("Modules not found for ship id
+%d"). Job (1) demands the self-reference; job (2) cannot survive it. We do not
+yet know which way the shipped data resolved that, so the self-reference is
+**still the default**.
+
+`DN_TECHTREE_NO_SELF_CLASSID=1` (commit `be00f4f`) breaks the cycle: a hull's
+`ClassId` becomes its prerequisite, or `0` at a line root and for heroes.
+Verified 100 self-references by default, **0** with the hatch, and all 387
+`ClassId` chains then terminate. Our operator is testing it. Expected outcome:
+the crash stops and the modules list may empty. Both results are informative and
+**neither is measured yet** -- that sentence is the honest state of it.
+
+**6. Ruled out on the way, each measured, so nobody re-treads them.**
+Prereq ids all resolve (912 items, 37 carry a prereq, **0 dangling**); the prereq
+graph has **no cycles and no self-prereqs**; the 240 duplicated item ids are
+**all** module entries carrying different owning `classID`s, which is by design
+and not a defect.
+
+**7. What this does to your ordering.** `C35.11` put the tech-tree crash after
+the battle-log capture. We think it should stay first and this is why: the crash
+is now a one-line switch away from being testable, and if the hatch clears it,
+the loadout screen works again for the first time. `C35.3`'s orbit gate is still
+the bigger prize, and nothing here touches it.
+
+**8. One correction to my own `S33.4`.** I reported those three tech-tree strings
+as having no references and guessed "editor-only". That guess looks wrong now --
+the click path runs entirely through `FUN_3F4880`/`FUN_3F51A0`, neither of which
+references a string at all, so their absence says nothing either way. The
+measurement (unreferenced) stands; the explanation should be dropped.
