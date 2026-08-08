@@ -3754,11 +3754,33 @@ func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 	// learns which items the player owns, so every entry reading as 0 meant it
 	// learned nothing: unlocks were charged and recorded, and the ship stayed
 	// locked and re-unlockable.
-	b, stack = protocol.AppendArrayStart(b, stack, "PurchasesData")
-	for _, itemID := range persistedMmogPlayerPurchaseItemIDs(playerPID) {
-		b = protocol.AppendUnnamedStringField(b, strconv.Itoa(int(itemID)))
+	//
+	// Sent as an INDEXED list, not a bare array. A 0x0d container throws its
+	// children's names away, and a name-less container answers ANY non-numeric
+	// named lookup with child[0] (see AppendIndexedStringListField -- the same
+	// mechanism that made the tech tree read every item's ProxyType as its own
+	// first prereq id). Positions are unchanged, so anything walking this list
+	// by index is unaffected; the only difference is that a named lookup can
+	// now succeed or cleanly not-find, instead of silently returning entry 0.
+	//
+	// This also invalidates an older conclusion recorded in
+	// grantUnlockedShipLoadout: "with the ids in PurchasesData ... the client
+	// still re-sent YA_UnlockItem". They were in PurchasesData, but in the
+	// shape that cannot be looked up by name, so that observation never
+	// established what it was taken to establish.
+	//
+	// UNVERIFIED against a live client as of 2026-08-08. What IS measured: the
+	// operator re-researched module 83820825 at 22:42 -- twice -- for an item
+	// already in player_purchases since 20:28 and now present in the owned-item
+	// inventory (32 -> 38 items). So the client is not learning ownership from
+	// the inventory, and PurchasesData in a readable shape is the next
+	// candidate, not a proven fix.
+	purchases := persistedMmogPlayerPurchaseItemIDs(playerPID)
+	values := make([]string, 0, len(purchases))
+	for _, itemID := range purchases {
+		values = append(values, strconv.Itoa(int(itemID)))
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendIndexedStringListField(b, stack, "PurchasesData", values)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

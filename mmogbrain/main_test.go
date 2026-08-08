@@ -2428,7 +2428,12 @@ func TestPlayerBootstrapAvoidsSyntheticOfficersAndPurchases(t *testing.T) {
 		t.Fatal("YA_PlayerGet should not include synthetic officer rows with non-client parser fields")
 	}
 
-	purchases := extractNamedMmogArray(t, extractNamedMmogObject(t, buildMmogPlayerPurchasesPayload(), "result"), "PurchasesData")
+	// PurchasesData is an OBJECT (0x0c) with children named "0", "1", ... not a
+	// bare array (0x0d), since 2026-08-08: a name-less container answers any
+	// non-numeric named lookup with child[0], so the client could never look an
+	// id up by name. Extraction changed shape with it; the assertion below is
+	// unchanged and still checks the same thing.
+	purchases := extractNamedMmogObject(t, extractNamedMmogObject(t, buildMmogPlayerPurchasesPayload(), "result"), "PurchasesData")
 	if bytes.Contains(purchases, []byte{0x00, 0x56}) {
 		t.Fatal("YA_GetPlayerPurchases should not synthesize starter inventory purchases")
 	}
