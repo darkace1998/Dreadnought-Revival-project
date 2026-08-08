@@ -1292,3 +1292,50 @@ func rememberPlayerDisplayName(playerPID, username string) {
 		 WHERE user_id=? AND (display_name IS NULL OR display_name='' OR display_name='Local')`,
 		username, pid)
 }
+
+// purchasedInventoryItemIDs returns every item the player has actually bought,
+// in purchase order.
+//
+// The owned-item inventory in YA_PlayerGet was built from
+// starterOwnedInventorySeeds() alone -- a STATIC list -- so nothing a player
+// bought ever entered it. That is why an unlocked module never appeared as
+// owned: the client's only route to module ownership is
+// UYInventoryManager::UpdateItemsFromInventory, which reads that array, and the
+// array never changed. The operator's report was "tried to buy it but it never
+// updated"; the purchase was recorded correctly in player_purchases and simply
+// had nowhere to surface.
+//
+// Ships are a separate mechanism and stay that way: grantUnlockedShipLoadout
+// gives an unlocked hull a loadout row, because ownership of a SHIP is a
+// UYLoadoutManager row rather than an inventory entry (see the evidence in that
+// function -- purchases and m_isOwned both failed to convince the client). This
+// covers everything that is not a ship, and ships appear here too only because
+// the starter seeds already list them.
+func purchasedInventoryItemIDs(playerPID string) []int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(
+		`SELECT item_id FROM player_purchases WHERE user_id=? ORDER BY rowid`,
+		normalizedPlayerStatePID(playerPID))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ids []int32
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			return ids
+		}
+		if id != 0 {
+			ids = append(ids, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return ids
+	}
+	return ids
+}

@@ -1689,21 +1689,38 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// (FUN_142a77660) through the restrictive tagged union that only accepts
 	// double/int64/string — our int32 tag reads as 0 — so every value goes as a
 	// numeric string. ItemID must be non-zero or the entry is skipped outright.
+	// This list is the STARTER seeds PLUS everything the player has since
+	// bought. It used to be the seeds alone, which is why an unlocked module
+	// never showed as owned -- the purchase was recorded in player_purchases
+	// and had nowhere to surface, because this array is the client's only route
+	// to module ownership. Reported live as "tried to buy it but it never
+	// updated". See purchasedInventoryItemIDs.
 	b, stack = protocol.AppendArrayStart(b, stack, "Items")
-	for _, item := range starterOwnedInventorySeeds() {
-		if item.itemID == 0 {
-			continue
-		}
-		amount := item.quantity
+	emitted := map[int32]bool{}
+	appendInventoryEntry := func(b []byte, stack []int, itemID, amount int32) ([]byte, []int) {
 		if amount <= 0 {
 			amount = 1
 		}
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(item.itemID)))
+		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
 		b = protocol.AppendStringField(b, "Amount", strconv.Itoa(int(amount)))
 		b = protocol.AppendStringField(b, "NewPromotionID", "0")
 		b = protocol.AppendStringField(b, "Credits", "0")
-		b, stack = protocol.AppendObjectEnd(b, stack)
+		return protocol.AppendObjectEnd(b, stack)
+	}
+	for _, item := range starterOwnedInventorySeeds() {
+		if item.itemID == 0 || emitted[item.itemID] {
+			continue
+		}
+		emitted[item.itemID] = true
+		b, stack = appendInventoryEntry(b, stack, item.itemID, item.quantity)
+	}
+	for _, itemID := range purchasedInventoryItemIDs(playerPID) {
+		if emitted[itemID] {
+			continue // a starter item bought again is still one entry
+		}
+		emitted[itemID] = true
+		b, stack = appendInventoryEntry(b, stack, itemID, 1)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
