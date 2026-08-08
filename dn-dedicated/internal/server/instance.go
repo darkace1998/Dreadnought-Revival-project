@@ -360,9 +360,26 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 		inst.mu.Lock()
 		inst.err = err
 		inst.mu.Unlock()
+		lines, bytesRead := writer.stats()
 		if logFile != nil {
-			fmt.Fprintf(logFile, "\n# exited at %s (err: %v)\n", time.Now().Format(time.RFC3339), err)
+			// Record how much the child actually produced. Without this a
+			// header-only log looks exactly like a healthy one that has not
+			// been written to yet, and the operator cannot tell a battle server
+			// that died on startup from one whose output never reached us.
+			fmt.Fprintf(logFile, "\n# exited at %s (err: %v); captured %d lines, %d bytes from the child\n",
+				time.Now().Format(time.RFC3339), err, lines, bytesRead)
 			_ = logFile.Close()
+		}
+		// Zero output is never normal: the engine prints its Steam SDK banner
+		// within a second of starting, so a run that captured nothing did not
+		// get far enough to log, or its stdout never reached this process.
+		// Say so where the operator will see it rather than leaving a plausible
+		// short file behind.
+		if lines == 0 {
+			fmt.Fprintf(logTo,
+				"warning: battle server %s produced NO output before exiting (err: %v); "+
+					"log %q holds only the header\n",
+				shortID(inst.ID), err, inst.LogPath)
 		}
 		close(inst.done)
 	}()
@@ -677,10 +694,24 @@ type logWriter struct {
 	onReady    func()
 	mu         sync.Mutex
 	buf        []byte
+
+	// Counters so a short log can say why it is short. A capture that ends
+	// after the header is indistinguishable from a healthy one that simply has
+	// not been written to yet -- the operator sees a plausible-looking file
+	// either way. See stats and the exit marker in Launch.
+	lines int64
+	bytes int64
 }
 
 func newLogWriter(out, file io.Writer, instanceID string, verbose bool, onReady func()) *logWriter {
 	return &logWriter{out: out, file: file, instanceID: instanceID, verbose: verbose, onReady: onReady}
+}
+
+// stats reports how much the child actually produced.
+func (w *logWriter) stats() (lines, bytes int64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lines, w.bytes
 }
 
 // readyMarkers are the engine lines that mean the map is loaded and the match is
@@ -706,6 +737,7 @@ func (w *logWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 
 	w.buf = append(w.buf, p...)
+	w.bytes += int64(len(p))
 	for {
 		idx := bytes.IndexByte(w.buf, '\n')
 		if idx < 0 {
@@ -713,6 +745,7 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		}
 		line := string(bytes.TrimRight(w.buf[:idx], "\r"))
 		w.buf = w.buf[idx+1:]
+		w.lines++
 		if w.file != nil {
 			fmt.Fprintf(w.file, "%s %s\n", time.Now().Format("15:04:05.000"), line)
 		}
