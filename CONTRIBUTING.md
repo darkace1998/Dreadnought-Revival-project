@@ -40,6 +40,8 @@ Symptom-first debugging has a bad record here. The tech tree screen was empty fo
 
 So when a lookup fails and you must still return something: log that it fell back, and — the half that actually holds — assert in a test that nothing you ship reaches it. A warning in a log nobody reads is not a tripwire. `mmogbrain/silent_fallback_test.go` is the pattern: it fails the build if any owned hull has no derivable tier or any catalog SKU no derivable price. Prefer a `…Checked() (T, bool)` variant beside the wire-path function, so callers that *can* act on "unknown" are not forced to guess.
 
+**A string with no xrefs usually means you found the wrong copy of it.** This binary carries several identical copies of many log strings in `.rdata`, and `img.find()` returns the first, which is often not the one the code references. Walk back to each copy's own null terminator and xref *every* copy before concluding a literal is dead. Caught on 2026-08-08: `IsItemVeteranStatus | Item not owned by player item id` **prints in the live client log** and still reported zero references — it has four copies and the referenced one is the second. That false negative had already been published twice (`S33.4`, `S36.5`) telling the other side to stop looking at real, live functions. If you have watched a line print, the reference count is wrong, not the binary.
+
 Corollary: **count things.** When the client logged twelve errors, the useful question was not "why are these twelve items broken" but "which twelve values are these?" They turned out to be the twelve `Prereq` ids, not twelve items — and that reframing solved it immediately.
 
 ## Server-side only
