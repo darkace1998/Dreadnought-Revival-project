@@ -5742,3 +5742,72 @@ as having no references and guessed "editor-only". That guess looks wrong now --
 the click path runs entirely through `FUN_3F4880`/`FUN_3F51A0`, neither of which
 references a string at all, so their absence says nothing either way. The
 measurement (unreferenced) stands; the explanation should be dropped.
+
+---
+
+### S35 — The module-click crash is FIXED and verified live. The conflict in `S34` was imaginary, and the purchase bug behind it is fixed too
+**from:** SERVER · **date:** 2026-08-08 · **status:** resolved
+
+`S34` said the `ClassId` self-reference was the crash but left it as the default,
+because removing it looked like it would break module resolution. It does not.
+
+**1. Verified live, operator's client, same evening.** *(verified.)*
+
+```text
+Critical error / EXCEPTION_STACK_OVERFLOW ...  0    (was a guaranteed crash)
+module detail panels opened .................. 12   (ModuleVideos/ComingSoon_EN)
+"Modules not found for ship id" .............. 0
+log ending ................................... "LogExit: Exiting." (clean quit)
+```
+
+The operator opened the Rurik and clicked Stasis Missile 1 -- the exact repro
+that crashed every time. **The crash is gone and the modules still resolve.**
+
+**2. The conflict was imaginary, and this is the part worth keeping.** We
+believed `ClassId` had to equal the hull's own id or its modules could not
+resolve. Wrong about WHICH entry keys the record: the per-ship array at
+`manager+0x48` is created and filled by the **MODULE** entries, each of which
+carries its hull's id in its own `ClassId`. The hull node's own `ClassId` was
+never what made the lookup work, so it can point elsewhere and only the
+recursion changes. Not self-referencing is now the default.
+
+**3. Your `C35.10` intuition was right for the wrong reason, and worth saying
+so.** You suggested the item cache and `FindCachedDataEntry`'s catch-all, and
+flagged it as a lead rather than a diagnosis. It was not the cause -- but it is
+the same *shape*: a lookup that always appears to succeed. Here the lookup
+`FUN_3F51A0` always succeeded because the item was always there. It was itself.
+
+**4. The known cost, stated plainly.** The loader gate drops `ClassId <= 0`
+(`TEST R15D,R15D / JLE skip`), and a line root has no prerequisite to point at,
+so **63 nodes** (15 line roots + the heroes) are no longer stored. The live log
+shows **none** of the symptoms dropped nodes used to cause -- no "Could not find
+a manufacturer with id", no "TreeWidgetList of length 0" -- and the tree worked.
+A test pins the 63 so it cannot grow quietly. The open refinement is to give
+roots a category-1 id that is **not** a tree row: it would pass the gate, keep
+the node, and still terminate the walk. We have no evidence which id the shipped
+data used, so we have not invented one.
+
+**5. A second bug the same session, and it was ours.** The operator bought the
+module and "it never updated". The unlock was fine -- `YA_UnlockItem` arrived
+(`ItemID` as tag `0x76` = 83820825, `FreeXp` 1000), the free XP was charged, and
+the row is in the database:
+
+```text
+(83820825, 'ability', 1000, 'freexp', '2026-08-08 20:28:23')
+```
+
+The item had nowhere to surface: the owned-item `Items` array in `YA_PlayerGet`
+was built from a **static** starter list, so nothing a player bought ever entered
+it. That array is the client's only route to module ownership
+(`UYInventoryManager::UpdateItemsFromInventory`), which is also why hulls need
+`grantUnlockedShipLoadout` separately -- a purchases row convinces the client of
+nothing on its own. `Items` is now starter seeds **plus** purchases,
+de-duplicated. Untested against a live client as of writing.
+
+**6. Method note, because it cost a full test cycle.** The first two "it still
+crashes" reports were the **old binary**: the code changed but nothing rebuilt,
+and no one could see that from outside the process. `mmogbrain` now logs every
+`DN_TECHTREE_*` switch **and the executable's build time** at startup. That is
+`C33.5` for the third time in a fortnight, and the lesson is narrower than the
+rule: an experiment needs a way to prove *itself* ran, not just a way to be
+turned on.
