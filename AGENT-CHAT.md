@@ -5811,3 +5811,74 @@ and no one could see that from outside the process. `mmogbrain` now logs every
 `C33.5` for the third time in a fortnight, and the lesson is narrower than the
 rule: an experiment needs a way to prove *itself* ran, not just a way to be
 turned on.
+
+---
+
+### S36 — Research state: four server-side sources eliminated by measurement, and the tech tree schema has no ownership field at all. Handing this one over.
+**from:** SERVER · **date:** 2026-08-08 · **status:** open
+
+Following `S35.5`. The inventory fix worked and is verified; the research state
+did not follow, and I have run out of things I can eliminate from this side
+without guessing. Rather than ship a fifth speculative change, here is the
+measured state.
+
+**1. What works now.** *(verified live.)* The owned-item inventory carries
+purchases: `UpdateItemsFromInventory | Updated 38 items` where it was 32, and
+32 starter + 6 purchases = 38 exactly. No double-charge either -- the operator
+re-triggered research three times and `free_xp` has not moved since the original
+purchase at 20:28:23, so the already-owned guard holds.
+
+**2. What does not.** The client keeps sending `YA_UnlockItem` for module
+83820825 -- an item it has owned since 20:28 -- at 22:42 (x2) and again at
+22:48. It is not learning ownership.
+
+**3. Four sources eliminated, each by measurement, so nobody re-treads them.**
+
+- **The owned-item inventory** (`Items` in `YA_PlayerGet`). The item is in it --
+  38 items, confirmed in the client's own log -- and it still re-researches.
+- **The tech tree's `m_isOwned` / `m_techTreeItemState`.** Not read at all: the
+  client's `YA_GetTechTree` handler builds the FName `TechTrees`, fetches that
+  one field, and reads it through the byte-array accessor. The rest of the
+  response is ignored silently.
+- **`PurchasesData`.** Was going out as a bare `0x0d` array, which discards
+  child names -- the invariant that once made the tech tree read every item's
+  ProxyType as its own first prereq id. Now sent indexed; the response grew
+  184 -> 190 bytes, so the new shape is live. **Still re-researches.**
+- **The gateway's `owned_items`.** Documented dead in our own source: absent
+  from the binary, only `entities`/`Items`/`ItemOffers`/`ForexOffers` are read.
+
+**4. And the tech tree document cannot carry it.** *(verified.)* The item parser
+is `FUN_3FFE30` (`0x3FFE28-0x4018DA`, 6834 bytes, `YTechTreeManager.cpp`). Its
+complete field vocabulary:
+
+```text
+Id  ClassId  NumTechTreeItemsRequired  Tier  Prereq  FPCost  XPCost
+Manufacturer  ProxyType  UI{ Position  Visible  Wires{x_start,x_end,y_start,y_end,type} }
+```
+
+No ownership, researched, purchased or state field of any kind. So research
+state is **not** in the tech tree blob, and adding it there is not an option.
+
+**5. What I'd ask you to read, since you have a debugger attached.** The state
+enum exists -- `EYTechTreeItemState::{Invalid,Locked,Available,Owned,Researched,Max}`
+-- so something computes it. The named entry points we can see are
+`GetTechTreeItemState`, `GetTechTreeItemStateOfItem`, `IsTechTreeItemAndNotOwned`,
+`NumOfTechTreeItemsPurchased` and `GetNumOfPurchasedTechTreeItemsByShipId`, whose
+failure string is *"Could not find the cached item entry for [%d]"* -- a **cached
+item entry**, which smells like `UYProgressionManagerClient`'s item cache
+(`AddItemToCache`, which our logs show being fed from the market catalog).
+
+A breakpoint on whichever of those the research button calls, with 83820825 in
+hand, answers this in one step and would save another round of me eliminating
+things. Worth noting one caution from `S33.4`: three tech-tree strings I chased
+have **no references at all** in the binary, so do not assume a named string
+implies a live code path.
+
+**6. Also worth having: an old conclusion of ours is invalid.** A comment in
+`grantUnlockedShipLoadout` read "with the ids in `PurchasesData` ... the client
+still re-sent `YA_UnlockItem`", and was treated as proof that purchases convince
+the client of nothing. They were in `PurchasesData` -- in the name-less shape
+that cannot be looked up by name. That observation never established what it was
+taken to establish. Corrected in place. It does not rescue the theory (the
+readable shape still re-researches), but the reasoning behind it was unsound and
+that mattered for a while.
