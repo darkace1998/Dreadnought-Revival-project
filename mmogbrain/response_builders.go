@@ -2600,7 +2600,11 @@ func techTreeBaseItems() []techTreeItem {
 			// is the separate manufacturer-keyed array at manager+0x38, and a
 			// shared ClassId left every tier above the line root unable to find
 			// its modules ("Modules not found for ship id %d").
-			classID:      hull.loadoutID,
+			//
+			// AND IT IS ALSO THE ID THE CLIENT RECURSES INTO, which is the
+			// crash on clicking any module on any ship. See
+			// techTreeHullClassID.
+			classID:      techTreeHullClassID(hull.loadoutID, prereq),
 			manufacturer: manufacturerID,
 			position:     columnOf[hull.hullLine],
 			tier:         hull.tier,
@@ -2649,7 +2653,11 @@ func techTreeHeroItems() []techTreeItem {
 			// A hero is its own column -- nothing researches into or out of it
 			// -- so it is its own class root. Its id is category 3, which the
 			// store gate accepts alongside category 1; see techTreeBaseItems.
-			classID:      hero.loadoutID,
+			//
+			// It self-references for the same reason a hull does, and recurses
+			// for the same reason -- a hero having no prerequisite means the
+			// hatch sends it to 0. See techTreeHullClassID.
+			classID:      techTreeHullClassID(hero.loadoutID, nil),
 			manufacturer: manufacturerID,
 			tier:         hero.tier,
 			position:     heroColumn[[2]int32{manufacturerID, hero.tier}],
@@ -2825,6 +2833,49 @@ func buildMmogTechTreeDocument() []byte {
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	return protocol.AppendRootEnd(b)
+}
+
+// techTreeHullClassID returns the ClassId a hull node goes out with.
+//
+// ClassId carries two jobs that are in direct conflict, and the second one was
+// only found on 2026-08-08 from a full-memory dump of a crashed client:
+//
+//  1. It keys the per-ship record, which is why a ship's own modules resolve
+//     only when it equals the hull's own id (see the block above this).
+//  2. It is the id the client RECURSES INTO. UYTechTreeManager's walk at
+//     FUN_3F4880 reads the current item's ClassId (item+0x28), asks
+//     FUN_3F51A0 for an item whose Id equals it, and if one exists calls
+//     itself at 0x3F499B:
+//
+//     03F4984  call 0x3f51a0   ; find item by ClassId -> al
+//     03F4989  test al, al
+//     03F498B  je   0x3f49a0   ; not found -> stop
+//     03F499B  call 0x3f4880   ; found -> recurse into it
+//
+// A hull whose ClassId is its own id therefore finds ITSELF, every time, and
+// the only termination condition never fires. Measured, not inferred: the dump
+// holds 16,382 frames returning to 0x3F49A0 and the fault is
+// EXCEPTION_STACK_OVERFLOW (C00000FD) at ntdll+0x413F6.
+//
+// That is exactly "clicking any module on any ship": the module's ClassId walks
+// to its hull (one hop, correct), and the hull then walks to itself forever.
+// It is not the module's data, which is why no single item or ship isolates it.
+//
+// The self-reference is STILL THE DEFAULT, because removing it is what job (1)
+// forbids and nothing here has been shown to survive that. DN_TECHTREE_NO_SELF_CLASSID=1
+// breaks the cycle -- ClassId becomes the hull's prerequisite (its parent in the
+// line, which is what a "recurse into ClassId" walk most plausibly meant) or 0
+// at the root -- so the crash and its cost can be A/B'd on a live client.
+// Setting it is expected to stop the crash and may empty the modules list; both
+// outcomes are informative and neither is yet measured.
+func techTreeHullClassID(ownID int32, prereq []int32) int32 {
+	if os.Getenv("DN_TECHTREE_NO_SELF_CLASSID") != "1" {
+		return ownID
+	}
+	if len(prereq) > 0 && prereq[0] != ownID {
+		return prereq[0]
+	}
+	return 0
 }
 
 // techTreeProxyTypeShip is the ProxyType for a ship node: 9.
