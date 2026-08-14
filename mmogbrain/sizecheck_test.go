@@ -131,7 +131,15 @@ var targetSizes = map[string]int{
 	// appeared. TestLineRootsAndHeroesAreTheOnlyDroppedNodes pins the 63 so it
 	// cannot grow quietly; giving roots a category-1 id that is not a tree row
 	// would recover them and is the open refinement.
-	"YA_GetTechTree": 23762,
+	//
+	// Now 16272 (-7490): per-ship MODULE entries are no longer sent, at the
+	// operator's instruction -- we were emitting hundreds per ship while the
+	// client displayed a base plus two, so the two sets disagreed by an order
+	// of magnitude and every module observation was made through a screen
+	// showing the wrong thing. This is a deliberate reduction to a known-good
+	// baseline, NOT a fix: why only three appear is still unexplained.
+	// DN_TECHTREE_WITH_MODULES=1 restores them; see techTreeNoModules.
+	"YA_GetTechTree": 16272,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

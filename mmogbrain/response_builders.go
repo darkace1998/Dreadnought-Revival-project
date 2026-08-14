@@ -2991,9 +2991,24 @@ var techTreeNoWrap = os.Getenv("DN_TECHTREE_NO_WRAP") == "1"
 // the tree regresses.
 var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 
-// techTreeNoModules drops the per-ship module entries, restoring a document of
-// hull nodes only. The switch that isolates them if the tree regresses.
-var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
+// techTreeNoModules drops the per-ship module entries, leaving a document of
+// hull nodes only.
+//
+// DEFAULT ON since 2026-08-14, at the operator's instruction: "there are so many
+// loadout item IDs but i only see the base and 2 unlockable something is wrong
+// there for now lets strip all the aditional modules from the techtree /ships".
+//
+// The reasoning behind that call is sound and worth recording. We emit hundreds
+// of module entries per ship; the client displays a base plus two. So the module
+// set we derive and the set the client will show disagree by an order of
+// magnitude, and until that is understood every module-related observation is
+// made through a screen showing the wrong thing. Stripping them removes a large
+// unverified surface and gives a known-good baseline to build back from.
+//
+// This is a deliberate reduction in scope, not a fix: nothing here explains WHY
+// only three appear, and that question is still open. DN_TECHTREE_WITH_MODULES=1
+// restores them for anyone investigating it.
+var techTreeNoModules = os.Getenv("DN_TECHTREE_WITH_MODULES") != "1"
 
 // techTreeSingleWrap restores the single wrapping array; see
 // buildMmogTechTreeDocument.

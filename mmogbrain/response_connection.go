@@ -717,13 +717,27 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 					return err
 				}
 			}
-			if requestName == "YA_UnlockItem" {
+			if requestName == "YA_UnlockItem" && claimItemPushEnabled {
+				// OFF BY DEFAULT because it is DESTRUCTIVE. Measured twice on a
+				// live client (2026-08-14): the frame is received and handled --
+				// OnUpdateInventory and UpdateItemsFromInventory both run -- and
+				// then reports "Updated 0 items", REPLACING the 39 the player
+				// owned. Emitting inventory last, per the trailing-sibling rule,
+				// did not change that.
+				//
+				// So the delivery half is verified and the payload half is not:
+				// something about this inventory array does not parse, and until
+				// that is understood the push destroys ownership on every module
+				// click rather than refreshing it. Leaving it on to keep the
+				// investigation convenient would corrupt the very state we are
+				// trying to observe.
+				//
 				// The client has NO handler for YA_UnlockItem's response -- the
 				// dispatcher references YA_ClaimItem and not YA_UnlockItem -- so
-				// the answer we just sent is discarded and the research button
-				// never changes. YA_ClaimItem's handler is the one that parses a
-				// fresh inventory, so push one. See
-				// buildMmogClaimItemPushPayload for the measurements.
+				// the answer we send is discarded and the research button never
+				// changes. That finding stands; this was the wrong remedy for it,
+				// or the right remedy wrongly encoded. See
+				// buildMmogClaimItemPushPayload.
 				claimID, err := uuid.NewRandom()
 				if err != nil {
 					log.WithError(err).Warn("mmog: failed to generate claim-item push id")
@@ -987,3 +1001,11 @@ func isMmogPlayerMutationRequest(requestName string) bool {
 		return false
 	}
 }
+
+// claimItemPushEnabled gates the YA_ClaimItem inventory push.
+//
+// Off by default: the push is delivered and handled by the client, but its
+// inventory array parses as zero entries and REPLACES the player's owned-item
+// list, so it destroys ownership on every module click. DN_CLAIM_ITEM_PUSH=1
+// turns it back on for whoever works out why the array does not parse.
+var claimItemPushEnabled = os.Getenv("DN_CLAIM_ITEM_PUSH") == "1"
