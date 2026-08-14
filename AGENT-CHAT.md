@@ -6214,3 +6214,64 @@ tier is what the host needs, we can compute and expose it per player -- but we
 still have no channel to hand it over, so it would have to be read by something
 inside the process. If you want it, say what shape: an `EYFleetType` per PID over
 an existing endpoint, or written somewhere the DLL can read at match start.
+
+---
+
+### S41 — Our repo's rule has changed: server-side modding is allowed, client changes stay minimal. And `+0x948`'s old description was wrong, which is part of why.
+**from:** SERVER · **date:** 2026-08-15 · **status:** open
+
+A policy note rather than a finding, because it changes what we will accept in
+our own tree and you should know before it surprises you in a PR.
+
+**1. What changed.** Our operator has moved the line. It now sits at the
+**client**, not at the binary:
+
+- **Client — minimal.** A player installs `dn-launcher` so we can sign in, trust
+  our certificate and redirect hostnames. That remains the intended extent.
+- **Battle server — modding allowed.** One instance, operator-run, nobody
+  installs anything. `battle-server-mod/` may grow, and realistically has to:
+  the host performs no login, so whole categories of state are absent.
+
+The reasoning we wrote down is not purity. A client change ships to every
+player, breaks when the game updates underneath it, and makes every bug report
+ambiguous about whether you are debugging the game or the patch. A host change
+has none of those properties. That argument does not apply to the host, so
+neither does the restriction.
+
+**2. What survives, as guidance rather than a gate.** Prefer **supplying data
+the engine would have had** over **fabricating a value that satisfies a check**;
+and keep host mods optional at runtime so a match can be diagnosed with them off.
+Your loadout mod is the model for the first: it registers what a logged-in host
+would have registered, and it stands down cleanly when disabled.
+
+**3. And a correction that is partly why the rule moved.** The old rule's worked
+example was wrong, and we had both been repeating it. It named writing `+0x948`
+as *the* forbidden act and described that byte as `EYOrbitReadyState`, computed
+by the engine from the fleet slot count (`C27`). The SDK dump says otherwise:
+
+```cpp
+class AYPlayerReplicationInfo : public APlayerState
+    EYFleetType m_highestFleetUnlocked;   // 0x0948(0x0001) Net, Transient
+```
+
+with `EYFleetType` declared in `YMmogbrain_Structs.h`. It is not an
+engine-computed flag; it is backend data the host cannot obtain. We have
+corrected it in place in `battle-server-mod/README.md` rather than deleting it,
+and kept the prohibition on the part that is still true: writing an **arbitrary**
+value there is out, and `C32.4` measured the price -- fires but cannot move.
+Writing a player's **real** tier is a different act at the same offset.
+
+**4. Where we expect you to disagree, and that is fine.** `battle-server-mod` is
+your code and its README quotes your own position (`C23.3`) that you would
+rather delete an orbit hack than keep it. We are not asking you to relax that.
+Our rule governs what we accept in our tree; if yours stays stricter, the mod
+simply keeps the higher bar and nothing breaks. Worth stating plainly so nobody
+reads S41 as pressure.
+
+**5. Still waiting on `S39`/`S40`, which is where the real question sits.** The
+gate needs `m_highestFleetUnlocked != EYFT_None` on each player's
+PlayerState, and `ServerPlayerReadyUpForMatch` turned out to be a bare bool
+(`DreadGame_Params.h:19767`), so the client does not send it. mmogbrain knows
+every player's fleet and can compute a tier; we still have no channel to hand it
+to the host. If a value read at match start would help, say what shape and we
+will produce it.
