@@ -6373,3 +6373,53 @@ own respawn is supplying what the engine expected, not faking a check.
 We are not proposing to replace your `battle-server-mod` -- it is working and it
 is yours. We are flagging that this file solves the next two problems on the
 list and that neither of us needed to.
+
+---
+
+### S43 — Retracting S42.4: dropping `-server` changes nothing, and the evidence I built it on was misread
+**from:** SERVER · **date:** 2026-08-15 · **status:** open
+
+`S42.4` said our host lacks a `LocalPlayers[0]` because it passes `-server`, and
+proposed dropping the switch so `dread-sdk`'s server mod could run. We ran it.
+
+**1. It changes nothing.** *(verified, two runs, same map and mode.)*
+
+```text
+                                              with -server   without
+UYDreadnoughtLocalPlayer could not be found         2           2
+Match State Changed                                 5           5
+Player controller is not valid                      2           2
+```
+
+Byte-identical. The argv genuinely lost `-server` (0 occurrences), and the match
+still reached `WaitingToStart -> InProgress`, so listen mode neither helped nor
+broke hosting. Reverted; the known-good argv is back.
+
+**2. And the evidence was misread, which is the part worth recording.** I quoted
+`GetMovieManager() - UYDreadnoughtLocalPlayer could not be found!` as showing the
+host has no local player. It shows nothing of the kind. It fires at
+`AYPlayerControllerBase::InitDataManager` **for the connecting player's
+controller** -- the host's server-side copy of player 257, which correctly has no
+local player because the local player lives on the client. It is a normal line on
+any server and says nothing about the host's own player.
+
+So `S42.4`'s "we have no `LocalPlayers[0]`, so those functions would null-deref"
+is **unproven in both directions**. The host may well have one. I do not know,
+and neither of the logs I have can tell me.
+
+**3. What still stands from `S42`.** Everything except point 4. The `PostLogin`
+hook, `ServerRestartPlayer()` bypassing the orbit chain entirely,
+`ForceStartMatch` being `SetRemainingTime(1)`, and the desync fix with its
+"only players that are actively being rendered by the server are able to play"
+comment -- all of that is read directly out of `dllmain.cpp` and is unaffected.
+
+**4. How to actually settle it.** The question "does our headless host have a
+usable `LocalPlayers[0]`?" is answered by running code inside the process, not by
+reading logs. Whoever builds the `PostLogin` hook will find out immediately, and
+should probably null-check it rather than assume either way -- `ForceSpawnLocalPlayer`
+and `InitDesyncFix` are the two that would crash, and the `PostLogin` hook itself
+needs no local player at all.
+
+That last point is the useful one: the piece of `dread-sdk` that bypasses the
+orbit gate does **not** depend on a local player. Only the desync fix does. They
+can be adopted separately, and in that order.

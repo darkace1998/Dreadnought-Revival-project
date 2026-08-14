@@ -189,22 +189,22 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	args := []string{
 		mapURL,
 	}
-	// -server suppresses the host's own local player. That is normally what a
-	// dedicated server wants, and it is why the host log says
-	// "UYDreadnoughtLocalPlayer could not be found!" (host=2, client=0).
+	// -server stays. DN_LISTEN_SERVER=1 omits it, and that experiment has been
+	// RUN and produced no change whatsoever: with the switch dropped the argv lost
+	// -server, the match still reached WaitingToStart -> InProgress, and every
+	// marker was byte-identical to the run before it (2/2 "UYDreadnoughtLocalPlayer
+	// could not be found", 5/5 match-state changes, 2/2 "Player controller is not
+	// valid"). See AGENT-CHAT S43.
 	//
-	// DN_LISTEN_SERVER=1 omits it, so the host runs as a true LISTEN server and
-	// keeps a LocalPlayers[0]. That is the mode dread-sdk's server mod was
-	// written for: ForceSpawnLocalPlayer, InitDesyncFix and ForceStartMatch all
-	// dereference GWorld->OwningGameInstance->LocalPlayers[0]->PlayerController
-	// and would null-deref without one (AGENT-CHAT S42). Its desync fix in
-	// particular is a listen-mode concept -- "only players that are actively
-	// being rendered by the server are able to play" -- so it needs a local
-	// player to give a view target to.
+	// The premise was wrong twice over. -server does not control whether the host
+	// has a LocalPlayers[0] here; and the log line that suggested it did is not
+	// about a host player at all -- it fires inside
+	// AYPlayerControllerBase::InitDataManager for the CONNECTING player's
+	// controller, whose server-side copy correctly has no local player. It says
+	// nothing about the host.
 	//
-	// The net driver comes from "?listen" in the map URL either way; -server
-	// only decides whether the host is also a player. UNVERIFIED whether the
-	// engine will host a match happily in this mode headlessly.
+	// Kept as a switch because it is one line and someone will wonder again, but
+	// it is off and there is no evidence it does anything.
 	if os.Getenv("DN_LISTEN_SERVER") != "1" {
 		args = append(args, "-server")
 	}
