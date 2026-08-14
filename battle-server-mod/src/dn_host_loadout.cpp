@@ -635,11 +635,17 @@ static bool g_postLoginArmed = false;
 // kPrecastPaths / g_precastCDO; 0 is the Assault Medium T1.
 static int g_postLoginLoadoutIndex = 0;
 
-// FindUObjectByName walks GObjects for an object whose FName text matches.
+// FindUObjectByName walks GObjects for an object whose FName text CONTAINS the
+// wanted text.
+//
+// Substring, not equality. The first version matched "K2_PostLogin" exactly and
+// found nothing on a live host; dread-sdk matches
+// GetFullName().find("PostLogin"), which also catches a plain "PostLogin" and
+// any Blueprint variant. Equality was a guess about which of those this build
+// creates, and it was wrong.
 //
 // Names are not unique across classes, so the caller gets the FIRST match and
-// the outer is logged. That is enough for the three engine functions wanted
-// here, and a wrong pick shows up in the log rather than silently.
+// the outer is logged. A wrong pick shows up in the log rather than silently.
 static void *FindUObjectByName(const char *want, const char **outerOut) {
   FUObjectArrayMin *arr = GObjects();
   if (!IsReadable(arr, sizeof(*arr)) || !IsReadable(arr->Objects, sizeof(FUObjectItemMin)))
@@ -657,7 +663,7 @@ static void *FindUObjectByName(const char *want, const char **outerOut) {
     if (!IsReadable(obj, sizeof(*obj)))
       continue;
     const char *text = NameText(obj->Name);
-    if (!text || strcmp(text, want) != 0)
+    if (!text || !strstr(text, want))
       continue;
     if (outerOut) {
       *outerOut = nullptr;
@@ -745,6 +751,8 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
 }
 
 // Opt-in separately from the loadout fix, because it changes what players see.
+static DWORD WINAPI PostLoginInstallThread(LPVOID);
+
 static bool PostLoginEnabled() {
   char buf[8];
   DWORD n = GetEnvironmentVariableA("DN_HOST_POSTLOGIN_SPAWN", buf, sizeof(buf));
@@ -762,6 +770,41 @@ static bool PostLoginEnabled() {
   return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
 }
 
+// The install runs on its own thread and WAITS, because GObjects is not
+// populated when this DLL is attached.
+//
+// Measured: the first version resolved at DLL_PROCESS_ATTACH and logged
+// "K2_PostLogin not found in GObjects" on a live host, while the loadout half of
+// this file worked -- because that half resolves lazily, on the first
+// FindLoadoutByID miss, by which time the engine is up. dread-sdk sleeps 20
+// seconds before its server callbacks for the same reason.
+//
+// Polling rather than a fixed sleep, so a fast host is not held back and a slow
+// one is not cut off. The window is generous: the hook only has to be in place
+// before the first player joins, which is many seconds after map load.
+#define POSTLOGIN_WAIT_MS 90000
+#define POSTLOGIN_POLL_MS 500
+
+static void *WaitForUObjectByName(const char *want, const char **outerOut,
+                                  int *waitedMsOut) {
+  int waited = 0;
+  for (;;) {
+    void *found = FindUObjectByName(want, outerOut);
+    if (found) {
+      if (waitedMsOut)
+        *waitedMsOut = waited;
+      return found;
+    }
+    if (waited >= POSTLOGIN_WAIT_MS)
+      break;
+    Sleep(POSTLOGIN_POLL_MS);
+    waited += POSTLOGIN_POLL_MS;
+  }
+  if (waitedMsOut)
+    *waitedMsOut = waited;
+  return nullptr;
+}
+
 static void InstallPostLoginHook() {
   if (!PostLoginEnabled()) {
     Logf("post-login spawn is OFF (create dn_host_postlogin.txt beside the "
@@ -771,20 +814,29 @@ static void InstallPostLoginHook() {
   }
 
   const char *outer = nullptr;
-  g_fnK2PostLogin = FindUObjectByName("K2_PostLogin", &outer);
+  int waited = 0;
+  g_fnK2PostLogin = FindUObjectByName("PostLogin", &outer);
+  if (!g_fnK2PostLogin)
+    g_fnK2PostLogin = WaitForUObjectByName("PostLogin", &outer, &waited);
   if (!g_fnK2PostLogin) {
-    Logf("post-login: K2_PostLogin not found in GObjects. Not hooking.");
+    FUObjectArrayMin *arr = GObjects();
+    Logf("post-login: no UFunction containing \"PostLogin\" after %d ms "
+         "(GObjects reports %d objects). Not hooking.",
+         waited,
+         IsReadable(arr, sizeof(*arr)) ? arr->NumElements : -1);
     return;
   }
+  if (waited)
+    Logf("post-login: waited %d ms for GObjects to carry PostLogin", waited);
   Logf("post-login: K2_PostLogin found at %p (outer %s)", g_fnK2PostLogin,
        outer ? outer : "<unknown>");
 
-  g_fnGetLoadoutManager = FindUObjectByName("GetLoadoutManager", &outer);
+  g_fnGetLoadoutManager = WaitForUObjectByName("GetLoadoutManager", &outer, nullptr);
   if (!g_fnGetLoadoutManager) {
     Logf("post-login: GetLoadoutManager not found. Not hooking.");
     return;
   }
-  g_fnServerRestartPlayer = FindUObjectByName("ServerRestartPlayer", &outer);
+  g_fnServerRestartPlayer = WaitForUObjectByName("ServerRestartPlayer", &outer, nullptr);
   if (!g_fnServerRestartPlayer) {
     Logf("post-login: ServerRestartPlayer not found. Not hooking.");
     return;
@@ -816,6 +868,11 @@ static void InstallPostLoginHook() {
   Logf("post-login: ProcessEvent hooked at %p; joining players will spawn "
        "directly as %s, bypassing the orbit flow.",
        processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
+}
+
+static DWORD WINAPI PostLoginInstallThread(LPVOID) {
+  InstallPostLoginHook();
+  return 0;
 }
 
 static bool IsEnabled() {
@@ -875,7 +932,9 @@ static DWORD WINAPI Startup(LPVOID) {
        "loadout lookup.",
        RVA_FIND_LOADOUT_BY_ID, target);
 
-  InstallPostLoginHook();
+  // On its own thread: InstallPostLoginHook waits for GObjects, and Startup
+  // must return so the FindLoadoutByID hook above is live immediately.
+  CreateThread(NULL, 0, PostLoginInstallThread, NULL, 0, NULL);
   return 0;
 }
 
