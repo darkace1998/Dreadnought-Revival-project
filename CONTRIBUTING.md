@@ -44,15 +44,30 @@ So when a lookup fails and you must still return something: log that it fell bac
 
 Corollary: **count things.** When the client logged twelve errors, the useful question was not "why are these twelve items broken" but "which twelve values are these?" They turned out to be the twelve `Prereq` ids, not twelve items — and that reframing solved it immediately.
 
-## Server-side only
+## Where changes are allowed
 
-The project's purpose is to run the **unmodified game client**. Patching the executable defeats the point and is not accepted.
+**The client stays stock; the battle server is ours.** These are two different rules and the difference matters.
 
-The only thing we ask a player to install is `dn-launcher/`, which replaces the original launcher so we can sign in, trust our certificate, and redirect the hostnames.
+### The client — minimal changes
 
-You will find community guides that solve problems by injecting a DLL and writing into the game's memory. They are useful reading — their reverse-engineering is often excellent — but their *approach* is out of scope here. If a guide says "the arrays are empty because the backend never sent the response", the fix belongs in the response.
+A player installs `dn-launcher/`, which replaces the original launcher so we can sign in, trust our certificate, and redirect the hostnames. That is the intended extent of it. Anything further should be the last thing tried, not the first, and needs a reason that survives being written down.
 
-**The one exception, and where its boundary is.** `battle-server-mod/` holds an optional DLL loaded by the **battle server** — the same executable run headless by an operator, never by a player. It exists because one thing genuinely cannot be done from the backend: the host's loadout manager is filled only from a login the host never performs, and without it no player can spawn (`docs/battle-server-data-path.md` §1). The test for anything in that directory is whether it *fills a hole the engine left* or *lies to a gate*: registering the precast loadouts the engine would have installed itself qualifies; writing a value into `PlayerController+0x948` to fake an orbit state does not. Read `battle-server-mod/README.md` before adding to it. The rule above is unchanged for everything a player runs.
+The reason is not purity. A client change has to be shipped to and applied by every player, it breaks when the game updates underneath it, and it makes every bug report ambiguous — you no longer know whether you are debugging the game or your patch. A backend change has none of those properties.
+
+So when a community guide solves something by injecting a DLL into the client and writing into its memory, read it for the reverse-engineering — it is often excellent — but do not copy the approach. If a guide says "the arrays are empty because the backend never sent the response", the fix belongs in the response.
+
+### The battle server — modding is allowed
+
+The host is the same executable run headless by an operator, never by a player. None of the objections above apply: there is one of it, we control it, and nobody has to install anything. `battle-server-mod/` is where host-side code lives and it may grow.
+
+It has to, in fact. The host performs no login, so whole categories of state it expects are simply absent — `docs/battle-server-data-path.md` §1 for the loadout manager, and `AGENT-CHAT S39`/`S40` for the fleet tier that gates the orbit teleport. Those are holes the engine left, and filling them from the host is legitimate work rather than a tolerated exception.
+
+Two pieces of guidance survive from the narrower rule this replaced (2026-08-14), and they are guidance, not gates:
+
+- **Prefer supplying data the engine would have had over fabricating a value that satisfies a check.** Registering the precast loadouts the host never received is the first kind, and it works. Writing an arbitrary value to get past a comparison is the second, and it produced a pawn that could fire weapons but not move (`AGENT-CHAT C32.4`).
+- **Keep it optional at runtime,** so a match can still be diagnosed with the mod off. `battle-server-mod/README.md` documents the enable switch.
+
+A worked example of why the distinction is not the same as "never touch offsets": the old rule named writing `+0x948` as its example of what was forbidden, calling it an "orbit flag". The SDK dump later named it `AYPlayerReplicationInfo::m_highestFleetUnlocked`, an `EYFleetType` from `YMmogbrain_Structs.h` — real backend data the host cannot obtain. Writing a player's **actual** tier there is supplying what a logged-in host would have had; writing an arbitrary one to get through the gate is not. Same offset, different act.
 
 ## Invariants worth knowing before you touch the protocol
 

@@ -4,9 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A community private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against an emulated backend; the only thing a player installs is the replacement launcher (`dn-launcher/`). Patching the game executable is out of scope and not accepted.
+A community private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against an emulated backend; the only thing a player installs is the replacement launcher (`dn-launcher/`).
 
-One narrow exception, added 2026-08-04: `battle-server-mod/` holds an optional DLL for the **battle server** (the same executable run headless by an operator, never by a player). The host's loadout manager can only be filled from a login it never performs, so without it nobody can spawn. It must remain optional at runtime — see `battle-server-mod/README.md` for what qualifies.
+**The line is drawn at the client, not at the binary.** Two halves of the project, two different rules:
+
+- **The client — keep changes minimal.** It is what a player installs, so it stays stock. The launcher replacement exists to sign in, trust our certificate and redirect the hostnames, and that is the intended extent of it. Anything beyond that needs a real justification and should be the last option tried, not the first.
+- **The battle server — modding is allowed.** The host is the same executable run headless by an operator, never by a player. It is ours to change. `battle-server-mod/` is where that lives, and it may grow: the host is missing whole categories of state because it performs no login, and filling those in is legitimate work rather than a grudging exception.
+
+Updated 2026-08-14, replacing a narrower rule that permitted only one specific host-side fix. What prompted it: the orbit gate turned out to read `AYPlayerReplicationInfo::m_highestFleetUnlocked` (`+0x948`), an `EYFleetType` from `YMmogbrain_Structs.h` — real backend data the host cannot obtain because it never logs in. The old rule named writing that byte as the example of what was forbidden, on the belief that it was an "orbit flag". It is not.
+
+Two things still worth keeping from the old rule, as *guidance* rather than a gate:
+
+- Prefer **supplying data the engine would have had** over **fabricating a value that satisfies a check**. Registering the precast loadouts the host never received is the first kind; writing an arbitrary tier to get past a comparison is the second. The first tends to work; the second produced a pawn that could shoot but not move (`AGENT-CHAT C32.4`).
+- Keep host mods **optional at runtime**, so a match can still be diagnosed with them off. See `battle-server-mod/README.md`.
 
 A Go workspace (`go.work`, Go 1.24+ required) of independent modules under `github.com/darkace1998/Dreadnought-Revival-project/<service>`.
 

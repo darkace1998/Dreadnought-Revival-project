@@ -62,9 +62,16 @@ Anything that lies to a gate rather than filling a hole. The client side named
 their own orbit fix as exactly this and would rather delete it than keep it
 (AGENT-CHAT C23.3):
 
-- **Forcing `PlayerController+0x948`.** That byte is `EYOrbitReadyState`, and the
-  engine computes it correctly from the fleet slot count (C27). Writing 1 tells
-  the engine a fleet exists. The fix is to populate the fleet.
+- **Forcing `+0x948` to an arbitrary value.** Corrected 2026-08-14: that byte is
+  NOT `EYOrbitReadyState`. The SDK dump names it
+  `AYPlayerReplicationInfo::m_highestFleetUnlocked`, an `EYFleetType`
+  (`EYFT_None/Recruit/Veteran/Legendary`) declared in `YMmogbrain_Structs.h` --
+  so the "not in orbit" error really means "this player's highest unlocked fleet
+  tier is None", and the value is backend data rather than an engine-computed
+  flag. Writing 1 to get past the comparison is still out: it produced a pawn
+  that could fire but not move (C32.4). Writing a player's REAL tier, if the host
+  can be given it, is the other kind of change and is fine -- see `CLAUDE.md`,
+  which no longer treats this offset as forbidden on principle.
 - Anything that invents player data, a fleet, or an inventory.
 - Anything a player's client would load.
 
