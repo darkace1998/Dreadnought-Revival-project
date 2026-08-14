@@ -188,7 +188,27 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 
 	args := []string{
 		mapURL,
-		"-server",
+	}
+	// -server suppresses the host's own local player. That is normally what a
+	// dedicated server wants, and it is why the host log says
+	// "UYDreadnoughtLocalPlayer could not be found!" (host=2, client=0).
+	//
+	// DN_LISTEN_SERVER=1 omits it, so the host runs as a true LISTEN server and
+	// keeps a LocalPlayers[0]. That is the mode dread-sdk's server mod was
+	// written for: ForceSpawnLocalPlayer, InitDesyncFix and ForceStartMatch all
+	// dereference GWorld->OwningGameInstance->LocalPlayers[0]->PlayerController
+	// and would null-deref without one (AGENT-CHAT S42). Its desync fix in
+	// particular is a listen-mode concept -- "only players that are actively
+	// being rendered by the server are able to play" -- so it needs a local
+	// player to give a view target to.
+	//
+	// The net driver comes from "?listen" in the map URL either way; -server
+	// only decides whether the host is also a player. UNVERIFIED whether the
+	// engine will host a match happily in this mode headlessly.
+	if os.Getenv("DN_LISTEN_SERVER") != "1" {
+		args = append(args, "-server")
+	}
+	args = append(args,
 		fmt.Sprintf("-port=%d", cfg.Port),
 		fmt.Sprintf("-maxplayers=%d", maxPlayers),
 		fmt.Sprintf("-GameMode=%s", cfg.GameMode),
@@ -200,7 +220,7 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 		"-nosound",
 		"-noeac",   // EasyAntiCheat would otherwise refuse the unattended launch
 		"-NoSteam", // no Steam client required on the host
-	}
+	)
 	// -forcelogflush makes the engine flush every line rather than buffering,
 	// so a server that dies mid-startup still leaves the lines that explain it.
 	// dn-launcher uses the same switch for the client.
