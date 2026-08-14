@@ -580,6 +580,244 @@ static bool IsBattleServer() {
 // operator starts the service; the environment variable is honoured too because
 // dn-dedicated's spawner does inherit its environment (buildEnv, AGENT-CHAT
 // S10.5).
+// ---------------------------------------------------------------------------
+// PostLogin: put a joining player straight into the arena
+//
+// OFF by default. This is a much larger behavioural change than the loadout
+// registration above, and it removes a step players can see.
+//
+// Why it exists. Registering the precast loadouts got players a PAWN -- the host
+// spawns them and SetYPawn assigns it -- but they still never reach the map,
+// because the orbit teleport is gated:
+//
+//   FUN_3D92A0:  cmp byte ptr [rdx+0x948], 0 ; jne proceed
+//                -> "Trying to teleport into level player %s that is not in orbit!"
+//
+// and 0x948 is AYPlayerReplicationInfo::m_highestFleetUnlocked, an EYFleetType
+// from YMmogbrain_Structs.h. It is EYFT_None on a host that never logged in, and
+// no payload we can send changes that, because the host holds no mmogbrain data
+// (AGENT-CHAT S39, S40).
+//
+// dread-sdk's server mod does not satisfy that gate. It skips the orbit flow
+// entirely: hook PostLogin, set the controller's active loadout, and call the
+// engine's own ServerRestartPlayer(), which asks the GameMode for a PlayerStart
+// and spawns there. That path never enters UYPlayerOrbitComponent, never reads
+// m_highestFleetUnlocked, and never needs the GameState readiness mask. It is a
+// proven route -- our operator has played matches with it (S42).
+//
+// What it costs, stated plainly: the player no longer picks a ship in orbit.
+// Everyone spawns in one configured hull. That is a real regression in
+// behaviour, and it is why this is opt-in and separate from the loadout fix.
+// Prefer the orbit path if it can ever be made to work.
+//
+// How it hooks. Every reflected call goes through UObject::ProcessEvent, vtable
+// index 0x35 on this build (dread-sdk resolves it the same way). Hooking there
+// costs one pointer comparison per reflected call: the UFunction objects are
+// resolved ONCE at install and the hook compares pointers, never strings.
+// ---------------------------------------------------------------------------
+
+#define VF_PROCESS_EVENT 0x35
+
+// UYLoadoutManagerComponent::m_activeLoadout, from the SDK dump
+// (DreadGame_Classes.h: "class UYShipLoadout* m_activeLoadout; // 0x0208").
+#define OFF_ACTIVE_LOADOUT 0x208
+
+typedef void *(__fastcall *tProcessEvent)(void *object, void *function,
+                                          void *params);
+static tProcessEvent g_origProcessEvent = nullptr;
+
+static void *g_fnK2PostLogin = nullptr;
+static void *g_fnGetLoadoutManager = nullptr;
+static void *g_fnServerRestartPlayer = nullptr;
+static bool g_postLoginArmed = false;
+
+// Which of the four precast loadouts everyone spawns in. Index into
+// kPrecastPaths / g_precastCDO; 0 is the Assault Medium T1.
+static int g_postLoginLoadoutIndex = 0;
+
+// FindUObjectByName walks GObjects for an object whose FName text matches.
+//
+// Names are not unique across classes, so the caller gets the FIRST match and
+// the outer is logged. That is enough for the three engine functions wanted
+// here, and a wrong pick shows up in the log rather than silently.
+static void *FindUObjectByName(const char *want, const char **outerOut) {
+  FUObjectArrayMin *arr = GObjects();
+  if (!IsReadable(arr, sizeof(*arr)) || !IsReadable(arr->Objects, sizeof(FUObjectItemMin)))
+    return nullptr;
+
+  int count = arr->NumElements;
+  if (count < 0 || count > 20000000)
+    return nullptr;
+
+  for (int i = 0; i < count; ++i) {
+    FUObjectItemMin *item = &arr->Objects[i];
+    if (!IsReadable(item, sizeof(*item)))
+      continue;
+    UObjectMin *obj = item->Object;
+    if (!IsReadable(obj, sizeof(*obj)))
+      continue;
+    const char *text = NameText(obj->Name);
+    if (!text || strcmp(text, want) != 0)
+      continue;
+    if (outerOut) {
+      *outerOut = nullptr;
+      if (IsReadable(obj->Outer, sizeof(UObjectMin)))
+        *outerOut = NameText(obj->Outer->Name);
+    }
+    return obj;
+  }
+  return nullptr;
+}
+
+// SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
+static void SpawnJoiningPlayer(void *params) {
+  if (!IsReadable(params, sizeof(void *)))
+    return;
+
+  // AGameMode_K2_PostLogin_Params is a single APlayerController* at +0x00.
+  void *pc = *(void **)params;
+  if (!IsReadable(pc, 0x200)) {
+    Logf("post-login: NewPlayer is not readable, skipping");
+    return;
+  }
+
+  // GetLoadoutManager() is a UFunction returning UYLoadoutManagerComponent*.
+  // Calling it through ProcessEvent avoids needing another hardcoded RVA.
+  struct {
+    void *ReturnValue;
+  } gp = {};
+  g_origProcessEvent(pc, g_fnGetLoadoutManager, &gp);
+
+  void *mgr = gp.ReturnValue;
+  if (!IsReadable(mgr, OFF_ACTIVE_LOADOUT + sizeof(void *))) {
+    Logf("post-login: controller %p has no readable loadout manager, skipping",
+         pc);
+    return;
+  }
+
+  // Same registration the FindLoadoutByID path uses, so the manager holds real
+  // loadouts before one is made active. Idempotent per manager.
+  RegisterPrecastLoadouts(mgr);
+  if (g_precastResolved == 0) {
+    Logf("post-login: no precast loadouts resolved, skipping");
+    return;
+  }
+
+  int idx = g_postLoginLoadoutIndex;
+  if (idx < 0 || idx >= g_precastResolved)
+    idx = 0;
+  void *loadout = g_precastCDO[idx];
+  if (!IsReadable(loadout, sizeof(void *))) {
+    Logf("post-login: precast %d is not readable, skipping", idx);
+    return;
+  }
+
+  *(void **)((uintptr_t)mgr + OFF_ACTIVE_LOADOUT) = loadout;
+
+  // The engine's own respawn. It asks the GameMode for a PlayerStart and
+  // spawns there -- no orbit, no readiness mask, no fleet tier.
+  g_origProcessEvent(pc, g_fnServerRestartPlayer, nullptr);
+
+  Logf("post-login: controller %p -> active loadout %s (%p), ServerRestartPlayer called",
+       pc, kPrecastLabels[idx], loadout);
+}
+
+static void *__fastcall HookProcessEvent(void *object, void *function,
+                                         void *params) {
+  void *ret = g_origProcessEvent ? g_origProcessEvent(object, function, params)
+                                 : nullptr;
+
+  // One pointer compare on the hot path. Everything else is behind it.
+  if (!g_postLoginArmed || function != g_fnK2PostLogin)
+    return ret;
+
+  // SpawnJoiningPlayer calls ProcessEvent twice, which re-enters this hook.
+  // Neither call is K2_PostLogin, so the compare above already stops it; the
+  // guard makes that explicit rather than incidental.
+  static thread_local bool s_inSpawn = false;
+  if (s_inSpawn)
+    return ret;
+  s_inSpawn = true;
+  SpawnJoiningPlayer(params);
+  s_inSpawn = false;
+
+  return ret;
+}
+
+// Opt-in separately from the loadout fix, because it changes what players see.
+static bool PostLoginEnabled() {
+  char buf[8];
+  DWORD n = GetEnvironmentVariableA("DN_HOST_POSTLOGIN_SPAWN", buf, sizeof(buf));
+  if (n == 1 && buf[0] == '1')
+    return true;
+
+  char path[MAX_PATH];
+  if (!GetModuleFileNameA(NULL, path, MAX_PATH))
+    return false;
+  char *slash = strrchr(path, '\\');
+  if (!slash)
+    return false;
+  strcpy_s(slash + 1, sizeof(path) - (slash + 1 - path),
+           "dn_host_postlogin.txt");
+  return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+static void InstallPostLoginHook() {
+  if (!PostLoginEnabled()) {
+    Logf("post-login spawn is OFF (create dn_host_postlogin.txt beside the "
+         "executable, or set DN_HOST_POSTLOGIN_SPAWN=1, to enable). Players "
+         "will use the normal orbit flow.");
+    return;
+  }
+
+  const char *outer = nullptr;
+  g_fnK2PostLogin = FindUObjectByName("K2_PostLogin", &outer);
+  if (!g_fnK2PostLogin) {
+    Logf("post-login: K2_PostLogin not found in GObjects. Not hooking.");
+    return;
+  }
+  Logf("post-login: K2_PostLogin found at %p (outer %s)", g_fnK2PostLogin,
+       outer ? outer : "<unknown>");
+
+  g_fnGetLoadoutManager = FindUObjectByName("GetLoadoutManager", &outer);
+  if (!g_fnGetLoadoutManager) {
+    Logf("post-login: GetLoadoutManager not found. Not hooking.");
+    return;
+  }
+  g_fnServerRestartPlayer = FindUObjectByName("ServerRestartPlayer", &outer);
+  if (!g_fnServerRestartPlayer) {
+    Logf("post-login: ServerRestartPlayer not found. Not hooking.");
+    return;
+  }
+
+  // ProcessEvent is virtual on UObject, so any UObject's vtable has it. The
+  // UFunction just resolved is one.
+  if (!IsReadable(g_fnK2PostLogin, sizeof(void *))) {
+    Logf("post-login: K2_PostLogin object is not readable. Not hooking.");
+    return;
+  }
+  void **vtable = *(void ***)g_fnK2PostLogin;
+  if (!IsReadable(vtable, (VF_PROCESS_EVENT + 1) * sizeof(void *))) {
+    Logf("post-login: vtable is not readable to index 0x%X. Not hooking.",
+         VF_PROCESS_EVENT);
+    return;
+  }
+  void *processEvent = vtable[VF_PROCESS_EVENT];
+
+  if (MH_CreateHook(processEvent, &HookProcessEvent,
+                    (LPVOID *)&g_origProcessEvent) != MH_OK ||
+      MH_EnableHook(processEvent) != MH_OK) {
+    Logf("post-login: failed to hook ProcessEvent at %p. Not hooking.",
+         processEvent);
+    return;
+  }
+
+  g_postLoginArmed = true;
+  Logf("post-login: ProcessEvent hooked at %p; joining players will spawn "
+       "directly as %s, bypassing the orbit flow.",
+       processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
+}
+
 static bool IsEnabled() {
   char buf[8];
   DWORD n = GetEnvironmentVariableA("DN_SERVER_LOADOUT", buf, sizeof(buf));
@@ -636,6 +874,8 @@ static DWORD WINAPI Startup(LPVOID) {
   Logf("installed: FindLoadoutByID hooked at RVA 0x%X (%p). Waiting for a "
        "loadout lookup.",
        RVA_FIND_LOADOUT_BY_ID, target);
+
+  InstallPostLoginHook();
   return 0;
 }
 

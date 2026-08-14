@@ -56,6 +56,41 @@ engine was designed to have and then gets out of the way. It stays correct if a
 real backend ever populates the manager, because it only runs when the manager
 could not answer.
 
+## Optional: post-login spawn (`dn_host_postlogin.txt`)
+
+**Off by default, and a bigger change than the loadout fix.** Enable with an
+empty `dn_host_postlogin.txt` beside the executable, or `DN_HOST_POSTLOGIN_SPAWN=1`.
+
+Registering the loadouts gets a player a **pawn** — the host spawns them and
+`SetYPawn` assigns it — but they still never reach the map, because the orbit
+teleport is gated on `AYPlayerReplicationInfo::m_highestFleetUnlocked`
+(`+0x948`, an `EYFleetType` from `YMmogbrain_Structs.h`). It is `EYFT_None` on a
+host that never logged in, and no backend payload can change that, because the
+host holds no mmogbrain data at all (AGENT-CHAT S39, S40).
+
+This switch does not satisfy that gate. It skips the orbit flow: it hooks
+`PostLogin`, sets the controller's active loadout, and calls the engine's own
+`ServerRestartPlayer()`, which asks the GameMode for a PlayerStart and spawns
+there. That path never enters `UYPlayerOrbitComponent` and never reads the fleet
+tier. The approach is taken from `dread-sdk`'s server mod, which the operator has
+played real matches with (S42).
+
+**What it costs:** the player no longer picks a ship in orbit — everyone spawns
+in one configured hull (`g_postLoginLoadoutIndex`, default Assault Medium T1).
+That is a real regression in behaviour and the reason this is opt-in and
+separate. If the orbit path can ever be made to work, prefer it.
+
+**How it hooks:** `UObject::ProcessEvent`, vtable index `0x35`. The three
+UFunctions it needs (`K2_PostLogin`, `GetLoadoutManager`, `ServerRestartPlayer`)
+are resolved once at install by walking GObjects, so the hot path is a single
+pointer comparison per reflected call — no string work.
+
+**Not yet verified against a running host.** It is written from the SDK dump's
+offsets (`m_activeLoadout` at `0x0208`) and dread-sdk's proven sequence, but it
+has not been built or run. Expect to read the `[dn-host-loadout] post-login:`
+lines on the first attempt; every failure path logs why and stands down rather
+than continuing.
+
 ## What does NOT belong here
 
 Anything that lies to a gate rather than filling a hole. The client side named
