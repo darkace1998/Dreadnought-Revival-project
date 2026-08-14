@@ -147,3 +147,29 @@ func TestClaimItemPushCarriesTheUpdatedInventory(t *testing.T) {
 		}
 	}
 }
+
+// inventory must be the LAST array in the push. An array with an array sibling
+// after it has its parsed value tree corrupted -- established on YA_PlayerFleets,
+// and why YA_PlayerGet emits "Items" last. Getting it wrong is not a silent
+// no-op: measured live on 2026-08-14, the push was received, handled, and
+// reported "Updated 0 items", REPLACING the 39 the player owned. A wrong order
+// here destroys ownership rather than failing to refresh it.
+func TestClaimItemPushEmitsInventoryLast(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	push := string(buildMmogClaimItemPushPayload(pid))
+
+	inv := strings.Index(push, "inventory")
+	added := strings.Index(push, "addedLoadouts")
+	if inv < 0 || added < 0 {
+		t.Fatalf("push is missing a field: inventory=%d addedLoadouts=%d", inv, added)
+	}
+	if added > inv {
+		t.Errorf("addedLoadouts is emitted after inventory (%d > %d); the trailing "+
+			"sibling corrupts inventory and the client parses 0 items", added, inv)
+	}
+	// Nothing else may follow inventory either.
+	if tail := push[inv+len("inventory"):]; strings.Contains(tail, "addedLoadouts") {
+		t.Error("an array sibling follows inventory")
+	}
+}

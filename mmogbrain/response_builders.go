@@ -5772,14 +5772,25 @@ func buildMmogClaimItemPushPayload(playerPID string) []byte {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
 	b = protocol.AppendStringField(b, "reason", "")
+	// addedLoadouts FIRST, inventory LAST. Not cosmetic: an array with an array
+	// SIBLING AFTER IT has its parsed value tree corrupted -- established on
+	// YA_PlayerFleets and the reason YA_PlayerGet emits "Items" last.
+	//
+	// Measured cost of getting this wrong, live on 2026-08-14: with
+	// addedLoadouts after inventory, the push was received and handled
+	// (OnUpdateInventory and UpdateItemsFromInventory both ran) and reported
+	// "Updated 0 items" -- it parsed nothing AND replaced the 39 items the
+	// player had, so the push actively destroyed ownership instead of
+	// refreshing it. The frame being accepted at all is the half that worked.
+	//
+	// addedLoadouts is empty and deliberately present rather than omitted: a
+	// module grants no loadout, and hulls get theirs through
+	// grantUnlockedShipLoadout, which the client learns from YA_PlayerFleets.
+	// Sending a wrong loadout here would be inventing one.
+	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
+	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "inventory")
 	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	// Empty, and deliberately present rather than omitted: a module grants no
-	// loadout, and hulls get theirs through grantUnlockedShipLoadout, which the
-	// client learns from YA_PlayerFleets. Sending a wrong loadout here would be
-	// inventing one.
-	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
