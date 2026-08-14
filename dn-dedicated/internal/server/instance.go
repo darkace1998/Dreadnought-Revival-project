@@ -231,7 +231,68 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	if cfg.EngineLogCmds != "" {
 		args = append(args, "-LogCmds="+cfg.EngineLogCmds)
 	}
+	args = append(args, backendAddressArgs()...)
 	return append(args, cfg.ExtraArgs...)
+}
+
+// backendAddressArgs passes the gateway and Firmament addresses to the engine,
+// when DN_PASS_BACKEND_ADDRS=1.
+//
+// OFF by default, and here is the honest state of it: **none of these switch
+// names occur in the executable**, wide or ASCII --
+//
+//	GatewayAddress  GatewayPort  YFirmamentAddress  YFirmamentPort  ->  0 hits each
+//
+// so on the evidence the engine cannot read them and this changes nothing. UE4
+// ignores unrecognised -Switch=Value arguments silently, so passing them is
+// harmless but is expected to be inert. Kept because the operator asked to try
+// it directly after being shown that measurement, and one match is a cheap way
+// to be sure of a negative.
+//
+// The reason it is expected to fail is not the switch names anyway: the client
+// does not get this address from a switch either. It LEARNS it, by logging in
+// and calling GET /api/v1/play/lkg, which answers
+// {"Code":0,"serverHost":"10.0.0.73","serverPort":"48843"}. The host never
+// performs that login because the call is made from LoginGateManager, a UI
+// screen a -server -nullrhi process never enters. So there is no address to
+// configure -- there is a handshake that never happens.
+//
+// Addresses come from the same env the rest of the stack uses, so this cannot
+// drift from what mmogbrain actually listens on.
+func backendAddressArgs() []string {
+	if os.Getenv("DN_PASS_BACKEND_ADDRS") != "1" {
+		return nil
+	}
+	host := firstNonEmpty(os.Getenv("SERVER_IP"), "127.0.0.1")
+	gwPort := portOf(os.Getenv("GATEWAY_ADDR"), "65443")
+	fmPort := portOf(os.Getenv("FIRMAMENT_ADDR"), "48843")
+	return []string{
+		"-GatewayAddress=" + host,
+		"-GatewayPort=" + gwPort,
+		"-YFirmamentAddress=" + host,
+		"-YFirmamentPort=" + fmPort,
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// portOf pulls the port out of a ":65443" or "host:65443" listen address.
+func portOf(addr, fallback string) string {
+	addr = strings.TrimSpace(addr)
+	if i := strings.LastIndex(addr, ":"); i >= 0 && i+1 < len(addr) {
+		return addr[i+1:]
+	}
+	if addr != "" && !strings.Contains(addr, ":") {
+		return addr
+	}
+	return fallback
 }
 
 // MapPathOrName returns the package path if there is one, else the bare name.
