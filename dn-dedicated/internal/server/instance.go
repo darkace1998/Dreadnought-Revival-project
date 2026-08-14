@@ -809,6 +809,19 @@ func reportHostLoadoutModState(cfg LaunchConfig, logTo io.Writer) {
 			"Build battle-server-mod/ and copy the DLL there; see battle-server-mod/README.md.\n", dir)
 		return
 	}
+	// Presence is not enough: this repo also ships bin/wer-proxy/wer.dll, a WER
+	// LOGGING shim with no loadout code in it at all. Copying that one in
+	// satisfies the check above and reports "present and enabled" while nobody
+	// can spawn -- a default that cannot be told apart from the real thing
+	// (CONTRIBUTING.md). So look for the mod's own tag, which every line it
+	// logs carries.
+	if !fileContains(dll, []byte("dn-host-loadout")) {
+		fmt.Fprintf(logTo, "[host-loadout] %s exists but is NOT the loadout mod -- it carries no "+
+			"[dn-host-loadout] marker. The WER logging proxy in bin/wer-proxy/ is a common mix-up. "+
+			"Players will not be able to spawn. Build battle-server-mod/ (Windows/MSVC, build.bat) "+
+			"and copy dn_host_loadout.dll here AS wer.dll.\n", dll)
+		return
+	}
 	marker := filepath.Join(dir, "dn_server_loadout.txt")
 	_, markerErr := os.Stat(marker)
 	enabled := markerErr == nil || os.Getenv("DN_SERVER_LOADOUT") == "1"
@@ -820,4 +833,43 @@ func reportHostLoadoutModState(cfg LaunchConfig, logTo io.Writer) {
 	fmt.Fprintf(logTo, "[host-loadout] wer.dll present and enabled; expect timestamped "+
 		"[dn-host-loadout] lines in the host log.\n")
 	_ = marker
+}
+
+// fileContains reports whether the file holds the given bytes.
+//
+// Used to tell the loadout mod apart from the WER logging proxy that shares its
+// deployed filename. Streams in chunks with an overlap, so a marker straddling
+// a boundary is still found and a large DLL is never read whole.
+func fileContains(path string, want []byte) bool {
+	if len(want) == 0 {
+		return false
+	}
+	f, err := os.Open(path) //nolint:gosec // operator-configured install path
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+
+	const chunk = 64 << 10
+	buf := make([]byte, chunk+len(want))
+	carry := 0
+	for {
+		n, err := f.Read(buf[carry:])
+		if n > 0 {
+			if bytes.Contains(buf[:carry+n], want) {
+				return true
+			}
+			// Keep the last len(want)-1 bytes so a marker spanning two reads
+			// is still matched.
+			keep := len(want) - 1
+			if carry+n < keep {
+				keep = carry + n
+			}
+			copy(buf, buf[carry+n-keep:carry+n])
+			carry = keep
+		}
+		if err != nil {
+			return false
+		}
+	}
 }
