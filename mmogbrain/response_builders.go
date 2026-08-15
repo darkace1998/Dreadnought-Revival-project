@@ -4792,7 +4792,38 @@ func buildMmogTunePayload() []byte {
 	var b []byte
 	var stack []int
 
-	b = protocol.AppendStringField(b, "RT", "YA_Tune")
+	// "YA_TuneReturn", not "YA_Tune". The client SENDS YA_Tune and LISTENS for
+	// YA_TuneReturn; answering with the request name means no dispatcher branch
+	// matches and the response is dropped without a word.
+	//
+	// Verified 2026-08-15, four ways:
+	//
+	//  1. The client log has NEITHER of YTuneManager::Set()'s two branches --
+	//     not "Received data, setting tune values (version: %s)" and not
+	//     "Received empty data object from mmogbrain or local server". Set() was
+	//     never called at all, so "Client synced to server version: backup-data"
+	//     is just the untouched startup fallback, not a rejection of our data.
+	//  2. "YA_TuneReturn" (0x1438b0830) is compared inside the mmog response
+	//     dispatcher (0x142a236c2-0x142a31a32) at 0x142a27a7e:
+	//         lea rdx,[rip+0xe88dab]   ; "YA_TuneReturn"
+	//         call 0x14022d590         ; strcmp
+	//         test eax,eax / jne       ; -> next branch on mismatch
+	//     and the match body calls the field lookup at 0x140237c30 before
+	//     handing off to the tune manager.
+	//  3. "YA_Tune" (0x1438c1a08) has exactly ONE xref in the whole image, at
+	//     0x142a41a76, inside 0x142a41a10 -- the function RequestUpdateFromServer
+	//     calls to SEND the request. It is a request name only; the dispatcher
+	//     has no branch for it.
+	//  4. The convention already exists here and we already follow it once:
+	//     YA_CheckReturn. Only five YA_ names carry the Return suffix
+	//     (YA_CheckReturn, YA_CustomRoomUserReturn, YA_RoomReturn,
+	//     YA_TuneReturn, YA_CustomRoomUserReturnResponse).
+	//
+	// This is why the size experiments were inconclusive: a 40KB payload and a
+	// 20KB payload and an empty one all fail identically, because none of them
+	// were ever parsed. Size mattered too -- the 40KB one also overran the
+	// 32768-byte receive ring -- but it was never the reason tuning did not work.
+	b = protocol.AppendStringField(b, "RT", "YA_TuneReturn")
 	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
 	// YTuneManager::Set() reads Returning.MetaData.Version (nested), not a
 	// flat Returning.Version — confirmed by decompiling FUN_1403d5160 and

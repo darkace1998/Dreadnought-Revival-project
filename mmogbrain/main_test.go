@@ -2388,8 +2388,14 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 
 func TestTunePayloadUsesClientParserShape(t *testing.T) {
 	payload := buildMmogTunePayload()
-	if rt := protocol.ExtractStringField(payload, "RT"); rt != "YA_Tune" {
-		t.Fatalf("YA_Tune RT = %q, want YA_Tune", rt)
+	// The client sends "YA_Tune" and listens for "YA_TuneReturn". Answering with
+	// the request name matched no dispatcher branch, so the response was dropped
+	// without a log line and YTuneManager::Set() never ran -- which is why every
+	// experiment with the tune CONTENT came back identical. This assertion
+	// defended the wrong name; see buildMmogTunePayload for the four pieces of
+	// evidence.
+	if rt := protocol.ExtractStringField(payload, "RT"); rt != "YA_TuneReturn" {
+		t.Fatalf("tune RT = %q, want YA_TuneReturn", rt)
 	}
 
 	returning := extractNamedMmogObject(t, payload, "Returning")

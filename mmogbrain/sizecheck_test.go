@@ -159,8 +159,18 @@ var targetSizes = map[string]int{
 	// Was 368116 (full tuning tables) — that overflowed the 16-bit mmog frame
 	// size field and desynced the client stream, blocking hangar entry. Now sends
 	// empty override tables (client uses its backup asset tuning); see
-	// buildMmogTunePayload. Must stay well under 65535.
-	"YA_Tune":          299,
+	// buildMmogTunePayload.
+	//
+	// 299 -> 305 (+6): the RT changed from "YA_Tune" to "YA_TuneReturn", which is
+	// six characters longer. The client sends YA_Tune and dispatches the reply on
+	// YA_TuneReturn, so the old name matched no branch and the response was
+	// dropped silently -- YTuneManager::Set() never ran at all. Evidence in
+	// buildMmogTunePayload.
+	//
+	// The real ceiling here is the client's 32768-byte receive ring, NOT the
+	// 65535 frame limit an earlier version of this comment cited: a 40,316-byte
+	// YA_Tune hung a live client on 2026-08-15. See tune_frame_size_test.go.
+	"YA_Tune":          305,
 	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
