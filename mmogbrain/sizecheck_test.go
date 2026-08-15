@@ -177,7 +177,12 @@ var targetSizes = map[string]int{
 	// compressed document instead of eight loose JSON strings. Compression is
 	// roughly 10:1 on this data, so the ring is no longer the binding
 	// constraint it was.
-	"YA_Tune":          242,
+	// 242 -> 244 (+2): MetaData moved to be the LAST child of Returning. With it
+	// first, the client read an EMPTY version out of a document that demonstrably
+	// contained "1.0.0" -- the parsed-tree corruption CONTRIBUTING.md records for
+	// a container followed by siblings. Two bytes because zlib re-packs the same
+	// content in a different order.
+	"YA_Tune":          244,
 	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,

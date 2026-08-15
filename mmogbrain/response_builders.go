@@ -4869,9 +4869,8 @@ func buildMmogTuneDocument() []byte {
 	// flat Version here means the client's cached-version comparison never
 	// changes, so the whole WeaponsTune/AbilitiesTune/etc. block below is
 	// never actually applied client-side.
-	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
-	b = protocol.AppendStringField(b, "Version", "1.0.0")
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	// MetaData is emitted LAST, after every scalar sibling below. See the block
+	// at the end of this function for why.
 	// CRITICAL frame-size constraint: mmog frames are delimited by a 16-bit size
 	// field (protocol.BuildResponseFrame / ParseAppFrames), so a single response
 	// MUST stay under 65535 bytes. Previously these fields embedded the full
@@ -4932,6 +4931,35 @@ func buildMmogTuneDocument() []byte {
 	b = protocol.AppendStringField(b, "FeatsTune", `[]`)
 	b = protocol.AppendStringField(b, "HavocTune", `[]`)
 	b = protocol.AppendStringField(b, "GameModifiersTune", `[]`)
+
+	// MetaData goes LAST, and that placement is the fix, not a style choice.
+	//
+	// Measured 2026-08-15: with MetaData FIRST and eight scalar siblings after
+	// it, the client logged
+	//
+	//	Set(): Received data, setting tune values (version: ).
+	//
+	// -- an empty version, while this document carried Version "1.0.0" and our
+	// own parser walked Returning -> MetaData -> Version and read it back fine.
+	// So the document is well-formed by our rules and the client still saw
+	// nothing, which is the client-parser defect CONTRIBUTING.md already
+	// records for arrays: a container with siblings AFTER it can have its parsed
+	// value tree corrupted, so containers that must parse go last.
+	//
+	// The client reads this by CHILD COUNT, which is what makes an empty parse
+	// indistinguishable from an absent field:
+	//
+	//	Set() 0x1403d5239: Returning -> "MetaData"      (FName from 0x142eca528)
+	//	     0x1403d5245: node copy   -> manager+0x80   (0x140332cc0)
+	//	     0x1403d529a: find "Version" in its children (0x1402c3bf0)
+	//	                  cmp dword ptr [rcx+0x20], 0 / jle -> not found
+	//
+	// An empty version is not cosmetic: the client compares it to decide whether
+	// its cached tuning is current, so everything above stays unapplied.
+	b, stack = protocol.AppendObjectStart(b, stack, "MetaData")
+	b = protocol.AppendStringField(b, "Version", "1.0.0")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
