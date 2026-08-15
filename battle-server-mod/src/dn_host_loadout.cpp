@@ -629,7 +629,10 @@ static tProcessEvent g_origProcessEvent = nullptr;
 static void *g_fnK2PostLogin = nullptr;
 static void *g_fnGetLoadoutManager = nullptr;
 static void *g_fnServerRestartPlayer = nullptr;
+static void *g_fnServerReadyForJoining = nullptr;
 static bool g_postLoginArmed = false;
+static bool g_fleetTierArmed = false;
+static bool g_spawnArmed = false;
 
 // Which of the four precast loadouts everyone spawns in. Index into
 // kPrecastPaths / g_precastCDO; 0 is the Assault Medium T1.
@@ -675,6 +678,63 @@ static void *FindUObjectByName(const char *want, const char **outerOut) {
   return nullptr;
 }
 
+// AController::PlayerState, from the SDK dump (Engine_Classes.h:797).
+#define OFF_PLAYERSTATE 0x3E0
+// AYPlayerReplicationInfo::m_highestFleetUnlocked (DreadGame_Classes.h:1920),
+// an EYFleetType from YMmogbrain_Structs.h: None=0 Recruit=1 Veteran=2
+// Legendary=3.
+#define OFF_HIGHEST_FLEET 0x948
+#define EYFT_NONE 0
+#define EYFT_RECRUIT 1
+
+// EnsureFleetTier gives a player the Recruit tier when the host has none.
+//
+// This is the byte the orbit teleport is gated on:
+//
+//   FUN_3D92A0: cmp byte ptr [rdx+0x948], 0 ; jne proceed
+//               -> "Trying to teleport into level player %s that is not in orbit!"
+//
+// It is EYFT_None on a host that never logged in, so nobody is ever teleported
+// and the client sits in the orbit screen. Measured, and the reason the
+// post-login spawn below is not sufficient on its own: the server spawned FOUR
+// pawns for the player and the CLIENT still stayed in orbit, because the only
+// thing that takes a client out of orbit is the teleport.
+//
+// Why Recruit, and why this is not fabrication. The tier is real backend data:
+// the engine computes it from the YMmogbrain module (FUN_3A5831, which logs
+// "EYFleetType::EYFT_Recruit: no FleetType override - FleetTier=%d") and cannot
+// here, because the host holds no mmogbrain data. Recruit is the floor -- what
+// a player who owns any fleet at all has unlocked, and every player who reaches
+// a battle server owns one. It is the value a logged-in host would have had.
+//
+// The honest limit: Veteran and Legendary players are under-reported. If a real
+// tier ever reaches the host this must defer to it, which is what the guard
+// below does.
+static void EnsureFleetTier(void *pc) {
+  if (!g_fleetTierArmed || !IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *)))
+    return;
+
+  void *ps = *(void **)((uintptr_t)pc + OFF_PLAYERSTATE);
+  if (!IsReadable(ps, OFF_HIGHEST_FLEET + 1))
+    return;
+
+  uint8_t *tier = (uint8_t *)((uintptr_t)ps + OFF_HIGHEST_FLEET);
+
+  // Never overwrite a value the engine already has. Same rule the
+  // FindLoadoutByID hook follows -- if the engine answered, do not second-guess
+  // it -- and it is what keeps this correct if a real tier ever arrives.
+  if (*tier != EYFT_NONE)
+    return;
+
+  *tier = EYFT_RECRUIT;
+
+  static int s_logged = 0;
+  if (s_logged++ < 8)
+    Logf("fleet tier: PlayerState %p was EYFT_None -> EYFT_Recruit "
+         "(controller %p); the orbit teleport gate reads this byte",
+         ps, pc);
+}
+
 // SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
 static void SpawnJoiningPlayer(void *params) {
   if (!IsReadable(params, sizeof(void *)))
@@ -686,6 +746,15 @@ static void SpawnJoiningPlayer(void *params) {
     Logf("post-login: NewPlayer is not readable, skipping");
     return;
   }
+
+  // The tier first. It is what lets the NORMAL orbit flow finish, and it is
+  // useful with or without the spawn below -- which is why the two are
+  // separately switchable. Tier alone is the better outcome: the player still
+  // picks a ship in orbit.
+  EnsureFleetTier(pc);
+
+  if (!g_spawnArmed)
+    return;
 
   // GetLoadoutManager() is a UFunction returning UYLoadoutManagerComponent*.
   // Calling it through ProcessEvent avoids needing another hardcoded RVA.
@@ -733,8 +802,20 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   void *ret = g_origProcessEvent ? g_origProcessEvent(object, function, params)
                                  : nullptr;
 
+  if (!g_postLoginArmed)
+    return ret;
+
+  // ServerReadyForJoining is the last server-side event before the teleport --
+  // ~100 seconds after PostLogin in a real match. Re-asserting the tier there
+  // costs one more pointer compare and covers anything that cleared the byte in
+  // between.
+  if (function == g_fnServerReadyForJoining) {
+    EnsureFleetTier(object);
+    return ret;
+  }
+
   // One pointer compare on the hot path. Everything else is behind it.
-  if (!g_postLoginArmed || function != g_fnK2PostLogin)
+  if (function != g_fnK2PostLogin)
     return ret;
 
   // SpawnJoiningPlayer calls ProcessEvent twice, which re-enters this hook.
@@ -750,12 +831,16 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   return ret;
 }
 
-// Opt-in separately from the loadout fix, because it changes what players see.
+// Both of the switches below are opt-in separately from the loadout fix,
+// because both change what players see.
 static DWORD WINAPI PostLoginInstallThread(LPVOID);
 
-static bool PostLoginEnabled() {
+// SwitchOn reports whether an env var is "1" or a marker file sits beside the
+// executable. Two ways because the spawner inherits its environment but a file
+// survives however the operator starts the service.
+static bool SwitchOn(const char *envName, const char *markerFile) {
   char buf[8];
-  DWORD n = GetEnvironmentVariableA("DN_HOST_POSTLOGIN_SPAWN", buf, sizeof(buf));
+  DWORD n = GetEnvironmentVariableA(envName, buf, sizeof(buf));
   if (n == 1 && buf[0] == '1')
     return true;
 
@@ -765,9 +850,20 @@ static bool PostLoginEnabled() {
   char *slash = strrchr(path, '\\');
   if (!slash)
     return false;
-  strcpy_s(slash + 1, sizeof(path) - (slash + 1 - path),
-           "dn_host_postlogin.txt");
+  strcpy_s(slash + 1, sizeof(path) - (slash + 1 - path), markerFile);
   return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
+}
+
+// The ServerRestartPlayer bypass: spawns joining players straight into the
+// arena, at the cost of removing ship selection.
+static bool PostLoginSpawnEnabled() {
+  return SwitchOn("DN_HOST_POSTLOGIN_SPAWN", "dn_host_postlogin.txt");
+}
+
+// The fleet tier: lets the NORMAL orbit flow complete, keeping ship selection.
+// Preferred over the bypass, and useful on its own.
+static bool FleetTierEnabled() {
+  return SwitchOn("DN_HOST_FLEET_TIER", "dn_host_fleet_tier.txt");
 }
 
 // The install runs on its own thread and WAITS, because GObjects is not
@@ -806,12 +902,20 @@ static void *WaitForUObjectByName(const char *want, const char **outerOut,
 }
 
 static void InstallPostLoginHook() {
-  if (!PostLoginEnabled()) {
-    Logf("post-login spawn is OFF (create dn_host_postlogin.txt beside the "
-         "executable, or set DN_HOST_POSTLOGIN_SPAWN=1, to enable). Players "
-         "will use the normal orbit flow.");
+  g_spawnArmed = PostLoginSpawnEnabled();
+  g_fleetTierArmed = FleetTierEnabled();
+
+  // The ProcessEvent hook carries both features, so it installs if either is
+  // wanted.
+  if (!g_spawnArmed && !g_fleetTierArmed) {
+    Logf("post-login hook is OFF. Enable the fleet tier "
+         "(dn_host_fleet_tier.txt or DN_HOST_FLEET_TIER=1) to let the normal "
+         "orbit flow finish, and/or the spawn bypass (dn_host_postlogin.txt or "
+         "DN_HOST_POSTLOGIN_SPAWN=1) to skip orbit entirely.");
     return;
   }
+  Logf("post-login hook: fleet tier %s, spawn bypass %s",
+       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off");
 
   const char *outer = nullptr;
   int waited = 0;
@@ -831,16 +935,27 @@ static void InstallPostLoginHook() {
   Logf("post-login: K2_PostLogin found at %p (outer %s)", g_fnK2PostLogin,
        outer ? outer : "<unknown>");
 
-  g_fnGetLoadoutManager = WaitForUObjectByName("GetLoadoutManager", &outer, nullptr);
-  if (!g_fnGetLoadoutManager) {
-    Logf("post-login: GetLoadoutManager not found. Not hooking.");
-    return;
+  // Only the spawn bypass needs these two. The fleet tier writes a byte on the
+  // PlayerState and calls nothing, so it must not be blocked by their absence.
+  if (g_spawnArmed) {
+    g_fnGetLoadoutManager = WaitForUObjectByName("GetLoadoutManager", &outer, nullptr);
+    g_fnServerRestartPlayer = WaitForUObjectByName("ServerRestartPlayer", &outer, nullptr);
+    if (!g_fnGetLoadoutManager || !g_fnServerRestartPlayer) {
+      Logf("post-login: GetLoadoutManager=%p ServerRestartPlayer=%p -- spawn "
+           "bypass disabled, continuing with fleet tier only.",
+           g_fnGetLoadoutManager, g_fnServerRestartPlayer);
+      g_spawnArmed = false;
+      if (!g_fleetTierArmed)
+        return;
+    }
   }
-  g_fnServerRestartPlayer = WaitForUObjectByName("ServerRestartPlayer", &outer, nullptr);
-  if (!g_fnServerRestartPlayer) {
-    Logf("post-login: ServerRestartPlayer not found. Not hooking.");
-    return;
-  }
+
+  // Optional: used only to re-assert the tier just before the teleport.
+  g_fnServerReadyForJoining =
+      FindUObjectByName("ServerReadyForJoining", &outer);
+  if (!g_fnServerReadyForJoining)
+    Logf("post-login: ServerReadyForJoining not found; the tier will be set at "
+         "PostLogin only");
 
   // ProcessEvent is virtual on UObject, so any UObject's vtable has it. The
   // UFunction just resolved is one.
@@ -865,9 +980,14 @@ static void InstallPostLoginHook() {
   }
 
   g_postLoginArmed = true;
-  Logf("post-login: ProcessEvent hooked at %p; joining players will spawn "
-       "directly as %s, bypassing the orbit flow.",
-       processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
+  if (g_spawnArmed)
+    Logf("post-login: ProcessEvent hooked at %p; joining players will spawn "
+         "directly as %s, bypassing the orbit flow.",
+         processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
+  else
+    Logf("post-login: ProcessEvent hooked at %p; fleet tier only -- players "
+         "keep ship selection and the normal orbit flow.",
+         processEvent);
 }
 
 static DWORD WINAPI PostLoginInstallThread(LPVOID) {

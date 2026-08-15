@@ -56,6 +56,45 @@ engine was designed to have and then gets out of the way. It stays correct if a
 real backend ever populates the manager, because it only runs when the manager
 could not answer.
 
+## Optional: fleet tier (`dn_host_fleet_tier.txt`) — try this one first
+
+**Off by default.** Enable with an empty `dn_host_fleet_tier.txt` beside the
+executable, or `DN_HOST_FLEET_TIER=1`.
+
+The orbit teleport is gated on one byte:
+
+```
+FUN_3D92A0:  cmp byte ptr [rdx+0x948], 0 ; jne proceed
+             -> "Trying to teleport into level player %s that is not in orbit!"
+```
+
+`+0x948` is `AYPlayerReplicationInfo::m_highestFleetUnlocked`, an `EYFleetType`
+declared in `YMmogbrain_Structs.h` (`None=0 Recruit=1 Veteran=2 Legendary=3`).
+It is `EYFT_None` on a host that never logged in, so **nobody is ever teleported
+and the client sits in the orbit screen** — measured live, and the reason the
+spawn bypass below was not sufficient on its own: the host spawned four pawns
+for the player and the client stayed in orbit regardless, because the only thing
+that takes a client out of orbit is the teleport.
+
+This sets the tier to `EYFT_Recruit` **when, and only when, the host has none**.
+It never overwrites a value the engine already has — the same rule the
+`FindLoadoutByID` hook follows, and what keeps it correct if a real tier ever
+arrives. It is written at `PostLogin` and re-asserted at `ServerReadyForJoining`,
+the last server-side event before the teleport.
+
+Why this is supplying data rather than faking a check: the engine computes this
+tier from the YMmogbrain module (`FUN_3A5831`, which logs
+`EYFleetType::EYFT_Recruit: no FleetType override - FleetTier=%d`) and cannot
+here, because the host holds no mmogbrain data at all. Recruit is the floor —
+what a player who owns any fleet has unlocked, and every player who reaches a
+battle server owns one.
+
+**Honest limit:** Veteran and Legendary players are under-reported as Recruit.
+If a real tier ever reaches the host, this defers to it.
+
+**Prefer this over the spawn bypass below.** It lets the *normal* orbit flow
+finish, so players keep ship selection.
+
 ## Optional: post-login spawn (`dn_host_postlogin.txt`)
 
 **Off by default, and a bigger change than the loadout fix.** Enable with an
