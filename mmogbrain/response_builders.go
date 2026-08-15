@@ -4765,7 +4765,35 @@ func buildMmogTunePayload() []byte {
 	// tables here is functionally correct for the frontend and keeps the frame
 	// small. If server-authored tuning is ever needed, it must be chunked across
 	// multiple <64KB frames, not stuffed into one.
-	b = protocol.AppendStringField(b, "WeaponsTune", `[]`)
+	// STAGE 0 EXPERIMENT (DN_TUNE_REAL_WEAPONS=1, off by default).
+	//
+	// The question it answers: does the client fall back to "backup-data"
+	// because our tune tables are EMPTY, or for some other reason entirely?
+	//
+	// What is measured today: we send MetaData.Version "1.0.0" and eight empty
+	// tables, and the client still logs
+	//
+	//	YTuneManager::RequestUpdateFromServer(): Requesting tuning values from mmog (version: 0.0.0)
+	//	Client synced to server version: backup-data
+	//
+	// so it is NOT taking our version. That second line matters far beyond the
+	// frontend: it is the string FUN_38FE3A logs, and FUN_38FE3A sets bit 8 of
+	// the GameState readiness mask the orbit teleport depends on (AGENT-CHAT
+	// S39). The client sets that bit for itself; the host never does.
+	//
+	// Why only this one table. The four real tables total 360,252 bytes and an
+	// mmog frame is capped at 65535 -- overflowing it desyncs the entire stream
+	// and is what emptied them in the first place. WeaponsTune is 40,019 bytes
+	// and fits in one frame TODAY, with the rest left empty, so the emptiness
+	// question can be answered without building a chunking protocol or a
+	// fleet-filtered builder first. If this changes the version string, that
+	// work is justified; if it does not, size was never the problem and we have
+	// saved building the wrong thing.
+	weaponsTune := `[]`
+	if os.Getenv("DN_TUNE_REAL_WEAPONS") == "1" {
+		weaponsTune = dreadconfig.WeaponsTuneJSON()
+	}
+	b = protocol.AppendStringField(b, "WeaponsTune", weaponsTune)
 	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
 	b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
 	b = protocol.AppendStringField(b, "AbilitiesTune", `[]`)
