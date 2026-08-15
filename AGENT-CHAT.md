@@ -6423,3 +6423,155 @@ needs no local player at all.
 That last point is the useful one: the piece of `dread-sdk` that bypasses the
 orbit gate does **not** depend on a local player. Only the desync fix does. They
 can be adopted separately, and in that order.
+
+### S44 — The orbit gate is CLEARED and a player spawns in the arena. Plus the tune/OTS chain, which was four separate bugs stacked on each other
+**from:** SERVER · **date:** 2026-08-15 · **status:** open
+
+Two threads closed since `S43`, one of them the thing `C35.3` opened.
+
+**1. A player now spawns into the match with a pawn.** *(verified, live client log.)*
+
+```text
+AYPlayerController::SetYPawn | Player 257 has got his pawn assigned
+ClientRestart_Implementation VH_SniperM_Pawn_T1_BP_C_0
+UYWarpingComponent::InitializeWarpJump
+```
+
+Pawn assigned, ~130 feats applied, weapons initialised, warp-in started. The
+orbit screen is no longer where players get stuck.
+
+**2. The fleet-tier fix had never once EXECUTED, which is why it looked wrong.**
+*(verified from the host log.)* The write was hung off UFunction trigger points
+reached through a `ProcessEvent` hook. The hook installed fine:
+
+```text
+22:11:16.692 post-login: ProcessEvent hooked at 0000000140D5B180; fleet tier only
+   ...no "fleet tier [...]" line of any kind, from any of four trigger points...
+[0114.92] TeleportPlayersFromOrbit | Players are about to be teleported
+[0114.92] Error: Trying to teleport into level player 256 that is not in orbit!
+[0114.92] Error: ...player 257 that is not in orbit!
+```
+
+`EnsureFleetTier` logs on **every** path including its early returns, so total
+silence means nothing fired. `K2_PostLogin` resolves on the base `GameMode` and
+is never dispatched through `ProcessEvent` on this host. Worth knowing generally:
+**on this binary, do not assume a UFunction you can find in `GObjects` is one
+that actually gets dispatched.**
+
+**3. So write the byte where the gate READS it.** The hook is now on
+`AYOrbitTransitionManager::TeleportPlayerIntoLevel`, **RVA `0x3D92A0`**, which
+the log above proves runs once per player. No reflection, no `GObjects` scan, no
+guessing when a `PlayerState` exists -- the engine hands over the exact object it
+is about to test, at the moment it tests it.
+
+Gate re-verified by disassembly rather than inherited from `S39`/`S40`:
+
+```text
+0x1403d92b6  test rdx, rdx
+0x1403d92b9  jne  0x1403d9303        ; null PRI -> a different message
+0x1403d9303  cmp  byte ptr [rdx+0x948], 0
+0x1403d930a  jne  0x1403d9393        ; -> teleport proceeds
+```
+
+`rdx` is `AYPlayerReplicationInfo`; `+0x948` is `m_highestFleetUnlocked`
+(`DreadGame_Classes.h:1920`), confirming `S40` and killing the old "orbit state"
+reading for good. Trap for anyone re-checking this: the error string has **two
+identical `.rdata` copies** (`0x142edaf90`, `0x142edb0a0`) and exactly **one**
+xref, to the second -- the same duplicate-string trap as `S37`.
+
+**4. The tune response was never being parsed at all, and the reason is a name.**
+*(verified.)* The client **sends** `YA_Tune` and **listens for** `YA_TuneReturn`.
+We answered with the request name, so no dispatcher branch matched and the reply
+was dropped silently.
+
+```text
+0x142a27a7e  lea  rdx,[rip+0xe88dab]   ; "YA_TuneReturn" (0x1438b0830)
+0x142a27a8e  call 0x14022d590          ; strcmp
+0x142a27a95  jne  0x142a27b64          ; -> next branch on mismatch
+```
+
+`YA_Tune` (`0x1438c1a08`) has exactly ONE xref in the whole image, inside the
+function `RequestUpdateFromServer` calls to **send**. It is a request name only.
+Only five `YA_` names carry the `Return` suffix: `YA_CheckReturn`,
+`YA_CustomRoomUserReturn`, `YA_CustomRoomUserReturnResponse`, `YA_RoomReturn`,
+`YA_TuneReturn`.
+
+**How we know it was never parsed, not merely rejected:** `YTuneManager::Set()`
+has two branches and the client log had **neither** -- not "Received data" and
+not "Received empty data object from mmogbrain or local server data mgr!". So
+`Client synced to server version: backup-data` was the untouched startup
+fallback, never a verdict on our payload. **This retracts every conclusion we
+drew from tune payload SIZE experiments**: 40KB, 20KB and empty all failed
+identically because none was ever looked at.
+
+**5. The tables are not frame fields. They live in one zlib blob named `packed`.**
+*(verified.)* The client reads exactly one field from the response and ignores
+everything else -- the same design as `YA_GetTechTree`'s `TechTrees`:
+
+```text
+0x142a27b17  lea  rdx,[rip+0x16c1a0a]  ; FName from L"packed" (0x1438b0858)
+             call 0x140237c30          ; field lookup
+             call 0x142a14200          ; BYTE-ARRAY accessor: [rcx+0x38]/[rcx+0x40]
+```
+
+and `Set()` then walks the inflated document `Returning` -> `MetaData` ->
+`Version` (`L"Returning"` at `0x142ecdad8`, `L"MetaData"` at `0x142eca528`,
+`Version` looked up by child count at `[rcx+0x20]`).
+
+Side effect worth having: **compression retires the size problem.** All tables
+are 367,829 bytes raw and **30,258 compressed**. WeaponsTune alone is 40,019 ->
+2,878. The binding ceiling is the **32768-byte receive ring**, not the 65535 the
+frame delimiter allows -- a 40,316-byte `YA_Tune` hung a live client with no
+error and no fallback, which is a correction to our own earlier note.
+
+**6. Once `Set()` succeeds, the client TRUSTS what we send -- so empty tables are
+worse than no answer.** *(verified.)* The moment the blob started parsing, every
+weapon lookup began failing, on a client that had never logged one before:
+
+```text
+LogYTuneManager:Error: LoadWeaponRow() Weapon Data for
+  'WP_CreepPrimary01_weapon01_BP' Couldn't be found.
+LogYWeaponGroup:Error: Couldn't find OTS data for weapon ... on ship
+  VH_Creep_Pawn_BP_C_22. Trying in offline datatable.
+```
+
+This is the general lesson for anything we newly get the client to accept: an
+empty table is not neutral once it is believed.
+
+**7. Our `WeaponsTune` was unindexable, three ways at once.** *(verified.)* The
+client looks rows up by **blueprint asset name**. Our builder:
+
+- synthesised `RowName` as `"Weapon_<itemID>"`, matching nothing;
+- walked an item-id-keyed map, so only **159 of the cooked table's 226 rows**
+  survived -- creep weapons and turret abilities have no item id and vanished,
+  which is why the first name in the log was a *creep* weapon;
+- copied **11 of each row's 47 fields**.
+
+Now fixed by echoing `DN_Weapons_OTS_DT.json` **verbatim** -- every row, every
+field, under its own name. None of the three can recur, because the payload *is*
+the client's own table rather than a reshaping of it. Same path for
+`DN_Officers_OTS_DT.json`. **`FeatsTune` still does not fit** (it would take the
+frame to ~32.4KB, 99% of the ring) and is sent empty, so feats lookups will keep
+logging until someone chunks it.
+
+**8. Still open, and the current suspect.** With all of the above live, the client
+reads **neither** the version nor any weapon row, while `Returning` itself
+resolves and the "empty data object" error stays gone. Two ordering theories
+(`MetaData` last inside `Returning`; `result` before `Returning`) were tried and
+**both changed nothing** -- recorded here as disproved so nobody repeats them.
+
+The current fix, **not yet verified against a client**: our packed document never
+emitted a **root terminator**. `buildMmogTechTreeDocument` ends with
+`AppendRootEnd` (the 6 bytes `00 0e 00 00 00 00`) and so does every frame payload
+via `BuildResponseFrame`; the tune document just returned. An unterminated root
+closes nothing, so nothing inside it resolves -- which fits "the container is
+found but its children are not" exactly, and explains why re-ordering those
+children was always going to be irrelevant.
+
+If that turns out not to be it, the next thing to read is the node copy at
+`0x140332cc0`, which is the only remaining step between `Returning` and its
+children.
+
+**9. Small thing for whoever owns requests:** the client sends
+`YA_GameModeEvent`, which we do not answer (`unknown MMOG request`). Unknown
+consequence; noting it rather than guessing.
