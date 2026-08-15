@@ -79,8 +79,35 @@ that takes a client out of orbit is the teleport.
 This sets the tier to `EYFT_Recruit` **when, and only when, the host has none**.
 It never overwrites a value the engine already has — the same rule the
 `FindLoadoutByID` hook follows, and what keeps it correct if a real tier ever
-arrives. It is written at `PostLogin` and re-asserted at `ServerReadyForJoining`,
-the last server-side event before the teleport.
+arrives.
+
+**Where it is written, corrected 2026-08-15.** It used to be written from
+UFunction trigger points (`PostLogin`, `ServerReadyForJoining`, …) reached
+through a `ProcessEvent` hook. Measured on a live host, **none of them ever
+ran**: `ProcessEvent` hooked successfully and `EnsureFleetTier` then logged
+nothing at all — not even one of its failure paths, which all log. `K2_PostLogin`
+resolves on the base `GameMode` and is never dispatched through `ProcessEvent`
+here. The fix had never once executed.
+
+It is now written in a hook on **`AYOrbitTransitionManager::TeleportPlayerIntoLevel`
+(RVA `0x3D92A0`)** — the function that reads the gate, which the same host log
+proves runs once per player. No reflection, no GObjects scan, no guess about
+when a `PlayerState` exists: the engine hands over the exact object it is about
+to test, at the moment it tests it. The old trigger points are retained and
+still log, so if they ever start firing it will be visible.
+
+The gate was re-verified by disassembly rather than inherited from notes:
+
+```
+0x1403d92b6  test rdx, rdx
+0x1403d92b9  jne  0x1403d9303        ; a null PRI logs a different message
+0x1403d9303  cmp  byte ptr [rdx+0x948], 0
+0x1403d930a  jne  0x1403d9393        ; -> teleport proceeds
+```
+
+The format string has two identical `.rdata` copies (`0x142edaf90`,
+`0x142edb0a0`) and exactly one xref, to the second — the wrong-copy trap in
+`CONTRIBUTING.md`.
 
 Why this is supplying data rather than faking a check: the engine computes this
 tier from the YMmogbrain module (`FUN_3A5831`, which logs

@@ -152,6 +152,29 @@ static uintptr_t g_base = 0;
 #define RVA_FIND_LOADOUT_BY_ID 0x340340
 #define RVA_ADD_LOADOUT 0x3382F0
 #define RVA_STATIC_LOAD_CLASS 0xD78110
+
+// AYOrbitTransitionManager::TeleportPlayerIntoLevel(this, AYPlayerReplicationInfo*)
+//
+// The function that reads the fleet-tier gate. Verified 2026-08-15 by
+// disassembly rather than inference:
+//
+//   0x1403d92b6  test rdx, rdx
+//   0x1403d92b9  jne  0x1403d9303          ; null PRI -> a different message
+//   0x1403d9303  cmp  byte ptr [rdx+0x948], 0
+//   0x1403d930a  jne  0x1403d9393          ; -> teleport proceeds
+//                ; fallthrough logs, at 0x1403d9360:
+//                ; "Trying to teleport into level player %s that is not in orbit!"
+//
+// The format string has TWO identical .rdata copies (0x142edaf90 and
+// 0x142edb0a0) and exactly ONE xref, to the SECOND -- the wrong-copy trap in
+// CONTRIBUTING.md. Scanning .text for RIP-relative LEAs found it.
+//
+// rdx is AYPlayerReplicationInfo: +0x948 is m_highestFleetUnlocked in
+// dread-sdk's DreadGame_Classes.h:1920, and nothing else in the SDK dump puts
+// an EYFleetType there. Only rcx/rdx are read, so the two-argument passthrough
+// below is complete -- [rsp+0xC0] at 0x1403d9393 is a STORE into the caller's
+// home space, not a stack argument.
+#define RVA_TELEPORT_PLAYER_INTO_LEVEL 0x3D92A0
 #define OFF_GOBJECTS 0x3F63A70
 #define OFF_GNAMES 0x3E069D0
 
@@ -717,26 +740,14 @@ static void *FindUObjectByName(const char *want, const char **outerOut) {
 // and when the tier did not get written there was no way to tell which -- a
 // default indistinguishable from a real result, which is the exact trap
 // CONTRIBUTING.md warns about. Capped so a busy match cannot flood the log.
-static void EnsureFleetTier(void *pc, const char *where) {
-  if (!g_fleetTierArmed)
-    return;
-
-  static int s_logged = 0;
-  bool verbose = (s_logged++ < 24);
-
-  if (!IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *))) {
-    if (verbose)
-      Logf("fleet tier [%s]: controller %p not readable to +0x%X", where, pc,
-           OFF_PLAYERSTATE);
-    return;
-  }
-
-  void *ps = *(void **)((uintptr_t)pc + OFF_PLAYERSTATE);
+// EnsureFleetTierOnPlayerState is the half that does the work, split out
+// because the teleport hook already HAS the PlayerState -- it is the argument
+// the gate is read from -- and must not go looking for one via a controller.
+static void EnsureFleetTierOnPlayerState(void *ps, const char *where,
+                                         bool verbose) {
   if (!ps) {
     if (verbose)
-      Logf("fleet tier [%s]: controller %p has a NULL PlayerState (+0x%X) -- "
-           "too early, the engine has not created it yet",
-           where, pc, OFF_PLAYERSTATE);
+      Logf("fleet tier [%s]: NULL PlayerState", where);
     return;
   }
   if (!IsReadable(ps, OFF_HIGHEST_FLEET + 1)) {
@@ -762,9 +773,69 @@ static void EnsureFleetTier(void *pc, const char *where) {
   *tier = EYFT_RECRUIT;
 
   if (verbose)
-    Logf("fleet tier [%s]: PlayerState %p (controller %p) EYFT_None -> "
-         "EYFT_Recruit, reads back %u",
-         where, ps, pc, (unsigned)*tier);
+    Logf("fleet tier [%s]: PlayerState %p EYFT_None -> EYFT_Recruit, reads "
+         "back %u",
+         where, ps, (unsigned)*tier);
+}
+
+static void EnsureFleetTier(void *pc, const char *where) {
+  if (!g_fleetTierArmed)
+    return;
+
+  static int s_logged = 0;
+  bool verbose = (s_logged++ < 24);
+
+  if (!IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *))) {
+    if (verbose)
+      Logf("fleet tier [%s]: controller %p not readable to +0x%X", where, pc,
+           OFF_PLAYERSTATE);
+    return;
+  }
+
+  void *ps = *(void **)((uintptr_t)pc + OFF_PLAYERSTATE);
+  if (!ps) {
+    if (verbose)
+      Logf("fleet tier [%s]: controller %p has a NULL PlayerState (+0x%X) -- "
+           "too early, the engine has not created it yet",
+           where, pc, OFF_PLAYERSTATE);
+    return;
+  }
+  EnsureFleetTierOnPlayerState(ps, where, verbose);
+}
+
+// HookTeleportPlayerIntoLevel is the trigger point that is PROVEN to run.
+//
+// Every earlier attempt hung the write off a UFunction dispatch, and the
+// 2026-08-15 host log settles that they do not fire: ProcessEvent was hooked
+// successfully ("post-login: ProcessEvent hooked at 0000000140D5B180") and
+// EnsureFleetTier then logged NOTHING from any of its four trigger points --
+// not even one of its failure paths, which all log. K2_PostLogin was resolved
+// on the base GameMode and never dispatched through ProcessEvent on this host.
+//
+// So write the byte where the engine reads it. The same log proves this
+// function runs, twice, once per player:
+//
+//   AYGameMode_Multiplayer::TeleportPlayersFromOrbit | Players are about to be
+//   teleported into the arena
+//   LogYOrbitTransitionManager:Error: Trying to teleport into level player 256
+//   that is not in orbit!
+//   ...player 257 that is not in orbit!
+//
+// This needs no UFunction lookup, no GObjects scan, and no guess about when a
+// PlayerState exists -- the engine hands us the exact object it is about to
+// test, at the moment it tests it.
+typedef void(__fastcall *tTeleportPlayerIntoLevel)(void *self, void *pri,
+                                                   void *a3, void *a4);
+static tTeleportPlayerIntoLevel g_origTeleportPlayerIntoLevel = NULL;
+
+static void __fastcall HookTeleportPlayerIntoLevel(void *self, void *pri,
+                                                   void *a3, void *a4) {
+  if (g_fleetTierArmed) {
+    static int s_logged = 0;
+    EnsureFleetTierOnPlayerState(pri, "TeleportPlayerIntoLevel",
+                                 s_logged++ < 24);
+  }
+  g_origTeleportPlayerIntoLevel(self, pri, a3, a4);
 }
 
 // SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
@@ -953,7 +1024,8 @@ static void *WaitForUObjectByName(const char *want, const char **outerOut,
 
 static void InstallPostLoginHook() {
   g_spawnArmed = PostLoginSpawnEnabled();
-  g_fleetTierArmed = FleetTierEnabled();
+  // g_fleetTierArmed is already set in Startup, which must know it before this
+  // thread exists so the teleport hook can install without racing it.
 
   // The ProcessEvent hook carries both features, so it installs if either is
   // wanted.
@@ -1105,6 +1177,29 @@ static DWORD WINAPI Startup(LPVOID) {
   Logf("installed: FindLoadoutByID hooked at RVA 0x%X (%p). Waiting for a "
        "loadout lookup.",
        RVA_FIND_LOADOUT_BY_ID, target);
+
+  // Read the switch here, not on the install thread: the teleport hook below
+  // needs it and must not race the thread that used to set it.
+  g_fleetTierArmed = FleetTierEnabled();
+
+  // The teleport gate. Installed here rather than from the GObjects thread
+  // because it needs no reflection at all -- and because the thing it replaces
+  // (the UFunction trigger points) is exactly what failed by never running.
+  // A failure to hook is logged and survivable: everything else still works.
+  if (g_fleetTierArmed) {
+    void *tp = (void *)(g_base + RVA_TELEPORT_PLAYER_INTO_LEVEL);
+    if (MH_CreateHook(tp, &HookTeleportPlayerIntoLevel,
+                      (LPVOID *)&g_origTeleportPlayerIntoLevel) != MH_OK ||
+        MH_EnableHook(tp) != MH_OK) {
+      Logf("fleet tier: FAILED to hook TeleportPlayerIntoLevel at RVA 0x%X "
+           "(%p). The orbit gate will not be satisfied.",
+           RVA_TELEPORT_PLAYER_INTO_LEVEL, tp);
+    } else {
+      Logf("installed: TeleportPlayerIntoLevel hooked at RVA 0x%X (%p). Fleet "
+           "tier is written where the gate reads it.",
+           RVA_TELEPORT_PLAYER_INTO_LEVEL, tp);
+    }
+  }
 
   // On its own thread: InstallPostLoginHook waits for GObjects, and Startup
   // must return so the FindLoadoutByID hook above is live immediately.
