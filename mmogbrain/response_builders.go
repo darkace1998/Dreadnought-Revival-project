@@ -4901,6 +4901,29 @@ func buildMmogTuneDocument() []byte {
 	var b []byte
 	var stack []int
 
+	// "result" is emitted FIRST so that "Returning" is the LAST child of this
+	// document. That ordering is the fix, not a style choice.
+	//
+	// Measured 2026-08-15 with the complete 226-row weapons table on the wire
+	// (20,983 bytes of tables, server 23:27:37 = client login 21:27 local):
+	//
+	//	Set(): Received data, setting tune values (version: ).
+	//	LoadWeaponRow() Weapon Data for 'WP_SniperMPri01_weapon01_T1_BP'
+	//	  Couldn't be found.
+	//
+	// Both are IN the payload -- that row is one of the 226, and MetaData.Version
+	// is "1.0.0". So the client read NEITHER the version NOR any table, i.e. it
+	// could not reach Returning's CHILDREN at all, even though Returning itself
+	// resolved (the "empty data object" error stays gone).
+	//
+	// That is the parser defect CONTRIBUTING.md records: a container with a
+	// container SIBLING AFTER IT has its parsed value tree corrupted. The earlier
+	// attempt moved MetaData last INSIDE Returning and changed nothing, because
+	// the offending sibling was a level up -- "result", right after "Returning".
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+
 	// "YA_TuneReturn", not "YA_Tune". The client SENDS YA_Tune and LISTENS for
 	// YA_TuneReturn; answering with the request name means no dispatcher branch
 	// matches and the response is dropped without a word.
@@ -5018,10 +5041,6 @@ func buildMmogTuneDocument() []byte {
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	b, stack = protocol.AppendObjectEnd(b, stack)
-
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b, _ = protocol.AppendObjectEnd(b, stack)
 
 	return b
 }
