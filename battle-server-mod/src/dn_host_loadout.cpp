@@ -630,6 +630,8 @@ static void *g_fnK2PostLogin = nullptr;
 static void *g_fnGetLoadoutManager = nullptr;
 static void *g_fnServerRestartPlayer = nullptr;
 static void *g_fnServerReadyForJoining = nullptr;
+static void *g_fnServerSpawnNearActor = nullptr;
+static void *g_fnServerPlayerReadyUp = nullptr;
 static bool g_postLoginArmed = false;
 static bool g_fleetTierArmed = false;
 static bool g_spawnArmed = false;
@@ -710,29 +712,59 @@ static void *FindUObjectByName(const char *want, const char **outerOut) {
 // The honest limit: Veteran and Legendary players are under-reported. If a real
 // tier ever reaches the host this must defer to it, which is what the guard
 // below does.
-static void EnsureFleetTier(void *pc) {
-  if (!g_fleetTierArmed || !IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *)))
+//
+// EVERY path here logs. The first version returned silently on three of them,
+// and when the tier did not get written there was no way to tell which -- a
+// default indistinguishable from a real result, which is the exact trap
+// CONTRIBUTING.md warns about. Capped so a busy match cannot flood the log.
+static void EnsureFleetTier(void *pc, const char *where) {
+  if (!g_fleetTierArmed)
     return;
+
+  static int s_logged = 0;
+  bool verbose = (s_logged++ < 24);
+
+  if (!IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *))) {
+    if (verbose)
+      Logf("fleet tier [%s]: controller %p not readable to +0x%X", where, pc,
+           OFF_PLAYERSTATE);
+    return;
+  }
 
   void *ps = *(void **)((uintptr_t)pc + OFF_PLAYERSTATE);
-  if (!IsReadable(ps, OFF_HIGHEST_FLEET + 1))
+  if (!ps) {
+    if (verbose)
+      Logf("fleet tier [%s]: controller %p has a NULL PlayerState (+0x%X) -- "
+           "too early, the engine has not created it yet",
+           where, pc, OFF_PLAYERSTATE);
     return;
+  }
+  if (!IsReadable(ps, OFF_HIGHEST_FLEET + 1)) {
+    if (verbose)
+      Logf("fleet tier [%s]: PlayerState %p not readable to +0x%X", where, ps,
+           OFF_HIGHEST_FLEET);
+    return;
+  }
 
   uint8_t *tier = (uint8_t *)((uintptr_t)ps + OFF_HIGHEST_FLEET);
+  uint8_t before = *tier;
 
   // Never overwrite a value the engine already has. Same rule the
   // FindLoadoutByID hook follows -- if the engine answered, do not second-guess
   // it -- and it is what keeps this correct if a real tier ever arrives.
-  if (*tier != EYFT_NONE)
+  if (before != EYFT_NONE) {
+    if (verbose)
+      Logf("fleet tier [%s]: PlayerState %p already reads %u, leaving it", where,
+           ps, (unsigned)before);
     return;
+  }
 
   *tier = EYFT_RECRUIT;
 
-  static int s_logged = 0;
-  if (s_logged++ < 8)
-    Logf("fleet tier: PlayerState %p was EYFT_None -> EYFT_Recruit "
-         "(controller %p); the orbit teleport gate reads this byte",
-         ps, pc);
+  if (verbose)
+    Logf("fleet tier [%s]: PlayerState %p (controller %p) EYFT_None -> "
+         "EYFT_Recruit, reads back %u",
+         where, ps, pc, (unsigned)*tier);
 }
 
 // SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
@@ -751,7 +783,12 @@ static void SpawnJoiningPlayer(void *params) {
   // useful with or without the spawn below -- which is why the two are
   // separately switchable. Tier alone is the better outcome: the player still
   // picks a ship in orbit.
-  EnsureFleetTier(pc);
+  //
+  // PostLogin may be too early: the engine creates the PlayerState in
+  // InitPlayerState, and for a networked join that can land after this. The
+  // later trigger points in HookProcessEvent are what actually catch it; this
+  // one is kept because when it does work it is the earliest.
+  EnsureFleetTier(pc, "PostLogin");
 
   if (!g_spawnArmed)
     return;
@@ -805,12 +842,25 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   if (!g_postLoginArmed)
     return ret;
 
-  // ServerReadyForJoining is the last server-side event before the teleport --
-  // ~100 seconds after PostLogin in a real match. Re-asserting the tier there
-  // costs one more pointer compare and covers anything that cleared the byte in
-  // between.
+  // Later trigger points, all server RPCs on the PlayerController, all of which
+  // route through ProcessEvent and all of which happen long after the
+  // PlayerState exists. `object` is the controller.
+  //
+  // Several rather than one because PostLogin alone did not write the byte on a
+  // live host and the silent version could not say why; these bracket the whole
+  // orbit sequence, from picking a ship to readying up to the last event before
+  // the teleport. Writing twice is free -- the second call sees a non-zero tier
+  // and leaves it.
   if (function == g_fnServerReadyForJoining) {
-    EnsureFleetTier(object);
+    EnsureFleetTier(object, "ServerReadyForJoining");
+    return ret;
+  }
+  if (function == g_fnServerSpawnNearActor) {
+    EnsureFleetTier(object, "ServerSpawnNearActor");
+    return ret;
+  }
+  if (function == g_fnServerPlayerReadyUp) {
+    EnsureFleetTier(object, "ServerPlayerReadyUpForMatch");
     return ret;
   }
 
@@ -950,12 +1000,16 @@ static void InstallPostLoginHook() {
     }
   }
 
-  // Optional: used only to re-assert the tier just before the teleport.
-  g_fnServerReadyForJoining =
-      FindUObjectByName("ServerReadyForJoining", &outer);
-  if (!g_fnServerReadyForJoining)
-    Logf("post-login: ServerReadyForJoining not found; the tier will be set at "
-         "PostLogin only");
+  // The later tier trigger points. All optional: a missing one costs a trigger,
+  // not the feature.
+  g_fnServerReadyForJoining = FindUObjectByName("ServerReadyForJoining", &outer);
+  g_fnServerSpawnNearActor = FindUObjectByName("ServerSpawnNearActor", &outer);
+  g_fnServerPlayerReadyUp =
+      FindUObjectByName("ServerPlayerReadyUpForMatch", &outer);
+  Logf("post-login: tier triggers -- ServerReadyForJoining=%p "
+       "ServerSpawnNearActor=%p ServerPlayerReadyUpForMatch=%p",
+       g_fnServerReadyForJoining, g_fnServerSpawnNearActor,
+       g_fnServerPlayerReadyUp);
 
   // ProcessEvent is virtual on UObject, so any UObject's vtable has it. The
   // UFunction just resolved is one.
