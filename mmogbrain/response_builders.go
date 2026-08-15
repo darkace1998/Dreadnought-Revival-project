@@ -4737,6 +4737,57 @@ func buildMmogFleetEligibilityPayload() []byte {
 	return b
 }
 
+// tuneTableByteBudget caps a single tuning table inside YA_Tune.
+//
+// The ceiling that matters is the client's 32768-byte mmog receive ring, NOT
+// the 65535 the 16-bit frame delimiter allows. Measured live 2026-08-15: a
+// 40,316-byte YA_Tune (under the frame limit, over the ring) left the client
+// logging "Requesting tuning values from mmog (version: 0.0.0)" and then
+// nothing at all -- no sync line, no backup-data fallback, hangar stalled.
+// It does not fail loudly and it does not degrade; it stops.
+//
+// 20000 keeps the whole frame at roughly two thirds of the ring with every
+// other field in place, which is the same margin the tech tree runs with.
+const tuneTableByteBudget = 20000
+
+// truncateJSONArray returns the longest prefix of a JSON array that fits in
+// budget bytes, cut on element boundaries so the result is still valid JSON.
+// Under budget, the input is returned untouched; unparseable input degrades to
+// an empty array rather than shipping a half-written string into a frame whose
+// oversize failure mode is a silent client hang.
+func truncateJSONArray(src string, budget int) string {
+	if len(src) <= budget {
+		return src
+	}
+	var elems []json.RawMessage
+	if err := json.Unmarshal([]byte(src), &elems); err != nil {
+		logrus.WithError(err).Warn("tune table is not a JSON array; sending empty")
+		return `[]`
+	}
+	kept := make([]json.RawMessage, 0, len(elems))
+	size := 2 // the enclosing brackets
+	for _, elem := range elems {
+		next := size + len(elem)
+		if len(kept) > 0 {
+			next++ // the separating comma
+		}
+		if next > budget {
+			break
+		}
+		kept = append(kept, elem)
+		size = next
+	}
+	out, err := json.Marshal(kept)
+	if err != nil {
+		logrus.WithError(err).Warn("could not re-encode truncated tune table")
+		return `[]`
+	}
+	logrus.WithFields(logrus.Fields{
+		"kept": len(kept), "of": len(elems), "bytes": len(out), "budget": budget,
+	}).Warn("tune table truncated to fit the client's 32768-byte receive ring")
+	return string(out)
+}
+
 func buildMmogTunePayload() []byte {
 	var b []byte
 	var stack []int
@@ -4789,9 +4840,20 @@ func buildMmogTunePayload() []byte {
 	// fleet-filtered builder first. If this changes the version string, that
 	// work is justified; if it does not, size was never the problem and we have
 	// saved building the wrong thing.
+	// THE LIMIT IS THE RING, NOT THE FRAME. Corrected after the first attempt
+	// hung a live client: the 16-bit frame delimiter allows 65535, but the
+	// client's mmog receive ring is 32768 bytes, which this file already says in
+	// five other places and which main_test.go already asserts for the tech
+	// tree. A 40,316-byte YA_Tune went out, the client logged "Requesting
+	// tuning values from mmog (version: 0.0.0)" and then NOTHING -- no sync, no
+	// fallback, hangar stalled. Oversized frames do not degrade gracefully here.
+	//
+	// So the experiment sends as much of the real table as fits and no more.
+	// A partial override list still answers the question, which is only whether
+	// a NON-EMPTY table changes the version the client reports.
 	weaponsTune := `[]`
 	if os.Getenv("DN_TUNE_REAL_WEAPONS") == "1" {
-		weaponsTune = dreadconfig.WeaponsTuneJSON()
+		weaponsTune = truncateJSONArray(dreadconfig.WeaponsTuneJSON(), tuneTableByteBudget)
 	}
 	b = protocol.AppendStringField(b, "WeaponsTune", weaponsTune)
 	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
