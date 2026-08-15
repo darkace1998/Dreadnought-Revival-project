@@ -4901,8 +4901,15 @@ func buildMmogTuneDocument() []byte {
 	var b []byte
 	var stack []int
 
-	// "result" is emitted FIRST so that "Returning" is the LAST child of this
-	// document. That ordering is the fix, not a style choice.
+	// "result" is emitted first, leaving "Returning" last.
+	//
+	// DISPROVED as a fix: this was tried on the theory that a container with a
+	// container sibling after it has its parsed value tree corrupted (the rule
+	// CONTRIBUTING.md records for arrays), after the same theory had already
+	// failed one level down. It changed nothing -- the version stayed empty and
+	// every weapon row stayed missing. The real cause was the missing root
+	// terminator at the end of this function. The order is kept because it is
+	// harmless and matches the invariant, NOT because it fixed anything.
 	//
 	// Measured 2026-08-15 with the complete 226-row weapons table on the wire
 	// (20,983 bytes of tables, server 23:27:37 = client login 21:27 local):
@@ -5040,9 +5047,24 @@ func buildMmogTuneDocument() []byte {
 	b = protocol.AppendStringField(b, "Version", "1.0.0")
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
 
-	return b
+	// TERMINATE THE ROOT. This document had no root terminator at all, and that
+	// is what kept the client from reading anything inside "Returning".
+	//
+	// Every other document in this codebase ends with one: BuildResponseFrame
+	// appends it to every frame payload, and buildMmogTechTreeDocument -- the
+	// only other packed blob, and one the client demonstrably parses -- ends
+	// with protocol.AppendRootEnd. This one just returned b.
+	//
+	// The symptom that finally pointed here: with the complete 226-row weapons
+	// table on the wire, the client read NEITHER MetaData.Version ("1.0.0" in
+	// the payload) NOR a single weapon row, while "Returning" itself resolved
+	// and the "Received empty data object" error stayed gone. An unterminated
+	// root explains exactly that -- the tree never closes, so nothing inside it
+	// resolves -- and it explains why two rounds of re-ordering children changed
+	// nothing.
+	return protocol.AppendRootEnd(b)
 }
 
 func buildMmogPlayerStatisticsPayload() []byte {
