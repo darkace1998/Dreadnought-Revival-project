@@ -4788,7 +4788,44 @@ func truncateJSONArray(src string, budget int) string {
 	return string(out)
 }
 
+// buildMmogTunePayload answers YA_Tune with RT + one zlib blob named "packed".
+//
+// The tune tables are NOT top-level fields of the frame. The client reads
+// exactly one field from this response and ignores everything else, exactly
+// like YA_GetTechTree's "TechTrees" blob:
+//
+//	dispatcher 0x142a27b17:
+//	  lea rdx,[rip+0x16c1a0a]  ; FName built from L"packed" (0x1438b0858, len 0xe)
+//	  call 0x140237c30         ; field lookup on the response
+//	  call 0x142a14200         ; BYTE-ARRAY accessor: [rcx+0x38]=data, [rcx+0x40]=len
+//
+// and the document inside it is what YTuneManager::Set() then walks:
+//
+//	Set() 0x1403d51e5:
+//	  mov qword[rbp-0x21], 0xa ; FString of 10 wchars incl. NUL
+//	  call 0x140bd8710         ; copies 0x14 bytes from 0x142ecdad8 = L"Returning"
+//	  call 0x140237c30         ; doc -> "Returning"
+//	  call 0x140237c30         ; -> a sub-field, then stored at manager+0x80
+//
+// So "Returning" was right all along and so were the table names -- they were
+// simply one level too high, sitting in the frame instead of inside the blob.
+// That is why Set() reported "Received empty data object from mmogbrain or
+// local server data mgr!" and then an EMPTY version: it found no "packed"
+// field, so it walked an empty document.
+//
+// This also retires the size problem that produced the ring-overflow hang. The
+// tables are compressed now, so the budget applies to the deflated blob rather
+// than the raw JSON.
 func buildMmogTunePayload() []byte {
+	var b []byte
+
+	b = protocol.AppendStringField(b, "RT", "YA_TuneReturn")
+	b = protocol.AppendBytesField(b, "packed", compressMmogDocument(buildMmogTuneDocument()))
+	return b
+}
+
+// buildMmogTuneDocument is the document carried, zlib-compressed, in "packed".
+func buildMmogTuneDocument() []byte {
 	var b []byte
 	var stack []int
 
@@ -4823,7 +4860,8 @@ func buildMmogTunePayload() []byte {
 	// 20KB payload and an empty one all fail identically, because none of them
 	// were ever parsed. Size mattered too -- the 40KB one also overran the
 	// 32768-byte receive ring -- but it was never the reason tuning did not work.
-	b = protocol.AppendStringField(b, "RT", "YA_TuneReturn")
+	// No RT here: the RT belongs to the FRAME, and this document is the payload
+	// of the frame's "packed" field.
 	b, stack = protocol.AppendObjectStart(b, stack, "Returning")
 	// YTuneManager::Set() reads Returning.MetaData.Version (nested), not a
 	// flat Returning.Version — confirmed by decompiling FUN_1403d5160 and

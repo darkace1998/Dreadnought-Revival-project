@@ -2398,7 +2398,33 @@ func TestTunePayloadUsesClientParserShape(t *testing.T) {
 		t.Fatalf("tune RT = %q, want YA_TuneReturn", rt)
 	}
 
-	returning := extractNamedMmogObject(t, payload, "Returning")
+	// The tables are NOT top-level fields of the frame. The client reads one
+	// byte field, "packed", inflates it, and walks "Returning" inside it -- the
+	// same shape as YA_GetTechTree's "TechTrees". This test asserted the flat
+	// shape and passed the whole time the client was reporting "Received empty
+	// data object", because nothing here checked where the client actually
+	// looks. Walk the blob the way the client does.
+	blob, ok := protocol.ExtractBytesField(payload, "packed")
+	if !ok {
+		t.Fatal("YA_TuneReturn has no \"packed\" byte field; the client reads nothing else")
+	}
+	if len(blob) == 0 {
+		t.Fatal("packed blob is empty")
+	}
+	if blob[0]&0x0f != 8 {
+		t.Fatalf("packed blob is not a zlib stream (CMF=0x%02x); the client uses inflateInit_", blob[0])
+	}
+	reader, err := zlib.NewReader(bytes.NewReader(blob))
+	if err != nil {
+		t.Fatalf("packed blob does not inflate: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	document, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read inflated packed document: %v", err)
+	}
+
+	returning := extractNamedMmogObject(t, document, "Returning")
 	if version := protocol.ExtractStringField(returning, "Version"); version != "1.0.0" {
 		t.Fatalf("YA_Tune Version = %q, want 1.0.0", version)
 	}
@@ -2419,7 +2445,7 @@ func TestTunePayloadUsesClientParserShape(t *testing.T) {
 		}
 	}
 
-	result := extractNamedMmogObject(t, payload, "result")
+	result := extractNamedMmogObject(t, document, "result")
 	if status := protocol.ExtractStringField(result, fieldStatus); status != "ok" {
 		t.Fatalf("YA_Tune result.status = %q, want ok", status)
 	}

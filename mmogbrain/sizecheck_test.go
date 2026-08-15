@@ -170,7 +170,14 @@ var targetSizes = map[string]int{
 	// The real ceiling here is the client's 32768-byte receive ring, NOT the
 	// 65535 frame limit an earlier version of this comment cited: a 40,316-byte
 	// YA_Tune hung a live client on 2026-08-15. See tune_frame_size_test.go.
-	"YA_Tune":          305,
+	//
+	// 305 -> 242 (-63): the tables moved INSIDE a zlib blob named "packed",
+	// which is the only field the client reads (dispatcher 0x142a27b17 ->
+	// byte-array accessor 0x142a14200). The frame now carries RT + one
+	// compressed document instead of eight loose JSON strings. Compression is
+	// roughly 10:1 on this data, so the ring is no longer the binding
+	// constraint it was.
+	"YA_Tune":          242,
 	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
