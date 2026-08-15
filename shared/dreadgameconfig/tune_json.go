@@ -1,10 +1,28 @@
 package dreadgameconfig
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 )
+
+// sortedMapKeys returns a map's keys in a stable order.
+//
+// Every builder below used to walk its map directly, so the emitted JSON came
+// out in a different order on every process start. That is not cosmetic: the
+// tables ship compressed in YA_TuneReturn, so the payload SIZE moved run to run
+// (measured 17851 / 17894 / 17988 for identical data), which no size tripwire
+// can pin and which makes a real regression indistinguishable from noise.
+func sortedMapKeys[K cmp.Ordered, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
 
 var (
 	tuneJSONOnce      sync.Once
@@ -100,7 +118,8 @@ func buildWeaponsTuneJSON() string {
 		return `[]`
 	}
 	rows := make([]map[string]any, 0, len(weapons))
-	for itemID, w := range weapons {
+	for _, itemID := range sortedMapKeys(weapons) {
+		w := weapons[itemID]
 		row := map[string]any{
 			"RowName":            fmt.Sprintf("Weapon_%d", itemID),
 			"m_slotType":         w.SlotType,
@@ -129,7 +148,7 @@ func buildProjectilesTuneJSON() string {
 		return `[]`
 	}
 	rows := make([]map[string]any, 0, len(projectiles))
-	for rowName := range projectiles {
+	for _, rowName := range sortedMapKeys(projectiles) {
 		row := map[string]any{
 			"RowName": rowName,
 		}
@@ -148,7 +167,8 @@ func buildAbilitiesTuneJSON() string {
 		return `[]`
 	}
 	rows := make([]map[string]any, 0, len(abilities))
-	for id, a := range abilities {
+	for _, id := range sortedMapKeys(abilities) {
+		a := abilities[id]
 		row := map[string]any{
 			"RowName":      id,
 			"m_abilityName": a.AbilityName,
@@ -170,7 +190,8 @@ func buildOfficersTuneJSON() string {
 		return `[]`
 	}
 	rows := make([]map[string]any, 0, len(officers))
-	for id, o := range officers {
+	for _, id := range sortedMapKeys(officers) {
+		o := officers[id]
 		row := map[string]any{
 			"RowName":         id,
 			"m_enabling":      o.Enabling,
@@ -194,7 +215,8 @@ func buildFeatsTuneJSON() string {
 		return `[]`
 	}
 	rows := make([]map[string]any, 0, len(feats))
-	for name, f := range feats {
+	for _, name := range sortedMapKeys(feats) {
+		f := feats[name]
 		row := map[string]any{
 			"RowName":    name,
 			"m_enabling": f.Enabling,

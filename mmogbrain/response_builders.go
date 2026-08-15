@@ -4824,6 +4824,72 @@ func buildMmogTunePayload() []byte {
 	return b
 }
 
+type tuneTable struct {
+	name string
+	json string
+}
+
+// tuneTablesInPriorityOrder returns the tuning tables to send, largest-value
+// first, dropping whole tables that would not fit under the compressed budget.
+//
+// Priority is by observed consequence, not by size. WeaponsTune and
+// ProjectilesTune come first because their absence is what a player actually
+// sees -- "Couldn't find OTS data for weapon ... Trying in offline datatable"
+// on every weapon of every pawn. Feats and Abilities are the two large ones and
+// go last, so a budget squeeze costs the least-visible tables.
+//
+// DN_TUNE_EMPTY=1 restores the old all-empty behaviour for A/B testing. It is
+// NOT the default any more: empty tables were measured to be worse than either
+// real data or no response, because the client trusts them.
+func tuneTablesInPriorityOrder() []tuneTable {
+	if os.Getenv("DN_TUNE_EMPTY") == "1" {
+		logrus.Warn("tune: DN_TUNE_EMPTY=1, sending empty override tables")
+		return []tuneTable{
+			{"WeaponsTune", `[]`}, {"BattleReadyTune", `[]`},
+			{"ProjectilesTune", `[]`}, {"AbilitiesTune", `[]`},
+			{"OfficersTune", `[]`}, {"FeatsTune", `[]`},
+			{"HavocTune", `[]`}, {"GameModifiersTune", `[]`},
+		}
+	}
+
+	candidates := []tuneTable{
+		{"WeaponsTune", dreadconfig.WeaponsTuneJSON()},
+		{"ProjectilesTune", dreadconfig.ProjectilesTuneJSON()},
+		{"OfficersTune", dreadconfig.OfficersTuneJSON()},
+		{"GameModifiersTune", dreadconfig.GameModifiersTuneJSON()},
+		{"AbilitiesTune", dreadconfig.AbilitiesTuneJSON()},
+		{"FeatsTune", dreadconfig.FeatsTuneJSON()},
+		// No source data for these two; they stay empty rather than absent so
+		// the field list the client walks does not change shape.
+		{"BattleReadyTune", `[]`},
+		{"HavocTune", `[]`},
+	}
+
+	// Measure by COMPRESSING what has been accepted so far, because the budget
+	// is spent on the wire, not in memory -- and zlib does far better on the
+	// combined document than on any table alone.
+	kept := make([]tuneTable, 0, len(candidates))
+	var accepted []byte
+	for _, candidate := range candidates {
+		trial := append(append([]byte{}, accepted...), candidate.json...)
+		if size := len(compressMmogDocument(trial)); size > tuneTableByteBudget {
+			logrus.WithFields(logrus.Fields{
+				"table": candidate.name, "raw": len(candidate.json),
+				"compressed_total": size, "budget": tuneTableByteBudget,
+			}).Warn("tune: table does not fit the budget, sending it empty")
+			kept = append(kept, tuneTable{candidate.name, `[]`})
+			continue
+		}
+		accepted = trial
+		kept = append(kept, candidate)
+	}
+	logrus.WithFields(logrus.Fields{
+		"compressed": len(compressMmogDocument(accepted)),
+		"budget":     tuneTableByteBudget,
+	}).Info("tune: built override tables")
+	return kept
+}
+
 // buildMmogTuneDocument is the document carried, zlib-compressed, in "packed".
 func buildMmogTuneDocument() []byte {
 	var b []byte
@@ -4884,53 +4950,38 @@ func buildMmogTuneDocument() []byte {
 	// tables here is functionally correct for the frontend and keeps the frame
 	// small. If server-authored tuning is ever needed, it must be chunked across
 	// multiple <64KB frames, not stuffed into one.
-	// STAGE 0 EXPERIMENT (DN_TUNE_REAL_WEAPONS=1, off by default).
+	// REAL tables, whole, in priority order until the budget is spent.
 	//
-	// The question it answers: does the client fall back to "backup-data"
-	// because our tune tables are EMPTY, or for some other reason entirely?
+	// Empty tables are not neutral. Once the packed blob started parsing, the
+	// client began treating our empty WeaponsTune as authoritative and every
+	// lookup missed -- measured in a live proving-ground match, absent from the
+	// same client before the blob landed:
 	//
-	// What is measured today: we send MetaData.Version "1.0.0" and eight empty
-	// tables, and the client still logs
+	//	LogYTuneManager:Error: LoadWeaponRow() Weapon Data for
+	//	  'WP_CreepPrimary01_weapon01_BP' Couldn't be found.
+	//	LogYWeaponGroup:Error: Couldn't find OTS data for weapon ... on ship
+	//	  VH_Creep_Pawn_BP_C_16. Trying in offline datatable.
 	//
-	//	YTuneManager::RequestUpdateFromServer(): Requesting tuning values from mmog (version: 0.0.0)
-	//	Client synced to server version: backup-data
+	// So the choice is real data or no response at all; an empty table is the
+	// one option that is worse than both.
 	//
-	// so it is NOT taking our version. That second line matters far beyond the
-	// frontend: it is the string FUN_38FE3A logs, and FUN_38FE3A sets bit 8 of
-	// the GameState readiness mask the orbit teleport depends on (AGENT-CHAT
-	// S39). The client sets that bit for itself; the host never does.
+	// Compression is what makes this affordable. Measured 2026-08-15:
 	//
-	// Why only this one table. The four real tables total 360,252 bytes and an
-	// mmog frame is capped at 65535 -- overflowing it desyncs the entire stream
-	// and is what emptied them in the first place. WeaponsTune is 40,019 bytes
-	// and fits in one frame TODAY, with the rest left empty, so the emptiness
-	// question can be answered without building a chunking protocol or a
-	// fleet-filtered builder first. If this changes the version string, that
-	// work is justified; if it does not, size was never the problem and we have
-	// saved building the wrong thing.
-	// THE LIMIT IS THE RING, NOT THE FRAME. Corrected after the first attempt
-	// hung a live client: the 16-bit frame delimiter allows 65535, but the
-	// client's mmog receive ring is 32768 bytes, which this file already says in
-	// five other places and which main_test.go already asserts for the tech
-	// tree. A 40,316-byte YA_Tune went out, the client logged "Requesting
-	// tuning values from mmog (version: 0.0.0)" and then NOTHING -- no sync, no
-	// fallback, hangar stalled. Oversized frames do not degrade gracefully here.
+	//	WeaponsTune        40019 ->  2878      AbilitiesTune  139098 -> 11553
+	//	ProjectilesTune    18594 ->  2046      FeatsTune      162541 -> 13023
+	//	OfficersTune        7231 ->  1205      GameModifiers     346 ->   158
+	//	ALL               367829 -> 30258
 	//
-	// So the experiment sends as much of the real table as fits and no more.
-	// A partial override list still answers the question, which is only whether
-	// a NON-EMPTY table changes the version the client reports.
-	weaponsTune := `[]`
-	if os.Getenv("DN_TUNE_REAL_WEAPONS") == "1" {
-		weaponsTune = truncateJSONArray(dreadconfig.WeaponsTuneJSON(), tuneTableByteBudget)
+	// All of it is 30258 compressed -- under the 32768 ring, but with ~2KB of
+	// margin against a failure mode that is a SILENT HANG. So tables are added
+	// whole while they fit the budget, and any that do not are skipped and
+	// logged.
+	//
+	// Whole, never truncated: a partial table is exactly the missing-row error
+	// above, just for the rows that fell off the end.
+	for _, table := range tuneTablesInPriorityOrder() {
+		b = protocol.AppendStringField(b, table.name, table.json)
 	}
-	b = protocol.AppendStringField(b, "WeaponsTune", weaponsTune)
-	b = protocol.AppendStringField(b, "BattleReadyTune", `[]`)
-	b = protocol.AppendStringField(b, "ProjectilesTune", `[]`)
-	b = protocol.AppendStringField(b, "AbilitiesTune", `[]`)
-	b = protocol.AppendStringField(b, "OfficersTune", `[]`)
-	b = protocol.AppendStringField(b, "FeatsTune", `[]`)
-	b = protocol.AppendStringField(b, "HavocTune", `[]`)
-	b = protocol.AppendStringField(b, "GameModifiersTune", `[]`)
 
 	// MetaData goes LAST, and that placement is the fix, not a style choice.
 	//

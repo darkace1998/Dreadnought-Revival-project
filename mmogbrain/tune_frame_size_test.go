@@ -82,11 +82,22 @@ func TestTruncateJSONArrayCutsOnElementBoundaries(t *testing.T) {
 	}
 }
 
-// And the default must not change. The real tables are opt-in.
-func TestTuneDefaultIsUnchanged(t *testing.T) {
-	t.Setenv("DN_TUNE_REAL_WEAPONS", "")
-	if payload := buildMmogTunePayload(); len(payload) > 1000 {
-		t.Errorf("default YA_TuneReturn is %d bytes; it should still be the "+
-			"small empty-tables payload", len(payload))
+// The default now carries REAL tables. This test used to assert the opposite --
+// that the payload stayed under 1000 bytes -- which was right while empty
+// tables were merely useless and wrong once they became actively harmful: the
+// client trusts them and then cannot find a single weapon row.
+//
+// DN_TUNE_EMPTY=1 still restores the old behaviour for A/B testing.
+func TestTuneDefaultCarriesRealTables(t *testing.T) {
+	payload := buildMmogTunePayload()
+	if len(payload) < 5000 {
+		t.Errorf("default YA_TuneReturn is only %d bytes; the real tables are "+
+			"not being included", len(payload))
+	}
+
+	t.Setenv("DN_TUNE_EMPTY", "1")
+	if empty := buildMmogTunePayload(); len(empty) > 1000 {
+		t.Errorf("DN_TUNE_EMPTY=1 gave %d bytes; it should be the small "+
+			"empty-tables payload", len(empty))
 	}
 }
