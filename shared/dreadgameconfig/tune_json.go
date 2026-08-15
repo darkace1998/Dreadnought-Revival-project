@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"sync"
 )
@@ -39,11 +40,61 @@ var (
 	medalScoringTuneJSON string
 )
 
+
+// otsTableRowsJSON echoes a cooked OTS data table back to the client verbatim:
+// every row, every field, under the row's OWN name.
+//
+// This replaced a builder that reshaped the table into something the client
+// could not use. Measured against a live client 2026-08-15, on every weapon of
+// every pawn:
+//
+//	LogYTuneManager:Error: LoadWeaponRow() Weapon Data for
+//	  'WP_CreepPrimary01_weapon01_BP' Couldn't be found.
+//
+// The client looks rows up by BLUEPRINT ASSET NAME, which is exactly the key
+// DN_Weapons_OTS_DT.json already uses. The old builder was wrong three ways at
+// once, and each one alone would have caused that error:
+//
+//  1. RowName was synthesised as "Weapon_<itemID>", matching nothing.
+//  2. It walked AllWeapons(), which is keyed by player item id, so of the
+//     table's 226 rows only 159 survived -- creep weapons and turret abilities
+//     have no item id and vanished entirely.
+//  3. It copied 11 of the row's 47 fields.
+//
+// Echoing the file needs none of that to be got right, and cannot drift from
+// the client's expectations, because it IS the client's table.
+func otsTableRowsJSON(fileName string) string {
+	data, err := os.ReadFile(DataTablePath(fileName))
+	if err != nil {
+		return `[]`
+	}
+	var table struct {
+		Rows map[string]map[string]any `json:"rows"`
+	}
+	if err := json.Unmarshal(data, &table); err != nil {
+		return `[]`
+	}
+	rows := make([]map[string]any, 0, len(table.Rows))
+	for _, name := range sortedMapKeys(table.Rows) {
+		row := make(map[string]any, len(table.Rows[name])+1)
+		for field, value := range table.Rows[name] {
+			row[field] = value
+		}
+		row["RowName"] = name
+		rows = append(rows, row)
+	}
+	out, err := json.Marshal(rows)
+	if err != nil {
+		return `[]`
+	}
+	return string(out)
+}
+
 func buildTuneJSONCache() {
-	weaponsTuneJSON = buildWeaponsTuneJSON()
+	weaponsTuneJSON = otsTableRowsJSON("DN_Weapons_OTS_DT.json")
 	projectilesTuneJSON = buildProjectilesTuneJSON()
 	abilitiesTuneJSON = buildAbilitiesTuneJSON()
-	officersTuneJSON = buildOfficersTuneJSON()
+	officersTuneJSON = otsTableRowsJSON("DN_Officers_OTS_DT.json")
 	featsTuneJSON = buildFeatsTuneJSON()
 	gameModifiersTuneJSON = buildGameModifiersTuneJSON()
 	killScoringTuneJSON = buildKillScoringTuneJSON()
@@ -112,35 +163,6 @@ func MedalScoringTuneJSON() string {
 	return medalScoringTuneJSON
 }
 
-func buildWeaponsTuneJSON() string {
-	weapons := AllWeapons()
-	if len(weapons) == 0 {
-		return `[]`
-	}
-	rows := make([]map[string]any, 0, len(weapons))
-	for _, itemID := range sortedMapKeys(weapons) {
-		w := weapons[itemID]
-		row := map[string]any{
-			"RowName":            fmt.Sprintf("Weapon_%d", itemID),
-			"m_slotType":         w.SlotType,
-			"m_class":            w.Class,
-			"m_damageHigh":       w.DamageHigh,
-			"m_damageMedium":     w.DamageMedium,
-			"m_damageLow":        w.DamageLow,
-			"m_maxRange":         w.MaxRange,
-			"m_weaponCooldownTime": w.WeaponCooldownTime,
-			"m_ammoMagazinSize":  w.AmmoMagazinSize,
-			"m_spreadBaseValue":  w.SpreadBaseValue,
-			"m_spreadMaxValue":   w.SpreadMaxValue,
-		}
-		rows = append(rows, row)
-	}
-	data, err := json.Marshal(rows)
-	if err != nil {
-		return `[]`
-	}
-	return string(data)
-}
 
 func buildProjectilesTuneJSON() string {
 	projectiles := AllProjectiles()
@@ -184,30 +206,6 @@ func buildAbilitiesTuneJSON() string {
 	return string(data)
 }
 
-func buildOfficersTuneJSON() string {
-	officers := AllOfficers()
-	if len(officers) == 0 {
-		return `[]`
-	}
-	rows := make([]map[string]any, 0, len(officers))
-	for _, id := range sortedMapKeys(officers) {
-		o := officers[id]
-		row := map[string]any{
-			"RowName":         id,
-			"m_enabling":      o.Enabling,
-			"m_triggers":      o.Triggers,
-			"m_effects":       o.Effects,
-			"m_stackOnAdding": o.StackOnAdding,
-			"m_isPerkFeat":    o.IsPerkFeat,
-		}
-		rows = append(rows, row)
-	}
-	data, err := json.Marshal(rows)
-	if err != nil {
-		return `[]`
-	}
-	return string(data)
-}
 
 func buildFeatsTuneJSON() string {
 	feats := AllShipFeats()

@@ -22,7 +22,7 @@ import "testing"
 // fatal is not a safe place to sit when the failure mode is a silent hang.
 const (
 	clientReceiveRingBytes = 32768
-	maxTuneFrameBytes      = 24000
+	maxTuneFrameBytes      = 28000
 )
 
 func TestTunePayloadStaysWellUnderTheReceiveRing(t *testing.T) {

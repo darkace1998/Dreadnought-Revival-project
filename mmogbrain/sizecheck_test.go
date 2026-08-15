@@ -190,7 +190,16 @@ var targetSizes = map[string]int{
 	// 205,534 bytes of tuning compressed to 17,868 on the wire, carrying
 	// Weapons/Projectiles/Officers/GameModifiers/Abilities in full. FeatsTune is
 	// the one that does not fit the budget and is still sent empty.
-	"YA_Tune":          14730,
+	// 14730 -> 21280: WeaponsTune and OfficersTune are now the cooked OTS tables
+	// echoed VERBATIM -- every row, every field, keyed by blueprint asset name.
+	// The old builder synthesised RowName as "Weapon_<itemID>", walked an
+	// item-id-keyed map that dropped 67 of the table's 226 rows outright (creep
+	// weapons and turret abilities have no item id), and copied 11 of 47 fields.
+	// A live client asked for 'WP_CreepPrimary01_weapon01_BP' and could not find
+	// it, once per weapon per pawn. AbilitiesTune now fits the budget too.
+	// FeatsTune is still empty: including it would take the frame to ~32.4KB,
+	// 99% of the 32768-byte ring.
+	"YA_Tune":          21280,
 	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,

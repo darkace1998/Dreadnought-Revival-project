@@ -4746,9 +4746,15 @@ func buildMmogFleetEligibilityPayload() []byte {
 // nothing at all -- no sync line, no backup-data fallback, hangar stalled.
 // It does not fail loudly and it does not degrade; it stops.
 //
-// 20000 keeps the whole frame at roughly two thirds of the ring with every
-// other field in place, which is the same margin the tech tree runs with.
-const tuneTableByteBudget = 20000
+// 26000 fits every table we have. That is ~23.4KB on the wire, 71% of the ring,
+// and it is not a guess about what is safe: YA_GetTechTree shipped at 25,846
+// bytes for weeks (see sizecheck_test.go), so frames of this size are proven on
+// this client. The only measured failure was 40,316 bytes -- 123% of the ring.
+//
+// Complete tables matter because a MISSING row is a visible error, not a
+// silent default: the client logs "Couldn't find OTS data for weapon ... Trying
+// in offline datatable" for every lookup it cannot satisfy.
+const tuneTableByteBudget = 26000
 
 // truncateJSONArray returns the longest prefix of a JSON array that fits in
 // budget bytes, cut on element boundaries so the result is still valid JSON.
