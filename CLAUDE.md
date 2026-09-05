@@ -20,9 +20,52 @@ Two things still worth keeping from the old rule, as *guidance* rather than a ga
 
 A Go workspace (`go.work`, Go 1.24+ required) of independent modules under `github.com/darkace1998/Dreadnought-Revival-project/<service>`.
 
+## Start here
+
+Five skills carry the parts of this project that are expensive to re-derive.
+Load the relevant one BEFORE working, not after a failed attempt:
+
+| Skill | Use it when |
+| --- | --- |
+| `dreadnought-stack` | starting a session: what runs where, build/deploy/restart, every log path, the operator test cycle |
+| `dreadnought-mmog-responses` | adding or debugging any `YA_*` response; the client "ignores" a payload |
+| `dreadnought-rva` | "where does the client do X?"; verifying an RVA before trusting it |
+| `dreadnought-hooks` | adding a MinHook target in `battle-server-mod/` |
+| `dreadnought-verify` | before claiming a fix works |
+
+`AGENT-CHAT.md` is the running log with the client-side project (`S##` ours,
+`C##` theirs). Read the last few entries first — it records what was tried, what
+worked, and what was **retracted**, which is often the more useful half.
+
 ## The one rule: never invent data
 
 Everything the server sends must be traceable to the client's own data tables (`data/`) or to the client binary. Invented-but-plausible values have repeatedly cost days here, because they look right and get built on. If a value cannot be determined, mark it `// GUESS:` with what evidence is missing. Debugging order: read the client's log → find the string in the binary → read the parser → only then hypothesize about the payload. Full working rules are in `CONTRIBUTING.md` — read it before touching anything protocol-related.
+
+## Current state (2026-08-15)
+
+Working end to end, verified against a live client: login, hangar, inventory and
+purchases, the tech tree (including module clicks, which used to stack-overflow),
+fleet/loadout data for the four starter ships, matchmaking, battle-server spawn,
+ship selection, and — as of this session — **the orbit teleport: a player spawns
+into the arena with a pawn, feats and weapons.**
+
+The orbit gate was one byte, `AYPlayerReplicationInfo::m_highestFleetUnlocked`
+(`+0x948`), which a host that never logs in can never have. `battle-server-mod`
+writes it from a hook on `TeleportPlayerIntoLevel` (RVA `0x3D92A0`) — the
+function that READS the gate — because the UFunction trigger points tried first
+(`K2_PostLogin` and friends) are never dispatched on this host, so that fix had
+never once executed while appearing to be wrong.
+
+Open:
+
+- **Tuning/OTS.** `YA_TuneReturn` is being parsed, but the client reads neither
+  the version nor any table row. Latest fix (packed document was missing its root
+  terminator) is **not yet verified against a client**. `FeatsTune` does not fit
+  the receive ring and is still sent empty, so feats lookups keep logging.
+- Research state: a researched module still shows the Research button.
+- `dn-dedicated` can report a zombie instance as `running` while the game process
+  is `<defunct>`, holding port 7777. Cleared by restart; unfixed.
+- The client sends `YA_GameModeEvent`, which we do not answer.
 
 ## Commands
 
@@ -108,6 +151,14 @@ Details and evidence in `CONTRIBUTING.md`; headlines:
 - The binary mmog parser compares field names **case-insensitively**; the JSON catalog lookups do **not** — `Name` and `name` are both required, carrying different values.
 - `<DNT>[[NotFound]]` in-game means a **missing field**, not a failed localization.
 - Three distinct enums are all called "ship class" — see `docs/client-data-reference.md` before mixing them.
+- **The size ceiling is the client's 32768-byte receive ring, not the 65535 the frame's 16-bit size field allows.** A 40,316-byte response is legal by the frame limit and still killed a live client: it logged the request, then nothing at all. Oversized frames do not degrade, they stop. `YA_GetTechTree` has shipped at 25,846 bytes, so ~26KB is proven safe.
+- **A reply name is not always the request name.** The client sends `YA_Tune` and dispatches the reply on `YA_TuneReturn`. Five names carry the suffix; the rest correlate by request id. Check the dispatcher (`0x142a236c2-0x142a31a32`) before renaming anything.
+- **Two responses carry everything in one zlib blob and ignore every other field**: `YA_GetTechTree`/`TechTrees` and `YA_TuneReturn`/`packed`.
+- **A hand-built document inside a blob must call `protocol.AppendRootEnd`.** `BuildResponseFrame` does it for frame payloads, so it is easy to forget. Without it the top container resolves but nothing inside it does — an empty version string and every table lookup missing, at once.
+- **Once the client accepts a response it TRUSTS it.** Empty tuning tables are worse than sending nothing: the client stops consulting its own cooked data and every weapon lookup fails. Fill a newly-accepted response or turn it off.
+- **Echo cooked data tables verbatim** (`otsTableRowsJSON`). The client looks rows up by blueprint asset name; reshaping the table breaks it three ways at once.
+
+Full detail and the debugging order are in the `dreadnought-mmog-responses` skill.
 
 ### TLS
 

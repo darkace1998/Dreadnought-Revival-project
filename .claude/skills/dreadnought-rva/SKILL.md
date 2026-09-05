@@ -121,6 +121,23 @@ an early fragment of the message, or widen with `--window 800`.
 Both UTF-16LE and ASCII are searched. UE4 log literals are nearly always
 UTF-16LE.
 
+**A literal often has SEVERAL identical copies, and only one is referenced.**
+This binary carries duplicate `.rdata` copies of the same string, so a plain
+byte-search returns the first, which is frequently NOT the one any code points
+at. Two sessions lost time to it, once concluding "this string is unreferenced"
+and once xrefing the wrong copy.
+
+Trust the copy that has a `LEA`, not the first hit:
+
+```text
+Trying to teleport into level player %s that is not in orbit!
+  0x142edaf90   (no LEA)          <- first hit, a decoy
+  0x142edb0a0   LEA at 0x1403d9360 <- the one the code uses
+```
+
+If a string you know is logged at runtime appears to have no xref, assume you
+found the wrong copy before you assume the code is dead.
+
 ## 2. Function → its callers
 
 ```console

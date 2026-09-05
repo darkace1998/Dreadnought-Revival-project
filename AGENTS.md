@@ -5,6 +5,13 @@ Read `CLAUDE.md` for the working rules and `CONTRIBUTING.md` before touching any
 protocol-related. This file is the operational stuff: what breaks, what has moved,
 and what you can now do locally that you could not before.
 
+**Load the skills first.** `dreadnought-stack` (session orientation: services,
+deploy, every log path, the operator test cycle), `dreadnought-mmog-responses`
+(response shape — the client fails silently on a malformed one),
+`dreadnought-rva` (find code in the client binary), `dreadnought-hooks`,
+`dreadnought-verify`. They exist so a new session does not re-derive what past
+sessions paid live test cycles for.
+
 ## Critical Gotchas
 
 **Tests & lint must run per-module, not from workspace root:**
