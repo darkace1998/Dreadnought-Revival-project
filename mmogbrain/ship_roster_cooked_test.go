@@ -370,3 +370,37 @@ func TestTechTreeSlotsPreferTheNormalCurrentAsset(t *testing.T) {
 		}
 	}
 }
+
+// An account that owns everything must still be able to log in. YA_PlayerGet
+// carries one Items entry per owned item, and with every ship and module owned
+// it reached 62,150 bytes -- nearly twice the 32768-byte receive ring -- and the
+// client hung on "entering game" with no error. The frame must stay within
+// playerDataFrameBudget however much a player owns.
+func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	ships, items := provisionUnlockSet()
+	for _, id := range append(ships, items...) {
+		if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+			VALUES(?,?,'x',0,'admin')`, pid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(purchasedInventoryItemIDs(pid)); n < 600 {
+		t.Fatalf("only %d owned items seeded; the test would prove nothing", n)
+	}
+	for _, name := range []string{"YA_PlayerGet", "YA_RefreshPlayerProfile"} {
+		payload := buildMmogPlayerDataPayload(name, pid)
+		t.Logf("%s: %d bytes", name, len(payload))
+		// Against the RING, a fixed fact about the client -- not against
+		// playerDataFrameBudget, which would move with the thing under test.
+		if len(payload) > clientReceiveRingBytes-2048 {
+			t.Errorf("%s is %d bytes for a player owning %d items; budget %d, ring 32768",
+				name, len(payload), len(ships)+len(items), playerDataFrameBudget)
+		}
+	}
+}

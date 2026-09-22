@@ -6045,8 +6045,27 @@ func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
 // because both are parsed by the SAME client function (FUN_2A6CED0) into the
 // same owned-item list -- the one IsItemOwnedByPlayer scans at module+0x39E8.
 // Two emitters would be two chances to disagree about what the player owns.
+// playerDataFrameBudget caps YA_PlayerGet / YA_RefreshPlayerProfile.
+//
+// The Items array is the one part of player data that grows without bound -- one
+// entry per owned item -- and it is emitted LAST, so everything else is already
+// in the buffer when it starts. Measured 2026-09-22 on an account owning every
+// ship and module (666 items): YA_PlayerGet was 62,150 bytes, nearly twice the
+// client's 32768-byte receive ring, and the client sat on "entering game"
+// forever -- market data arrived, then nothing, the same silent stop a 40KB
+// YA_Tune produced. 24000 keeps the frame at ~73% of the ring, the same margin
+// the other large responses run with.
+const playerDataFrameBudget = 24000
+
 func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byte, []int) {
 	emitted := map[int32]bool{}
+	// Only ItemID and Amount are sent. NewPromotionID and Credits used to go out
+	// as "0" on every entry, and are now omitted: FUN_142a77660 reads them
+	// through the field lookup 0x140237c30, whose not-found path
+	// (0x140237c8d -> 0x140237cb0) returns a pointer to a STATIC EMPTY node,
+	// never null, which the value accessors read as 0. An absent field is
+	// therefore exactly a "0" field, at 46 bytes per entry instead of 81.
+	// Amount stays: absent would read as 0, not 1.
 	entry := func(b []byte, stack []int, itemID, amount int32) ([]byte, []int) {
 		if amount <= 0 {
 			amount = 1
@@ -6054,23 +6073,38 @@ func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byt
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
 		b = protocol.AppendStringField(b, "Amount", strconv.Itoa(int(amount)))
-		b = protocol.AppendStringField(b, "NewPromotionID", "0")
-		b = protocol.AppendStringField(b, "Credits", "0")
 		return protocol.AppendObjectEnd(b, stack)
 	}
+	var ids []int32
+	var amounts []int32
 	for _, item := range starterOwnedInventorySeeds() {
 		if item.itemID == 0 || emitted[item.itemID] {
 			continue
 		}
 		emitted[item.itemID] = true
-		b, stack = entry(b, stack, item.itemID, item.quantity)
+		ids, amounts = append(ids, item.itemID), append(amounts, item.quantity)
 	}
 	for _, itemID := range purchasedInventoryItemIDs(playerPID) {
 		if emitted[itemID] {
 			continue // a starter item bought again is still one entry
 		}
 		emitted[itemID] = true
-		b, stack = entry(b, stack, itemID, 1)
+		ids, amounts = append(ids, itemID), append(amounts, 1)
+	}
+	// Never let the inventory push the frame past the budget. Dropping the tail
+	// makes some owned items look unowned; overrunning the ring makes the whole
+	// login hang with no error. The first is visible and recoverable, the
+	// second is not -- so stop, and say so loudly.
+	for i, id := range ids {
+		if len(b) > playerDataFrameBudget {
+			logrus.WithFields(logrus.Fields{
+				"player": playerPID, "sent": i, "owned": len(ids),
+				"bytes": len(b), "budget": playerDataFrameBudget,
+			}).Error("mmog: owned inventory truncated to fit the client's receive ring -- " +
+				"items past this point will look unowned")
+			break
+		}
+		b, stack = entry(b, stack, id, amounts[i])
 	}
 	return b, stack
 }
