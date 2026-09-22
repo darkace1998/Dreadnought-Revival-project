@@ -1648,9 +1648,30 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// EVERY owned ship, not just the fleet's. The client's loadout manager learns
+	// ships from this array and nowhere else: UYLoadoutManager (0x14034ff90)
+	// copies the player data and walks the array at +0xF8 -- where the
+	// YA_PlayerGet parser stores ShipLoadouts (0x142a71932) -- calling AddLoadout
+	// (0x1403382f0) per entry. Fleet m_loadoutList is not a second route.
+	// Sending only fleet ships is why an account with 99 unlocked ships showed
+	// the 4 starters in "owned ships" while the tech tree showed all 99 owned.
+	//
+	// Compact entries and a budget, because the client's receive ring is a
+	// hard-coded 0x8000 bytes (0x142a65700) and a message that cannot fit is
+	// never read. Ships go before Items: a ship missing from the overview is
+	// worse than a module that shows as locked.
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
-	for _, loadout := range state.shipLoadouts() {
-		b, stack = appendMmogShipLoadout(b, stack, playerPID, loadout)
+	owned := ownedShipLoadoutsForPlayerData(state, playerPID)
+	for i, loadout := range owned {
+		if len(b) > playerDataFrameBudget {
+			logrus.WithFields(logrus.Fields{
+				"player": playerPID, "sent": i, "owned": len(owned),
+				"bytes": len(b), "budget": playerDataFrameBudget,
+			}).Error("mmog: owned ships truncated to fit the client's receive ring -- " +
+				"ships past this point will not appear in the owned-ships overview")
+			break
+		}
+		b, stack = appendMmogCompactShipLoadout(b, stack, playerPID, loadout)
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendArrayStart(b, stack, "Ribbons")
@@ -6055,7 +6076,110 @@ func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
 // forever -- market data arrived, then nothing, the same silent stop a 40KB
 // YA_Tune produced. 24000 keeps the frame at ~73% of the ring, the same margin
 // the other large responses run with.
-const playerDataFrameBudget = 24000
+const playerDataFrameBudget = 28000
+
+// ownedShipLoadoutsForPlayerData is every ship the player owns: the fleet's
+// ships first (the lineup must never be the part that gets cut), then every
+// other owned loadout in the order it was acquired.
+func ownedShipLoadoutsForPlayerData(state mmogPlayerState, playerPID string) []mmogShipLoadoutSeed {
+	seen := map[int32]bool{}
+	var out []mmogShipLoadoutSeed
+	for _, loadout := range state.shipLoadouts() {
+		if !seen[loadout.loadoutID()] {
+			seen[loadout.loadoutID()] = true
+			out = append(out, loadout)
+		}
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return out
+	}
+	persisted, err := loadPersistedShipLoadouts(database, normalizedPlayerStatePID(playerPID))
+	if err != nil {
+		logrus.WithError(err).Warn("mmog: load owned ship loadouts")
+		return out
+	}
+	var rest []mmogShipLoadoutSeed
+	for id, loadout := range persisted {
+		if !seen[id] {
+			rest = append(rest, loadout)
+		}
+	}
+	sort.Slice(rest, func(i, j int) bool {
+		if rest[i].position != rest[j].position {
+			return rest[i].position < rest[j].position
+		}
+		return rest[i].loadoutID() < rest[j].loadoutID()
+	})
+	return append(out, rest...)
+}
+
+// rosterSlotsFor is a ship's default loadout from the validated roster (which
+// ship_roster_cooked_test.go pins to the client's cooked blueprints).
+func rosterSlotsFor(precastLoadoutID int32) (primary, secondary int32, abilities, perks [4]int32, ok bool) {
+	for _, h := range baseShipLoadouts {
+		if h.loadoutID == precastLoadoutID {
+			return h.primary, h.secondary, h.abilities, h.perks, true
+		}
+	}
+	for _, h := range heroShipLoadouts {
+		if h.loadoutID == precastLoadoutID {
+			return h.primary, h.secondary, h.abilities, h.perks, true
+		}
+	}
+	return 0, 0, [4]int32{}, [4]int32{}, false
+}
+
+// appendMmogCompactShipLoadout writes one ShipLoadouts entry with ONLY the
+// fields the client's entry parser reads -- ID, PID, precastLoadout, shipID,
+// name, class, displayInfo, the two weapons, four abilities and four perks
+// (field-name block at 0x142a700f0-0x142a706c0; the next block, from "eid",
+// belongs to daily contracts). The full entry (appendMmogShipLoadoutEntry)
+// carries ~28 more m_*/duplicate fields this parser never reads: 1,063 bytes
+// against ~420.
+//
+// Zero-valued slots are omitted: a missing field resolves to the lookup's
+// static empty node (0x140237c8d -> 0x140237cb0) and reads as 0, identical to
+// sending "0". A ship granted by an unlock has no slots stored at all, so its
+// slots come from the roster -- the ship's own blueprint defaults -- rather
+// than going out empty.
+func appendMmogCompactShipLoadout(b []byte, stack []int, playerPID string, loadout mmogShipLoadoutSeed) ([]byte, []int) {
+	primary, secondary := loadout.weaponPrimaryItemID(), loadout.weaponSecondaryItemID()
+	abilities, perks := loadout.abilityIDs, loadout.perkIDs
+	if primary == 0 && secondary == 0 && abilities == ([4]int32{}) {
+		if p, s2, a, k, ok := rosterSlotsFor(loadout.precastLoadoutID); ok {
+			primary, secondary, abilities = p, s2, a
+			if perks == ([4]int32{}) {
+				perks = k
+			}
+		}
+	}
+	str := func(b []byte, name string, v int32) []byte {
+		if v == 0 {
+			return b
+		}
+		return protocol.AppendStringField(b, name, strconv.Itoa(int(v)))
+	}
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "ID", loadout.entryID())
+	b = protocol.AppendStringField(b, "PID", playerPID)
+	b = protocol.AppendInt32Field(b, "precastLoadout", loadout.precastLoadoutID)
+	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
+	b = protocol.AppendStringField(b, "name", loadout.loadoutName)
+	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
+	if info := loadout.displayInfo(); info != "" {
+		b = protocol.AppendStringField(b, "displayInfo", info)
+	}
+	b = str(b, "weaponPrimary", primary)
+	b = str(b, "weaponSecondary", secondary)
+	for i, name := range []string{"abilityPrimary", "abilitySecondary", "abilityPerimeter", "abilityInternal"} {
+		b = str(b, name, abilities[i])
+	}
+	for i, name := range []string{"perkCom", "perkWeapon", "perkNavigation", "perkEngineer"} {
+		b = str(b, name, perks[i])
+	}
+	return protocol.AppendObjectEnd(b, stack)
+}
 
 func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byte, []int) {
 	emitted := map[int32]bool{}

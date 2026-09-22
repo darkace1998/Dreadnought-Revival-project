@@ -1024,15 +1024,33 @@ func TestMmogPlayerStatePreservesDistinctLoadoutAndPrecastIDs(t *testing.T) {
 		t.Fatalf("update persisted flagship loadout id: %v", err)
 	}
 
+	// The persisted loadout keeps BOTH ids distinct in server state...
+	state, err := loadMmogPlayerState(playerPID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, loadout := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		if loadout.loadoutID() == customLoadoutID {
+			found = true
+			if loadout.precastLoadoutID != starter.precastLoadoutID {
+				t.Fatalf("loadout %d lost its precast id: %d, want %d",
+					customLoadoutID, loadout.precastLoadoutID, starter.precastLoadoutID)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("persisted loadout %d is not among the player's owned ships", customLoadoutID)
+	}
+	// ...and on the wire the entry carries the precast id in the one field the
+	// client's ShipLoadouts parser reads for it, "precastLoadout". This used to
+	// assert LoadoutID / precastLoadoutID / m_precastLoadoutID, none of which
+	// that parser reads (its field block is 0x142a700f0-0x142a706c0: ID, PID,
+	// precastLoadout, shipID, name, class, displayInfo and the ten slots).
+	// They were dropped to fit every owned ship under the 32768-byte ring.
 	payload := buildMmogPlayerGetPayload(playerPID)
-	if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "LoadoutID", customLoadoutID)) {
-		t.Fatal("YA_PlayerGet missing persisted player loadout id")
-	}
-	if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "precastLoadoutID", starter.precastLoadoutID)) {
-		t.Fatal("YA_PlayerGet missing original precast loadout id")
-	}
-	if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "m_precastLoadoutID", starter.precastLoadoutID)) {
-		t.Fatal("YA_PlayerGet missing original m_precastLoadoutID")
+	if !bytes.Contains(payload, protocol.AppendInt32Field(nil, "precastLoadout", starter.precastLoadoutID)) {
+		t.Fatal("YA_PlayerGet missing the precast loadout id")
 	}
 }
 
@@ -1833,15 +1851,34 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 			"perkNavigation",
 			"perkEngineer",
 		} {
-			// Sent as numeric strings now (see int32SliceToStrings' doc
-			// comment in response_builders.go), not int32.
-			if !bytes.Contains(payload, appendFieldMarker(field, 0x09)) {
+			// Sent as numeric strings (see int32SliceToStrings' doc comment in
+			// response_builders.go). A slot that is EMPTY is omitted, not sent
+			// as "0": the client's lookup returns a static empty node for a
+			// missing field (0x140237c8d -> 0x140237cb0), which reads as 0.
+			// The starter's four perk slots are empty, so only filled slots
+			// are required here.
+			value := int32(0)
+			switch field {
+			case "weaponPrimary":
+				value = 123456789 // the mutation above
+			case "weaponSecondary":
+				value = starter.weaponSecondaryID
+			case "abilityPrimary", "abilitySecondary", "abilityPerimeter", "abilityInternal":
+				value = starter.abilityIDs[map[string]int{"abilityPrimary": 0, "abilitySecondary": 1, "abilityPerimeter": 2, "abilityInternal": 3}[field]]
+			default:
+				value = starter.perkIDs[map[string]int{"perkCom": 0, "perkWeapon": 1, "perkNavigation": 2, "perkEngineer": 3}[field]]
+			}
+			present := bytes.Contains(payload, appendFieldMarker(field, 0x09))
+			if value != 0 && !present {
 				t.Fatalf("%s missing native loadout slot field %s", payloadName, field)
 			}
+			if value == 0 && present && field != "weaponPrimary" && field != "weaponSecondary" &&
+				bytes.Contains(payload, protocol.AppendStringField(nil, field, "0")) {
+				t.Fatalf("%s sends empty slot %s as \"0\"; omit it", payloadName, field)
+			}
 		}
-		if !bytes.Contains(payload, appendFieldMarker("m_loadoutID", 0x56)) {
-			t.Fatalf("%s missing m_loadoutID field", payloadName)
-		}
+		// No per-entry m_loadoutID any more: the ShipLoadouts parser does not
+		// read it (see TestMmogPlayerStatePreservesDistinctLoadoutAndPrecastIDs).
 		if !bytes.Contains(payload, appendFieldMarker("m_displayInfo", 0x09)) {
 			t.Fatalf("%s missing m_displayInfo field", payloadName)
 		}
@@ -1851,9 +1888,9 @@ func TestNativeLoadoutShapesStayConsistentAcrossPlayerPayloads(t *testing.T) {
 		if !bytes.Contains(payload, appendFieldMarker("m_abilityIDs", 0x0d)) {
 			t.Fatalf("%s missing m_abilityIDs array", payloadName)
 		}
-		if !bytes.Contains(payload, appendFieldMarker("m_perkIDs", 0x0d)) {
-			t.Fatalf("%s missing m_perkIDs array", payloadName)
-		}
+		// No m_perkIDs: it existed only on the full ShipLoadouts entry, which
+		// the client's parser never read (the fleet summary's m_loadoutList
+		// carries its own m_perkIds).
 	}
 
 	if !bytes.Contains(playerFleets, appendFieldMarker("m_loadoutList", 0x0d)) {

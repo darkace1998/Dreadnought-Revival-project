@@ -246,7 +246,14 @@ var targetSizes = map[string]int{
 	// reads as 0 -- so absent is identical to "0", at 46 bytes per entry instead
 	// of 81. Found because an account owning everything (666 items) sent a
 	// 62,150-byte YA_PlayerGet and hung the client; see playerDataFrameBudget.
-	"YA_PlayerGet": 9761,
+	// 9761 -> 7297 (-2464): ShipLoadouts entries carry only the 17 fields the
+	// client's entry parser reads (field block 0x142a700f0-0x142a706c0), not the
+	// ~45 they used to, with empty slots omitted -- ~1063 -> ~420 bytes each.
+	// And the array now holds EVERY owned ship, not just fleet ships: the
+	// loadout manager learns ships only from here (0x14034ff90 walks player
+	// data +0xF8), which is why 95 unlocked ships never appeared in "owned
+	// ships". Bounded by playerDataFrameBudget, ships before items.
+	"YA_PlayerGet": 7297,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which
