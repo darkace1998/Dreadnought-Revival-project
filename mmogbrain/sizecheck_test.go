@@ -151,7 +151,10 @@ var targetSizes = map[string]int{
 	// 35,023 bytes, over the 32768 ring. Modules re-enabled by default
 	// (techTreeNoModules); a techTreeFrameBudget guard drops them rather than
 	// hang login if a tree would still not fit.
-	"YA_GetTechTree": 11899,
+	// 11899 -> 11970 (+71): line roots and heroes carry their line's legacy
+	// anchor id in ClassId instead of "0". Those 63 nodes were dropped by the
+	// loader gate (ClassId <= 0) and were the ships missing from the tree.
+	"YA_GetTechTree": 11970,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

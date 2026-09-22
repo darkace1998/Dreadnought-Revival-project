@@ -87,14 +87,15 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 	for _, item := range items {
 		rows[item.id] = true
 	}
-	// ClassId <= 0 is dropped by that same gate, and since 2026-08-08 we send
-	// it deliberately for line roots and heroes -- see
-	// TestLineRootsAndHeroesAreTheOnlyDroppedNodes for why that trade is worth
-	// making and what it costs.
+	// ClassId <= 0 is dropped by that same gate. From 2026-08-08 it was sent
+	// deliberately for line roots and heroes, and those 63 ships were missing
+	// from the tech tree; they now anchor to their line's legacy loadout (see
+	// TestLineRootsAndHeroesAreTheOnlyDroppedNodes), so nothing is exempt.
+	anchors := map[int32]bool{}
+	for _, hull := range baseShipLoadouts {
+		anchors[techTreeLineAnchor(hull.hullLine)] = true
+	}
 	for _, item := range items {
-		if item.classID == 0 {
-			continue // knowingly dropped; counted and justified elsewhere
-		}
 		if item.classID < 0 {
 			t.Fatalf("item %d has ClassId %d; negative is never intended", item.id, item.classID)
 		}
@@ -102,11 +103,14 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 			t.Fatalf("item %d has ClassId %d (category %d); only 1 (precast) and 3 (hero) are stored",
 				item.id, item.classID, category)
 		}
-		// A ClassId that names a row is what keeps a module filed under a ship
-		// that exists. Hull nodes now name their PREREQUISITE, which is also a
-		// row, so this still holds for everything we send.
-		if !rows[item.classID] {
-			t.Errorf("item %d has ClassId %d, which names no row in the document", item.id, item.classID)
+		// A ClassId that names a row is what keeps a MODULE filed under a ship
+		// that exists (enforced for modules below). For a ship node it is the
+		// id the FUN_3F4880 walk recurses into: its prerequisite (a row), or,
+		// at a line root or a hero, the line's legacy anchor, which is
+		// deliberately NOT a row so FUN_3F51A0 finds nothing and the walk stops
+		// (03F498B je -> stop). Anything else is a mistake.
+		if !rows[item.classID] && !anchors[item.classID] {
+			t.Errorf("item %d has ClassId %d, which is neither a row nor a line anchor", item.id, item.classID)
 		}
 	}
 

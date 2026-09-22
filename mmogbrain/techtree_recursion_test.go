@@ -131,26 +131,40 @@ func TestClassIDChainTerminates(t *testing.T) {
 // the walk because FUN_3F51A0 would not find it. Nothing has established which
 // id the shipped data used, so that is not invented here.
 func TestLineRootsAndHeroesAreTheOnlyDroppedNodes(t *testing.T) {
+	// This used to PIN 63 dropped nodes -- every hull line root and every hero
+	// went out with ClassId 0, which the loader gate drops, as the price of
+	// fixing the self-reference crash. Those 63 are the ships that were missing
+	// from the tech tree. They now point at their line's legacy tier-less
+	// loadout (techTreeLineAnchor), so NOTHING may be dropped, and each anchor
+	// must satisfy the three conditions that make it safe.
 	items := append(techTreeBaseItems(), techTreeHeroItems()...)
-	dropped := 0
+	inTree := map[int32]bool{}
 	for _, it := range items {
-		if it.classID > 0 {
+		inTree[it.id] = true
+	}
+	for _, it := range items {
+		if it.module {
 			continue
 		}
-		dropped++
-		if it.module {
-			t.Errorf("MODULE %d has ClassId %d and will be dropped by the loader gate; "+
-				"only hull line roots and heroes may be", it.id, it.classID)
+		if it.classID <= 0 {
+			t.Errorf("node %d has ClassId %d; the loader gate drops it", it.id, it.classID)
+			continue
+		}
+		if cat := (it.classID >> 24) & 0xff; cat != 1 && cat != 3 {
+			t.Errorf("node %d ClassId %d is category %d; the store gate admits only 1 or 3", it.id, it.classID, cat)
+		}
+		if it.classID == it.id {
+			t.Errorf("node %d names itself in ClassId: the FUN_3F4880 walk recurses forever", it.id)
 		}
 	}
-	t.Logf("%d of %d items are dropped by the ClassId <= 0 gate", dropped, len(items))
-
-	// 15 line roots (five classes x three sizes) plus the heroes. If this
-	// moves, the roster changed or the fix regressed -- either way, look.
-	const want = 63
-	if dropped != want {
-		t.Errorf("%d nodes dropped, want %d. If the tech tree roster genuinely changed, "+
-			"update this number and say why; if it did not, something is emitting "+
-			"ClassId 0 that should not be.", dropped, want)
+	// Roots and heroes must anchor OUTSIDE the tree, so the walk stops at once.
+	for _, hull := range baseShipLoadouts {
+		anchor := techTreeLineAnchor(hull.hullLine)
+		if anchor == 0 {
+			t.Errorf("hull line %s has no legacy anchor", hull.hullLine)
+		}
+		if inTree[anchor] {
+			t.Errorf("anchor %d for %s is a tree node; the walk would recurse into it", anchor, hull.hullLine)
+		}
 	}
 }

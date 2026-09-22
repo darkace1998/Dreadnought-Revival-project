@@ -46,6 +46,8 @@ func runProvisionTestAccount(args []string) error {
 	credits := fs.Int64("credits", 200000, "credits (soft currency) to SET")
 	premium := fs.Int64("premium", 200000, "premium currency to SET")
 	freeXP := fs.Int64("free-xp", 200000, "free XP to SET")
+	withItems := fs.Bool("items", true, "also grant every weapon/ability/officer perk; false leaves "+
+		"modules to be unlocked in game, which is what testing the unlock flow needs")
 	saveFrom := fs.String("save-blobs-from", "", "copy the client's SGD/SCtA save blobs from this player "+
 		"(e.g. one that has finished the tutorial), so the account skips onboarding")
 	if err := fs.Parse(args); err != nil {
@@ -118,6 +120,9 @@ func runProvisionTestAccount(args []string) error {
 		if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
 			return err
 		}
+	}
+	if !*withItems {
+		items = nil
 	}
 	for _, id := range items {
 		kind := map[int32]string{4: "ability", 5: "weapon", 6: "perk"}[(id>>24)&0xff]

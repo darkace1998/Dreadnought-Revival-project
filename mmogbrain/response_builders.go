@@ -1663,7 +1663,7 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
 	owned := ownedShipLoadoutsForPlayerData(state, playerPID)
 	for i, loadout := range owned {
-		if len(b) > playerDataFrameBudget {
+		if len(b) > playerDataFrameBudget-playerDataItemReserve {
 			logrus.WithFields(logrus.Fields{
 				"player": playerPID, "sent": i, "owned": len(owned),
 				"bytes": len(b), "budget": playerDataFrameBudget,
@@ -2684,7 +2684,7 @@ func techTreeBaseItems() []techTreeItem {
 			// AND IT IS ALSO THE ID THE CLIENT RECURSES INTO, which is the
 			// crash on clicking any module on any ship. See
 			// techTreeHullClassID.
-			classID:      techTreeHullClassID(hull.loadoutID, prereq),
+			classID:      techTreeHullClassID(hull.loadoutID, prereq, hull.hullLine),
 			manufacturer: manufacturerID,
 			position:     columnOf[hull.hullLine],
 			tier:         hull.tier,
@@ -2737,7 +2737,7 @@ func techTreeHeroItems() []techTreeItem {
 			// It self-references for the same reason a hull does, and recurses
 			// for the same reason -- a hero having no prerequisite means the
 			// hatch sends it to 0. See techTreeHullClassID.
-			classID:      techTreeHullClassID(hero.loadoutID, nil),
+			classID:      techTreeHullClassID(hero.loadoutID, nil, hero.hullLine),
 			manufacturer: manufacturerID,
 			tier:         hero.tier,
 			position:     heroColumn[[2]int32{manufacturerID, hero.tier}],
@@ -2962,14 +2962,45 @@ func buildMmogTechTreeDocument() []byte {
 // The hull's prerequisite is used as the parent -- its predecessor in the line,
 // which is what a "recurse into ClassId" walk most plausibly meant -- and 0 at a
 // line root and for heroes, where the lookup fails and the walk stops.
-func techTreeHullClassID(ownID int32, prereq []int32) int32 {
+func techTreeHullClassID(ownID int32, prereq []int32, hullLine string) int32 {
 	if os.Getenv("DN_TECHTREE_SELF_CLASSID") == "1" {
 		return ownID // the crashing shape, kept only for A/B
 	}
 	if len(prereq) > 0 && prereq[0] != ownID {
 		return prereq[0]
 	}
+	// A line root or a hero has no prerequisite. It used to get 0, and the
+	// loader gate drops ClassId <= 0 (TEST R15D,R15D / JLE skip) -- so 63 ships,
+	// all 15 line roots and all 48 heroes, were never stored and never appeared
+	// in the tech tree. Reported live 2026-09-22 as "not all ships are showing
+	// in the techtree".
+	//
+	// What a root needs is an id that (a) passes the gate: > 0 and category
+	// byte 1 or 3; (b) is not its own id, or the FUN_3F4880 walk recurses
+	// forever; and (c) is not any node in the tree, so FUN_3F51A0 finds nothing
+	// and the walk stops at once. Every hull line has exactly one such id in the
+	// client's data: the previous build's tier-less precast loadout,
+	// /Game/Generic/Loadouts/Precast/VH_<Line>_PrecastLoadout_BP (33489313 ..
+	// 33489331) -- category 1, registered, and never a tree node (the roster is
+	// the TIERED loadouts; the legacy copies carry different ids). All 15 lines
+	// have one. Heroes use their own hull line's.
+	if anchor := techTreeLineAnchor(hullLine); anchor != 0 && anchor != ownID {
+		return anchor
+	}
 	return 0
+}
+
+// techTreeLineAnchor is the legacy tier-less precast loadout of a hull line,
+// resolved through the client's ItemIDRegister by asset path.
+func techTreeLineAnchor(hullLine string) int32 {
+	if hullLine == "" {
+		return 0
+	}
+	item, ok := dreadconfig.ItemByAssetPath("/Game/Generic/Loadouts/Precast/VH_" + hullLine + "_PrecastLoadout_BP")
+	if !ok || (item.ItemID>>24)&0xff != 1 {
+		return 0
+	}
+	return item.ItemID
 }
 
 // techTreeProxyTypeShip is the ProxyType for a ship node: 9.
@@ -6112,6 +6143,15 @@ func buildMmogRewardCurrenciesPayload(playerPID string) []byte {
 // YA_Tune produced. 24000 keeps the frame at ~73% of the ring, the same margin
 // the other large responses run with.
 const playerDataFrameBudget = 28000
+
+// playerDataItemReserve is the part of the budget ships may NOT take, so owned
+// items always get some room. With ships allowed the whole budget, an account
+// owning every ship sent 50 ships and ZERO items -- and then every module the
+// player unlocked stayed locked on screen, because the client's only route to
+// module ownership is this Items array ("UpdateItemsFromInventory | Updated 0
+// items" right after YA_UnlockItem, live 2026-09-22). 6000 bytes is ~130 items
+// at 46 bytes each. An account small enough to fit whole is unaffected.
+const playerDataItemReserve = 6000
 
 // ownedShipLoadoutsForPlayerData is every ship the player owns: the fleet's
 // ships first (the lineup must never be the part that gets cut), then every
