@@ -404,3 +404,31 @@ func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
 		}
 	}
 }
+
+// The tech tree must fit the receive ring for an account that owns every ship,
+// with modules on. It hung login once already at 35,023 bytes: the ignored
+// plain techTreeRow block grew one row per owned ship. Checked against the
+// fixed ring, not techTreeFrameBudget, which moves with the code under test.
+func TestTechTreeFitsTheRingWhenEverythingIsOwned(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcdee"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	ships, items := provisionUnlockSet()
+	for _, id := range append(ships, items...) {
+		if _, err := database.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+			VALUES(?,?,'x',0,'admin')`, pid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if techTreeNoModules {
+		t.Fatal("modules are off; this test is meant to measure the tree WITH them")
+	}
+	payload := buildMmogTechTreePayload(pid)
+	t.Logf("YA_GetTechTree for an everything-owned account: %d bytes", len(payload))
+	if len(payload) > clientReceiveRingBytes-2048 {
+		t.Errorf("YA_GetTechTree is %d bytes; ring %d", len(payload), clientReceiveRingBytes)
+	}
+}

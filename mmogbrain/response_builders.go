@@ -1969,19 +1969,27 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	// receive ring buffer. Rows are now ~identity+flags only, and moduleUiData
 	// carries ownership state only. See t1t2TechTree Ships / appendMmogModuleOwnershipEntry.
 	b = protocol.AppendStringField(b, "RT", "YA_GetTechTree")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
-	b, stack = protocol.AppendArrayStart(b, stack, "techTreeRow")
-	for _, ship := range ships {
-		b, stack = appendMmogTechTreeRow(b, stack, ship)
+	// The plain result/techTreeRow/moduleUiData block below is NOT sent by
+	// default any more. The client never reads it (see the note after it), and
+	// it was not free: one row per OWNED ship, so an account owning all 99 ships
+	// carried ~11KB of it -- the difference between a module-bearing tech tree
+	// that fits the 32768-byte receive ring and one that hangs login (35,023 vs
+	// the ring). DN_TECHTREE_PLAIN_ROWS=1 restores it.
+	if os.Getenv("DN_TECHTREE_PLAIN_ROWS") == "1" {
+		b, stack = protocol.AppendObjectStart(b, stack, "result")
+		b = protocol.AppendInt32Field(b, "techTreeRowCount", int32(len(ships)))
+		b, stack = protocol.AppendArrayStart(b, stack, "techTreeRow")
+		for _, ship := range ships {
+			b, stack = appendMmogTechTreeRow(b, stack, ship)
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		b, stack = protocol.AppendArrayStart(b, stack, "moduleUiData")
+		for _, module := range starterModuleUIDataSeeds() {
+			b, stack = appendMmogModuleOwnershipEntry(b, stack, module)
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		b, _ = protocol.AppendObjectEnd(b, stack)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "moduleUiData")
-	for _, module := range starterModuleUIDataSeeds() {
-		b, stack = appendMmogModuleOwnershipEntry(b, stack, module)
-	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, _ = protocol.AppendObjectEnd(b, stack)
 
 	// The client does not read any of the above. Its YA_GetTechTree handler
 	// (response slot 0x36b0) builds the FName "TechTrees", fetches that single
@@ -1997,9 +2005,27 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	// are then handed to the ordinary mmog document parser -- it dispatches on
 	// the same wire tags we already emit (0x09 string, 0x56 int32) -- so the
 	// payload inside is just another mmog document.
-	b = protocol.AppendBytesField(b, "TechTrees", compressMmogDocument(buildMmogTechTreeDocument()))
+	blob := compressMmogDocument(buildMmogTechTreeDocument())
+	// Never let the tree hang login. Modules are the part that grows, so if the
+	// frame would pass the budget the tree goes out WITHOUT them -- rails empty
+	// but the game playable -- and says so loudly.
+	if len(b)+len(blob) > techTreeFrameBudget && !techTreeNoModules {
+		techTreeNoModules = true
+		stripped := compressMmogDocument(buildMmogTechTreeDocument())
+		techTreeNoModules = false
+		logrus.WithFields(logrus.Fields{
+			"player": pid, "with_modules": len(b) + len(blob), "without": len(b) + len(stripped),
+			"budget": techTreeFrameBudget,
+		}).Error("mmog: tech tree with modules exceeds the client's receive ring; sending it without modules")
+		blob = stripped
+	}
+	b = protocol.AppendBytesField(b, "TechTrees", blob)
 	return b
 }
+
+// techTreeFrameBudget caps YA_GetTechTree. The ring is a hard-coded 0x8000
+// (0x142a65700); 28000 is where the tree has already shipped (27,578) and works.
+const techTreeFrameBudget = 28000
 
 // buildMmogTechTreeDocument builds the document that goes inside the TechTrees
 // blob. It carries the same rows as the (ignored) plain fields above so the two
@@ -3070,7 +3096,16 @@ var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 // This is a deliberate reduction in scope, not a fix: nothing here explains WHY
 // only three appear, and that question is still open. DN_TECHTREE_WITH_MODULES=1
 // restores them for anyone investigating it.
-var techTreeNoModules = os.Getenv("DN_TECHTREE_WITH_MODULES") != "1"
+//
+// DEFAULT OFF again since 2026-09-22 -- modules are back. The module set was
+// rebuilt since the strip: validated against the client's cooked blueprints
+// (ship_roster_cooked_test.go), gated to the hull's tier, offered only in slot
+// groups the hull fits, and deterministic across restarts (it used to change
+// with map iteration order). The live report that prompted re-enabling:
+// "the modules per ship are empty so no new unlockable ship modules", with the
+// client logging "ComposeModuleUiDataForShip | Modules not found for ship id".
+// DN_TECHTREE_NO_MODULES=1 strips them again.
+var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
 
 // techTreeSingleWrap restores the single wrapping array; see
 // buildMmogTechTreeDocument.

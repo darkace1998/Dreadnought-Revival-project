@@ -144,7 +144,14 @@ var targetSizes = map[string]int{
 	// it, so it has been removed from the game; offering it put a ship in the
 	// tree that cannot be loaded. It was inside the 64-byte tolerance, which is
 	// exactly why the number is updated rather than left to drift.
-	"YA_GetTechTree": 16211,
+	// 16211 -> 11899 (-4312) WITH modules back in: the plain
+	// result/techTreeRow/moduleUiData block is no longer sent. The client reads
+	// only the TechTrees blob, and that block grew one row per owned ship --
+	// ~11KB for an account owning all 99, which put a module-bearing tree at
+	// 35,023 bytes, over the 32768 ring. Modules re-enabled by default
+	// (techTreeNoModules); a techTreeFrameBudget guard drops them rather than
+	// hang login if a tree would still not fit.
+	"YA_GetTechTree": 11899,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

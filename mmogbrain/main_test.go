@@ -444,6 +444,11 @@ func TestTechTreeRowsExposeMinimalIdentityAndUnlock(t *testing.T) {
 }
 
 func TestTechTreeIncludesInstallerStarterShips(t *testing.T) {
+	// This asserts the plain result/techTreeRow/moduleUiData block, which the
+	// client never reads (its handler fetches only the TechTrees blob) and which
+	// is no longer sent by default -- it cost ~11KB for a well-stocked account.
+	// The block is still built behind DN_TECHTREE_PLAIN_ROWS=1; this pins that.
+	t.Setenv("DN_TECHTREE_PLAIN_ROWS", "1")
 	// The player's owned starter ships (the 4 T1 ships) must be present in the
 	// minimal tech tree so the hangar can select them. Fleet/development ship
 	// ids that are NOT T1/T2 nodes are intentionally no longer sent — the
@@ -512,6 +517,11 @@ func TestPlayersInformationPayloadUsesRequestedPlayerIDs(t *testing.T) {
 }
 
 func TestTechTreeModuleUIDataIncludesStarterItems(t *testing.T) {
+	// This asserts the plain result/techTreeRow/moduleUiData block, which the
+	// client never reads (its handler fetches only the TechTrees blob) and which
+	// is no longer sent by default -- it cost ~11KB for a well-stocked account.
+	// The block is still built behind DN_TECHTREE_PLAIN_ROWS=1; this pins that.
+	t.Setenv("DN_TECHTREE_PLAIN_ROWS", "1")
 	// Minimal moduleUiData: identity + ownership only. Static module data
 	// (prices, textures, weapon stats) comes from the client's own Content.
 	payload := buildMmogTechTreePayload()
@@ -544,6 +554,11 @@ func TestTechTreeModuleUIDataIncludesStarterItems(t *testing.T) {
 
 // TestF6WirePerksIntoTechTree tests that perks are wired into tech tree (F6)
 func TestF6WirePerksIntoTechTree(t *testing.T) {
+	// This asserts the plain result/techTreeRow/moduleUiData block, which the
+	// client never reads (its handler fetches only the TechTrees blob) and which
+	// is no longer sent by default -- it cost ~11KB for a well-stocked account.
+	// The block is still built behind DN_TECHTREE_PLAIN_ROWS=1; this pins that.
+	t.Setenv("DN_TECHTREE_PLAIN_ROWS", "1")
 	// F6: Wire perks into tech tree and store catalog
 	payload := buildMmogTechTreePayload()
 
@@ -1236,6 +1251,11 @@ func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
 }
 
 func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
+	// This asserts the plain result/techTreeRow/moduleUiData block, which the
+	// client never reads (its handler fetches only the TechTrees blob) and which
+	// is no longer sent by default -- it cost ~11KB for a well-stocked account.
+	// The block is still built behind DN_TECHTREE_PLAIN_ROWS=1; this pins that.
+	t.Setenv("DN_TECHTREE_PLAIN_ROWS", "1")
 	database := useTempMmogPlayerStateDB(t)
 	const playerPID = "edededededededededededededededed"
 	if err := seedMmogPlayerState(database, playerPID); err != nil {
