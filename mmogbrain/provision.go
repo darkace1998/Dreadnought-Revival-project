@@ -13,7 +13,8 @@ import (
 // provision-test-account: give an existing account everything, for testing.
 //
 //	mmogbrain provision-test-account -user <32-hex player id> \
-//	    [-rank 20] [-credits 200000] [-premium 200000] [-free-xp 200000]
+//	    [-rank 20] [-credits 200000] [-premium 200000] [-free-xp 200000] \
+//	    [-save-blobs-from <player who finished the tutorial>]
 //
 // The account must already exist in auth-server (register it through
 // /auth/register, so the password is hashed properly); this only fills in the
@@ -45,6 +46,8 @@ func runProvisionTestAccount(args []string) error {
 	credits := fs.Int64("credits", 200000, "credits (soft currency) to SET")
 	premium := fs.Int64("premium", 200000, "premium currency to SET")
 	freeXP := fs.Int64("free-xp", 200000, "free XP to SET")
+	saveFrom := fs.String("save-blobs-from", "", "copy the client's SGD/SCtA save blobs from this player "+
+		"(e.g. one that has finished the tutorial), so the account skips onboarding")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -75,6 +78,25 @@ func runProvisionTestAccount(args []string) error {
 		current_rank=?, rank_xp=0, current_xp=?, updated_at=datetime('now') WHERE user_id=?`,
 		*credits, *premium, *freeXP, *rank, totalXP, pid); err != nil {
 		return fmt.Errorf("set currencies and rank: %w", err)
+	}
+
+	// A brand-new account is sent straight into the onboarding tutorial
+	// (S01E00_00_Tutorial) and never reaches the real hangar or tech tree --
+	// measured 2026-09-22, a whole 4.5-minute test session spent there. The
+	// client decides that from its OWN save blob: SGD carries
+	// m_bTutorialFinished and the onboarding rule states (Ob_TutorialFinished,
+	// Ob_CharacterFinished, ...). It holds no player id, so copying one from a
+	// player who has finished onboarding is the client's own data, not ours.
+	if *saveFrom != "" {
+		src := normalizedPlayerStatePID(*saveFrom)
+		res, err := database.Exec(`INSERT OR REPLACE INTO player_save_blobs(user_id,slot,data,updated_at)
+			SELECT ?,slot,data,datetime('now') FROM player_save_blobs WHERE user_id=?`, pid, src)
+		if err != nil {
+			return fmt.Errorf("copy save blobs: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return fmt.Errorf("player %s has no save blobs to copy", src)
+		}
 	}
 
 	ships, items := provisionUnlockSet()
