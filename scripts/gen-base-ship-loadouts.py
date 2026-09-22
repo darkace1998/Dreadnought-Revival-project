@@ -114,6 +114,34 @@ def load_cooked_heroes():
     return out
 
 
+PRECAST_COOKED = os.path.join(ROOT, "data/loadouts/PrecastLoadouts_cooked.jsonl")
+
+
+def load_cooked_ids():
+    """Every loadout id with a cooked blueprint in the client's Content tree.
+
+    A hull the reference lists but the client has no blueprint for has been
+    REMOVED from the game: the register may still carry its id (Brutus,
+    33489299, /Precast/T5/VH_AssaultLight_PrecastLoadout_T5_BP), but there is
+    no .uasset for the client to load, so offering it in the tech tree offers a
+    ship that cannot exist. Such hulls are rejected, not emitted.
+
+    Returns None when the dumps are absent, so the generator still runs (and
+    says so) without them.
+    """
+    paths = [PRECAST_COOKED, HERO_COOKED]
+    if not all(os.path.exists(p) for p in paths):
+        return None
+    ids = set()
+    for path in paths:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                sysdata = json.loads(line).get("m_itemSystemData") or {}
+                if "m_itemID" in sysdata:
+                    ids.add(int(sysdata["m_itemID"]))
+    return ids
+
+
 def normalize(path):
     """Turn a reference slot value into a register path, or None if empty."""
     if not path:
@@ -171,6 +199,9 @@ def main():
     names = load_names(register)
     entries = parse()
     cooked_heroes = load_cooked_heroes()
+    cooked_ids = load_cooked_ids()
+    if cooked_ids is None:
+        print("warning: no cooked loadout dumps; cannot drop hulls removed from the game", file=sys.stderr)
 
     rows, hero_rows, rejected = [], [], []
     for entry in entries:
@@ -181,6 +212,9 @@ def main():
         loadout_id = register.get(entry["path"])
         if hull is None or loadout_id is None:
             rejected.append((entry["name"], "loadout path not in ItemIDRegister"))
+            continue
+        if cooked_ids is not None and loadout_id not in cooked_ids:
+            rejected.append((entry["name"], f"{loadout_id} has no cooked blueprint -- removed from the game"))
             continue
 
         resolved, bad = {}, None

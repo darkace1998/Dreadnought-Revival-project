@@ -6,8 +6,8 @@
 // path through the client's own ItemIDRegister and rejects any slot whose id
 // does not land in the category the slot implies (weapon 5, ability 4, perk 6).
 //
-// 52 hulls across 15 hull lines.
-// Names: 52 come from ItemIDConversionTable, 0 from the reference
+// 51 hulls across 15 hull lines.
+// Names: 51 come from ItemIDConversionTable, 0 from the reference
 // (the client's table does not cover them). Where the two disagree the client
 // wins, because the reference names some items after their blueprint filename.
 
@@ -31,7 +31,6 @@ var baseShipLoadouts = []baseShipLoadout{
 	{loadoutID: 33489283, hullLine: "AssaultHeavy", tier: 4, name: "Blud", clientNamed: true, primary: 100597764, secondary: 100597783, abilities: [4]int32{83820577, 83820603, 83820568, 83820992}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489298, hullLine: "AssaultHeavy", tier: 5, name: "Gora", clientNamed: true, primary: 100597765, secondary: 100597778, abilities: [4]int32{83820586, 83820597, 83820560, 83820556}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489284, hullLine: "AssaultLight", tier: 4, name: "Vindicta", clientNamed: true, primary: 100597768, secondary: 100597783, abilities: [4]int32{83820590, 83820603, 83820981, 83820558}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
-	{loadoutID: 33489299, hullLine: "AssaultLight", tier: 5, name: "Brutus", clientNamed: true, primary: 100597977, secondary: 100597778, abilities: [4]int32{83820584, 83820599, 83820934, 83820975}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 	{loadoutID: 33489262, hullLine: "AssaultMedium", tier: 1, name: "Agosta", clientNamed: true, primary: 100597772, secondary: 100598563, abilities: [4]int32{83820574, 83820606, 83820565, 83820550}, perks: [4]int32{0, 0, 0, 0}},
 	{loadoutID: 33489265, hullLine: "AssaultMedium", tier: 2, name: "Trafalgar", clientNamed: true, primary: 100597773, secondary: 100598564, abilities: [4]int32{83820575, 83820607, 83820566, 83820551}, perks: [4]int32{0, 0, 0, 0}},
 	{loadoutID: 33489272, hullLine: "AssaultMedium", tier: 3, name: "Otranto", clientNamed: true, primary: 100597774, secondary: 100598565, abilities: [4]int32{83820576, 83820608, 83820937, 83820557}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},

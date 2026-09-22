@@ -42,12 +42,11 @@ type cookedLoadout struct {
 	OfficerEng   string   `json:"m_officerEngineerPerk"`
 }
 
-// knownUncookedHulls are server hulls whose blueprint is absent from our
-// extraction, each with the reason it is kept. See the same list in
-// scripts/validate-precast-loadouts.py.
-var knownUncookedHulls = map[int32]string{
-	33489299: "Brutus: in ItemIDRegister (/Precast/T5/VH_AssaultLight_PrecastLoadout_T5_BP) but the .uasset is not in DreadGame/Content",
-}
+// There is deliberately no allow-list for hulls without a blueprint. Brutus
+// (33489299) used to be kept on one: the register still carries its id, but the
+// client has no .uasset for it, so it has been removed from the game and the
+// generator now drops it (scripts/gen-base-ship-loadouts.py, load_cooked_ids).
+// A server hull with no cooked blueprint is a failure, full stop.
 
 func readCookedLoadouts(t *testing.T, file string) []cookedLoadout {
 	t.Helper()
@@ -130,10 +129,6 @@ func TestBaseShipRosterMatchesCookedBlueprints(t *testing.T) {
 	for id, hull := range server {
 		c, ok := cooked[id]
 		if !ok {
-			if why, known := knownUncookedHulls[id]; known {
-				t.Logf("kept without a cooked blueprint: %s", why)
-				continue
-			}
 			t.Errorf("server hull %d %q has no cooked tiered loadout", id, hull.name)
 			continue
 		}

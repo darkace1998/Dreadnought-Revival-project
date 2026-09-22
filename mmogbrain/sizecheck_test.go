@@ -139,7 +139,12 @@ var targetSizes = map[string]int{
 	// showing the wrong thing. This is a deliberate reduction to a known-good
 	// baseline, NOT a fix: why only three appear is still unexplained.
 	// DN_TECHTREE_WITH_MODULES=1 restores them; see techTreeNoModules.
-	"YA_GetTechTree": 16272,
+	// 16272 -> 16211 (-61): Brutus (T5 AssaultLight, 33489299) removed. The
+	// register still carries its id but the client has no cooked blueprint for
+	// it, so it has been removed from the game; offering it put a ship in the
+	// tree that cannot be loaded. It was inside the 64-byte tolerance, which is
+	// exactly why the number is updated rather than left to drift.
+	"YA_GetTechTree": 16211,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

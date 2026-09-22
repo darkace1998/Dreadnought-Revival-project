@@ -108,17 +108,10 @@ def server():
     return out
 
 
-# Server hulls with no cooked blueprint in our extraction, and why each is kept.
-# An entry here must be explained; it is not a way to silence a mismatch.
-KNOWN_UNCOOKED = {
-    # Brutus, AssaultLight T5. The client's own ItemIDRegister lists it at
-    # /Game/Generic/Loadouts/Precast/T5/VH_AssaultLight_PrecastLoadout_T5_BP, so
-    # the client knows the id, but that .uasset is absent from DreadGame/Content.
-    # Its slots come from the community reference and every one resolves through
-    # the register into the right category -- unverifiable against cooked data,
-    # but no evidence against it either. Re-check if the extraction is redone.
-    33489299,
-}
+# No allow-list: a server hull without a cooked blueprint has been removed from
+# the game and is a failure. (Brutus, 33489299, was once kept here; the
+# generator now drops it -- see load_cooked_ids in gen-base-ship-loadouts.py.)
+KNOWN_UNCOOKED = set()
 
 
 def main():
