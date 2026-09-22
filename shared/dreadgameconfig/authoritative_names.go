@@ -229,6 +229,13 @@ func AuthoritativeItemName(itemID int32) (string, bool) {
 	}
 	nameCacheMu.Unlock()
 
+	// Hero blueprints win over the conversion table for the same reason hull
+	// blueprints do: it carries the previous build's names. See
+	// cooked_hero_names.go.
+	if name, ok := CookedHeroName(itemID); ok {
+		return name, true
+	}
+
 	ensureAuthoritativeNames()
 	nameCacheMu.Lock()
 	defer nameCacheMu.Unlock()

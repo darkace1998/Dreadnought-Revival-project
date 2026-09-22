@@ -3730,8 +3730,10 @@ func TestTechTreeClassIDsMatchTheAssetPaths(t *testing.T) {
 }
 
 // TestShipAndHeroNamesMatchTheAuthoritativeTable guards every hardcoded ship and
-// hero name against ItemIDConversionTable, which pairs each item id with the name
-// the game actually displays.
+// hero name against the authoritative names: the client's own cooked precast and
+// hero blueprints (HullNames.json, HeroLoadouts_cooked.jsonl) first, then
+// ItemIDConversionTable for everything else. The conversion table alone is NOT
+// authoritative for ships -- its Name column is one build behind.
 //
 // The seed tables were populated from ASSET FILENAMES, which are not display
 // names, and the audit found several wrong: hero 67043329 was "Skagerrak" (its
@@ -3767,13 +3769,25 @@ func TestShipAndHeroNamesMatchTheAuthoritativeTable(t *testing.T) {
 		t.Fatal("no names were checked; the authoritative table is not loading")
 	}
 
-	// The specific corrections the audit produced, pinned by id.
+	// The specific corrections the audits produced, pinned by id.
+	//
+	// 67043329 used to be pinned as "Huscarl". That was the conversion table's
+	// name, and the conversion table carries the PREVIOUS build's names: the
+	// client's own hero blueprint (VH_AssaultHeavy_Skagerrak_HeroLoadout_BP)
+	// names 67043329 "Huscarl - Vintage", and the current Huscarl is 67043379,
+	// which the server had been calling "Skagerrak Mk.2". The original audit's
+	// point still stands -- the filename's "Skagerrak" is not the game's name --
+	// but the authority it was checked against was one build behind. Hero names
+	// now come from the cooked blueprints (dreadgameconfig/cooked_hero_names.go),
+	// validated by scripts/validate-precast-loadouts.py.
 	for id, want := range map[int32]string{
-		67043329:  "Huscarl",         // filename says Skagerrak
-		67043330:  "Fall of Troy",    // filename runs it together
-		67043338:  "Junkyard Prince", // filename runs it together
-		184483981: "Trafalgar",       // was "Leipzig", not a game string
-		184483972: "Nav",             // was "Trieste", not a game string
+		67043329:  "Huscarl - Vintage", // filename says Skagerrak; blueprint m_name
+		67043379:  "Huscarl",           // was "Skagerrak Mk.2"
+		67043377:  "Zaratan",           // was "Minotaurus Mk.2"
+		67043330:  "Fall of Troy",      // filename runs it together
+		67043338:  "Junkyard Prince",   // filename runs it together
+		184483981: "Trafalgar",         // was "Leipzig", not a game string
+		184483972: "Nav",               // was "Trieste", not a game string
 	} {
 		got, ok := authoritativeShipName(id)
 		if !ok || got != want {

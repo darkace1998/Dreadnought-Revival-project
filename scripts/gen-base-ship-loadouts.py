@@ -85,6 +85,35 @@ def load_names(register):
     return names
 
 
+HERO_COOKED = os.path.join(ROOT, "data/loadouts/HeroLoadouts_cooked.jsonl")
+
+
+def load_cooked_heroes():
+    """itemID -> (m_name, m_itemTier), read out of the client's own hero blueprints.
+
+    Wins over the reference AND the conversion table for heroes, the same way
+    HullNames.json wins for base hulls: it is what the client itself loads.
+    Measured against the cooked blueprints, 28 of 48 hero names were wrong --
+    the conversion table carries an older build's names, so the current Huscarl
+    shipped as "Skagerrak Mk.2" and the current Zaratan as "Minotaurus Mk.2" --
+    and Hanuman's tier was 4 where the blueprint says 3. Names matter: the client
+    compares the name we send with its design default and SHOWS ours when they
+    differ ("Loadout name from Mmogbrain [...] is the same as the default name").
+
+    Produced by: bpdump --loadouts DreadGame/Content/Generic/Loadouts/Hero "*.uasset"
+    """
+    if not os.path.exists(HERO_COOKED):
+        return {}
+    out = {}
+    with open(HERO_COOKED, encoding="utf-8") as handle:
+        for line in handle:
+            row = json.loads(line)
+            sysdata = row.get("m_itemSystemData") or {}
+            if "m_itemID" in sysdata and row.get("m_name"):
+                out[int(sysdata["m_itemID"])] = (row["m_name"], int(sysdata.get("m_itemTier", 0)))
+    return out
+
+
 def normalize(path):
     """Turn a reference slot value into a register path, or None if empty."""
     if not path:
@@ -119,9 +148,21 @@ def parse():
                 }
                 entries.append(current)
                 continue
+            # A "---/---/..." rule ends the current entry. Without this, the blank
+            # template at the end of the reference ("continuation (if needed)"
+            # followed by empty PW:/SW:/M1..B4: lines, no header of its own) was
+            # attributed to the LAST ship parsed -- Feronia -- and blanked every
+            # slot, so the server shipped a T5 hull with no weapons, abilities or
+            # officers. Found by diffing against the cooked blueprints
+            # (scripts/validate-precast-loadouts.py).
+            if line.startswith("---/"):
+                current = None
+                continue
             slot = SLOT.match(line.rstrip("\n"))
             if slot and current is not None:
-                current["slots"][slot.group(1)] = slot.group(2)
+                # Never let an empty slot line overwrite a value already read.
+                if slot.group(2).strip() or slot.group(1) not in current["slots"]:
+                    current["slots"][slot.group(1)] = slot.group(2)
     return entries
 
 
@@ -129,6 +170,7 @@ def main():
     register = load_register()
     names = load_names(register)
     entries = parse()
+    cooked_heroes = load_cooked_heroes()
 
     rows, hero_rows, rejected = [], [], []
     for entry in entries:
@@ -159,13 +201,18 @@ def main():
             rejected.append((entry["name"], bad))
             continue
 
+        tier, name = entry["tier"], names.get(loadout_id, entry["name"])
+        named_by_client = loadout_id in names
+        if is_hero and loadout_id in cooked_heroes:
+            name, tier = cooked_heroes[loadout_id]
+            named_by_client = True
         (hero_rows if is_hero else rows).append(
             {
                 "id": loadout_id,
                 "line": hull.group(1) + hull.group(2),
-                "tier": entry["tier"],
-                "name": names.get(loadout_id, entry["name"]),
-                "named_by_client": loadout_id in names,
+                "tier": tier,
+                "name": name,
+                "named_by_client": named_by_client,
                 "manufacturer": next(
                     (v for k, v in MANUFACTURERS.items() if entry["midclass"].startswith(k)), ""
                 ),
