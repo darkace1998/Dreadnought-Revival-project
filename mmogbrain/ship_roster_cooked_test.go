@@ -316,3 +316,57 @@ func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 	}
 	t.Logf("checked %d tech-tree module offerings", offered)
 }
+
+// Every ship in the roster must resolve to a pawn, because an unlock with no
+// pawn is silently a no-op: grantUnlockedShipLoadout returns nil, so the player
+// is charged, the purchase is recorded, and no ship appears. Before the cooked
+// pawn fallback this failed for 63 of 99 ships -- all 15 tier-4 hulls and all
+// 48 heroes -- found by provisioning an account with every ship (99 unlocked,
+// 36 loadouts created).
+//
+// Where the old path-pattern lookup does answer, it must agree with the pawn
+// the blueprint itself names; a disagreement means one of them is wrong.
+func TestEveryRosterShipResolvesToItsBlueprintPawn(t *testing.T) {
+	check := func(id int32, name string) {
+		pawn, ok := dreadconfig.ShipIDForPrecastLoadout(id)
+		if !ok {
+			t.Errorf("%s (%d): no ship pawn -- unlocking it would grant nothing", name, id)
+			return
+		}
+		if cooked, ok := dreadconfig.CookedPawnForLoadout(id); ok && cooked != pawn {
+			t.Errorf("%s (%d): pawn %d, but its blueprint names %d", name, id, pawn, cooked)
+		}
+		if _, ok := nativeStarterLoadoutClassName(id); !ok {
+			t.Errorf("%s (%d): no native loadout class -- the grant would be skipped", name, id)
+		}
+	}
+	for _, hull := range baseShipLoadouts {
+		check(hull.loadoutID, hull.name)
+	}
+	for _, hero := range heroShipLoadouts {
+		check(hero.loadoutID, hero.name)
+	}
+}
+
+// A tech-tree slot must resolve to ONE asset, chosen by rule rather than by map
+// iteration order. 36 of 421 slots have two candidates -- 35 a normal variant
+// and its _Hero_BP twin, one a current file and a legacy tier-less copy -- and
+// the index used to keep whichever GetAllRegistryEntries (a map) yielded last,
+// so the modules offered changed on every restart (578/573/574/577 items across
+// four runs). No slot is hero-only, so a hero twin must never be what a base
+// hull is offered.
+func TestTechTreeSlotsPreferTheNormalCurrentAsset(t *testing.T) {
+	for _, hull := range baseShipLoadouts {
+		m := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
+		for _, module := range techTreeModuleItems(hull, m) {
+			item, _ := dreadconfig.ItemByID(module.id)
+			if strings.Contains(item.AssetPath, "_Hero_BP") {
+				t.Errorf("%s is offered hero-ship variant %d (%s)", hull.name, module.id, item.AssetPath)
+			}
+			// No filename-shape assertion here: the "current file over legacy
+			// copy" preference only decides between two candidates. Where a
+			// slot has one asset it is offered whatever its name -- e.g.
+			// AB_AS_Int_Mov_Side_Ability_T5_BP_2 is the only T5 dodge.
+		}
+	}
+}

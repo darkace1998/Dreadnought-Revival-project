@@ -295,5 +295,7 @@ func ShipIDForPrecastLoadout(precastLoadoutID int32) (int32, bool) {
 			}
 		}
 	}
-	return 0, false
+	// The path-pattern match above cannot answer for tier-4 hulls or heroes; the
+	// loadout's own cooked blueprint can. See CookedPawnForLoadout.
+	return CookedPawnForLoadout(precastLoadoutID)
 }

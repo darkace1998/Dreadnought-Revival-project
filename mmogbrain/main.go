@@ -29,6 +29,9 @@ const (
 )
 
 func main() {
+	if maybeRunSubcommand() {
+		return
+	}
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
 

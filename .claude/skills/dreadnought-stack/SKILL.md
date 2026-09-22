@@ -115,6 +115,23 @@ not exist in the binary, and dropping `-server` was measured to change nothing.
 | `DN_HOST_FLEET_TIER` / `DN_HOST_POSTLOGIN_SPAWN` | battle-server mod, marker file or env |
 | `DN_CLAIM_ITEM_PUSH` | OFF: the push wiped the inventory to 0 items |
 
+## A test account with everything
+
+```bash
+curl -s -X POST http://127.0.0.1:8081/auth/register -H 'Content-Type: application/json' \
+  -d '{"username":"Name","email":"name@test.local","password":"..."}'   # -> {"id": "<uuid>"}
+bash scripts/stop-services.sh
+DB_PATH=$PWD/run/mmog.db JWT_SECRET=x run/mmogbrain provision-test-account \
+  -user <uuid> [-rank 20] [-credits 200000] [-premium 200000] [-free-xp 200000]
+bash scripts/start-services.sh
+```
+
+Unlocks every ship (base + hero) and owns every weapon/ability/officer perk the
+server can offer, through the SAME grant path a real unlock uses -- so it
+exercises the code under test. Idempotent; currency and rank are SET, not added.
+Stop the stack first so the running server holds no stale view of the player.
+Existing account: **UnlockAll** (password in the operator's notes, not here).
+
 ## Where the knowledge lives
 
 - `AGENT-CHAT.md` — the running log with the client-side project. `S##` entries

@@ -2292,6 +2292,8 @@ var (
 	// trees from 2 modules to ~23 while Tier 1 went the other way, 25 to 0-2,
 	// which is the shape of "worse for some ships than others".
 	techTreeAbilityAssetUntiered = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/[A-Za-z0-9_]+$`)
+	// A current-build filename carries its tier: ..._T5_BP or ..._T5_Hero_BP.
+	techTreeTierTokenedFile      = regexp.MustCompile(`_T\d+(_Hero)?_BP$`)
 	techTreeWeaponAsset          = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
 )
 
@@ -2320,11 +2322,50 @@ func techTreeBuildSlotIndex() {
 		techTreeSlotOf = map[int32]techTreeSlotKey{}
 		techTreeSlotTier = map[int32]int32{}
 
+		// Which asset wins when two land on the same (group, line, tier).
+		//
+		// GetAllRegistryEntries iterates a MAP, so this used to be "whichever the
+		// map yielded last" -- a different module set on every process start.
+		// Measured: provisioning the same account four times offered 578, 573,
+		// 574 and 577 distinct items. 36 of the 421 slots collide: 35 are a
+		// normal variant against its _Hero_BP twin (hero-ship equipment), and one
+		// is a current _T5_BP file against the previous build's tier-less copy.
+		// No slot exists ONLY as a hero variant, so preferring the normal one
+		// never empties a slot. Order: non-hero first, then the current tier-
+		// tokened filename, then the lowest id.
+		rank := func(id int32) (int, int, int32) {
+			path := ""
+			if item, ok := dreadconfig.ItemByID(id); ok {
+				path = item.AssetPath
+			}
+			hero, legacy := 0, 0
+			if strings.Contains(path, "_Hero_BP") {
+				hero = 1
+			}
+			if !techTreeTierTokenedFile.MatchString(path) {
+				legacy = 1
+			}
+			return hero, legacy, id
+		}
+		better := func(a, b int32) bool {
+			ah, al, ai := rank(a)
+			bh, bl, bi := rank(b)
+			if ah != bh {
+				return ah < bh
+			}
+			if al != bl {
+				return al < bl
+			}
+			return ai < bi
+		}
 		add := func(group, line string, tier int32, id int32) {
 			key := techTreeSlotKey{group: group, line: line}
 			if techTreeSlotIndex[key] == nil {
 				techTreeSlotIndex[key] = map[int32]int32{}
 				techTreeSlotLines[group] = append(techTreeSlotLines[group], line)
+			}
+			if existing, ok := techTreeSlotIndex[key][tier]; ok && !better(id, existing) {
+				return
 			}
 			techTreeSlotIndex[key][tier] = id
 			techTreeSlotOf[id] = key

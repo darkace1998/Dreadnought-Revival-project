@@ -1,0 +1,166 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"sort"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/db"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/handlers"
+)
+
+// provision-test-account: give an existing account everything, for testing.
+//
+//	mmogbrain provision-test-account -user <32-hex player id> \
+//	    [-rank 20] [-credits 200000] [-premium 200000] [-free-xp 200000]
+//
+// The account must already exist in auth-server (register it through
+// /auth/register, so the password is hashed properly); this only fills in the
+// player side.
+//
+// Everything is granted through the SAME paths a real purchase uses, so the
+// account exercises the code under test rather than a hand-written shortcut:
+//
+//   - every base hull and every hero: a player_purchases row (price 0) plus
+//     grantUnlockedShipLoadout, which is exactly what an unlock does;
+//   - every weapon, ability and officer perk any hull fits by default or can
+//     be offered in the tech tree: a player_purchases row, which is what makes
+//     it OWNED in YA_PlayerGet's inventory (purchasedInventoryItemIDs).
+//
+// The roster is baseShipLoadouts + heroShipLoadouts, which are validated
+// against the client's cooked blueprints (ship_roster_cooked_test.go), so a
+// ship the game no longer has (Brutus) cannot be granted.
+//
+// Rank is stored directly (CurrentRank) with RankXP as progress WITHIN the rank,
+// so rank N is current_rank=N, rank_xp=0, and current_xp is the sum of
+// RankXPThreshold(2..N) -- the XP it takes to get there, not a made-up number.
+//
+// Safe to run twice: purchases and loadouts are INSERT OR IGNORE, and the
+// currency/rank values are SET, not added.
+func runProvisionTestAccount(args []string) error {
+	fs := flag.NewFlagSet("provision-test-account", flag.ContinueOnError)
+	user := fs.String("user", "", "player id (32 hex chars, auth-server user id without hyphens)")
+	rank := fs.Int("rank", 20, "rank to set")
+	credits := fs.Int64("credits", 200000, "credits (soft currency) to SET")
+	premium := fs.Int64("premium", 200000, "premium currency to SET")
+	freeXP := fs.Int64("free-xp", 200000, "free XP to SET")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	pid := normalizedPlayerStatePID(*user)
+	if len(pid) != 32 {
+		return fmt.Errorf("-user must be a 32-hex player id, got %q", *user)
+	}
+	if *rank < 1 || *rank > 50 {
+		return fmt.Errorf("-rank must be 1..50, got %d", *rank)
+	}
+
+	database, err := db.Open(getenv("DB_PATH", "mmog.db"))
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() { _ = database.Close() }()
+	setMmogPlayerStateDB(database)
+
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		return fmt.Errorf("seed player: %w", err)
+	}
+
+	var totalXP int64
+	for r := int32(2); r <= int32(*rank); r++ {
+		totalXP += int64(handlers.RankXPThreshold(r))
+	}
+	if _, err := database.Exec(`UPDATE player_state SET soft_currency=?, premium_currency=?, free_xp=?,
+		current_rank=?, rank_xp=0, current_xp=?, updated_at=datetime('now') WHERE user_id=?`,
+		*credits, *premium, *freeXP, *rank, totalXP, pid); err != nil {
+		return fmt.Errorf("set currencies and rank: %w", err)
+	}
+
+	ships, items := provisionUnlockSet()
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	record := func(id int32, kind string) error {
+		_, err := tx.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+			SELECT ?,?,?,0,'admin' WHERE NOT EXISTS
+			(SELECT 1 FROM player_purchases WHERE user_id=? AND item_id=?)`, pid, id, kind, pid, id)
+		return err
+	}
+	for _, id := range ships {
+		if err := record(id, "loadout"); err != nil {
+			return fmt.Errorf("record ship %d: %w", id, err)
+		}
+		if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
+			return err
+		}
+	}
+	for _, id := range items {
+		kind := map[int32]string{4: "ability", 5: "weapon", 6: "perk"}[(id>>24)&0xff]
+		if err := record(id, kind); err != nil {
+			return fmt.Errorf("record item %d: %w", id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	var loadouts, purchases int
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_ship_loadouts WHERE user_id=?`, pid).Scan(&loadouts)
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=?`, pid).Scan(&purchases)
+	fmt.Printf("provisioned %s: rank %d (%d XP), credits %d, premium %d, free XP %d\n",
+		pid, *rank, totalXP, *credits, *premium, *freeXP)
+	fmt.Printf("  %d ships unlocked (%d base + %d hero), %d modules/weapons/officers owned\n",
+		len(ships), len(baseShipLoadouts), len(heroShipLoadouts), len(items))
+	fmt.Printf("  player now has %d ship loadouts and %d purchase rows\n", loadouts, purchases)
+	return nil
+}
+
+// provisionUnlockSet is every ship, and every weapon/ability/officer perk the
+// server can put in front of a player, sorted for a deterministic run.
+func provisionUnlockSet() (ships []int32, items []int32) {
+	itemSet := map[int32]bool{}
+	add := func(ids ...int32) {
+		for _, id := range ids {
+			if id > 0 {
+				itemSet[id] = true
+			}
+		}
+	}
+	for _, hull := range baseShipLoadouts {
+		ships = append(ships, hull.loadoutID)
+		add(hull.primary, hull.secondary)
+		add(hull.abilities[:]...)
+		add(hull.perks[:]...)
+		manufacturer := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
+		for _, module := range techTreeModuleItems(hull, manufacturer) {
+			add(module.id)
+		}
+	}
+	for _, hero := range heroShipLoadouts {
+		ships = append(ships, hero.loadoutID)
+		add(hero.primary, hero.secondary)
+		add(hero.abilities[:]...)
+		add(hero.perks[:]...)
+	}
+	for id := range itemSet {
+		items = append(items, id)
+	}
+	sort.Slice(ships, func(i, j int) bool { return ships[i] < ships[j] })
+	sort.Slice(items, func(i, j int) bool { return items[i] < items[j] })
+	return ships, items
+}
+
+// maybeRunSubcommand runs a one-shot subcommand and exits, or returns false.
+func maybeRunSubcommand() bool {
+	if len(os.Args) < 2 || os.Args[1] != "provision-test-account" {
+		return false
+	}
+	if err := runProvisionTestAccount(os.Args[2:]); err != nil {
+		fmt.Fprintln(os.Stderr, "provision-test-account:", err)
+		os.Exit(1)
+	}
+	return true
+}

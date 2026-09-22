@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -85,4 +86,70 @@ func CookedHeroName(itemID int32) (string, bool) {
 func CookedHeroCount() int {
 	cookedHeroesOnce.Do(loadCookedHeroes)
 	return len(cookedHeroes)
+}
+
+// Pawn (ship) ids by loadout id, from the m_pawnClass of every cooked precast
+// and hero loadout blueprint.
+//
+// ShipIDForPrecastLoadout derived the pawn by matching asset-path PATTERNS
+// (/Ships/<Class>/<Size>/T<n>/ against /Loadouts/Precast/T<n>/), and that could
+// not answer for 63 of the 99 player ships: all 15 tier-4 hulls (their pawns do
+// not sit on the tiered path the pattern expects) and all 48 heroes (their
+// loadouts are not under /Precast/ at all). The failure was silent:
+// grantUnlockedShipLoadout returns nil when it gets no pawn, so unlocking any of
+// those ships charged the player, recorded the purchase, and never gave them
+// the ship. Measured by provisioning an account with every ship: 99 unlocked,
+// 36 loadouts created.
+//
+// The blueprint names its own pawn, and all 63 resolve through the register.
+//
+// Rebuilt while EMPTY rather than guarded by a sync.Once: it resolves through
+// ItemByAssetPath, i.e. the item catalog, and a first call that lands before the
+// catalog is loaded would otherwise cache an empty map forever -- the trap the
+// comment on nameCacheMu describes. An empty index is never a real answer.
+var (
+	cookedPawnMu        sync.Mutex
+	cookedPawnByLoadout map[int32]int32
+)
+
+func loadCookedPawns() {
+	cookedPawnByLoadout = map[int32]int32{}
+	for _, file := range []string{"PrecastLoadouts_cooked.jsonl", "HeroLoadouts_cooked.jsonl"} {
+		f, err := os.Open(filepath.Join(LoadoutsDir(), file))
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for scanner.Scan() {
+			var row struct {
+				Pawn       string `json:"m_pawnClass"`
+				SystemData struct {
+					ItemID int32 `json:"m_itemID"`
+				} `json:"m_itemSystemData"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &row) != nil || row.Pawn == "" || row.SystemData.ItemID == 0 {
+				continue
+			}
+			pkg := row.Pawn
+			if i := strings.IndexByte(pkg, '.'); i >= 0 {
+				pkg = pkg[:i]
+			}
+			if pawn, ok := ItemByAssetPath(pkg); ok {
+				cookedPawnByLoadout[row.SystemData.ItemID] = pawn.ItemID
+			}
+		}
+		_ = f.Close()
+	}
+}
+
+// CookedPawnForLoadout is the ship pawn a loadout's own blueprint names.
+func CookedPawnForLoadout(loadoutID int32) (int32, bool) {
+	cookedPawnMu.Lock()
+	defer cookedPawnMu.Unlock()
+	if len(cookedPawnByLoadout) == 0 {
+		loadCookedPawns()
+	}
+	pawn, ok := cookedPawnByLoadout[loadoutID]
+	return pawn, ok
 }
