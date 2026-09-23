@@ -21,7 +21,10 @@ var targetSizes = map[string]int{
 	// ship -- all four starters are Mediums -- while tech tree ships, which
 	// carry a ship id, loaded the correct bay for their size. See the comment
 	// at the field in buildMmogPlayerFleetsPayload.
-	"YA_RequestStaticFleetData": 7228,
+	// 7228 -> 7231 (+3): ship class goes out as EYShipClass (class x size,
+	// e.g. 14 = YSC_ASSAULT_MEDIUM) instead of baseClass+1, which always named a
+	// LIGHT hull. Two-digit values for the medium starters. See loadoutEYShipClass.
+	"YA_RequestStaticFleetData": 7231,
 	"YA_GetFeatureToggle":       111,
 	// Now 967 (+433): GameModes is emitted at the message ROOT as well as inside
 	// "result". The response's own handler calls GetGameModesData
@@ -263,7 +266,10 @@ var targetSizes = map[string]int{
 	// loadout manager learns ships only from here (0x14034ff90 walks player
 	// data +0xF8), which is why 95 unlocked ships never appeared in "owned
 	// ships". Bounded by playerDataFrameBudget, ships before items.
-	"YA_PlayerGet": 7297,
+	// 7297 -> 7300 (+3): ship class goes out as EYShipClass (class x size,
+	// e.g. 14 = YSC_ASSAULT_MEDIUM) instead of baseClass+1, which always named a
+	// LIGHT hull. Two-digit values for the medium starters. See loadoutEYShipClass.
+	"YA_PlayerGet": 7300,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which

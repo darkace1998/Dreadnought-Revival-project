@@ -411,13 +411,18 @@ func TestTechTreeRowsExposeMinimalIdentityAndUnlock(t *testing.T) {
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(ship.id)))) {
 			t.Fatalf("tech tree row for %q missing ShipID=%d", ship.name, ship.id)
 		}
-		// ShipClass goes out ONE-BASED (0 means "no class"), not as the raw
-		// internal ordinal. Established from what the client rendered for the
-		// starter fleet: Rurik (ArtilleryCruiser, sent 2) showed as "Corvette",
-		// Cerberus (TacticalCruiser, sent 3) showed as "Artillery Cruiser", and
-		// Simargl (Dreadnought, sent 0) showed no class at all -- i.e.
-		// displayed = table[sent-1]. See mmogShipClassWire.
-		wireClass := mmogShipClassWire(ship.shipClass)
+		// ShipClass is EYShipClass -- class AND size (1..15) -- the type of
+		// UYShipLoadout::m_shipClass in the SDK. This used to assert
+		// baseClass+1 on the strength of what the client rendered: Rurik
+		// (sent 2) showed "Corvette", Cerberus (sent 3) "Artillery Cruiser",
+		// Simargl (sent 0) no class. Read as EYShipClass that evidence says the
+		// opposite of what it was taken to mean: 2 = YSC_SCOUT_LIGHT (a Scout is
+		// a Corvette), 3 = YSC_SNIPER_LIGHT (a Sniper is an Artillery Cruiser),
+		// 0 = YSC_NONE. The client displayed exactly the class we sent -- and
+		// both labels were WRONG for those ships (Rurik is a Sniper, Cerberus a
+		// Support). baseClass+1 always lands on a LIGHT hull, which is also why
+		// every ship loaded a light model. See loadoutEYShipClass.
+		wireClass, _ := derivedShipClassID(ship.id)
 		if !bytes.Contains(row, protocol.AppendStringField(nil, "ShipClass", strconv.Itoa(int(wireClass)))) {
 			t.Fatalf("tech tree row for %q missing ShipClass=%d (internal %d)", ship.name, wireClass, ship.shipClass)
 		}

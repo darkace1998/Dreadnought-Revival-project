@@ -542,3 +542,33 @@ func TestGrantedShipGoesOutWithItsDefaultLoadout(t *testing.T) {
 		}
 	}
 }
+
+// Every ship loadout must carry its EYShipClass -- class AND size -- as
+// UYShipLoadout::m_shipClass does. It used to carry baseClass+1, which always
+// fell in 1..5: the five LIGHT hulls. Agosta (Assault Medium) went out as 5,
+// YSC_ASSAULT_LIGHT, and the client loaded light-hull models and bays for
+// medium and heavy ships ("the actual ship model loaded is wrong").
+func TestEveryShipLoadoutCarriesItsClassAndSize(t *testing.T) {
+	check := func(id int32, line, name string) {
+		want, ok := eyShipClassByKey[line]
+		if !ok {
+			t.Errorf("%s: hull line %q has no EYShipClass", name, line)
+			return
+		}
+		if got := loadoutEYShipClass(mmogShipLoadoutSeed{precastLoadoutID: id}); got != want {
+			t.Errorf("%s (%s): class %d, want %d", name, line, got, want)
+		}
+	}
+	for _, h := range baseShipLoadouts {
+		check(h.loadoutID, h.hullLine, h.name)
+	}
+	for _, h := range heroShipLoadouts {
+		check(h.loadoutID, h.hullLine, h.name)
+	}
+	// And on the wire: Agosta's entry says 14, not 5.
+	useTempMmogPlayerStateDB(t)
+	payload := buildMmogPlayerGetPayload("0123456789abcdef0123456789abcdeb")
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "class", "14")) {
+		t.Error("YA_PlayerGet does not carry class 14 (YSC_ASSAULT_MEDIUM) for the starter Agosta")
+	}
+}

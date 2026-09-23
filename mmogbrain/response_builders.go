@@ -911,7 +911,7 @@ func appendMmogFleetBackendFields(b []byte, stack []int, playerPID string, fleet
 		b = protocol.AppendStringField(b, "m_pid", playerPID)
 		b = protocol.AppendInt32Field(b, "m_precastLoadoutID", lo.precastLoadoutID)
 		b = protocol.AppendStringField(b, "m_name", lo.loadoutName)
-		b = protocol.AppendInt32Field(b, "m_shipClass", mmogShipClassWire(lo.ship.shipClass))
+		b = protocol.AppendInt32Field(b, "m_shipClass", loadoutEYShipClass(lo))
 		// m_shipId identifies the HULL. It is here for consistency -- every other
 		// loadout payload in this file sends it and this entry was the only one
 		// that did not -- and NOT because it fixed anything.
@@ -1754,9 +1754,9 @@ func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout
 	// comment) — plain int32 silently defaults every one of these to 0.
 	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendInt32Field(b, "m_shipId", loadout.effectiveFleetShipID())
-	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
+	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(loadoutEYShipClass(loadout))))
 	b = protocol.AppendStringField(b, "m_name", loadout.loadoutName)
-	b = protocol.AppendInt32Field(b, "m_shipClass", mmogShipClassWire(loadout.ship.shipClass))
+	b = protocol.AppendInt32Field(b, "m_shipClass", loadoutEYShipClass(loadout))
 	b = protocol.AppendStringField(b, "displayInfo", loadout.displayInfo())
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
 	b = protocol.AppendInt32Field(b, "m_loadoutTier", 1)
@@ -1808,7 +1808,7 @@ func appendMmogShipLoadoutInfoFields(b []byte, stack []int, loadout mmogShipLoad
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendStringField(b, "loadoutIndex", strconv.Itoa(int(loadout.loadoutIndex)))
-	b = protocol.AppendStringField(b, "m_shipClass", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
+	b = protocol.AppendStringField(b, "m_shipClass", strconv.Itoa(int(loadoutEYShipClass(loadout))))
 	b = protocol.AppendStringField(b, "m_displayInfo", loadout.displayInfo())
 	b = protocol.AppendStringField(b, "m_loadoutTier", strconv.Itoa(1))
 	b = protocol.AppendBoolField(b, "m_loadoutComplete", loadout.complete())
@@ -3654,6 +3654,45 @@ func mmogShipClassWire(shipClass int32) int32 {
 	return shipClass + 1
 }
 
+// loadoutEYShipClass is the EYShipClass a ship loadout goes out with: class
+// AND size (YSC_ASSAULT_LIGHT=5 .. YSC_ASSAULT_MEDIUM=14 .. YSC_ASSAULT_HEAVY=
+// 15), which is what UYShipLoadout::m_shipClass holds (SDK DreadGame_Classes.h,
+// offset 0xD8, type EYShipClass).
+//
+// Every loadout used to go out with mmogShipClassWire(seed.shipClass) =
+// baseClass+1, and a base class is 0-4 -- so the value always landed in 1-5,
+// which in EYShipClass are exactly the five LIGHT hulls. Agosta (Assault
+// MEDIUM) went out as 5 = YSC_ASSAULT_LIGHT. The client was told every ship was
+// the light hull of its class. That is the long-standing "every fleet ship
+// loads the LIGHT hangar bay -- class right, size wrong" note on
+// appendMmogFleetBackendFields, and the live report of 2026-09-23: "the tech
+// tree display is correct but the actual ship model loaded is wrong". The
+// seed values were not even consistent within one line (Jupiter Arms
+// AssaultMedium went out as 5, 5, 1, 5, 1 across its five tiers).
+//
+// Derived from the hull line in the validated roster; the pawn's asset path is
+// the fallback; the old value only if neither resolves.
+func loadoutEYShipClass(loadout mmogShipLoadoutSeed) int32 {
+	for _, h := range baseShipLoadouts {
+		if h.loadoutID == loadout.precastLoadoutID {
+			if id, ok := eyShipClassByKey[h.hullLine]; ok {
+				return id
+			}
+		}
+	}
+	for _, h := range heroShipLoadouts {
+		if h.loadoutID == loadout.precastLoadoutID {
+			if id, ok := eyShipClassByKey[h.hullLine]; ok {
+				return id
+			}
+		}
+	}
+	if id, ok := derivedShipClassID(loadout.ship.id); ok {
+		return id
+	}
+	return loadoutEYShipClass(loadout)
+}
+
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	// Identity + structure the client uses to match this node against its
@@ -3687,7 +3726,11 @@ func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []
 	b = protocol.AppendStringField(b, "m_shipId", strconv.Itoa(int(ship.id)))
 	b = protocol.AppendStringField(b, "NodeType", strconv.Itoa(int(ship.nodeType)))
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(int32(techTreeRowTier(ship))))))
-	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(mmogShipClassWire(ship.shipClass))))
+	shipClassWire := mmogShipClassWire(ship.shipClass)
+	if id, ok := derivedShipClassID(ship.id); ok {
+		shipClassWire = id // EYShipClass; see loadoutEYShipClass
+	}
+	b = protocol.AppendStringField(b, "ShipClass", strconv.Itoa(int(shipClassWire)))
 	b = protocol.AppendStringField(b, "Weight", strconv.Itoa(int(ship.weight)))
 	// REGRESSION FIX: for ships that have a starter loadout, emit
 	// m_precastLoadoutID + m_shipLoadoutInfo. The client's hangar fleet loader
@@ -6277,7 +6320,7 @@ func appendMmogCompactShipLoadout(b []byte, stack []int, playerPID string, loado
 	b = protocol.AppendInt32Field(b, "precastLoadout", loadout.precastLoadoutID)
 	b = protocol.AppendStringField(b, "shipID", strconv.Itoa(int(loadout.effectiveFleetShipID())))
 	b = protocol.AppendStringField(b, "name", loadout.loadoutName)
-	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(mmogShipClassWire(loadout.ship.shipClass))))
+	b = protocol.AppendStringField(b, "class", strconv.Itoa(int(loadoutEYShipClass(loadout))))
 	if info := loadout.displayInfo(); info != "" {
 		b = protocol.AppendStringField(b, "displayInfo", info)
 	}

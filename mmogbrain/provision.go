@@ -46,6 +46,8 @@ func runProvisionTestAccount(args []string) error {
 	credits := fs.Int64("credits", 200000, "credits (soft currency) to SET")
 	premium := fs.Int64("premium", 200000, "premium currency to SET")
 	freeXP := fs.Int64("free-xp", 200000, "free XP to SET")
+	maxTier := fs.Int("max-tier", 0, "only grant ships up to this tier (0 = every tier)")
+	withHeroes := fs.Bool("heroes", true, "also grant hero ships")
 	withItems := fs.Bool("items", true, "also grant every weapon/ability/officer perk; false leaves "+
 		"modules to be unlocked in game, which is what testing the unlock flow needs")
 	saveFrom := fs.String("save-blobs-from", "", "copy the client's SGD/SCtA save blobs from this player "+
@@ -102,6 +104,27 @@ func runProvisionTestAccount(args []string) error {
 	}
 
 	ships, items := provisionUnlockSet()
+	// Narrow the ship set on request. A test account that owns everything has
+	// nothing left to unlock, so the unlock and research flows cannot be
+	// validated on it; "tier 1-2, defaults only" leaves the rest to earn.
+	if *maxTier > 0 || !*withHeroes {
+		tierOf := map[int32]int32{}
+		hero := map[int32]bool{}
+		for _, h := range baseShipLoadouts {
+			tierOf[h.loadoutID] = h.tier
+		}
+		for _, h := range heroShipLoadouts {
+			tierOf[h.loadoutID], hero[h.loadoutID] = h.tier, true
+		}
+		kept := ships[:0]
+		for _, id := range ships {
+			if (*maxTier > 0 && tierOf[id] > int32(*maxTier)) || (!*withHeroes && hero[id]) {
+				continue
+			}
+			kept = append(kept, id)
+		}
+		ships = kept
+	}
 	tx, err := database.Begin()
 	if err != nil {
 		return err
@@ -139,8 +162,7 @@ func runProvisionTestAccount(args []string) error {
 	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=?`, pid).Scan(&purchases)
 	fmt.Printf("provisioned %s: rank %d (%d XP), credits %d, premium %d, free XP %d\n",
 		pid, *rank, totalXP, *credits, *premium, *freeXP)
-	fmt.Printf("  %d ships unlocked (%d base + %d hero), %d modules/weapons/officers owned\n",
-		len(ships), len(baseShipLoadouts), len(heroShipLoadouts), len(items))
+	fmt.Printf("  %d ships unlocked, %d modules/weapons/officers owned\n", len(ships), len(items))
 	fmt.Printf("  player now has %d ship loadouts and %d purchase rows\n", loadouts, purchases)
 	return nil
 }
