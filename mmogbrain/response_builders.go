@@ -2721,6 +2721,26 @@ func techTreeHeroItems() []techTreeItem {
 	// twelve of a tier on one point. They are one-offs rather than lines, so the
 	// column is just a running index within each (manufacturer, tier).
 	heroColumn := map[[2]int32]int32{}
+	// Heroes start AFTER the manufacturer's base hull columns. They used to
+	// start at 0, the same columns the base hull lines occupy -- invisible while
+	// every hero was dropped by the ClassId <= 0 gate, and 23 of 76 cells holding
+	// a base hull AND a hero the moment heroes were stored (2026-09-23), reported
+	// live as ships "missing or overlapping" and "the next ship to unlock is not
+	// correct": the hero was drawn on the cell where the base line continues.
+	baseColumns := map[int32]int32{}
+	{
+		lines := map[int32]map[string]bool{}
+		for _, hull := range baseShipLoadouts {
+			m := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
+			if lines[m] == nil {
+				lines[m] = map[string]bool{}
+			}
+			lines[m][hull.hullLine] = true
+		}
+		for m, set := range lines {
+			baseColumns[m] = int32(len(set))
+		}
+	}
 	for _, hero := range heroShipLoadouts {
 		manufacturerID := shipManufacturerID(hero.manufacturer)
 		if manufacturerID < 0 {
@@ -2740,7 +2760,7 @@ func techTreeHeroItems() []techTreeItem {
 			classID:      techTreeHullClassID(hero.loadoutID, nil, hero.hullLine),
 			manufacturer: manufacturerID,
 			tier:         hero.tier,
-			position:     heroColumn[[2]int32{manufacturerID, hero.tier}],
+			position:     baseColumns[manufacturerID] + heroColumn[[2]int32{manufacturerID, hero.tier}],
 			// Heroes are bought in the store, not researched, and nothing in
 			// the client states a research cost for them -- so 0 rather than a
 			// made-up figure. Their real price rides on the market catalog.
@@ -6283,12 +6303,27 @@ func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byt
 		emitted[item.itemID] = true
 		ids, amounts = append(ids, item.itemID), append(amounts, item.quantity)
 	}
-	for _, itemID := range purchasedInventoryItemIDs(playerPID) {
-		if emitted[itemID] {
-			continue // a starter item bought again is still one entry
+	// Purchased MODULES (weapons, abilities, officer perks) go before purchased
+	// SHIPS. Measured 2026-09-23 on UnlockAll: items went out in purchase order,
+	// the 99 ship unlocks first, and the budget cut the list at 121 of 128 -- so
+	// the weapon the player had just unlocked was, every time, exactly the entry
+	// dropped. The client then offered to unlock it again, and the server
+	// correctly treated each retry as already owned. A ship id in this list is
+	// the less important entry: the ship itself reaches the client through
+	// ShipLoadouts.
+	purchased := purchasedInventoryItemIDs(playerPID)
+	isShip := func(id int32) bool {
+		category := (id >> 24) & 0xff
+		return category == mmogItemCategoryShipLoadoutPrecast || category == mmogItemCategoryShipLoadoutHero
+	}
+	for _, wantShips := range []bool{false, true} {
+		for _, itemID := range purchased {
+			if emitted[itemID] || isShip(itemID) != wantShips {
+				continue // a starter item bought again is still one entry
+			}
+			emitted[itemID] = true
+			ids, amounts = append(ids, itemID), append(amounts, 1)
 		}
-		emitted[itemID] = true
-		ids, amounts = append(ids, itemID), append(amounts, 1)
 	}
 	// Never let the inventory push the frame past the budget. Dropping the tail
 	// makes some owned items look unowned; overrunning the ring makes the whole

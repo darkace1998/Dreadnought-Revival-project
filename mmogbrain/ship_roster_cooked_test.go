@@ -2,12 +2,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
@@ -430,5 +433,71 @@ func TestTechTreeFitsTheRingWhenEverythingIsOwned(t *testing.T) {
 	t.Logf("YA_GetTechTree for an everything-owned account: %d bytes", len(payload))
 	if len(payload) > clientReceiveRingBytes-2048 {
 		t.Errorf("YA_GetTechTree is %d bytes; ring %d", len(payload), clientReceiveRingBytes)
+	}
+}
+
+// No two ships may share a tech-tree cell (manufacturer, tier, position). Heroes
+// used to be numbered from column 0 in each (manufacturer, tier) -- the columns
+// the base hull lines occupy -- which was invisible while heroes were dropped by
+// the ClassId <= 0 gate and put 23 of 76 cells under two ships the moment they
+// were stored. Reported live as ships "missing or overlapping".
+func TestTechTreeShipsNeverShareACell(t *testing.T) {
+	type cell struct{ manufacturer, tier, position int32 }
+	seen := map[cell]int32{}
+	ships := 0
+	for _, it := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+		if it.module {
+			continue
+		}
+		ships++
+		c := cell{it.manufacturer, it.tier, it.position}
+		if other, ok := seen[c]; ok {
+			t.Errorf("ships %d and %d share manufacturer %d tier %d position %d", other, it.id, c.manufacturer, c.tier, c.position)
+		}
+		seen[c] = it.id
+	}
+	if ships != len(baseShipLoadouts)+len(heroShipLoadouts) {
+		t.Errorf("%d ship nodes, want %d", ships, len(baseShipLoadouts)+len(heroShipLoadouts))
+	}
+}
+
+// A module the player unlocks must reach the client even when the item list is
+// cut. Items went out in purchase order, ship unlocks first, so on an account
+// owning every ship the budget cut exactly the newest unlock -- the client then
+// offered to unlock the same weapon again and again.
+func TestNewestUnlockedModuleSurvivesTheItemBudget(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcded"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	ships, items := provisionUnlockSet()
+	// Built like the UnlockAll account: every ship recorded AND granted through
+	// the real unlock path, so the ships take their share of the budget and the
+	// item list really is cut. (A first draft only recorded the purchases, left
+	// plenty of room, and passed with the bug present.)
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ships {
+		if _, err := tx.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'loadout',0,'admin')`, pid, id); err != nil {
+			t.Fatal(err)
+		}
+		if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	module := items[len(items)-1]
+	if _, err := database.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'weapon',2000,'freexp')`, pid, module); err != nil {
+		t.Fatal(err)
+	}
+	payload := buildMmogPlayerDataPayload("YA_PlayerGet", pid)
+	if !bytes.Contains(payload, protocol.AppendStringField(nil, "ItemID", strconv.Itoa(int(module)))) {
+		t.Fatalf("module %d, unlocked after %d ships, was cut from the item list", module, len(ships))
 	}
 }
