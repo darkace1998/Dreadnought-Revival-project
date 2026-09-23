@@ -199,7 +199,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogRequestSuccessPayload(requestName)
 	case "YA_UnlockItem":
 		return buildMmogUnlockItemPayload(playerPID, payload)
-	case "YA_ClaimItem", "YA_AddItems", "YA_RemoveItems",
+	case "YA_ClaimItem":
+		return buildMmogClaimItemPayload(playerPID, payload)
+	case "YA_AddItems", "YA_RemoveItems",
 		"YA_ContractReplace", "YA_ContractRemove":
 		return buildMmogRequestSuccessPayload(requestName)
 

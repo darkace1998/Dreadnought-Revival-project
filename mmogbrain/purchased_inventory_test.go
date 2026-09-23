@@ -19,6 +19,12 @@ import (
 // established when it kept re-sending YA_UnlockItem for an id already in
 // player_purchases.
 
+// CHANGED 2026-09-23: the rows below are credit purchases ("gp"). They were
+// "freexp" rows, i.e. what YA_UnlockItem records -- and a research is no longer
+// ownership: a free-XP unlock of a weapon/module/briefing now records RESEARCH
+// only (researchOnlyPurchase), because treating it as a purchase made every
+// researched item owned for free (live report 2026-09-23). What this test
+// protects -- a BOUGHT item reaches the inventory -- is unchanged.
 func TestPurchasedItemAppearsInTheOwnedInventory(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
@@ -35,7 +41,7 @@ func TestPurchasedItemAppearsInTheOwnedInventory(t *testing.T) {
 	database := currentMmogPlayerStateDB()
 	if _, err := database.Exec(
 		`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
-		 VALUES(?,?,?,?,?)`, pid, bought, "weapon", 1000, "freexp"); err != nil {
+		 VALUES(?,?,?,?,?)`, pid, bought, "weapon", 1000, "gp"); err != nil {
 		t.Fatalf("record purchase: %v", err)
 	}
 
@@ -102,8 +108,13 @@ func TestFreshAccountInventoryIsUnchanged(t *testing.T) {
 	t.Logf("%d starter items present", seen)
 }
 
-// The client has no handler for YA_UnlockItem's response, so the only way to
-// refresh ownership mid-session is an unsolicited YA_ClaimItem frame -- that
+// CORRECTED 2026-09-23: the client DOES handle YA_UnlockItem's reply -- the
+// dispatcher branch at 0x2A25DAE-0x2A263DB subtracts the root ShipXp/FreeXp and
+// appends the root ItemID to the RESEARCHED list (player-data +0x3F80); see
+// buildMmogUnlockItemPayload. It does not touch ownership, though, so the
+// claim below is still how ownership refreshes mid-session:
+//
+// The only way to refresh OWNERSHIP mid-session is an unsolicited YA_ClaimItem frame -- that
 // handler (FUN_2A38C49) reads result.status=="succeeded", inventory and
 // addedLoadouts, and runs inventory through the same owned-item parser
 // YA_PlayerGet's "Items" uses.
@@ -115,7 +126,7 @@ func TestClaimItemPushCarriesTheUpdatedInventory(t *testing.T) {
 	mmogPlayerStateForPID(pid)
 	if _, err := currentMmogPlayerStateDB().Exec(
 		`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
-		 VALUES(?,?,?,?,?)`, pid, bought, "ability", 1000, "freexp"); err != nil {
+		 VALUES(?,?,?,?,?)`, pid, bought, "ability", 1000, "gp"); err != nil {
 		t.Fatalf("record purchase: %v", err)
 	}
 

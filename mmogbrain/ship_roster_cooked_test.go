@@ -232,18 +232,18 @@ func TestStarterLoadoutsMatchTheValidatedRoster(t *testing.T) {
 // Measured 2026-09-22: 577 distinct ids (114 weapons, 434 abilities, 29 officer
 // perks), 837 tech-tree module offerings, zero failures.
 //
-// It also pins that an unlock is offered in the RIGHT slot and at a sane tier,
-// which is the intent techTreeSlotUpgrades documents: a module is an
-// ALTERNATIVE from a sibling line in the same slot group as something the hull
-// equips (group = ship class + slot family, e.g. Assault primary abilities, or
-// Assault secondaries across SecShort/SecMid/SecLong), taken at or below the
-// hull's own tier. So a perimeter ability cannot surface on the primary-ability
-// rail, another class's module cannot surface at all, and a Tier 1 hull cannot
-// be offered a Tier 5 module -- the live bug that gate was added for.
+// It also pins that an unlock is never above the hull's own tier.
 //
-// (A first draft of this test required modules to be tier variants of the
-// equipped item's OWN line. That is wrong: the equipped line is excluded
-// entirely and the offers are the SIBLING lines. 16 failures on Dola alone.)
+// SLOT-GROUP ASSERTION REMOVED 2026-09-23. It required every offer to be a
+// sibling-line alternative in a slot group the hull already equips -- the rule
+// techTreeSlotUpgrades used to COMPOSE the research list. The client's module
+// preview table turned out to hold the real list (dreadconfig.
+// ShipResearchItems), and it contradicts that rule: a tier-t hull researches
+// the tier-t versions of its OWN fitted lines (Agosta: "Agosta Trafalgar
+// Tempest Missiles I"), and Scouts research Afterburner, a group none of them
+// fits by default. What the old test protected -- nothing from another class,
+// nothing above the hull's tier -- is kept below and in
+// TestTechTreeResearchIsWhatTheClientNamesForTheHull.
 func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 	content := os.Getenv("DN_CLIENT_CONTENT")
 	if content == "" {
@@ -258,7 +258,7 @@ func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 		if id <= 0 {
 			return
 		}
-		item, ok := dreadconfig.ItemByID(id)
+		item, ok := dreadconfig.ItemByID(baseItemID(id)) // the register holds shared ids only; module entries are per-ship
 		if !ok || item.AssetPath == "" {
 			t.Errorf("%s: %d is not in ItemIDRegister", where, id)
 			return
@@ -285,12 +285,6 @@ func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 	offered := 0
 	for _, hull := range baseShipLoadouts {
 		slotsOf(hull.name, hull.primary, hull.secondary, hull.abilities, hull.perks)
-		groups := map[string]bool{}
-		for _, id := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
-			if key, ok := techTreeSlotOf[id]; ok {
-				groups[key.group] = true
-			}
-		}
 		m := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
 		for _, module := range techTreeModuleItems(hull, m) {
 			offered++
@@ -299,13 +293,15 @@ func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 			if cat != 4 && cat != 5 && cat != 6 {
 				t.Errorf("%s: module %d is category %d, not a weapon/ability/perk", hull.name, module.id, cat)
 			}
-			item, _ := dreadconfig.ItemByID(module.id)
-			key, ok := techTreeSlotOf[module.id]
-			if !ok || !groups[key.group] {
-				t.Errorf("%s: module %d (%s) is in slot group %q, which nothing the hull equips belongs to",
-					hull.name, module.id, item.AssetPath, key.group)
+			// Lookups by BASE id: the register and slot index hold shared
+			// ids, module entries carry the per-ship one (inflatedItemID).
+			base := baseItemID(module.id)
+			item, _ := dreadconfig.ItemByID(base)
+			if got, want := (module.id>>16)&0xff, eyShipClassByKey[hull.hullLine]; got != want {
+				t.Errorf("%s: module %d (%s) belongs to ship class %d, not the hull's %d",
+					hull.name, module.id, item.AssetPath, got, want)
 			}
-			if tier, ok := techTreeSlotTier[module.id]; ok && tier > hull.tier {
+			if tier, ok := techTreeSlotTier[base]; ok && tier > hull.tier {
 				t.Errorf("%s (T%d): module %d (%s) is tier %d, above the hull",
 					hull.name, hull.tier, module.id, item.AssetPath, tier)
 			}
@@ -362,7 +358,10 @@ func TestTechTreeSlotsPreferTheNormalCurrentAsset(t *testing.T) {
 	for _, hull := range baseShipLoadouts {
 		m := shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine])
 		for _, module := range techTreeModuleItems(hull, m) {
-			item, _ := dreadconfig.ItemByID(module.id)
+			item, ok := dreadconfig.ItemByID(baseItemID(module.id))
+			if !ok {
+				t.Fatalf("%s: module %d resolves to no item; the check below would pass vacuously", hull.name, module.id)
+			}
 			if strings.Contains(item.AssetPath, "_Hero_BP") {
 				t.Errorf("%s is offered hero-ship variant %d (%s)", hull.name, module.id, item.AssetPath)
 			}
@@ -395,6 +394,18 @@ func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
 	}
 	if n := len(purchasedInventoryItemIDs(pid)); n < 600 {
 		t.Fatalf("only %d owned items seeded; the test would prove nothing", n)
+	}
+	// Every ship with XP: ShipXps carries one entry per ship since 2026-09-24
+	// (~40 bytes each), and it shares this frame.
+	for _, id := range ships {
+		if pawn, ok := dreadconfig.ShipIDForPrecastLoadout(id); ok {
+			if _, err := database.Exec(`INSERT OR IGNORE INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,123456)`, pid, pawn); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n := len(persistedPlayerShipXPs(pid)); n < 50 {
+		t.Fatalf("only %d ships with XP seeded", n)
 	}
 	for _, name := range []string{"YA_PlayerGet", "YA_RefreshPlayerProfile"} {
 		payload := buildMmogPlayerDataPayload(name, pid)
@@ -492,8 +503,11 @@ func TestNewestUnlockedModuleSurvivesTheItemBudget(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
+	// Bought with credits: a free-XP unlock of a module is research, not
+	// ownership, since 2026-09-23 (researchOnlyPurchase), and only owned items
+	// are in the inventory this test is about.
 	module := items[len(items)-1]
-	if _, err := database.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'weapon',2000,'freexp')`, pid, module); err != nil {
+	if _, err := database.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'weapon',2000,'gp')`, pid, module); err != nil {
 		t.Fatal(err)
 	}
 	payload := buildMmogPlayerDataPayload("YA_PlayerGet", pid)
@@ -570,5 +584,257 @@ func TestEveryShipLoadoutCarriesItsClassAndSize(t *testing.T) {
 	payload := buildMmogPlayerGetPayload("0123456789abcdef0123456789abcdeb")
 	if !bytes.Contains(payload, protocol.AppendStringField(nil, "class", "14")) {
 		t.Error("YA_PlayerGet does not carry class 14 (YSC_ASSAULT_MEDIUM) for the starter Agosta")
+	}
+}
+
+// Weapons and modules belong to a ship: the client keys module previews, the
+// store and its own blueprints by the PER-SHIP id (see inflatedItemID). The
+// research entries went out with the shared 0xFF id, and those were exactly
+// the items that were broken while the blueprint-supplied base ones worked.
+func TestTechTreeModulesCarryTheirHullsPerShipID(t *testing.T) {
+	for _, hull := range baseShipLoadouts {
+		class, ok := eyShipClassByKey[hull.hullLine]
+		if !ok {
+			t.Fatalf("%s: no EYShipClass for hull line %q", hull.name, hull.hullLine)
+		}
+		for _, item := range techTreeModuleItems(hull, 0) {
+			category := (item.id >> 24) & 0xff
+			middle := (item.id >> 16) & 0xff
+			switch category {
+			case 4, 5:
+				if middle != class {
+					t.Errorf("%s (%s=%d): module %d carries ship byte %d", hull.name, hull.hullLine, class, item.id, middle)
+				}
+			case 6:
+				if middle != 0xff {
+					t.Errorf("%s: officer perk %d was inflated; perks are shared", hull.name, item.id)
+				}
+			}
+		}
+	}
+}
+
+// The inflation rule is checked against the client's own blueprints, not
+// against itself: inflating each roster hull's shared ability ids must give
+// back the m_abilitiesId its cooked blueprint carries.
+func TestInflatedIDsReproduceTheCookedBlueprints(t *testing.T) {
+	cooked := map[int32][]int32{}
+	for _, file := range []string{"PrecastLoadouts_cooked.jsonl", "HeroLoadouts_cooked.jsonl"} {
+		f, err := os.Open(filepath.Join(dreadconfig.LoadoutsDir(), file))
+		if err != nil {
+			t.Skipf("no cooked dump: %v", err)
+		}
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for scanner.Scan() {
+			var row struct {
+				Abilities  []int32 `json:"m_abilitiesId"`
+				SystemData struct {
+					ItemID int32 `json:"m_itemID"`
+				} `json:"m_itemSystemData"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &row) == nil {
+				cooked[row.SystemData.ItemID] = row.Abilities
+			}
+		}
+		_ = f.Close()
+	}
+	checked := 0
+	check := func(name string, loadoutID int32, line string, abilities [4]int32) {
+		want, ok := cooked[loadoutID]
+		if !ok {
+			return
+		}
+		checked++
+		for i, id := range abilities {
+			got := int32(0)
+			if id > 0 {
+				got = inflatedItemID(id, eyShipClassByKey[line])
+			}
+			if i >= len(want) || got != want[i] {
+				t.Errorf("%s slot %d: inflated %d, blueprint says %v", name, i, got, want)
+			}
+		}
+	}
+	for _, h := range baseShipLoadouts {
+		check(h.name, h.loadoutID, h.hullLine, h.abilities)
+	}
+	for _, h := range heroShipLoadouts {
+		check(h.name, h.loadoutID, h.hullLine, h.abilities)
+	}
+	if checked < 90 {
+		t.Fatalf("only %d loadouts checked against cooked blueprints", checked)
+	}
+}
+
+// The research list is taken from the client's module preview table by class
+// and tier. This checks it against something independent: the NAMES in that
+// same table, which list the hulls each variant belongs to. For every base hull
+//
+//   - each research entry's row names the hull ("Trafalgar Goliath Torpedo II");
+//   - no row of its class at its tier is left out;
+//   - its secondary weapon and four modules, inflated, are exactly the five rows
+//     at the tier below that name it -- the rule that fitted = tier t-1.
+//
+// Verified 51/51 on 2026-09-23. The Plasma Ram II / Energy Generator II that
+// broke on Trafalgar live are named by no row, so they cannot come back.
+func TestTechTreeResearchIsWhatTheClientNamesForTheHull(t *testing.T) {
+	raw, err := os.ReadFile(dreadconfig.DataTablePath(filepath.Join("UI", "Module_data_table_v01.json")))
+	if err != nil {
+		t.Skipf("no preview table: %v", err)
+	}
+	var table struct {
+		Rows map[string]struct {
+			ItemName string `json:"itemName"`
+		} `json:"rows"`
+	}
+	if err := json.Unmarshal(raw, &table); err != nil {
+		t.Fatal(err)
+	}
+	names := func(id int32) string { return table.Rows[strconv.Itoa(int(id))].ItemName }
+	hasWord := func(s, w string) bool { return strings.Contains(" "+s+" ", " "+w+" ") }
+
+	for _, hull := range baseShipLoadouts {
+		class := eyShipClassByKey[hull.hullLine]
+		research := techTreeModuleItems(hull, 0)
+		if len(research) == 0 {
+			t.Errorf("%s: no research at all", hull.name)
+		}
+		for _, item := range research {
+			if name := names(item.id); !hasWord(name, hull.name) {
+				t.Errorf("%s: researches %d %q, a row that does not name it", hull.name, item.id, name)
+			}
+		}
+		// Every row of this class naming the hull at its tier is offered; at
+		// the tier below, those rows are exactly the fitted five.
+		offered := map[int32]bool{}
+		for _, item := range research {
+			offered[item.id] = true
+		}
+		fitted := map[int32]bool{}
+		for _, id := range append([]int32{hull.secondary}, hull.abilities[:]...) {
+			if id > 0 {
+				fitted[inflatedItemID(id, class)] = true
+			}
+		}
+		namedBelow := 0
+		for key, row := range table.Rows {
+			id, _ := strconv.Atoi(key)
+			if int32(id>>16)&0xff != class || !hasWord(row.ItemName, hull.name) {
+				continue
+			}
+			for _, item := range dreadconfig.ShipResearchItems(class, hull.tier) {
+				if item.ID == int32(id) && !offered[item.ID] {
+					t.Errorf("%s: row %d %q is its research but was not offered", hull.name, id, row.ItemName)
+				}
+			}
+			for _, item := range dreadconfig.ShipResearchItems(class, hull.tier-1) {
+				if item.ID == int32(id) {
+					namedBelow++
+					if !fitted[item.ID] {
+						t.Errorf("%s: row %d %q names it one tier down but it does not fit it", hull.name, id, row.ItemName)
+					}
+				}
+			}
+		}
+		if namedBelow != len(fitted) {
+			t.Errorf("%s: %d rows one tier down name it, it fits %d", hull.name, namedBelow, len(fitted))
+		}
+	}
+}
+
+// PurchasesData and ProgressionData carry every purchase plus every owned
+// ship's fitted defaults (clientOwnedItemIDs), so an account that owns
+// everything sends well over a thousand ids. Both replies must still fit the
+// receive ring; checked against the ring itself, not a budget constant.
+func TestOwnedItemListsFitTheRingWhenEverythingIsOwned(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcded"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	ships, items := provisionUnlockSet()
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ships {
+		if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range append(ships, items...) {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+			VALUES(?,?,'x',0,'admin')`, pid, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	owned := clientOwnedItemIDs(pid)
+	if len(owned) < 1000 {
+		t.Fatalf("only %d owned ids; the test would prove nothing", len(owned))
+	}
+	for name, payload := range map[string][]byte{
+		"YA_GetPlayerPurchases":   buildMmogPlayerPurchasesPayloadForPlayer(pid),
+		"YA_GetPlayerProgression": buildMmogPlayerProgressionPayload(pid),
+	} {
+		t.Logf("%s: %d bytes for %d ids", name, len(payload), len(owned))
+		if len(payload) > clientReceiveRingBytes-2048 {
+			t.Errorf("%s is %d bytes for %d owned ids; ring is 32768", name, len(payload), len(owned))
+		}
+	}
+}
+
+// A ship the player owns must bring its fitted defaults with it, as PER-SHIP
+// ids, or the tech tree asks the player to research the modules the ship
+// already flies (live report 2026-09-23).
+func TestOwnedShipsFittedDefaultsAreOwned(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcdec"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	trafalgar := hullNamed(t, "Trafalgar")
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := grantUnlockedShipLoadout(tx, pid, trafalgar.loadoutID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	owned := map[int32]bool{}
+	for _, id := range clientOwnedItemIDs(pid) {
+		owned[id] = true
+	}
+	class := eyShipClassByKey[trafalgar.hullLine]
+	for _, id := range append([]int32{trafalgar.primary, trafalgar.secondary}, trafalgar.abilities[:]...) {
+		if !owned[inflatedItemID(id, class)] {
+			t.Errorf("Trafalgar fits %d (per-ship %d) but it is not owned", id, inflatedItemID(id, class))
+		}
+	}
+	// 84804388 = "Agosta Trafalgar Flak Turrets I", which the operator had to
+	// research on Trafalgar although Trafalgar flies it.
+	if !owned[84804388] {
+		t.Error("Trafalgar's own Flak Turrets I (84804388) is not owned")
+	}
+	for _, name := range []string{"YA_GetPlayerPurchases", "YA_GetPlayerProgression"} {
+		var payload []byte
+		if name == "YA_GetPlayerPurchases" {
+			payload = buildMmogPlayerPurchasesPayloadForPlayer(pid)
+		} else {
+			payload = buildMmogPlayerProgressionPayload(pid)
+		}
+		// Only PurchasesData carries fitted defaults; ProgressionData lists
+		// what was researched, and nothing was.
+		if carries := bytes.Contains(payload, []byte("84804388")); carries != (name == "YA_GetPlayerPurchases") {
+			t.Errorf("%s: carries 84804388 = %v", name, carries)
+		}
 	}
 }

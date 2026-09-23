@@ -201,8 +201,9 @@ func buildMmogFleetMutationPayload(requestName string, payload []byte) []byte {
 // The balances are the ones AFTER the charge: the connection persists the
 // mutation before building this response.
 func buildMmogUnlockItemPayload(playerPID string, payload []byte) []byte {
-	itemID := protocol.FirstInt32(payload, "ItemID", "itemID", "itemId")
-	state := mmogPlayerStateForPID(playerPID)
+	// Read exactly as persistUnlockItem reads it (int or numeric string), or
+	// the reply can name a different item -- 0 -- than the one recorded.
+	itemID := firstMmogInt32Field(payload, "ItemID", "itemID", "itemId")
 
 	var shipID int32
 	if itemID != 0 {
@@ -211,20 +212,51 @@ func buildMmogUnlockItemPayload(playerPID string, payload []byte) []byte {
 		}
 	}
 
+	// What persistUnlockItem did with this request. Without a record (no
+	// database) nothing was charged, so report success and spend nothing.
+	outcome, recorded := takeUnlockOutcome(playerPID, itemID)
+	if !recorded {
+		outcome = unlockOutcome{succeeded: itemID != 0}
+	}
+	status := "succeeded"
+	if !outcome.succeeded {
+		status = "failed"
+	}
+	// A module researched with ship XP: the client subtracts ShipXp from
+	// result.ShipID's entry in its ship-XP list, so name the ship it came from.
+	if outcome.shipID != 0 {
+		shipID = outcome.shipID
+	}
+
+	// Where the client reads each field -- the YA_UnlockItem reply branch of
+	// the dispatcher (0x2A25DAE-0x2A263DB), verified 2026-09-23:
+	//
+	//	result.status   string, compared with "succeeded"; anything else ends it
+	//	ShipXp          ROOT, double -- SUBTRACTED from result.ShipID's ship XP
+	//	FreeXp          ROOT, double -- SUBTRACTED from the free-XP balance
+	//	ItemID          ROOT, int    -- APPENDED to player-data +0x3F80, the
+	//	                               researched list HasResearchedItem reads
+	//	result.ShipID   int          -- which ship's XP ShipXp comes off
+	//
+	// All of these used to go under "result" only, so the root lookups found
+	// nothing: the client appended item 0 to its researched list and the item
+	// the player paid for never left the "Research" state -- the live report
+	// of 2026-09-23. The XP fields also carried BALANCES, which the client
+	// would have subtracted; they are now what this request spent. Ship XP is
+	// charged for per-ship weapons/modules (persistUnlockItem), 0 otherwise.
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", "YA_UnlockItem")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
+	b = protocol.AppendStringField(b, fieldStatus, status)
 	b = protocol.AppendStringField(b, "reason", "")
-	// Numeric strings: the client reads these through the restrictive
-	// double/int64/string union, so an int32 would read as 0 -- which is
-	// exactly how ItemID came back before.
-	b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(persistedPlayerShipXP(playerPID, shipID))))
-	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
-	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
 	b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(shipID)))
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	// Numeric strings, as everywhere the client reads through the
+	// double/int64/string union (an int32 reads as 0).
+	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
+	b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(outcome.shipXPCharged)))
+	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(outcome.freeXPCharged)))
 	return b
 }
 
@@ -1559,7 +1591,20 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// quest system, since no other quest data model exists server-side.
 	b, stack = appendMmogQuestsArray(b, stack, playerPID)
 	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
+	// Each ship's XP. Was always sent EMPTY, so the client never knew any ship
+	// had XP and research could only ever be paid with free XP (live,
+	// 2026-09-24: "i have no battle/ship exp"). Entry shape from the client's
+	// parser (0x2A766E0, called per element at 0x2A71D0D): ShipID and ShipXp,
+	// stored as 8-byte {id, xp} pairs -- the list the YA_UnlockItem reply's
+	// ShipXp is subtracted from (player-data +0x3B88) and the shape
+	// YA_ConvertShipXP sends back. Numeric strings, per the scalar union.
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
+	for _, entry := range persistedPlayerShipXPs(playerPID) {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(entry.shipID)))
+		b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(entry.xp)))
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 
 	// Add season progress data
@@ -1873,6 +1918,21 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	// The researched-items list, at the ROOT. The reply dispatcher routes
+	// YA_GetPlayerProgression (request slot +0x36E0, sender 0x2A1FCF0) to the
+	// parser at 0x2A79920, which reads "ProgressionData" off the document root
+	// as an array of ids into player-data +0x3F80 -- the array
+	// HasResearchedItem (0x547DD0) scans. It was never sent, so no item could
+	// ever reach the researched state and the Research button never cleared.
+	//
+	// Only what the player RESEARCHED (the purchase rows), not the fitted
+	// defaults clientOwnedItemIDs adds: GetTechTreeItemState checks the owned
+	// list first, so a fitted item is already state 4 without being here, and
+	// an account owning everything would otherwise put this reply over the
+	// receive ring (37,652 bytes measured, with 63 ships of ship progression
+	// in front of it). Plain array for the same reason as PurchasesData.
+	// Verified from the disassembly 2026-09-23; not yet live.
+	b, _ = protocol.AppendStringArrayField(b, nil, "ProgressionData", int32SliceToStrings(persistedMmogPlayerPurchaseItemIDs(playerPID)))
 	return b
 }
 
@@ -2181,73 +2241,131 @@ func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]b
 // duplicate; that is a client-side question and needs a look at the screen, not
 // another change here.
 func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeItem {
-	ids := make([]int32, 0, 10)
-	ids = append(ids, hull.primary, hull.secondary)
-	ids = append(ids, hull.abilities[:]...)
-	ids = append(ids, hull.perks[:]...)
-
-	// Nothing the hull already fields may be emitted, from ANY slot -- those
-	// are already on the rail from the client's own cached slot list, and a
-	// second copy is the duplicate the screen showed.
-	equipped := map[int32]bool{}
-	for _, id := range ids {
-		if id != 0 {
-			equipped[id] = true
+	// The research list is the CLIENT'S, not composed here: every row of the
+	// module preview table for this hull's class at this hull's tier (see
+	// dreadconfig.ShipResearchItems for the table and the rule, verified over
+	// all 51 hulls). The ids are per-ship already, which is what the preview,
+	// the store and the cooked blueprints key on (inflatedItemID).
+	//
+	// This used to be built from the hull's fitted items by walking sibling
+	// asset lines (techTreeSlotUpgrades). That offered ids the game never had
+	// -- Trafalgar's Plasma Ram II and Energy Generator II, broken live on
+	// 2026-09-23 -- and missed the ones it did: Trafalgar got 4 of its 9, and
+	// the tier-1 starters none of their 5, because it excluded the fitted
+	// module's own line while the game's research on Agosta is precisely the
+	// T1 versions of the T0 modules it flies ("Agosta Trafalgar Tempest
+	// Missiles I").
+	//
+	// Nothing fitted can reappear (the fitted defaults are the tier-1 rows), so
+	// the "drawn twice" duplicate cannot come back; checked anyway below.
+	class := eyShipClassByKey[hull.hullLine]
+	fitted := map[int32]bool{}
+	for _, id := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
+		if id > 0 {
+			fitted[inflatedItemID(id, class)] = true
 		}
 	}
-
-	items := make([]techTreeItem, 0, len(ids)*4)
-	position := int32(0)
-	for _, id := range ids {
-		if id == 0 {
+	rows := dreadconfig.ShipResearchItems(class, hull.tier)
+	items := make([]techTreeItem, 0, len(rows))
+	for _, row := range rows {
+		if fitted[row.ID] {
 			continue
 		}
-		// Emit the equipped item AND the higher-tier variants of its own line.
-		//
-		// A slot's entries used to be just the equipped item, which made the
-		// rails list the current loadout back to the player with nothing to
-		// research -- "more weapons and modules but they are just the
-		// duplicates, there is no higher version with better stats".
-		//
-		// The client's assets carry the progression in the path: a slot's line
-		// is one asset name with a _T<n> tier token, and the tiers are separate
-		// registered items with their own ids
-		// (WP_AssaultMPri01_weapon01_T1_BP .. _T5_BP,
-		// AB_AS_Pri_Missile_Super_Ability_T0_BP .. _T5_BP). So the upgrades for
-		// a slot are the same line at a higher tier, and they are real
-		// authored items -- not synthesised.
-		//
-		// Only STRICTLY higher tiers are added: lower ones are what earlier
-		// hulls fly, not something this ship can research.
-		for _, variant := range techTreeSlotUpgrades(id, hull.tier) {
-			if equipped[variant.itemID] {
-				continue
-			}
-			items = append(items, techTreeItem{
-				id: variant.itemID,
-				// ClassId keys the per-ship record, so it is the HULL's id, not
-				// the module's -- that is what files this module under this
-				// ship.
-				classID:      hull.loadoutID,
-				manufacturer: manufacturerID,
-				// Normalised HERE, not at the emit site. techTreeTiersPresent
-				// walks these tiers to decide how many layout rows the tree
-				// has, so a raw 0 produced SIX rows for a five-tier game --
-				// two of them claiming Tier 1, and one carrying the row id
-				// techTreeLayoutRowID reserves for tier 0 (-1000000).
-				tier: techTreeWireTier(variant.tier),
-				// The COST still comes from the raw tier, so a T0 alternative
-				// stays free to research. That is a separate judgement call
-				// (see techTreeModuleXPCost) and normalising the tier should
-				// not quietly reprice fifty-five modules.
-				xpCost:   techTreeModuleXPCost(variant.tier),
-				position: position,
-				module:   true,
-			})
-			position++
-		}
+		items = append(items, techTreeItem{
+			id: row.ID,
+			// ClassId keys the per-ship record, so it is the HULL's id, not
+			// the module's -- that is what files this module under this ship.
+			classID:      hull.loadoutID,
+			manufacturer: manufacturerID,
+			tier:         techTreeWireTier(row.Tier),
+			xpCost:       techTreeModuleXPCost(row.Tier),
+			position:     int32(len(items)),
+			module:       true,
+		})
 	}
 	return items
+}
+
+// inflatedItemID is the PER-SHIP id of a weapon or module: the shared id with
+// its middle byte replaced by the hull's EYShipClass (1..15).
+//
+//	shared   0x04FF001E  83820574  Tempest Missiles T0 (ItemIDRegister)
+//	inflated 0x040E001E  68026398  the same module on an AssaultMedium (14)
+//
+// The shipping game identified weapons and modules this way everywhere a
+// module belongs to a ship, and the client's own data says so -- all verified
+// 2026-09-23 against data/:
+//
+//   - every cooked precast/hero blueprint's m_abilitiesId: inflating the
+//     roster's shared ids with the hull's class reproduces all 99 exactly;
+//   - ItemIDConversionTable.InflatedItemIDs: 6255 of 6255 follow this rule;
+//   - Module_data_table_v01 (the module-details video/still table,
+//     UI_Screen_ModuleDetails.SetupVideoAndStill): all 1237 rows are keyed by
+//     inflated ids, none by shared ones -- a shared id always lands on the
+//     ComingSoon_EN.mp4 fallback;
+//   - CatalogIDTable: the store sold modules (1161) and weapons (140) ONLY by
+//     inflated id, i.e. ownership was per ship.
+//
+// The client converts back with a leaf at RVA 0x2CF0F0 (no unwind record,
+// 0x2CF0F0-0x2CF106): (id>>24)<<24 | id&0xFFFF | 0xFF0000 -- UYItemIDList::
+// GetBaseItemID -- and normalises the same way before the item hash lookup at
+// 0x2D8FF0, so asset resolution accepts either form.
+//
+// This is why "all base weapons and modules work, only the research items are
+// broken" (live report 2026-09-23): the base loadout comes from the client's
+// cooked blueprint, which already carries inflated ids, while the research
+// entries came from us with the shared id.
+//
+// Officer perks (category 6) are NOT per ship: the same blueprints carry them
+// with 0xFF (320 of 320), so only weapons (5) and abilities (4) are inflated.
+func inflatedItemID(id, shipClass int32) int32 {
+	category := (id >> 24) & 0xff
+	if (category != 4 && category != 5) || shipClass < 1 || shipClass > 15 {
+		return id
+	}
+	return id&^0x00ff0000 | shipClass<<16
+}
+
+// researchHullPawn is the ship (pawn id) whose research list a per-ship
+// weapon/module is on: the base hull of the id's EYShipClass at its preview
+// row's tier -- one hull per class and tier (dreadconfig.ShipResearchItems).
+// That is the ship whose XP pays for researching it.
+func researchHullPawn(itemID int32) (int32, bool) {
+	row, ok := perShipResearchRow(itemID)
+	if !ok {
+		return 0, false
+	}
+	class := (itemID >> 16) & 0xff
+	for _, hull := range baseShipLoadouts {
+		if hull.tier == row.Tier && eyShipClassByKey[hull.hullLine] == class {
+			return dreadconfig.ShipIDForPrecastLoadout(hull.loadoutID)
+		}
+	}
+	return 0, false
+}
+
+// perShipResearchRow is the module-preview row a per-ship weapon/module id
+// belongs to (dreadconfig.ShipResearchItems): its tier is what the research
+// entry and store offer carry, its name what the client's own table calls it.
+func perShipResearchRow(id int32) (dreadconfig.PerShipResearchItem, bool) {
+	category, class := (id>>24)&0xff, (id>>16)&0xff
+	if (category != 4 && category != 5) || class < 1 || class > 15 {
+		return dreadconfig.PerShipResearchItem{}, false
+	}
+	for tier := int32(0); tier <= 5; tier++ {
+		for _, row := range dreadconfig.ShipResearchItems(class, tier) {
+			if row.ID == id {
+				return row, true
+			}
+		}
+	}
+	return dreadconfig.PerShipResearchItem{}, false
+}
+
+// baseItemID is the shared id of a possibly-inflated one; the same arithmetic
+// as the client's GetBaseItemID (RVA 0x2CF0F0).
+func baseItemID(id int32) int32 {
+	return id&^0x00ff0000 | 0x00ff0000
 }
 
 // techTreeWireTier is the tier value the client can actually render.
@@ -2479,6 +2597,13 @@ func techTreeBuildSlotIndex() {
 	})
 }
 
+// NO LONGER FEEDS THE TECH TREE (2026-09-23): research lists are read from the
+// client's module preview table, see techTreeModuleItems and
+// dreadconfig.ShipResearchItems. This composed them, and offered ids the game
+// never had (Trafalgar's Plasma Ram II / Energy Generator II, broken live).
+// Kept for the slot index it shares with the tests; do not route offers
+// through it again without checking them against that table.
+//
 // techTreeSlotUpgrades returns what a ship can research in one slot, given the
 // item it currently has there.
 //
@@ -3690,7 +3815,7 @@ func loadoutEYShipClass(loadout mmogShipLoadoutSeed) int32 {
 	if id, ok := derivedShipClassID(loadout.ship.id); ok {
 		return id
 	}
-	return loadoutEYShipClass(loadout)
+	return mmogShipClassWire(loadout.ship.shipClass)
 }
 
 func appendMmogTechTreeRow(b []byte, stack []int, ship mmogShipSeed) ([]byte, []int) {
@@ -3956,14 +4081,84 @@ func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 	// inventory (32 -> 38 items). So the client is not learning ownership from
 	// the inventory, and PurchasesData in a readable shape is the next
 	// candidate, not a proven fix.
-	purchases := persistedMmogPlayerPurchaseItemIDs(playerPID)
-	values := make([]string, 0, len(purchases))
-	for _, itemID := range purchases {
-		values = append(values, strconv.Itoa(int(itemID)))
-	}
-	b, stack = protocol.AppendIndexedStringListField(b, stack, "PurchasesData", values)
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	// PurchasesData goes AT THE ROOT, which is where the client reads it. The
+	// reply dispatcher (0x2A236C2-0x2A31A32, branch at 0x2A259D4) hands the
+	// DOCUMENT ROOT to the parser at 0x2A796D0, which first checks the root
+	// has a "PurchasesData" field and silently returns if not -- so the copy
+	// under "result" above was never seen, which is why a researched item
+	// never became owned. The same root node is where YA_GetTechTree's
+	// "TechTrees" is found (branch at 0x2A258A4), and that works live.
+	// Verified from the disassembly 2026-09-23. It used to sit under "result"
+	// only; that copy was dropped rather than kept alongside, because with
+	// every ship's fitted defaults in it the list is large enough that two
+	// copies would not fit the client's 32768-byte receive ring.
+	//
+	// A plain array (0x0d), not AppendIndexedStringListField: the parser walks
+	// the children and never looks one up by name, so the "0","1",... names
+	// only cost bytes -- ~3.5 per id, which for an account owning everything
+	// (1745 ids) is the difference between fitting the ring and not.
+	b, _ = protocol.AppendStringArrayField(b, nil, "PurchasesData", int32SliceToStrings(clientOwnedItemIDs(playerPID)))
 	return b
+}
+
+// clientOwnedItemIDs is what the client is told the player owns and has
+// researched (PurchasesData and ProgressionData): every purchase row, plus the
+// fitted defaults of every ship the player owns.
+//
+// The defaults matter because ownership is PER SHIP (see inflatedItemID): the
+// client asks about the per-ship id of a fitted module, and nothing we sent
+// ever contained one, so every ship's base weapons and modules showed up as
+// needing research -- live report 2026-09-23, "why i need to research the base
+// weapons/modules of the base ships". The per-ship ids are the ones the cooked
+// blueprints carry (TestInflatedIDsReproduceTheCookedBlueprints); perks stay
+// shared.
+//
+// How the client uses the two lists, from UYTechTreeManager::
+// GetTechTreeItemState (0x543890, chunks to 0x543BB2):
+//
+//	id in player-data +0x3F90 (PurchasesData)        -> 4, owned
+//	fitted to the ship and the ship is in inventory   -> 4, else 1
+//	id in player-data +0x3F80 (ProgressionData)       -> 3, researched
+//	                                                     (HasResearchedItem, 0x547DD0)
+//	otherwise prerequisites decide
+func clientOwnedItemIDs(playerPID string) []int32 {
+	seen := map[int32]bool{}
+	var out []int32
+	add := func(id int32) {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	// Owned purchases only: a research-only row makes an item researched
+	// (ProgressionData), not owned. See researchOnlyPurchase.
+	for _, id := range ownedPurchaseItemIDs(playerPID) {
+		add(id)
+	}
+	fittedByLoadout := map[int32]baseShipLoadout{}
+	for _, h := range baseShipLoadouts {
+		fittedByLoadout[h.loadoutID] = h
+	}
+	for _, h := range heroShipLoadouts {
+		fittedByLoadout[h.loadoutID] = baseShipLoadout{loadoutID: h.loadoutID, hullLine: h.hullLine,
+			primary: h.primary, secondary: h.secondary, abilities: h.abilities, perks: h.perks}
+	}
+	state := mmogPlayerStateForPID(playerPID)
+	for _, loadout := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		hull, ok := fittedByLoadout[loadout.precastLoadoutID]
+		if !ok {
+			continue
+		}
+		class := eyShipClassByKey[hull.hullLine]
+		for _, id := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
+			if id > 0 {
+				add(inflatedItemID(id, class))
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 func buildMmogStaticCareerDataPayload() []byte {
@@ -5485,6 +5680,11 @@ func purchasePriceForItem(itemID int32) int32 {
 // purchasePriceForItemChecked reports whether the price was actually derived
 // rather than defaulted.
 func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
+	// A per-ship weapon/module id is offered by perShipResearchOfferSeeds at
+	// the tier of its research row; charge exactly what that offer shows.
+	if row, ok := perShipResearchRow(itemID); ok {
+		return gatewayMarketCreditPrice(itemTypeFromCategoryLaw(itemID), row.Tier), true
+	}
 	// Derive it exactly as the catalog entry did -- same itemType source, same
 	// tier source, same function -- so the two agree by construction rather
 	// than by two tables being kept in step by hand.
@@ -5586,31 +5786,105 @@ var dailyContractSeeds = []struct {
 	{"YMPQ_ModuleKills", "Module Kills", "Destroy enemy modules", 15, 0, 800, 1600},
 }
 
+// buildMmogPurchasePayload answers a store purchase (YA_PurchaseItem and its
+// aliases).
+//
+// What the client sends and reads -- sender near 0x2A3DD01, reply branch at
+// 0x2A2CAE8, verified 2026-09-23:
+//
+//	request  offer (string SKU, "999"+itemId for a per-ship item), quantity,
+//	         currency ("CR"), campaign
+//	reply    ALL AT THE ROOT: result, detailedResult, offer, quantity -- logged
+//	         as "PurchaseResult: id:<offer> amount:<quantity> result:<result>"
+//	         -- then inventory, addedLoadouts, membership, Contracts, campaign,
+//	         currency. result is compared with "ok", "pending" and "bought";
+//	         only "bought" takes the success path, which re-requests
+//	         YA_GetPlayerPurchases (0x2A1FD80), applies inventory to +0x39E8
+//	         only if that array is non-empty, and uses currency to update the
+//	         local balance.
+//
+// This used to reply with a "result" OBJECT holding status "ok": the root
+// string lookup found no string, the client logged "PurchaseResult: id:
+// amount:0 result:", and nothing was bought. The SKU "99968026432" also failed
+// to parse (it does not fit an int32), so the purchase was refused first.
+//
+// No inventory is sent: an empty array is skipped by the client, while a
+// populated one was measured to REPLACE the owned items (2026-08-14, see
+// buildMmogClaimItemPushPayload). The re-requested PurchasesData carries the
+// new ownership instead.
 func buildMmogPurchasePayload(requestName string, playerPID string, payload []byte) []byte {
+	offer := protocol.FirstNonEmptyString(payload, "offer", "Offer", "sku", "Sku", "external_id", "ExternalID")
 	itemID := protocol.FirstInt32Field(payload, 0, "ItemID", "itemID", "itemId", "ItemId")
 	if itemID == 0 {
-		itemID = itemIDFromPurchaseOffer(protocol.FirstNonEmptyString(payload, "offer", "Offer", "sku", "Sku", "external_id", "ExternalID"))
+		// The same id sent as a numeric string, which is how the client sends
+		// scalars in several requests (see firstMmogInt32Field).
+		itemID = firstMmogInt32Field(payload, "ItemID", "itemID", "itemId", "ItemId")
 	}
 	if itemID == 0 {
-		return buildMmogErrorPayload(requestName, "missing ItemID for purchase")
+		itemID = itemIDFromPurchaseOffer(offer)
+	}
+	quantity := protocol.FirstInt32Field(payload, 1, "quantity", "Quantity")
+	if quantity <= 0 {
+		quantity = 1
+	}
+	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
+	if currency == "" {
+		currency = "gp"
+	}
+	if offer == "" && itemID != 0 {
+		offer = "999" + strconv.Itoa(int(itemID))
+	}
+	reply := func(result, detail string, price int32, balance int32) []byte {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "offer": offer, "item_id": itemID,
+			"result": result, "detail": detail, "price": price}).Info("mmog: " + requestName)
+		var b []byte
+		var stack []int
+		b = protocol.AppendStringField(b, "RT", requestName)
+		b = protocol.AppendStringField(b, "result", result)
+		b = protocol.AppendStringField(b, "detailedResult", detail)
+		b = protocol.AppendStringField(b, "offer", offer)
+		b = protocol.AppendStringField(b, "quantity", strconv.Itoa(int(quantity)))
+		b = protocol.AppendStringField(b, "currency", currency)
+		b = protocol.AppendStringField(b, "campaign", "")
+		b = protocol.AppendStringField(b, "itemID", strconv.Itoa(int(itemID)))
+		b = protocol.AppendStringField(b, "pricePaid", strconv.Itoa(int(price)))
+		b = protocol.AppendStringField(b, "softCurrency", strconv.Itoa(int(balance)))
+		b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
+		b, stack = protocol.AppendObjectEnd(b, stack)
+		b, stack = protocol.AppendArrayStart(b, stack, "inventory")
+		b, _ = protocol.AppendObjectEnd(b, stack)
+		return b
+	}
+	if itemID == 0 {
+		return reply("failed", "missing ItemID for purchase", 0, 0)
 	}
 
 	pid := normalizedPlayerStatePID(playerPID)
 	database := currentMmogPlayerStateDB()
 	if database == nil {
-		return buildMmogErrorPayload(requestName, "database unavailable")
+		return reply("failed", "database unavailable", 0, 0)
 	}
 
-	quantity := protocol.FirstInt32Field(payload, 1, "quantity", "Quantity")
-	if quantity <= 0 {
-		quantity = 1
+	// A per-ship weapon/module is bought only AFTER it is researched: research
+	// with XP first, then buy with credits (the original game, per the
+	// operator). That is the claim path, which also covers YA_ClaimItem.
+	if _, perShip := perShipResearchRow(itemID); perShip {
+		status, reason, charged := claimResearchedItem(playerPID, itemID)
+		var balance int32
+		_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
+		if status != "succeeded" {
+			return reply("failed", reason, 0, balance)
+		}
+		if charged == 0 {
+			// The claim path treats "already owned" as success; a store
+			// purchase must not tell the client it bought something again.
+			return reply("failed", "item already owned", 0, balance)
+		}
+		return reply("bought", "ok", charged, balance)
 	}
+
 	price := purchasePriceForItem(itemID) * quantity
 	itemType := purchasedItemType(itemID)
-	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
-	if currency == "" {
-		currency = "gp"
-	}
 
 	// Check-then-update was a TOCTOU race: two concurrent purchase requests
 	// could both read a sufficient balance before either committed its
@@ -5623,7 +5897,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	// a separate racy pre-check.
 	tx, err := database.Begin()
 	if err != nil {
-		return buildMmogErrorPayload(requestName, "database unavailable")
+		return reply("failed", "database unavailable", 0, 0)
 	}
 	committed := false
 	defer func() {
@@ -5635,44 +5909,41 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	var softCurrency, premiumCurrency int32
 	if err := tx.QueryRow(`SELECT soft_currency, premium_currency FROM player_state WHERE user_id=?`, pid).
 		Scan(&softCurrency, &premiumCurrency); err != nil {
-		return buildMmogErrorPayload(requestName, "player state unavailable")
+		return reply("failed", "player state unavailable", 0, 0)
 	}
 
 	deductResult, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`, price, pid, price)
 	if err != nil {
-		return buildMmogErrorPayload(requestName, "currency deduction failed")
+		return reply("failed", "currency deduction failed", 0, softCurrency)
 	}
 	if rows, _ := deductResult.RowsAffected(); rows == 0 {
-		return buildMmogErrorPayload(requestName, "insufficient credits")
+		return reply("failed", "insufficient credits", 0, softCurrency)
 	}
 
 	insertResult, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`, pid, itemID, itemType, price, currency)
 	if err != nil {
-		return buildMmogErrorPayload(requestName, "purchase record failed")
+		return reply("failed", "purchase record failed", 0, softCurrency)
 	}
 	if rows, _ := insertResult.RowsAffected(); rows == 0 {
-		// Already owned — rollback (via defer) undoes the currency deduction above.
-		return buildMmogErrorPayload(requestName, "item already owned")
+		// A row exists. If it only records RESEARCH, this purchase is what
+		// makes the item owned: turn the row into a purchase, moving the XP it
+		// cost to research_xp. See researchOnlyPurchase.
+		upgraded, err := tx.Exec(`UPDATE player_purchases SET research_xp=price_paid, price_paid=?, currency=?
+			WHERE user_id=? AND item_id=? AND `+researchOnlyPurchase, price, currency, pid, itemID)
+		if err != nil {
+			return reply("failed", "purchase record failed", 0, softCurrency)
+		}
+		if n, _ := upgraded.RowsAffected(); n == 0 {
+			// Already owned — rollback (via defer) undoes the currency deduction above.
+			return reply("failed", "item already owned", 0, softCurrency)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return buildMmogErrorPayload(requestName, "purchase commit failed")
+		return reply("failed", "purchase commit failed", 0, softCurrency)
 	}
 	committed = true
-
-	var b []byte
-	var stack []int
-	b = protocol.AppendStringField(b, "RT", requestName)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendInt32Field(b, "itemID", itemID)
-	b = protocol.AppendInt32Field(b, "quantity", quantity)
-	b = protocol.AppendInt32Field(b, "pricePaid", price)
-	b = protocol.AppendStringField(b, "currency", currency)
-	b = protocol.AppendInt32Field(b, "softCurrency", softCurrency-price)
-	b = protocol.AppendInt32Field(b, "premiumCurrency", premiumCurrency)
-	b, _ = protocol.AppendObjectEnd(b, stack)
-	return b
+	return reply("bought", "ok", price, softCurrency-price)
 }
 
 // itemIDFromPurchaseOffer resolves the SKU string a client may send instead of a
@@ -5705,6 +5976,17 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 	}
 	if id, err := strconv.ParseInt(offer, 10, 32); err == nil && id > 0 {
 		return int32(id)
+	}
+	// The client's own offer id: "999" + item id (CatalogIDTable's SKU form,
+	// e.g. "99968026432"), which does not fit an int32 and so failed above.
+	// Accepted only for a real per-ship weapon/module, i.e. an id this server
+	// offers (researchedItemOfferSeeds) and can price.
+	if strings.HasPrefix(offer, "999") {
+		if id, err := strconv.ParseInt(offer[3:], 10, 32); err == nil && id > 0 {
+			if _, ok := perShipResearchRow(int32(id)); ok {
+				return int32(id)
+			}
+		}
 	}
 	if idx := strings.LastIndex(offer, "_"); idx >= 0 && idx+1 < len(offer) {
 		id, err := strconv.ParseInt(offer[idx+1:], 10, 32)
@@ -6432,6 +6714,120 @@ func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byt
 // UNVERIFIED against a live client. The handler, its field names and its parser
 // are read from the binary; that the client accepts this frame unsolicited is
 // not established -- the same caveat the currency push carries.
+// buildMmogClaimItemPayload answers the client's YA_ClaimItem request: BUYING
+// an item the player has researched, with credits.
+//
+// The flow, from the client (verified 2026-09-23):
+//
+//   - The tech tree's item action (0x4FDCE0) switches on GetTechTreeItemState:
+//     2 "available" -> research, YA_UnlockItem; 3 "researched" -> look for a
+//     market offer or a bundle containing the item (0x41F4C0) and open the
+//     store purchase if one exists, otherwise send YA_ClaimItem (sender
+//     0x2A16A80) carrying only ItemID. No price is sent: the server decides.
+//   - The reply handler (0x2A38B10, dispatcher branch 0x2A2C86E) reads
+//     result.status (== "succeeded") and the ROOT ItemID; on success it reads
+//     result.inventory and result.addedLoadouts, applies inventory to
+//     player-data +0x39E8 only if that array is NON-EMPTY, and re-requests
+//     YA_GetPlayerPurchases (0x2A1FD80) and YA_GetPlayerProgression
+//     (0x2A1FCF0) -- which is how the bought item becomes owned in-session.
+//     On failure it logs "YA_ClaimItem failed for item [%d] (reason: %s)".
+//
+// Until this existed, YA_ClaimItem got the generic success payload: nothing
+// was charged or granted, and the operator saw "price 0 ... insufficient
+// credits" (2026-09-23). The operator confirms the original game worked this
+// way: research with XP, then buy with credits.
+//
+// No inventory is sent. The client skips the inventory update for an empty
+// array, and a populated one was measured (2026-08-14) to REPLACE the owned
+// items with nothing it could parse -- see buildMmogClaimItemPushPayload. The
+// re-requested PurchasesData carries the ownership instead.
+func buildMmogClaimItemPayload(playerPID string, payload []byte) []byte {
+	itemID := protocol.FirstInt32Field(payload, 0, "ItemID", "itemID", "itemId", "ItemId")
+	if itemID == 0 {
+		itemID = firstMmogInt32Field(payload, "ItemID", "itemID", "itemId", "ItemId")
+	}
+	status, reason, charged := claimResearchedItem(playerPID, itemID)
+	logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID, "status": status,
+		"reason": reason, "credits_charged": charged}).Info("mmog: YA_ClaimItem")
+
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_ClaimItem")
+	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, status)
+	b = protocol.AppendStringField(b, "reason", reason)
+	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(itemID)))
+	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// claimResearchedItem charges the credit price of a researched item and makes
+// it owned. It returns the reply status, a reason for a refusal, and the credits
+// charged. Owning it already is a success that charges nothing.
+func claimResearchedItem(playerPID string, itemID int32) (status, reason string, charged int32) {
+	if itemID == 0 {
+		return "failed", "missing ItemID", 0
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return "failed", "database unavailable", 0
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	// A fitted default of a ship the player owns is owned already, even if it
+	// was also researched (before 2026-09-23 fitted items were not reported as
+	// owned, so players researched their own defaults). Checked BEFORE the
+	// transaction: clientOwnedItemIDs queries the database, and with the
+	// store's single connection (MaxOpenConns=1) a query inside an open
+	// transaction waits for itself forever -- measured as a hung test.
+	for _, id := range clientOwnedItemIDs(playerPID) {
+		if id == itemID {
+			return "succeeded", "", 0
+		}
+	}
+	tx, err := database.Begin()
+	if err != nil {
+		return "failed", "database unavailable", 0
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var researchOnly, owned int
+	if err := tx.QueryRow(`SELECT COALESCE(SUM(`+researchOnlyPurchase+`),0), COALESCE(SUM(NOT `+researchOnlyPurchase+`),0)
+		FROM player_purchases WHERE user_id=? AND item_id=?`, pid, itemID).Scan(&researchOnly, &owned); err != nil {
+		return "failed", "database unavailable", 0
+	}
+	if owned > 0 {
+		return "succeeded", "", 0
+	}
+	if researchOnly == 0 {
+		return "failed", "not researched", 0
+	}
+	price := purchasePriceForItem(itemID)
+	result, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now')
+		WHERE user_id=? AND soft_currency>=?`, price, pid, price)
+	if err != nil {
+		return "failed", "database unavailable", 0
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return "failed", "insufficient credits", 0
+	}
+	// research_xp keeps what the research cost; price_paid becomes what this
+	// purchase cost, in the currency the client pays with (CR, the store's
+	// credits -- "Sending PurchaseItem request (..., 1, CR, )"). SQLite
+	// evaluates every right-hand side against the OLD row, so research_xp
+	// takes the XP before price_paid is overwritten.
+	if _, err := tx.Exec(`UPDATE player_purchases SET research_xp=price_paid, price_paid=?, currency='CR'
+		WHERE user_id=? AND item_id=? AND `+researchOnlyPurchase, price, pid, itemID); err != nil {
+		return "failed", "database unavailable", 0
+	}
+	if err := tx.Commit(); err != nil {
+		return "failed", "database unavailable", 0
+	}
+	return "succeeded", "", price
+}
+
 func buildMmogClaimItemPushPayload(playerPID string) []byte {
 	var b []byte
 	var stack []int

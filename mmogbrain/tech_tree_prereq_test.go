@@ -317,7 +317,7 @@ func TestTechTreeModulesAreAlternativesOnly(t *testing.T) {
 
 		seen := map[int32]bool{}
 		for _, m := range techTreeModuleItems(hull, 0) {
-			if fitted[m.id] {
+			if fitted[baseItemID(m.id)] { // fitted ids are shared, entries per-ship
 				t.Errorf("%s re-sends fitted module %d; the client already draws it", hull.name, m.id)
 			}
 			if seen[m.id] {
@@ -331,7 +331,7 @@ func TestTechTreeModulesAreAlternativesOnly(t *testing.T) {
 		// drawn twice.
 		lines := map[techTreeSlotKey]int{}
 		for _, m := range techTreeModuleItems(hull, 0) {
-			if key, ok := techTreeSlotOf[m.id]; ok {
+			if key, ok := techTreeSlotOf[baseItemID(m.id)]; ok {
 				lines[key]++
 				if lines[key] > 1 {
 					t.Errorf("%s emits %d entries from line %v; one per line only", hull.name, lines[key], key)

@@ -21,6 +21,13 @@ package main
 // appear in the tables; they resolve through the in-fiction name their loadout
 // uses (Agosta, Simargl, Rurik, Cerberus).
 //
+// CORRECTED 2026-09-24 for weapons and abilities: the tier assumption above is
+// wrong. The game's base tier reads "N", not "I", and 23 of the 29 weapon/ability
+// keys here name the wrong tier (83820574 is "Tempest Missiles N" by its own
+// blueprint, not "... I"). Those items now take the blueprint's m_headline
+// (dreadconfig.ItemHeadlineKey) in gatewayItemCatalogSeeds; the entries below are
+// kept as the fallback and for ships, which the correction does not cover.
+//
 // Generated from the extracted client data; regenerate if the item set changes.
 var marketItemLocalizationKeys = map[int32]string{
 	// The fleet identifies its ships by their development precast-loadout id

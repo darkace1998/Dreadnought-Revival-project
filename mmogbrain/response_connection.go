@@ -732,12 +732,15 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				// investigation convenient would corrupt the very state we are
 				// trying to observe.
 				//
-				// The client has NO handler for YA_UnlockItem's response -- the
-				// dispatcher references YA_ClaimItem and not YA_UnlockItem -- so
-				// the answer we send is discarded and the research button never
-				// changes. That finding stands; this was the wrong remedy for it,
-				// or the right remedy wrongly encoded. See
-				// buildMmogClaimItemPushPayload.
+				// DISPROVED 2026-09-23: "the client has NO handler for
+				// YA_UnlockItem's response". It has one (dispatcher branch
+				// 0x2A25DAE-0x2A263DB, reply slot +0x3720): it appends the ROOT
+				// ItemID to the researched list and subtracts the root XP. The
+				// research button never changed because we put those fields under
+				// "result" -- see buildMmogUnlockItemPayload. YA_ClaimItem is the
+				// separate BUY step the client sends itself for a researched item
+				// (buildMmogClaimItemPayload), so this unsolicited push is not
+				// needed for either.
 				claimID, err := uuid.NewRandom()
 				if err != nil {
 					log.WithError(err).Warn("mmog: failed to generate claim-item push id")

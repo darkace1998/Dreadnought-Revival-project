@@ -490,6 +490,48 @@ func persistedMmogPlayerPurchaseItemIDs(playerPID string) []int32 {
 	return ids
 }
 
+// researchOnlyPurchase is the SQL condition for a player_purchases row that
+// records RESEARCH, not ownership: a weapon, module or officer briefing
+// (categories 4/5/6) unlocked with free XP through YA_UnlockItem.
+//
+// The game keeps the two apart. UYTechTreeManager::GetTechTreeItemState
+// (0x543890) answers 3 "researched" from player-data +0x3F80 and 4 "owned" from
+// +0x3F90, which come from two different lists (ProgressionData and
+// PurchasesData), and the store sold modules for credits by per-ship id
+// (CatalogIDTable "Modules"/"Weapons"). Recording a research as a plain
+// purchase put it in PurchasesData, so researching an item also bought it --
+// live report 2026-09-23, "i can research now but i also immediately buy it
+// without paying for it".
+//
+// A credit purchase of a researched item turns its row into an ordinary
+// purchase (buildMmogPurchasePayload), so the row keeps one meaning at a time.
+// Ships are deliberately not included: a ship unlock grants the hull, which is
+// the flow that was confirmed working and is left alone.
+const researchOnlyPurchase = `(currency='freexp' AND ((item_id>>24)&255) IN (4,5,6))`
+
+// ownedPurchaseItemIDs is every purchase that makes an item OWNED: all rows
+// except research-only ones.
+func ownedPurchaseItemIDs(playerPID string) []int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(`SELECT item_id FROM player_purchases WHERE user_id=? AND NOT `+
+		researchOnlyPurchase+` ORDER BY purchased_at,item_id`, normalizedPlayerStatePID(playerPID))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []int32
+	for rows.Next() {
+		var id int32
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func persistedMmogPlayerPurchasedItemIDSet(playerPID string) map[int32]struct{} {
 	ids := persistedMmogPlayerPurchaseItemIDs(playerPID)
 	if len(ids) == 0 {
@@ -1045,17 +1087,56 @@ func fleetEditLoadoutID(database *sql.DB, playerPID string, payload []byte) (int
 // taken from the request rather than recomputed from a tech tree the server
 // would have to model independently. They are still clamped at zero so a
 // malformed request cannot credit anybody.
+// unlockOutcome is what persistUnlockItem actually did, for the reply to report.
+//
+// The client does not re-read balances after YA_UnlockItem: its reply handler
+// (in the dispatcher at 0x2A25DAE) SUBTRACTS the reply's root ShipXp from that
+// ship's XP and its root FreeXp from the free-XP balance, then appends the root
+// ItemID to the researched list. So the reply must carry what THIS request
+// spent -- zero for a repeat of an item already owned, and a refusal when the
+// player could not pay -- which only the persistence step knows.
+type unlockOutcome struct {
+	succeeded     bool
+	freeXPCharged int32
+	shipXPCharged int32
+	shipID        int32 // whose XP shipXPCharged came from (pawn id)
+}
+
+var lastUnlockOutcomes sync.Map // normalized pid + "|" + item id -> unlockOutcome
+
+func unlockOutcomeKey(playerPID string, itemID int32) string {
+	return normalizedPlayerStatePID(playerPID) + "|" + strconv.Itoa(int(itemID))
+}
+
+// takeUnlockOutcome returns and forgets the recorded outcome of an unlock.
+func takeUnlockOutcome(playerPID string, itemID int32) (unlockOutcome, bool) {
+	v, ok := lastUnlockOutcomes.LoadAndDelete(unlockOutcomeKey(playerPID, itemID))
+	if !ok {
+		return unlockOutcome{}, false
+	}
+	return v.(unlockOutcome), true
+}
+
 func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error {
 	itemID := firstMmogInt32Field(payload, "ItemID", "itemID", "itemId")
 	if itemID == 0 {
 		return nil
 	}
-	// ShipXp is in the request too, but it is not charged here: the request
-	// names the ITEM, not which ship's pool the XP comes from, and guessing
-	// would take currency from the wrong ship. Free XP is unambiguous.
+	outcome := unlockOutcome{}
+	defer func() { lastUnlockOutcomes.Store(unlockOutcomeKey(playerPID, itemID), outcome) }()
 	freeXP := firstMmogInt32Field(payload, "FreeXp", "freeXp", "FreeXP")
 	if freeXP < 0 {
 		freeXP = 0
+	}
+	// Ship XP is charged too when the ship is unambiguous. The request names
+	// only the item, but a per-ship weapon/module is on exactly one hull's
+	// research list (its class, at its row's tier -- see researchHullPawn), and
+	// that is the ship whose XP the client spent. Anything else (hull unlocks)
+	// still charges free XP only.
+	shipXP := firstMmogInt32Field(payload, "ShipXp", "shipXp", "ShipXP")
+	shipID, shipKnown := researchHullPawn(itemID)
+	if shipXP < 0 || !shipKnown {
+		shipXP = 0
 	}
 
 	tx, err := database.Begin()
@@ -1081,9 +1162,22 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		return fmt.Errorf("check ownership of %d: %w", itemID, err)
 	}
 	if alreadyOwned > 0 {
+		outcome.succeeded = true // owned already: nothing charged
 		return nil
 	}
 
+	if shipXP > 0 {
+		result, err := tx.Exec(`UPDATE player_ship_xp SET xp=xp-?, updated_at=datetime('now')
+			WHERE user_id=? AND ship_id=? AND xp>=?`, shipXP, playerPID, shipID, shipXP)
+		if err != nil {
+			return fmt.Errorf("charge ship xp for %d: %w", itemID, err)
+		}
+		if affected, _ := result.RowsAffected(); affected == 0 {
+			// The ship does not have that much XP: record nothing, like a
+			// short free-XP balance below.
+			return nil
+		}
+	}
 	if freeXP > 0 {
 		result, err := tx.Exec(`UPDATE player_state SET free_xp=free_xp-?, updated_at=datetime('now')
 			WHERE user_id=? AND free_xp>=?`, freeXP, playerPID, freeXP)
@@ -1096,8 +1190,8 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 			return nil
 		}
 	}
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
-		VALUES(?,?,?,?,?)`, playerPID, itemID, purchasedItemType(itemID), freeXP, "freexp"); err != nil {
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency,research_xp)
+		VALUES(?,?,?,?,?,?)`, playerPID, itemID, purchasedItemType(itemID), freeXP, "freexp", freeXP+shipXP); err != nil {
 		return fmt.Errorf("record unlock %d: %w", itemID, err)
 	}
 	if err := grantUnlockedShipLoadout(tx, playerPID, itemID); err != nil {
@@ -1107,6 +1201,10 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		return fmt.Errorf("commit unlock %d: %w", itemID, err)
 	}
 	committed = true
+	outcome = unlockOutcome{succeeded: true, freeXPCharged: freeXP, shipXPCharged: shipXP}
+	if shipXP > 0 {
+		outcome.shipID = shipID
+	}
 	return nil
 }
 
@@ -1188,6 +1286,34 @@ func boolToInt(value bool) int {
 // persistedPlayerShipXP returns the XP the player has accumulated on one ship,
 // or 0 when there is no row (or no database). YA_UnlockItem's response echoes
 // it back alongside the free-XP balance.
+type shipXPEntry struct {
+	shipID, xp int32
+}
+
+// persistedPlayerShipXPs is every ship's XP for a player, in ship-id order.
+// Ships are keyed by PAWN id, as awardFleetShipXP records them (from
+// player_ship_loadouts.ship_id).
+func persistedPlayerShipXPs(playerPID string) []shipXPEntry {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(`SELECT ship_id, xp FROM player_ship_xp WHERE user_id=? AND xp>0 ORDER BY ship_id`,
+		normalizedPlayerStatePID(playerPID))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var out []shipXPEntry
+	for rows.Next() {
+		var e shipXPEntry
+		if rows.Scan(&e.shipID, &e.xp) == nil {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 func persistedPlayerShipXP(playerPID string, shipID int32) int32 {
 	if shipID == 0 {
 		return 0
@@ -1332,7 +1458,7 @@ func purchasedInventoryItemIDs(playerPID string) []int32 {
 		return nil
 	}
 	rows, err := database.Query(
-		`SELECT item_id FROM player_purchases WHERE user_id=? ORDER BY rowid`,
+		`SELECT item_id FROM player_purchases WHERE user_id=? AND NOT `+researchOnlyPurchase+` ORDER BY rowid`,
 		normalizedPlayerStatePID(playerPID))
 	if err != nil {
 		return nil

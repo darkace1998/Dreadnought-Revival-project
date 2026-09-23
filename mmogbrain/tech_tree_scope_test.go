@@ -28,8 +28,13 @@ func TestTechTreeIsSharedWithinAClassAndNotAcrossClasses(t *testing.T) {
 
 	ids := func(name string) map[int32]bool {
 		out := map[int32]bool{}
+		// Compared by BASE id since 2026-09-23: module entries now carry the
+		// per-ship (inflated) id, so the same asset on Vucari (SniperMedium,
+		// 10) and Ballista (SniperHeavy, 11) is two different ids by design --
+		// see inflatedItemID. What this test protects is that the ASSET pool
+		// is shared by class, and that is what the base id names.
 		for _, item := range techTreeModuleItems(hullNamed(t, name), 0) {
-			out[item.id] = true
+			out[baseItemID(item.id)] = true
 		}
 		return out
 	}
@@ -54,7 +59,7 @@ func TestTechTreeIsSharedWithinAClassAndNotAcrossClasses(t *testing.T) {
 	}
 	for id := range rurik {
 		if agosta[id] {
-			item, _ := dreadconfig.ItemByID(id)
+			item, _ := dreadconfig.ItemByID(baseItemID(id))
 			t.Errorf("a Sniper hull and an Assault hull both offer %d (%s)", id, item.AssetPath)
 		}
 	}
@@ -78,7 +83,7 @@ func TestTechTreeNeverOffersTheWrongHullSize(t *testing.T) {
 			continue
 		}
 		for _, item := range techTreeModuleItems(hull, 0) {
-			asset, _ := dreadconfig.ItemByID(item.id)
+			asset, _ := dreadconfig.ItemByID(baseItemID(item.id)) // per-ship id -> register id
 			if !strings.Contains(asset.AssetPath, "/Weapons/") {
 				continue // abilities and perks are class-level, not per size
 			}
@@ -102,7 +107,7 @@ func TestTechTreeExcludesWhatTheShipAlreadyFields(t *testing.T) {
 		equipped[id] = true
 	}
 	for _, item := range techTreeModuleItems(hull, 0) {
-		if equipped[item.id] {
+		if equipped[baseItemID(item.id)] { // fitted ids are shared, entries per-ship
 			t.Errorf("item %d is fitted to the ship AND offered in its tech tree; "+
 				"the client draws fitted items from its own slot list, so this is the duplicate", item.id)
 		}

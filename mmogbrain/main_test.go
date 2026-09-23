@@ -1239,11 +1239,14 @@ func TestPurchaseItemAcceptsClientOfferShape(t *testing.T) {
 	request = protocol.AppendStringField(request, "campaign", "")
 	request = protocol.AppendStringField(request, "priceId", "price_free")
 
+	// The client reads a ROOT string "result" and succeeds only on "bought"
+	// (reply branch 0x2A2CAE8, verified 2026-09-23); the old result-object with
+	// status "ok" is what logged "PurchaseResult: id: amount:0 result:".
 	purchase := buildMmogPurchasePayload("YA_PurchaseItem", playerPID, request)
-	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "result", "bought")) {
 		t.Fatalf("offer-shaped purchase did not succeed: %x", purchase)
 	}
-	if !bytes.Contains(purchase, protocol.AppendInt32Field(nil, "itemID", extractedShipIDTrafalgar)) {
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "itemID", strconv.Itoa(int(extractedShipIDTrafalgar)))) {
 		t.Fatal("offer-shaped purchase did not resolve offer to itemID")
 	}
 	var count int
@@ -1273,8 +1276,11 @@ func TestPurchasedShipUpdatesTechTreeAndProgressionOwnership(t *testing.T) {
 	}
 
 	purchaseRequest := protocol.AppendInt32Field(nil, "ItemID", extractedShipIDTrafalgar)
+	// The client reads a ROOT string "result" and succeeds only on "bought"
+	// (reply branch 0x2A2CAE8, verified 2026-09-23); the old result-object with
+	// status "ok" is what logged "PurchaseResult: id: amount:0 result:".
 	purchase := buildMmogPurchasePayload("YA_BuyItem", playerPID, purchaseRequest)
-	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "result", "bought")) {
 		t.Fatalf("purchase did not succeed: %x", purchase)
 	}
 
@@ -2522,12 +2528,12 @@ func TestPlayerBootstrapAvoidsSyntheticOfficersAndPurchases(t *testing.T) {
 		t.Fatal("YA_PlayerGet should not include synthetic officer rows with non-client parser fields")
 	}
 
-	// PurchasesData is an OBJECT (0x0c) with children named "0", "1", ... not a
-	// bare array (0x0d), since 2026-08-08: a name-less container answers any
-	// non-numeric named lookup with child[0], so the client could never look an
-	// id up by name. Extraction changed shape with it; the assertion below is
-	// unchanged and still checks the same thing.
-	purchases := extractNamedMmogObject(t, extractNamedMmogObject(t, buildMmogPlayerPurchasesPayload(), "result"), "PurchasesData")
+	// PurchasesData moved to the document ROOT as a plain array on 2026-09-23:
+	// that is where the client's parser (0x2A796D0) reads it, and it walks the
+	// children without name lookups, so the indexed-object shape adopted on
+	// 2026-08-08 bought nothing there. Extraction changed shape with it; the
+	// assertion below is unchanged and still checks the same thing.
+	purchases := extractNamedMmogArray(t, buildMmogPlayerPurchasesPayload(), "PurchasesData")
 	if bytes.Contains(purchases, []byte{0x00, 0x56}) {
 		t.Fatal("YA_GetPlayerPurchases should not synthesize starter inventory purchases")
 	}
@@ -2873,7 +2879,10 @@ func TestSafeNoopClientCallsReturnSuccess(t *testing.T) {
 		// ownership, and answers with its own payload whose success value is
 		// "succeeded", not "ok" (the arm compares against "succeeded" at
 		// 0x142a261d3). Covered by TestUnlockItemResponseCarriesWhatTheClientReads.
-		"YA_ClaimItem",
+		// YA_ClaimItem likewise (2026-09-23): it is the "buy a researched item
+		// with credits" request, charges and grants, and its reply handler
+		// (0x2A38B10) also compares against "succeeded". Covered by
+		// TestClaimBuysAResearchedItemWithCredits.
 		"YA_AddItems",
 		"YA_RemoveItems",
 		"YA_ContractReplace",
@@ -3238,8 +3247,11 @@ func TestPurchasedItemTypeMatchesRealItemCategory(t *testing.T) {
 
 	const weaponItemID int32 = 100597772 // Repeater Turrets, confirmed YWeapon in ItemIDTable.json
 	request := protocol.AppendInt32Field(nil, "ItemID", weaponItemID)
+	// The client reads a ROOT string "result" and succeeds only on "bought"
+	// (reply branch 0x2A2CAE8, verified 2026-09-23); the old result-object with
+	// status "ok" is what logged "PurchaseResult: id: amount:0 result:".
 	purchase := buildMmogPurchasePayload("YA_PurchaseItem", playerPID, request)
-	if !bytes.Contains(purchase, protocol.AppendStringField(nil, fieldStatus, "ok")) {
+	if !bytes.Contains(purchase, protocol.AppendStringField(nil, "result", "bought")) {
 		t.Fatalf("weapon purchase did not succeed: %x", purchase)
 	}
 

@@ -1,0 +1,3692 @@
+{
+ "100597762": {
+  "key": "FDF6F588468C274D7E5157B7E41EE1D7",
+  "source": "blueprint",
+  "text": "Ballistic Cannons IV"
+ },
+ "100597763": {
+  "key": "C142463A42F1F8417179EB88904CBF3C",
+  "source": "blueprint",
+  "text": "Ballistic Cannons III"
+ },
+ "100597765": {
+  "key": "64AB863F487833C79A567A9E1A5D6BAD",
+  "source": "blueprint",
+  "text": "Ballistic Cannons V"
+ },
+ "100597766": {
+  "key": "A4024E6544EFB9D1231C858000314839",
+  "source": "blueprint",
+  "text": "Tesla Turrets IV"
+ },
+ "100597771": {
+  "key": "36611671498FCE67445F06A0B15AC10B",
+  "source": "blueprint",
+  "text": "Repeater Turrets IV"
+ },
+ "100597772": {
+  "key": "AA639ABD406194105A9F3B80D2B0789E",
+  "source": "blueprint",
+  "text": "Repeater Turrets I"
+ },
+ "100597773": {
+  "key": "1288727D4D4F88A4DD310199C12057C9",
+  "source": "blueprint",
+  "text": "Repeater Turrets II"
+ },
+ "100597774": {
+  "key": "07A0FDCF4C3BCB9F351BC888B856F115",
+  "source": "blueprint",
+  "text": "Repeater Turrets III"
+ },
+ "100597776": {
+  "key": "AD26A9824D9065AFDFE78CA68D17FAB2",
+  "source": "blueprint",
+  "text": "Repeater Turrets V"
+ },
+ "100597777": {
+  "key": "58247E744EE2617BFEBF0E8538235041",
+  "source": "blueprint",
+  "text": "Light Particle Turrets IV"
+ },
+ "100597778": {
+  "key": "58247E744EE2617BFEBF0E8538235041",
+  "source": "preview-name",
+  "text": "Light Particle Turrets IV"
+ },
+ "100597779": {
+  "key": "0AA21FB8479C199EB229F6BDF3198328",
+  "source": "blueprint",
+  "text": "Light Particle Turrets V"
+ },
+ "100597780": {
+  "key": "D49326324274742955EDF38D8D74D9EA",
+  "source": "blueprint",
+  "text": "Rocket Turrets IV"
+ },
+ "100597781": {
+  "key": "5027532A4E19F7A905738397A936E391",
+  "source": "blueprint",
+  "text": "Rocket Turrets V"
+ },
+ "100597782": {
+  "key": "283193D449027A355F2825961878C57B",
+  "source": "blueprint",
+  "text": "Flak Turrets IV"
+ },
+ "100597783": {
+  "key": "61FC517048EF1EADC3C01CB0D3CEBA48",
+  "source": "blueprint",
+  "text": "Flak Turrets III"
+ },
+ "100597784": {
+  "key": "283193D449027A355F2825961878C57B",
+  "source": "preview-name",
+  "text": "Flak Turrets IV"
+ },
+ "100597785": {
+  "key": "311300CA497B5BDF168D81B15D233800",
+  "source": "blueprint",
+  "text": "Flak Turrets V"
+ },
+ "100597786": {
+  "key": "723AAF6F482DDF6E221CE283FC286DAB",
+  "source": "blueprint",
+  "text": "Drone Machine Gun"
+ },
+ "100597788": {
+  "key": "FC52F0B04F85917EE2C4198E84E9E721",
+  "source": "blueprint",
+  "text": "Heavy Ballistic Cannons IV"
+ },
+ "100597790": {
+  "key": "751C45FB4A191F87B8A01EA64044A949",
+  "source": "blueprint",
+  "text": "Heavy Ballistic Cannons V"
+ },
+ "100597792": {
+  "key": "AE104E694C62D89C003CAC95B147AACC",
+  "source": "blueprint",
+  "text": "Plasma Cannons IV"
+ },
+ "100597793": {
+  "key": "3B5B9F6F47C510A716D1FD901A46F82E",
+  "source": "blueprint",
+  "text": "Plasma Cannons III"
+ },
+ "100597794": {
+  "key": "BC5DE77247D2255807F55B988846A1AC",
+  "source": "blueprint",
+  "text": "Plasma Cannons IV"
+ },
+ "100597795": {
+  "key": "6B8855E3491D4AF2A8D7D48D5787EE89",
+  "source": "blueprint",
+  "text": "Plasma Cannons V"
+ },
+ "100597797": {
+  "key": "1BED82424C0301752FCA07AF9A27929B",
+  "source": "blueprint",
+  "text": "Heavy Plasma Cannons IV"
+ },
+ "100597799": {
+  "key": "6C1197074E2E484A18A364B87593955B",
+  "source": "blueprint",
+  "text": "Heavy Plasma Cannons III"
+ },
+ "100597801": {
+  "key": "CED9E9764E9F7D71D023878761B8EE5E",
+  "source": "blueprint",
+  "text": "Heavy Plasma Cannons V"
+ },
+ "100597802": {
+  "key": "6050B4454AEDCF81749AEA9947C51784",
+  "source": "blueprint",
+  "text": "Repeater Guns IV"
+ },
+ "100597803": {
+  "key": "1A6FB83B40A0AE8D4A2AD0AA5538F086",
+  "source": "blueprint",
+  "text": "Repeater Guns III"
+ },
+ "100597804": {
+  "key": "6050B4454AEDCF81749AEA9947C51784",
+  "source": "preview-name",
+  "text": "Repeater Guns IV"
+ },
+ "100597805": {
+  "key": "EB8AF4C34C18B5445F07E8A477BDBCC9",
+  "source": "blueprint",
+  "text": "Repeater Guns V"
+ },
+ "100597806": {
+  "key": "07B49BD94426C173C87C86A08BAB7428",
+  "source": "blueprint",
+  "text": "Heavy Mortar IV"
+ },
+ "100597807": {
+  "key": "870A19B84E2A707CE965D39ED735FED4",
+  "source": "blueprint",
+  "text": "Heavy Mortar V"
+ },
+ "100597808": {
+  "key": "A4FEB14942FF9894910A88941EACA12B",
+  "source": "blueprint",
+  "text": "Heavy Flak Turrets IV"
+ },
+ "100597809": {
+  "key": "A4FEB14942FF9894910A88941EACA12B",
+  "source": "preview-name",
+  "text": "Heavy Flak Turrets IV"
+ },
+ "100597810": {
+  "key": "1ED86125414B94A928C5E084E8BDC35E",
+  "source": "blueprint",
+  "text": "Heavy Flak Turrets V"
+ },
+ "100597811": {
+  "key": "DF72579A41F0E44D5D263E8BB31ACA66",
+  "source": "blueprint",
+  "text": "Jet Miniguns"
+ },
+ "100597818": {
+  "key": "7168F8934C867D8E5A7BBEB9F54592DD",
+  "source": "blueprint",
+  "text": "Dual Heavy Autocannons II"
+ },
+ "100597819": {
+  "key": "265BC5F54BB3F4577AF89284C8CC73CC",
+  "source": "blueprint",
+  "text": "Dual Heavy Autocannons III"
+ },
+ "100597821": {
+  "key": "53332DA6463AFED68C9530AAEAEF761C",
+  "source": "blueprint",
+  "text": "Dual Heavy Autocannons V"
+ },
+ "100597822": {
+  "key": "E3F906FB40C7FE3A83CDA2A62B129325",
+  "source": "blueprint",
+  "text": "Dual Heavy Autocannons IV"
+ },
+ "100597824": {
+  "key": "959C0E1A4CBDDF7D9DCB698BE6C4DFDD",
+  "source": "blueprint",
+  "text": "Dual Repeaters III"
+ },
+ "100597826": {
+  "key": "F36EE0894B447BA85FCAA486626808FB",
+  "source": "blueprint",
+  "text": "Dual Repeaters V"
+ },
+ "100597827": {
+  "key": "E81451A3443C4A6FFEC4B1A38AEFF330",
+  "source": "blueprint",
+  "text": "Dual Repeaters IV"
+ },
+ "100597828": {
+  "key": "A5FC4E674C6162DDC050BC89D4DB7789",
+  "source": "blueprint",
+  "text": "Bolt Guns V"
+ },
+ "100597829": {
+  "key": "E397E2F945ACA8958A7ECFB6FA538702",
+  "source": "blueprint",
+  "text": "Bolt Guns IV"
+ },
+ "100597830": {
+  "key": "55DD5D5445E528870FCC449A067353A0",
+  "source": "preview-name",
+  "text": "Plasma Turrets IV"
+ },
+ "100597831": {
+  "key": "04770D614AB2BAF0E55F699DE644FCB6",
+  "source": "blueprint",
+  "text": "Plasma Turrets V"
+ },
+ "100597832": {
+  "key": "55DD5D5445E528870FCC449A067353A0",
+  "source": "blueprint",
+  "text": "Plasma Turrets IV"
+ },
+ "100597833": {
+  "key": "F9585EDA4FE525BCA646CFB2709175E3",
+  "source": "blueprint",
+  "text": "Beam Turrets III"
+ },
+ "100597834": {
+  "key": "7BDD573E488ED0625C98F99616CBEEC2",
+  "source": "preview-name",
+  "text": "Beam Turrets IV"
+ },
+ "100597835": {
+  "key": "B46A5F2646D7D76B114F06AB26F4D7A7",
+  "source": "blueprint",
+  "text": "Beam Turrets V"
+ },
+ "100597836": {
+  "key": "7BDD573E488ED0625C98F99616CBEEC2",
+  "source": "blueprint",
+  "text": "Beam Turrets IV"
+ },
+ "100597839": {
+  "key": "66091D5149569AC3D725DA88C3120ED9",
+  "source": "blueprint",
+  "text": "Heavy Particle Cannon III"
+ },
+ "100597841": {
+  "key": "9922F93D4CA70D1DB6A56C8352A6727B",
+  "source": "blueprint",
+  "text": "Heavy Particle Cannon V"
+ },
+ "100597842": {
+  "key": "A92FA61447F77FF5FEA22D824F0E17C3",
+  "source": "blueprint",
+  "text": "Particle Turrets IV"
+ },
+ "100597843": {
+  "key": "C569979A4426B05BB643FB8B2AF48995",
+  "source": "blueprint",
+  "text": "Particle Turrets II"
+ },
+ "100597844": {
+  "key": "38E5231544CD6DE9FDDD3C8FB54310BD",
+  "source": "blueprint",
+  "text": "Particle Turrets III"
+ },
+ "100597846": {
+  "key": "B43A85C244F2929D52647296AEF97DF3",
+  "source": "blueprint",
+  "text": "Particle Turrets V"
+ },
+ "100597847": {
+  "key": "DF91F5394F0275B58C2531B4A772C386",
+  "source": "blueprint",
+  "text": "Heavy Tesla Cannon IV"
+ },
+ "100597853": {
+  "key": "8C26EEF243D0FBC2ED8FB898C4EB0F57",
+  "source": "blueprint",
+  "text": "Bolt Gun Turrets IV"
+ },
+ "100597854": {
+  "key": "4859F222463EF022C890D39CC68E0672",
+  "source": "blueprint",
+  "text": "Bolt Gun Turrets V"
+ },
+ "100597855": {
+  "key": "D28CF594461321BA88333B84711D6A00",
+  "source": "blueprint",
+  "text": "Machine Gun Turrets IV"
+ },
+ "100597856": {
+  "key": "D28CF594461321BA88333B84711D6A00",
+  "source": "preview-name",
+  "text": "Machine Gun Turrets IV"
+ },
+ "100597857": {
+  "key": "8289291946563BD9CC83768A2090D9C3",
+  "source": "blueprint",
+  "text": "Machine Gun Turrets V"
+ },
+ "100597858": {
+  "key": "58933A60479A2C66C4124290E84F8AD0",
+  "source": "blueprint",
+  "text": "Light Flak Turrets IV"
+ },
+ "100597859": {
+  "key": "C493406243E32C0861234BA173AE3D5F",
+  "source": "blueprint",
+  "text": "Light Flak Turrets III"
+ },
+ "100597860": {
+  "key": "58933A60479A2C66C4124290E84F8AD0",
+  "source": "preview-name",
+  "text": "Light Flak Turrets IV"
+ },
+ "100597861": {
+  "key": "A35D4CE24A9A0AC5E4B58C92EC7B8CCD",
+  "source": "blueprint",
+  "text": "Light Flak Turrets V"
+ },
+ "100597862": {
+  "key": "DD0EFB084B4BE8AFBF559D90C470411C",
+  "source": "blueprint",
+  "text": "Heavy Repair Beam IV"
+ },
+ "100597864": {
+  "key": "471F0E144EFA67B02B567598646A1CDB",
+  "source": "blueprint",
+  "text": "Heavy Repair Beam V"
+ },
+ "100597869": {
+  "key": "307A0EB44687AF4CD0CF2BBD06C404A0",
+  "source": "blueprint",
+  "text": "Medium Beam Turrets IV"
+ },
+ "100597870": {
+  "key": "AFA338A541BC72CD8E5B8F8633814E9A",
+  "source": "blueprint",
+  "text": "Medium Beam Turrets I"
+ },
+ "100597871": {
+  "key": "23D4234A4A497DCC0BCB6F814C577BC0",
+  "source": "blueprint",
+  "text": "Medium Beam Turrets II"
+ },
+ "100597872": {
+  "key": "21C19A584E23154FDD6443AC57B1AE2B",
+  "source": "blueprint",
+  "text": "Medium Beam Turrets III"
+ },
+ "100597874": {
+  "key": "F43E865E4976101D8044DDAAFEFC1CA3",
+  "source": "blueprint",
+  "text": "Medium Beam Turrets V"
+ },
+ "100597875": {
+  "key": "038538B94276B7E5EBA1CEA532A7A5D5",
+  "source": "blueprint",
+  "text": "Light Rocket Turrets IV"
+ },
+ "100597876": {
+  "key": "371F353E475AEFA471B6F8945F7493FA",
+  "source": "blueprint",
+  "text": "Light Rocket Turrets V"
+ },
+ "100597877": {
+  "key": "0B8A5DB84B76131D9F08769ABB7D3DD6",
+  "source": "blueprint",
+  "text": "Light Machine Guns IV"
+ },
+ "100597878": {
+  "key": "0B8A5DB84B76131D9F08769ABB7D3DD6",
+  "source": "preview-name",
+  "text": "Light Machine Guns IV"
+ },
+ "100597879": {
+  "key": "021CA0414988EF12623C88859FC98747",
+  "source": "blueprint",
+  "text": "Light Machine Guns V"
+ },
+ "100597913": {
+  "key": "3E5066934715AC6BC49C88AFA45107E0",
+  "source": "blueprint",
+  "text": "Jet Bomb Bay"
+ },
+ "100597914": {
+  "key": "7DCE3DFB4987CAF49D0CA8B040D94734",
+  "source": "blueprint",
+  "text": "Jet Bomb Bay"
+ },
+ "100597915": {
+  "key": "0457344844362D9323F66387B792D4B7",
+  "source": "blueprint",
+  "text": "Jet Missile Launcher"
+ },
+ "100597927": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100597928": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100597929": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100597930": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100597931": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100597932": {
+  "key": "C5A5FF9A423F02AEAD0275AD286F66C6",
+  "source": "blueprint",
+  "text": "Drain Missile Launcher"
+ },
+ "100597933": {
+  "key": "94BA0CE047A99AFE06B93EBCB8BE1E5C",
+  "source": "blueprint",
+  "text": "Scramble Torpedo Bay"
+ },
+ "100597934": {
+  "key": "DC2AD9F846F3A5ECCBDF959B2844B6B8",
+  "source": "blueprint",
+  "text": "Stasis Missile Launcher"
+ },
+ "100597935": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100597942": {
+  "key": "A41C0A414F302932139E989ECDABD725",
+  "source": "blueprint",
+  "text": "Armorbreaker Missile Launcher"
+ },
+ "100597943": {
+  "key": "1A3B9B8E4045B0CD13B67F84C71B5358",
+  "source": "blueprint",
+  "text": "Armorbooster Missile Launcher"
+ },
+ "100597947": {
+  "key": "A48ABC28489307E45312B0A5E9B247D6",
+  "source": "blueprint",
+  "text": "Heavy Beam Turrets IV"
+ },
+ "100597948": {
+  "key": "978F30264D83035DC4153F8A8636AB66",
+  "source": "blueprint",
+  "text": "Heavy Beam Turrets III"
+ },
+ "100597950": {
+  "key": "43725B0E497ACAF3CF3E66B5922E7C73",
+  "source": "blueprint",
+  "text": "Heavy Beam Turrets V"
+ },
+ "100597951": {
+  "key": "A1645F804E07F89E71B39BA81785A382",
+  "source": "blueprint",
+  "text": "Autocannon Turrets IV"
+ },
+ "100597954": {
+  "key": "ED991DF342AE7BC67458EA953DCC8304",
+  "source": "blueprint",
+  "text": "Sentry Turret Bay"
+ },
+ "100597955": {
+  "key": "0E8166F746153BCB253CE5A692045326",
+  "source": "blueprint",
+  "text": "Autoturret"
+ },
+ "100597956": {
+  "key": "078F6D684AF05D39BA11EAB22CC21F3F",
+  "source": "blueprint",
+  "text": "Anti-Nuke Laser Turret"
+ },
+ "100597958": {
+  "key": "F718966E4B2E57C6F7A432B9D4AE0B7A",
+  "source": "blueprint",
+  "text": "Light Anti-Missile Laser Turret"
+ },
+ "100597959": {
+  "key": "7CB87D5543D51B49E05866B1731E3ED7",
+  "source": "blueprint",
+  "text": "Light Anti-Missile Laser Turret"
+ },
+ "100597963": {
+  "key": "2CBF76F346FC961D99F1D8A7109A3188",
+  "source": "blueprint",
+  "text": "Anti-Nuke Laser Turret"
+ },
+ "100597965": {
+  "key": "2ABEDF6B402A5159E49FD5B7AE8A4911",
+  "source": "blueprint",
+  "text": "Dual Scatter Cannons V"
+ },
+ "100597966": {
+  "key": "D1E57ECA449D3E3C90CA6F881846A352",
+  "source": "blueprint",
+  "text": "Repair Beam"
+ },
+ "100597968": {
+  "key": "BD8E95B441F9A7B7940A11979E91FE35",
+  "source": "blueprint",
+  "text": "Heavy Plasma Cannons II"
+ },
+ "100597969": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100597973": {
+  "key": "DE2D98A845B2799A2D3C05B095E39A93",
+  "source": "blueprint",
+  "text": "Anti-Nuke Laser Turret"
+ },
+ "100597974": {
+  "key": "3F398F564909C5542E5CD2859D2A30E4",
+  "source": "blueprint",
+  "text": "Autoturret"
+ },
+ "100597975": {
+  "key": "ADB3E6004E188E34FFF78BB41A95168E",
+  "source": "blueprint",
+  "text": "Dual Scatter Cannons III"
+ },
+ "100597976": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100597977": {
+  "key": "0E6D55084B997C174D79C2ABD05F9CC1",
+  "source": "blueprint",
+  "text": "Autocannon Turrets V"
+ },
+ "100597978": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100597979": {
+  "key": "45CF7D2C47CF271FA921B099765E9F6E",
+  "source": "blueprint",
+  "text": "Dual Scatter Cannons IV"
+ },
+ "100597980": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100597983": {
+  "key": "D3969BF0416A28B307B1C69EEA5B751F",
+  "source": "blueprint",
+  "text": "Heavy Tesla Cannon V"
+ },
+ "100597985": {
+  "key": "15A5D14940BED9636B4023B79C509EC3",
+  "source": "blueprint",
+  "text": "Heavy Tesla Cannon III"
+ },
+ "100597986": {
+  "key": "7B3A3E83478595447B0B229FC3CF4B33",
+  "source": "blueprint",
+  "text": "Heavy Tesla Cannon II"
+ },
+ "100597987": {
+  "key": "AF6B8476426D916B7D590BB49E672FCF",
+  "source": "blueprint",
+  "text": "Heavy Tesla Cannon I"
+ },
+ "100597988": {
+  "key": "EBB0762047CE025DAF3C48A551C5F935",
+  "source": "blueprint",
+  "text": "Tesla Turrets V"
+ },
+ "100597996": {
+  "key": "A4024E6544EFB9D1231C858000314839",
+  "source": "preview-name",
+  "text": "Tesla Turrets IV"
+ },
+ "100597997": {
+  "key": "413A1142459D1A04D5AA4C85DC1D0828",
+  "source": "blueprint",
+  "text": "Tesla Turrets III"
+ },
+ "100598024": {
+  "key": "6BDD53B64A03B31804F639B1D73A571B",
+  "source": "blueprint",
+  "text": "Anti-Nuke Laser"
+ },
+ "100598025": {
+  "key": "3714AB174C746EFD5B85AD9E0004614E",
+  "source": "blueprint",
+  "text": "Light Anti-Missile Laser Turret"
+ },
+ "100598029": {
+  "key": "63B36F154FD64B7F39FF23A0864AC478",
+  "source": "blueprint",
+  "text": "Anti-Missile Laser Turret"
+ },
+ "100598031": {
+  "key": "2EC2FCFF42E815F41687269DA77C17CB",
+  "source": "blueprint",
+  "text": "Medium Autoturret"
+ },
+ "100598033": {
+  "key": "248411744245BF38D40052B236BFED4D",
+  "source": "blueprint",
+  "text": "Jet Support Turret"
+ },
+ "100598034": {
+  "key": "85914EAF46C8698DA3B9C98908AD7978",
+  "source": "blueprint",
+  "text": "Jet Anti-Missile Laser Turret"
+ },
+ "100598038": {
+  "key": "0E8166F746153BCB253CE5A692045326",
+  "source": "blueprint",
+  "text": "Autoturret"
+ },
+ "100598039": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100598040": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100598041": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100598043": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598044": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598045": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598046": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100598047": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100598048": {
+  "key": "C5A5FF9A423F02AEAD0275AD286F66C6",
+  "source": "blueprint",
+  "text": "Drain Missile Launcher"
+ },
+ "100598049": {
+  "key": "C5A5FF9A423F02AEAD0275AD286F66C6",
+  "source": "blueprint",
+  "text": "Drain Missile Launcher"
+ },
+ "100598054": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598055": {
+  "key": "EDFC00EA4905FF51868E9BAA654EB168",
+  "source": "blueprint",
+  "text": "Anti-Missile Laser Turret"
+ },
+ "100598155": {
+  "key": "0E8166F746153BCB253CE5A692045326",
+  "source": "blueprint",
+  "text": "Autoturret"
+ },
+ "100598156": {
+  "key": "0E8166F746153BCB253CE5A692045326",
+  "source": "blueprint",
+  "text": "Autoturret"
+ },
+ "100598157": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100598158": {
+  "key": "266A5262447025142226B5895E1A6DA9",
+  "source": "blueprint",
+  "text": "Catapult Silo"
+ },
+ "100598159": {
+  "key": "ED991DF342AE7BC67458EA953DCC8304",
+  "source": "blueprint",
+  "text": "Sentry Turret Bay"
+ },
+ "100598160": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598161": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598162": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598163": {
+  "key": "432BA8874B5F6FF5845C9292F476F7B2",
+  "source": "blueprint",
+  "text": "Special Weapon"
+ },
+ "100598164": {
+  "key": "DE9B11D142B9016A216650BE46CB0C6A",
+  "source": "blueprint",
+  "text": "Stasis Turret"
+ },
+ "100598165": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598166": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598167": {
+  "key": "94BA0CE047A99AFE06B93EBCB8BE1E5C",
+  "source": "blueprint",
+  "text": "Scramble Torpedo Bay"
+ },
+ "100598168": {
+  "key": "DC2AD9F846F3A5ECCBDF959B2844B6B8",
+  "source": "blueprint",
+  "text": "Stasis Missile Launcher"
+ },
+ "100598169": {
+  "key": "DC2AD9F846F3A5ECCBDF959B2844B6B8",
+  "source": "blueprint",
+  "text": "Stasis Missile Launcher"
+ },
+ "100598170": {
+  "key": "DC2AD9F846F3A5ECCBDF959B2844B6B8",
+  "source": "blueprint",
+  "text": "Stasis Missile Launcher"
+ },
+ "100598171": {
+  "key": "DC2AD9F846F3A5ECCBDF959B2844B6B8",
+  "source": "blueprint",
+  "text": "Stasis Missile Launcher"
+ },
+ "100598172": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598173": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598174": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598175": {
+  "key": "40D7D90A4BD62C37057E9CBBEE9667F7",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598306": {
+  "key": "E54E491D42F93B5836D02DA586619814",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod III"
+ },
+ "100598307": {
+  "key": "E16434144EBE09F70947D3B86BE4530E",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod II"
+ },
+ "100598402": {
+  "key": "087285FF4B71DB1509AC1BB4DDB84F41",
+  "source": "blueprint",
+  "text": "Autoturret Weapon"
+ },
+ "100598403": {
+  "key": "0048863E48368DF7BBB84B8E838FBE3B",
+  "source": "blueprint",
+  "text": "Barrage Missile Launcher"
+ },
+ "100598404": {
+  "key": "ED991DF342AE7BC67458EA953DCC8304",
+  "source": "blueprint",
+  "text": "Sentry Turret Bay"
+ },
+ "100598405": {
+  "key": "AD4671784EDB0E3954288AB3F9641CE7",
+  "source": "blueprint",
+  "text": "Missile Repeater Launcher"
+ },
+ "100598406": {
+  "key": "320F7070444C9D37928DC2885B679746",
+  "source": "blueprint",
+  "text": "'Swarm' Missile Launcher"
+ },
+ "100598407": {
+  "key": "4185B570470723BC382A7D945F4A4E68",
+  "source": "blueprint",
+  "text": "Nuclear Torpedo Bay"
+ },
+ "100598408": {
+  "key": "05563B8E4E1FF2EF9FFA668206414322",
+  "source": "blueprint",
+  "text": "Nuclear Torpedo Swarm Bay"
+ },
+ "100598410": {
+  "key": "21E2ECA949DE2A280A49BA9BCCDF0940",
+  "source": "blueprint",
+  "text": "Heavy Nuclear Torpedo Bay"
+ },
+ "100598411": {
+  "key": "BDFE9759425F3C95DFE4C79927A5CF53",
+  "source": "blueprint",
+  "text": "Disruptor Missile Launcher"
+ },
+ "100598412": {
+  "key": "379966864FAEA3A52791048F1F8B0C71",
+  "source": "blueprint",
+  "text": "Weaponbreaker Missile Launcher"
+ },
+ "100598413": {
+  "key": "0EB017B44CD7D2955545DDA19AE03328",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile Launcher"
+ },
+ "100598415": {
+  "key": "0C5D134248BBF9A1053832A9A8C250D9",
+  "source": "blueprint",
+  "text": "Drain Torpedo Bay"
+ },
+ "100598416": {
+  "key": "96CCFC4744E0F609B36906A1740B524C",
+  "source": "blueprint",
+  "text": "Torpedo Bay II"
+ },
+ "100598418": {
+  "key": "CABF0D704A06B662A65C87AE65B9D770",
+  "source": "blueprint",
+  "text": "Armorbreaker Weapon"
+ },
+ "100598419": {
+  "key": "471EFAC8409E8DD9141486977315D1B7",
+  "source": "blueprint",
+  "text": "Heavy Autoturret"
+ },
+ "100598420": {
+  "key": "8A9CFB1F4C8E49AF931C2884BCF5B22F",
+  "source": "blueprint",
+  "text": "Tractor Beam Turret"
+ },
+ "100598421": {
+  "key": "CE3C64A74BA65B4CEE8EBA870642D124",
+  "source": "blueprint",
+  "text": "Ballistic Broadside Cannon"
+ },
+ "100598422": {
+  "key": "C4C02A1E44D7A616C1635EBC6E31C872",
+  "source": "blueprint",
+  "text": "Plasma Broadside Cannon"
+ },
+ "100598423": {
+  "key": "6F1CEA1B4A0AC513CB6C03970147B3B9",
+  "source": "blueprint",
+  "text": "Scattergun Broadside Cannon"
+ },
+ "100598424": {
+  "key": "20B2D97D46E5D7F203272883673A733B",
+  "source": "blueprint",
+  "text": "Bombers IV"
+ },
+ "100598425": {
+  "key": "FC85694F4E9946CCCFB46FA07591E2C2",
+  "source": "blueprint",
+  "text": "Fighters IV"
+ },
+ "100598426": {
+  "key": "820A04604002F34D262124ABAC9D541A",
+  "source": "blueprint",
+  "text": "Interceptor IV"
+ },
+ "100598427": {
+  "key": "CB595E7143FED0AC0E2D7BA131F5B136",
+  "source": "blueprint",
+  "text": "Nuclear Missile Silo"
+ },
+ "100598428": {
+  "key": "A9B279E44715331D0C91D6A8F08E3197",
+  "source": "blueprint",
+  "text": "Light Nuclear Missile Silo"
+ },
+ "100598430": {
+  "key": "C1F6538A49C50C710DC27383BD81CF2F",
+  "source": "blueprint",
+  "text": "Purge Nuclear Missile Silo"
+ },
+ "100598431": {
+  "key": "ED991DF342AE7BC67458EA953DCC8304",
+  "source": "blueprint",
+  "text": "Sentry Turret Bay"
+ },
+ "100598432": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598433": {
+  "key": "60A34CAC44A33DCA39D755B4DC1C0676",
+  "source": "blueprint",
+  "text": "'Vulture' Missile Launcher"
+ },
+ "100598435": {
+  "key": "405A0EB64DF3FA209E66DFBC006459A3",
+  "source": "blueprint",
+  "text": "'Flechette' Missile Launcher"
+ },
+ "100598437": {
+  "key": "CCAAAAC441FDE0F58A8CA6A02ED85909",
+  "source": "blueprint",
+  "text": "Missile Launcher"
+ },
+ "100598439": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598440": {
+  "key": "B94C77064F7DB1A3A046C98A50FCB042",
+  "source": "blueprint",
+  "text": "Light Torpedo Bay"
+ },
+ "100598441": {
+  "key": "FF7A999545A2CA585D5854ACE334B667",
+  "source": "blueprint",
+  "text": "Disruptor Weapon"
+ },
+ "100598442": {
+  "key": "D73ADFF94E2A334098C154ADE730574F",
+  "source": "blueprint",
+  "text": "Stasis Weapon"
+ },
+ "100598443": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598445": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598447": {
+  "key": "A36E56D941E2F7E5D1016686A219FEF3",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598449": {
+  "key": "0AD0DB504333C36571ED76AF5FD22223",
+  "source": "blueprint",
+  "text": "Drain Torpedo Bay"
+ },
+ "100598452": {
+  "key": "32A17A2841FA50DBA142468EEF3E76C4",
+  "source": "blueprint",
+  "text": "Weaponbreaker Torpedo Bay"
+ },
+ "100598453": {
+  "key": "215F4B0E4DC0A3927BB0239E83E4053A",
+  "source": "blueprint",
+  "text": "Light Torpedo Bay"
+ },
+ "100598454": {
+  "key": "D778B2C64C7BFB568E15F2BF3FF8AC37",
+  "source": "blueprint",
+  "text": "Light Torpedo Bay"
+ },
+ "100598455": {
+  "key": "BDFAF23F4C1EF77CA217379FFAD40031",
+  "source": "blueprint",
+  "text": "Repair Turret"
+ },
+ "100598456": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598457": {
+  "key": "ED991DF342AE7BC67458EA953DCC8304",
+  "source": "blueprint",
+  "text": "Sentry Turret Bay"
+ },
+ "100598458": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598459": {
+  "key": "1606C0984F1B1782E55AC8A35A192238",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod IV"
+ },
+ "100598460": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598461": {
+  "key": "8A9CFB1F4C8E49AF931C2884BCF5B22F",
+  "source": "blueprint",
+  "text": "Tractor Beam Turret"
+ },
+ "100598462": {
+  "key": "4A68A519414DCAB3AA28C39D1763E55A",
+  "source": "blueprint",
+  "text": "Surge Drone Bay"
+ },
+ "100598463": {
+  "key": "4A68A519414DCAB3AA28C39D1763E55A",
+  "source": "blueprint",
+  "text": "Surge Drone Bay"
+ },
+ "100598464": {
+  "key": "AAEBDD3C4C90BC003F7CC383706D216F",
+  "source": "blueprint",
+  "text": "Proximity Repair Drone Bay"
+ },
+ "100598465": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598466": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598467": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100598468": {
+  "key": "BADA39B14F3FF264D6018AB9D38A22B9",
+  "source": "blueprint",
+  "text": "Energy Missile Launcher"
+ },
+ "100598469": {
+  "key": "696ADBC548B02C68EFDABABE2D16622F",
+  "source": "blueprint",
+  "text": "'Flechette' Missile Launcher"
+ },
+ "100598470": {
+  "key": "44480B4A4F0BA36FCEC995ADEF7E249C",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile Launcher"
+ },
+ "100598472": {
+  "key": "B79B7FA44EE1384D30A2ECB765B04644",
+  "source": "blueprint",
+  "text": "Particle Turrets"
+ },
+ "100598473": {
+  "key": "723AAF6F482DDF6E221CE283FC286DAB",
+  "source": "blueprint",
+  "text": "Drone Machine Gun"
+ },
+ "100598474": {
+  "key": "811E8F4B400614A2690968916D64BF09",
+  "source": "blueprint",
+  "text": "Heavy Ballistic Cannons"
+ },
+ "100598479": {
+  "key": "C5A5FF9A423F02AEAD0275AD286F66C6",
+  "source": "blueprint",
+  "text": "Drain Missile Launcher"
+ },
+ "100598504": {
+  "key": "4790A3334E14B6927548F68666AA027E",
+  "source": "blueprint",
+  "text": "Bombers V"
+ },
+ "100598505": {
+  "key": "BF1B8A3A41ACBFA9CBCE12ABD6C8AC69",
+  "source": "blueprint",
+  "text": "Fighters V"
+ },
+ "100598506": {
+  "key": "09F2650D40B53E86A5A4139EE8C45DAB",
+  "source": "blueprint",
+  "text": "Interceptor V"
+ },
+ "100598539": {
+  "key": "E0DAFCE44BDE1893B5003AAC056E9AAC",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod V"
+ },
+ "100598551": {
+  "key": "5158957C4F70A14C402E169086B4FF72",
+  "source": "blueprint",
+  "text": "Heavy Particle Cannon IV"
+ },
+ "100598563": {
+  "key": "6B688DBA4BA21233653385974CD5025B",
+  "source": "blueprint",
+  "text": "Flak Turrets N"
+ },
+ "100598564": {
+  "key": "9948B4E94F958C2C91AEADA62C5C3713",
+  "source": "blueprint",
+  "text": "Flak Turrets I"
+ },
+ "100598565": {
+  "key": "9961B1F14E82D963600F79B774A84C9F",
+  "source": "blueprint",
+  "text": "Flak Turrets II"
+ },
+ "100598566": {
+  "key": "72544E34472DA2919C5B19B0BE4CD40C",
+  "source": "blueprint",
+  "text": "Tesla Turrets I"
+ },
+ "100598567": {
+  "key": "8F7474C444D0B8841DECCE801FF8C1F3",
+  "source": "blueprint",
+  "text": "Tesla Turrets II"
+ },
+ "100598568": {
+  "key": "EE92A26A4965C78AF35FFC8B77C8644A",
+  "source": "blueprint",
+  "text": "Repeater Guns II"
+ },
+ "100598569": {
+  "key": "06D3ADFC4BFB38D9B89A468FBA534DF3",
+  "source": "blueprint",
+  "text": "Repeater Guns I"
+ },
+ "100598570": {
+  "key": "908C76994ABB224B0FB578BD520CA342",
+  "source": "blueprint",
+  "text": "Light Flak Turrets N"
+ },
+ "100598571": {
+  "key": "93C265D949BFBF995E8452996B50C087",
+  "source": "blueprint",
+  "text": "Light Flak Turrets I"
+ },
+ "100598572": {
+  "key": "41805144492B9451EF129DBE83C11973",
+  "source": "blueprint",
+  "text": "Light Flak Turrets II"
+ },
+ "100598573": {
+  "key": "EF8FCF5C41D74DB9C6D18AAD418FAC5D",
+  "source": "blueprint",
+  "text": "Tesla Turrets N"
+ },
+ "100598574": {
+  "key": "9E3C8E9046C835B63F851989D646DE56",
+  "source": "blueprint",
+  "text": "Beam Turrets II"
+ },
+ "100598575": {
+  "key": "34E7D10343FCEC29DC4128A89CFC8B4F",
+  "source": "blueprint",
+  "text": "Beam Turrets I"
+ },
+ "100598576": {
+  "key": "1ADAB14D4ADAE3ADE5CAA6BCA72FD620",
+  "source": "blueprint",
+  "text": "Heavy Flak Turrets II"
+ },
+ "100598577": {
+  "key": "A3FAA575443DE79182F88282678A5F24",
+  "source": "blueprint",
+  "text": "Machine Gun Turrets II"
+ },
+ "100598581": {
+  "key": "D6908F12498A9508855EBF8C7C63E40C",
+  "source": "blueprint",
+  "text": "Bolt Guns III"
+ },
+ "100598582": {
+  "key": "E7AFF91B4CFD05BE4AD7C0A8D867E3A6",
+  "source": "blueprint",
+  "text": "Plasma Turrets II"
+ },
+ "100598583": {
+  "key": "4849435A4F8AF046356C0BAF4985C192",
+  "source": "blueprint",
+  "text": "Plasma Turrets III"
+ },
+ "100598588": {
+  "key": "1B50FB634E130E4CEA655AA181C18D31",
+  "source": "blueprint",
+  "text": "Bolt Gun Turrets III"
+ },
+ "100598589": {
+  "key": "13D13A97430525143E5096A6692AE2CC",
+  "source": "blueprint",
+  "text": "Bolt Gun Turrets II"
+ },
+ "100598595": {
+  "key": "32F13C6D427CFD5A9261FABAA7CD8E27",
+  "source": "blueprint",
+  "text": "Heavy Plasma Cannons I"
+ },
+ "100598596": {
+  "key": "61A8F3D140F08C32DEA274B4871817F2",
+  "source": "blueprint",
+  "text": "Repeater Guns N"
+ },
+ "100598603": {
+  "key": "AD42A19144B0AFF56FE31E9F0ADCA549",
+  "source": "blueprint",
+  "text": "Heavy Flak Turrets III"
+ },
+ "100598604": {
+  "key": "1D9F578F4F2BE6BE698CCDA0D13F555E",
+  "source": "blueprint",
+  "text": "Light Particle Turrets III"
+ },
+ "100598605": {
+  "key": "E443529F4933AF334458BFB06E6D79AE",
+  "source": "blueprint",
+  "text": "Light Machine Guns III"
+ },
+ "100601229": {
+  "key": "081247564920C8BDD2A23A8FDB95BB50",
+  "source": "blueprint",
+  "text": "Machine Gun Turrets III"
+ },
+ "100601230": {
+  "key": "CEAB15C2428F372A764FB6AE946F076F",
+  "source": "blueprint",
+  "text": "Light Particle Turrets II"
+ },
+ "100601231": {
+  "key": "4E9DB8D8492688C1B72F8C8F8191FD3D",
+  "source": "blueprint",
+  "text": "Rocket Turrets III"
+ },
+ "100601233": {
+  "key": "10A6D09D413C029090ED22878BEAA1AA",
+  "source": "blueprint",
+  "text": "Beam Turrets N"
+ },
+ "100601236": {
+  "key": "5158957C4F70A14C402E169086B4FF72",
+  "source": "blueprint",
+  "text": "Heavy Particle Cannon IV"
+ },
+ "100601241": {
+  "key": "C1F6538A49C50C710DC27383BD81CF2F",
+  "source": "blueprint",
+  "text": "Purge Nuclear Missile Silo"
+ },
+ "100601256": {
+  "key": "0048863E48368DF7BBB84B8E838FBE3B",
+  "source": "blueprint",
+  "text": "Barrage Missile Launcher"
+ },
+ "100601257": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100601258": {
+  "key": "C1F6538A49C50C710DC27383BD81CF2F",
+  "source": "blueprint",
+  "text": "Purge Nuclear Missile Silo"
+ },
+ "100601259": {
+  "key": "44EBCFD84EF8769442E2A486C61A9117",
+  "source": "blueprint",
+  "text": "Heavy Torpedo Bay"
+ },
+ "100601267": {
+  "key": "811E8F4B400614A2690968916D64BF09",
+  "source": "blueprint",
+  "text": "Heavy Ballistic Cannons"
+ },
+ "100601268": {
+  "key": "811E8F4B400614A2690968916D64BF09",
+  "source": "blueprint",
+  "text": "Heavy Ballistic Cannons"
+ },
+ "184483936": {
+  "key": "8D762187492ED18EF567D8A25CA329A8",
+  "source": "blueprint",
+  "text": "Bombers IV"
+ },
+ "83820547": {
+  "key": "A5C189D94B128F3A6E1510B197205E5E",
+  "source": "blueprint",
+  "text": "Flechette Half-Battery IV"
+ },
+ "83820548": {
+  "key": "5AF8A88D426E2801FCC5F1A15973B7A5",
+  "source": "blueprint",
+  "text": "Stasis Ammo V"
+ },
+ "83820549": {
+  "key": "711058944B8EA0BD47A216B545EE1C90",
+  "source": "blueprint",
+  "text": "Module Reboot IV"
+ },
+ "83820550": {
+  "key": "73F63220459F28536D4A3188AA520B5A",
+  "source": "blueprint",
+  "text": "Module Reboot N"
+ },
+ "83820551": {
+  "key": "7F2D8A9C4DEC4F0FFDAB9CAE87F36C82",
+  "source": "blueprint",
+  "text": "Module Reboot I"
+ },
+ "83820552": {
+  "key": "0CF6917E43AFBFB0F46F1D9253C9FD4D",
+  "source": "blueprint",
+  "text": "Energy Generator IV"
+ },
+ "83820553": {
+  "key": "0367DF284703392851ACD48463B79CFC",
+  "source": "blueprint",
+  "text": "Weapon Amplifier IV"
+ },
+ "83820554": {
+  "key": "F7C1BC594182C2DB4A9094814D9A05C3",
+  "source": "blueprint",
+  "text": "Thrust Amplifier IV"
+ },
+ "83820555": {
+  "key": "90AD1D574FBF035A7BE8708318AEA29D",
+  "source": "preview-name-equal-text",
+  "text": "Evasive Maneuver V"
+ },
+ "83820556": {
+  "key": "DB4ABD2D4E88B831F6D6E9976A87F270",
+  "source": "preview-name",
+  "text": "Jump Drive IV"
+ },
+ "83820557": {
+  "key": "85D53ADD4011B99EBF9ED59B7A327F13",
+  "source": "blueprint",
+  "text": "Jump Drive II"
+ },
+ "83820558": {
+  "key": "1039A539495918279BDC909116DD9811",
+  "source": "blueprint",
+  "text": "Jump Drive III"
+ },
+ "83820559": {
+  "key": "04E481E248140F80C20A4B9CA964E66E",
+  "source": "blueprint",
+  "text": "Jump Drive V"
+ },
+ "83820560": {
+  "key": "889C15E94B8EDBAC7D9EE48CAD60FA9A",
+  "source": "blueprint",
+  "text": "Hell Lasers IV"
+ },
+ "83820561": {
+  "key": "6DF3929144109A22B71EC8965404FF29",
+  "source": "blueprint",
+  "text": "Hell Lasers V"
+ },
+ "83820562": {
+  "key": "6697920442DE1AE70E14D885871A8E73",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers IV"
+ },
+ "83820563": {
+  "key": "BE396D5D489CC2FD6717DBA7B71082F2",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers V"
+ },
+ "83820564": {
+  "key": "739064C942F5B1A3988798902D8EAAB6",
+  "source": "blueprint",
+  "text": "Protean Autoguns IV"
+ },
+ "83820565": {
+  "key": "4C9758E340861824ED197A996C0C8894",
+  "source": "blueprint",
+  "text": "Protean Autoguns N"
+ },
+ "83820566": {
+  "key": "AB03E3CC4E6740AC3B836FAF4A8FF5B5",
+  "source": "blueprint",
+  "text": "Protean Autoguns I"
+ },
+ "83820567": {
+  "key": "EF6A6A394C7EACBDE44B088A8AA4D01D",
+  "source": "blueprint",
+  "text": "Protean Autoguns II"
+ },
+ "83820568": {
+  "key": "E9A27EAE46BDDA4DC5DFC5B3301573F3",
+  "source": "blueprint",
+  "text": "Protean Autoguns III"
+ },
+ "83820569": {
+  "key": "DFBE3AFE46C598DF6F7AE98E07556B24",
+  "source": "blueprint",
+  "text": "Protean Autoguns V"
+ },
+ "83820570": {
+  "key": "2557A9D5411929F0FF4C41A8E93167C5",
+  "source": "blueprint",
+  "text": "Storm Missiles V"
+ },
+ "83820571": {
+  "key": "2FDD83E34FBE667313EF828574B4FA46",
+  "source": "blueprint",
+  "text": "Missile Repeater IV"
+ },
+ "83820572": {
+  "key": "60DB0D3641D80D6E338A969DAD5EF71F",
+  "source": "blueprint",
+  "text": "Missile Repeater V"
+ },
+ "83820573": {
+  "key": "EFCE58514222E76A2A0E1F9005ABB8CB",
+  "source": "blueprint",
+  "text": "Tempest Missiles IV"
+ },
+ "83820574": {
+  "key": "4ECBEDAC44FBB908D3D475B6F46B8E3A",
+  "source": "blueprint",
+  "text": "Tempest Missiles N"
+ },
+ "83820575": {
+  "key": "4A1C325C46BBE689FF848080245B2EB5",
+  "source": "blueprint",
+  "text": "Tempest Missiles I"
+ },
+ "83820576": {
+  "key": "3391F6764FB116F30D6D029368E6CBED",
+  "source": "blueprint",
+  "text": "Tempest Missiles II"
+ },
+ "83820577": {
+  "key": "63A788504BAE4BFF47430AA61132430B",
+  "source": "blueprint",
+  "text": "Tempest Missiles III"
+ },
+ "83820578": {
+  "key": "D5CEF7C949C55B8F59B805B82DC9D42B",
+  "source": "blueprint",
+  "text": "Tempest Missiles V"
+ },
+ "83820579": {
+  "key": "2C8A828141F974CC497DCD8FB0040FFE",
+  "source": "blueprint",
+  "text": "Blast Ram IV "
+ },
+ "83820580": {
+  "key": "727810E34BA3C9845E95928EC044D9A1",
+  "source": "blueprint",
+  "text": "Blast Ram V"
+ },
+ "83820582": {
+  "key": "9C51885149530EB06AEC2DB817C13794",
+  "source": "blueprint",
+  "text": "Plasma Ram III"
+ },
+ "83820583": {
+  "key": "9443546D41D6D238430E9D94E4A25A1A",
+  "source": "blueprint",
+  "text": "Plasma Ram V"
+ },
+ "83820584": {
+  "key": "38FCC4F843241CC21C1607A2FB587558",
+  "source": "blueprint",
+  "text": "Scylla Torpedo IV"
+ },
+ "83820585": {
+  "key": "0BF4E2D243F7397E019350852B9E5A21",
+  "source": "blueprint",
+  "text": "Scylla Torpedo V"
+ },
+ "83820586": {
+  "key": "5E6D66D948DC2E9DD61A8AAEB73F0502",
+  "source": "blueprint",
+  "text": "Flashpoint Torpedo Salvo IV"
+ },
+ "83820587": {
+  "key": "D7AEA55241D4D56A54ECC3B0434B1FBC",
+  "source": "blueprint",
+  "text": "Flashpoint Torpedo Salvo V"
+ },
+ "83820588": {
+  "key": "420763AF4EE8120C0DD122ADC9635C7E",
+  "source": "blueprint",
+  "text": "Goliath Torpedo IV"
+ },
+ "83820589": {
+  "key": "67CA60074A8CB0608F912D88E020C45B",
+  "source": "blueprint",
+  "text": "Goliath Torpedo II"
+ },
+ "83820590": {
+  "key": "94C1DD1247A932752323E3B4A6ADF1C4",
+  "source": "blueprint",
+  "text": "Goliath Torpedo III"
+ },
+ "83820591": {
+  "key": "8AB6565E4E1E865F37250EAF27F6D151",
+  "source": "blueprint",
+  "text": "Goliath Torpedo V"
+ },
+ "83820592": {
+  "key": "BC351D8B45EE2331315B8788440141E8",
+  "source": "blueprint",
+  "text": "Disruptor Missile IV"
+ },
+ "83820593": {
+  "key": "E407A0CB4C31F1D4DDCC0D940062D252",
+  "source": "blueprint",
+  "text": "Disruptor Missile V"
+ },
+ "83820594": {
+  "key": "06E123064CBE09210B922ABBCE26D217",
+  "source": "blueprint",
+  "text": "Weaponbreaker Missile IV"
+ },
+ "83820595": {
+  "key": "75EBA7EF4801E28D6B302C9151D3B8A1",
+  "source": "blueprint",
+  "text": "Weaponbreaker Missile III"
+ },
+ "83820596": {
+  "key": "D0BBFD9148EB29C103ABEC97C915B09C",
+  "source": "blueprint",
+  "text": "Weaponbreaker Missile V"
+ },
+ "83820597": {
+  "key": "873F3DD74D02BB3C1F99DEA334B3CC9F",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile IV"
+ },
+ "83820598": {
+  "key": "C4B1598344232C5FC3B6D58D5F16B4F5",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile V"
+ },
+ "83820599": {
+  "key": "8B9D9B9B4F15EEF08A48C9BDC43908FA",
+  "source": "blueprint",
+  "text": "Light Flechettes IV"
+ },
+ "83820600": {
+  "key": "A414B94B48DFC620DD8150A08A369F4E",
+  "source": "blueprint",
+  "text": "Light Flechettes V"
+ },
+ "83820601": {
+  "key": "BB8A11FE48A9C28B2F1BACAA828F8828",
+  "source": "blueprint",
+  "text": "Drain Torpedo IV"
+ },
+ "83820602": {
+  "key": "3A1F38194A6D6B7508C960BADB693C37",
+  "source": "blueprint",
+  "text": "Drain Torpedo II"
+ },
+ "83820603": {
+  "key": "61ED785942909FBDB06903B01F17889D",
+  "source": "blueprint",
+  "text": "Drain Torpedo III"
+ },
+ "83820604": {
+  "key": "D9CCCA2F4D59F7DE44AE5E8C4A1686E8",
+  "source": "blueprint",
+  "text": "Drain Torpedo V"
+ },
+ "83820605": {
+  "key": "F17F261D4E9321F69971E7BDCF472828",
+  "source": "blueprint",
+  "text": "Torpedo Salvo IV"
+ },
+ "83820606": {
+  "key": "43E888C341B76A98361C7DB6D3509A1A",
+  "source": "blueprint",
+  "text": "Torpedo Salvo N"
+ },
+ "83820607": {
+  "key": "9D2C8B4842DAD31A5DC29A8A28C75A19",
+  "source": "blueprint",
+  "text": "Torpedo Salvo I"
+ },
+ "83820608": {
+  "key": "2AEFB3E74B018F43E2F7B8A68033FD89",
+  "source": "blueprint",
+  "text": "Torpedo Salvo II"
+ },
+ "83820609": {
+  "key": "0A1F1B384F56C41B2A473BB701107167",
+  "source": "blueprint",
+  "text": "Torpedo Salvo III"
+ },
+ "83820610": {
+  "key": "808A35BC4A32113D837A0C82B105B600",
+  "source": "blueprint",
+  "text": "Torpedo Salvo V"
+ },
+ "83820611": {
+  "key": "A6500A924A2868484DC1FF865A018577",
+  "source": "preview-name",
+  "text": "Armorbreaker Ammo IV"
+ },
+ "83820612": {
+  "key": "E2FD954A43784D1CCD3392BD71A3980D",
+  "source": "preview-name",
+  "text": "Armorbreaker Ammo V"
+ },
+ "83820613": {
+  "key": "8891F5E843D8BAD8E2C31EAC577E7F97",
+  "source": "blueprint",
+  "text": "Armor Amplifier IV"
+ },
+ "83820614": {
+  "key": "EBBA484E4D3995862A08A590FCB837E9",
+  "source": "blueprint",
+  "text": "Endurance Mode IV"
+ },
+ "83820615": {
+  "key": "4696B4214432AA61F6F1D68E097CBAAC",
+  "source": "blueprint",
+  "text": "Offensive Lockdown IV"
+ },
+ "83820616": {
+  "key": "B1C88C5540A1BFF7BF8D8CA4AA2E1DBE",
+  "source": "blueprint",
+  "text": "Assault Thrusters IV"
+ },
+ "83820617": {
+  "key": "DAE2DD464FC661A1258A98A384D762D0",
+  "source": "blueprint",
+  "text": "Assault Thrusters V"
+ },
+ "83820623": {
+  "key": "F0C440144C8F37497D1CFE8400D837D4",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers IV"
+ },
+ "83820624": {
+  "key": "3C7662F244F60C4CFE6C22B85F2DB369",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers I"
+ },
+ "83820625": {
+  "key": "44EDC44B4F306AF60F4BE989B373B3F8",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers II"
+ },
+ "83820626": {
+  "key": "69F955A94C0E7E581BF2A087D8473B10",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers III"
+ },
+ "83820627": {
+  "key": "8023F6FC42E77B0CFA9D119E4B674552",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers V"
+ },
+ "83820628": {
+  "key": "150CAB2C4D2FEF0DC32EF4AB12D42939",
+  "source": "blueprint",
+  "text": "Heavy Autoguns IV"
+ },
+ "83820629": {
+  "key": "D17CD1204CE96D25145E26A393B7113D",
+  "source": "blueprint",
+  "text": "Heavy Autoguns II"
+ },
+ "83820630": {
+  "key": "BA03AC8040AE694C2409D4B2CD91C287",
+  "source": "blueprint",
+  "text": "Heavy Autoguns III"
+ },
+ "83820631": {
+  "key": "B7C494284AA1D53A75F8819AFE4D690F",
+  "source": "blueprint",
+  "text": "Heavy Autoguns V"
+ },
+ "83820632": {
+  "key": "1444F6EA498857BE9F3DAE9316A8E447",
+  "source": "blueprint",
+  "text": "Median Autoguns IV"
+ },
+ "83820633": {
+  "key": "70E5CD3D48D1F6A445DFAE87D0375D69",
+  "source": "blueprint",
+  "text": "Median Autoguns V"
+ },
+ "83820634": {
+  "key": "A5C2B89944990C417DA273AA503DC1E0",
+  "source": "blueprint",
+  "text": "Tractor Beam IV"
+ },
+ "83820635": {
+  "key": "082A99FF4DA45729A4B8AD978CFB9E6D",
+  "source": "blueprint",
+  "text": "Tractor Beam III"
+ },
+ "83820636": {
+  "key": "0001DFC24C2C5B6CB02C1E9C362627C6",
+  "source": "blueprint",
+  "text": "Tractor Beam V"
+ },
+ "83820637": {
+  "key": "1ACD25B14EF83FC3B1862092185792AA",
+  "source": "blueprint",
+  "text": "Ballistic Broadside IV"
+ },
+ "83820638": {
+  "key": "68B479F8451FDEA0B15F84AD4A4F7D86",
+  "source": "blueprint",
+  "text": "Ballistic Broadside V"
+ },
+ "83820639": {
+  "key": "0D9E95144CFE5C23C774C1815E8FC772",
+  "source": "blueprint",
+  "text": "Plasma Broadside IV"
+ },
+ "83820640": {
+  "key": "D3F23BE3423CA352D3EBFD84CF9E71B8",
+  "source": "blueprint",
+  "text": "Plasma Broadside I"
+ },
+ "83820641": {
+  "key": "53C8EDF14B0848E1303591B617EC0ED1",
+  "source": "blueprint",
+  "text": "Plasma Broadside II"
+ },
+ "83820642": {
+  "key": "7AA596C545D45D50FA474BB39D03A155",
+  "source": "blueprint",
+  "text": "Plasma Broadside III"
+ },
+ "83820643": {
+  "key": "2FA9CC1C4E0A8DCCA86436A1621F9556",
+  "source": "blueprint",
+  "text": "Plasma Broadside V"
+ },
+ "83820644": {
+  "key": "45F8CCB4473507A0D0AB83941956BDE2",
+  "source": "blueprint",
+  "text": "Scattergun Broadside IV"
+ },
+ "83820645": {
+  "key": "8FCB112E49AC3007EF0AD49AC5BAA445",
+  "source": "blueprint",
+  "text": "Scattergun Broadside III"
+ },
+ "83820646": {
+  "key": "1F8BD5E04B4512C9F527129E06677A53",
+  "source": "blueprint",
+  "text": "Scattergun Broadside V"
+ },
+ "83820647": {
+  "key": "ACF85D714F532387426911A82EE59005",
+  "source": "blueprint",
+  "text": "Bombers IV"
+ },
+ "83820648": {
+  "key": "988397194B10FA83F655DDA69560912D",
+  "source": "blueprint",
+  "text": "Bombers V"
+ },
+ "83820649": {
+  "key": "D816AB9B44D75A73B5885E91D09AD5BD",
+  "source": "blueprint",
+  "text": "Fighters IV"
+ },
+ "83820650": {
+  "key": "0630DB7347C874A0CB71CD89B364558E",
+  "source": "blueprint",
+  "text": "Fighters V"
+ },
+ "83820651": {
+  "key": "E114377944387DD0B8311AA205482C75",
+  "source": "blueprint",
+  "text": "Interceptors IV"
+ },
+ "83820652": {
+  "key": "24B21C4944E95ABFBDB98FA5CB0522A4",
+  "source": "blueprint",
+  "text": "Interceptors V"
+ },
+ "83820653": {
+  "key": "F04A94654239CBB96C91668F1EDABAFE",
+  "source": "blueprint",
+  "text": "Nuclear Missile IV"
+ },
+ "83820654": {
+  "key": "82EF94884AADC40C2E9337981DE4F4CD",
+  "source": "blueprint",
+  "text": "Nuclear Missile II"
+ },
+ "83820655": {
+  "key": "E670B3B345788D8C74F00AA3370554C6",
+  "source": "blueprint",
+  "text": "Nuclear Missile III"
+ },
+ "83820656": {
+  "key": "91C485374226F22099D543B2AE49AB74",
+  "source": "blueprint",
+  "text": "Nuclear Missile V"
+ },
+ "83820657": {
+  "key": "49C752B746CD20DC0F46A483AD734C60",
+  "source": "blueprint",
+  "text": "Starling Missile Salvo IV"
+ },
+ "83820658": {
+  "key": "CF05E4A643734BDBD25718A4CD3A841F",
+  "source": "blueprint",
+  "text": "Starling Missile Salvo V"
+ },
+ "83820659": {
+  "key": "7183C33743865AD9FF64499CFB428F4F",
+  "source": "blueprint",
+  "text": "Tartarus Missile IV"
+ },
+ "83820660": {
+  "key": "E25FAFDB4B494D376A281CBE8A13B8CC",
+  "source": "blueprint",
+  "text": "Tartarus Missile V"
+ },
+ "83820661": {
+  "key": "644D1EFC4B0FEE20D074858D962DD027",
+  "source": "blueprint",
+  "text": "Triad Pods IV"
+ },
+ "83820662": {
+  "key": "5B5AE3BC40D3C77CF66BC79CD81C71B1",
+  "source": "blueprint",
+  "text": "Triad Pods V"
+ },
+ "83820663": {
+  "key": "74CCE7C2469BA67667E776B8A4DC2766",
+  "source": "blueprint",
+  "text": "Vulture Missiles IV"
+ },
+ "83820664": {
+  "key": "27AA31724CDB0936C688899A1A2B9EE6",
+  "source": "blueprint",
+  "text": "Vulture Missiles I"
+ },
+ "83820665": {
+  "key": "AC52720C4A7869637AB92DA151A2207A",
+  "source": "blueprint",
+  "text": "Vulture Missiles II"
+ },
+ "83820666": {
+  "key": "8B20C0D245B906D6F0DCF8872A09FABF",
+  "source": "blueprint",
+  "text": "Vulture Missiles III"
+ },
+ "83820667": {
+  "key": "861A08C4485C0CFBB8DBF58888D7E41E",
+  "source": "blueprint",
+  "text": "Vulture Missiles V"
+ },
+ "83820668": {
+  "key": "FF9AC25A484A6A7FEF776AAB23DCDEF7",
+  "source": "blueprint",
+  "text": "Flechette Missiles IV"
+ },
+ "83820669": {
+  "key": "4524C37F45FA137BB36F8B836A371937",
+  "source": "blueprint",
+  "text": "Flechette Missiles II"
+ },
+ "83820670": {
+  "key": "CEC58F864BA7F3BB3126DB96EBAD1BA0",
+  "source": "blueprint",
+  "text": "Flechette Missiles III"
+ },
+ "83820671": {
+  "key": "0BB85AA44BB1F69DF975969B7BA8453F",
+  "source": "blueprint",
+  "text": "Flechette Missiles V"
+ },
+ "83820672": {
+  "key": "115D1B014B6A40FCA498F38EE0F3F43C",
+  "source": "blueprint",
+  "text": "Light Missiles IV"
+ },
+ "83820673": {
+  "key": "B03FC5A847004B4D521558BCE409DB84",
+  "source": "blueprint",
+  "text": "Light Missiles V"
+ },
+ "83820674": {
+  "key": "E9E7F9944CA560642F71FBBE4832EEC2",
+  "source": "blueprint",
+  "text": "Heavy Torpedo IV"
+ },
+ "83820675": {
+  "key": "14741F774AF12D5A226F8CB5B1CEBA58",
+  "source": "blueprint",
+  "text": "Heavy Torpedo III"
+ },
+ "83820676": {
+  "key": "E86ABAC84A8A8E9D8F6773B65577874D",
+  "source": "blueprint",
+  "text": "Heavy Torpedo V"
+ },
+ "83820677": {
+  "key": "EAD9A1CB403B78C9AB933D9004CCC262",
+  "source": "blueprint",
+  "text": "Light Torpedoes IV"
+ },
+ "83820678": {
+  "key": "20D2AA4B456FDCB5F48BC1AD843CC3BB",
+  "source": "blueprint",
+  "text": "Light Torpedoes III"
+ },
+ "83820679": {
+  "key": "E53B74C643F3C37D4066B78F379F3A43",
+  "source": "blueprint",
+  "text": "Light Torpedoes V"
+ },
+ "83820680": {
+  "key": "DB5B0AA24EFAD6B7A0677EAA26ECB25B",
+  "source": "blueprint",
+  "text": "Jet Loop Maneuver"
+ },
+ "83820681": {
+  "key": "458886C3495AA9533AC048ABC3A428A9",
+  "source": "blueprint",
+  "text": "Jet Roll Maneuver"
+ },
+ "83820682": {
+  "key": "E2960A2144FB31412C0566BC38553A70",
+  "source": "blueprint",
+  "text": "Jet Bombs"
+ },
+ "83820683": {
+  "key": "CB6C13C64B6DF7917255089A4CC4AB6B",
+  "source": "blueprint",
+  "text": "Jet Twin Missiles"
+ },
+ "83820684": {
+  "key": "9722E1BD43677BD8AC297E8C5B5A7422",
+  "source": "blueprint",
+  "text": "Jet Support Pod"
+ },
+ "83820685": {
+  "key": "E3AF5AC14A5A1B7718C10D967893F4A6",
+  "source": "blueprint",
+  "text": "Jet Anti-\nMissile Lasers"
+ },
+ "83820686": {
+  "key": "95FA65C54E0FD249903550B7EF8DA283",
+  "source": "blueprint",
+  "text": "Disruptor Ammo IV"
+ },
+ "83820687": {
+  "key": "49ED42CB4856ACBCB8D637966F7A7890",
+  "source": "blueprint",
+  "text": "Disruptor Ammo V"
+ },
+ "83820688": {
+  "key": "8D5128A5413D10A6918607991CE2DDDB",
+  "source": "blueprint",
+  "text": "Stasis Ammo IV"
+ },
+ "83820689": {
+  "key": "AE4814AA42D7F1874AAE00A854200C16",
+  "source": "blueprint",
+  "text": "Stasis Ammo V"
+ },
+ "83820690": {
+  "key": "E7E9982147173AC8F139D7839CBC260B",
+  "source": "blueprint",
+  "text": "Autorepair IV"
+ },
+ "83820691": {
+  "key": "0E1D17D04DFEDDAB9BDE0BADBAB8041A",
+  "source": "blueprint",
+  "text": "Afterburner IV"
+ },
+ "83820692": {
+  "key": "985E030B43DFE7E901B9DBB97EF0E9A2",
+  "source": "blueprint",
+  "text": "Afterburner I"
+ },
+ "83820693": {
+  "key": "BC7C4537406D989C56CC97BFE6067D42",
+  "source": "blueprint",
+  "text": "Afterburner II"
+ },
+ "83820694": {
+  "key": "43FC4241458BB17DC3B899A13371D4D9",
+  "source": "blueprint",
+  "text": "Afterburner III"
+ },
+ "83820695": {
+  "key": "B3D1F23E4A6E23F14D955BAA78C87A92",
+  "source": "blueprint",
+  "text": "Afterburner V"
+ },
+ "83820696": {
+  "key": "9360BE494A9EFCECFB4171B1E6CE63CC",
+  "source": "blueprint",
+  "text": "Immelmann Maneuver IV"
+ },
+ "83820697": {
+  "key": "4A7D20DA4EDA415AE1E6FD94BDA6D4C0",
+  "source": "blueprint",
+  "text": "Immelmann Maneuver V"
+ },
+ "83820698": {
+  "key": "AA78214F49595FB6D5158D915DC32E60",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse IV"
+ },
+ "83820699": {
+  "key": "8F67ECCE4E3A38F045A2F0945DAC1804",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse I"
+ },
+ "83820700": {
+  "key": "253DECA54AED55B20A387DA507189BC8",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse II"
+ },
+ "83820701": {
+  "key": "8A1F7C6342F08217A3F3469BBE71F931",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse III"
+ },
+ "83820702": {
+  "key": "8235636D43D39DB7A3D4B495D89347CE",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse V"
+ },
+ "83820703": {
+  "key": "7AC253DF4C3381BACBA3F982851CB5F1",
+  "source": "blueprint",
+  "text": "Blast Pulse IV"
+ },
+ "83820704": {
+  "key": "3FCD7C344D8A35DDD9C224A8179F94B4",
+  "source": "blueprint",
+  "text": "Blast Pulse V"
+ },
+ "83820705": {
+  "key": "1E1F3AC94CF9E4296BC09CBEAE9FD1E9",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers IV"
+ },
+ "83820706": {
+  "key": "710934C241BFFFB6DF23C7BE02F8006F",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers V"
+ },
+ "83820707": {
+  "key": "F790D2014567AC39E1710EA20E5F6EC2",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers IV"
+ },
+ "83820708": {
+  "key": "4B35E1F843663D2B6E745B9B0069FC41",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers V"
+ },
+ "83820709": {
+  "key": "911EBC0B4C62228C16D3629434819830",
+  "source": "blueprint",
+  "text": "Autoguns  IV"
+ },
+ "83820710": {
+  "key": "D1DBACAB4DA9B374BDC72A90BB57381E",
+  "source": "blueprint",
+  "text": "Autoguns  III"
+ },
+ "83820711": {
+  "key": "FA39590B49A38E01D075AA8DA264E35F",
+  "source": "blueprint",
+  "text": "Autoguns V"
+ },
+ "83820712": {
+  "key": "3802FE8B4146E5BE0BF8728D39B42D10",
+  "source": "blueprint",
+  "text": "Blink Warp IV"
+ },
+ "83820713": {
+  "key": "3EA51E4541A11D8CEF179A8950E1E0DC",
+  "source": "blueprint",
+  "text": "Blink Warp II"
+ },
+ "83820714": {
+  "key": "A5E0802347E8726A58DCD581DAFBAB9D",
+  "source": "blueprint",
+  "text": "Blink Warp III"
+ },
+ "83820715": {
+  "key": "7DBA2D054A3DF48A3CAFB6A348ED2636",
+  "source": "blueprint",
+  "text": "Blink Warp V"
+ },
+ "83820716": {
+  "key": "5315BCAB4D0E75A669B672B03C7756AA",
+  "source": "blueprint",
+  "text": "Assault Blink Warp IV"
+ },
+ "83820717": {
+  "key": "5CF23C2642FA6A37F21A9286395C2E5B",
+  "source": "blueprint",
+  "text": "Assault Blink Warp V"
+ },
+ "83820718": {
+  "key": "B41DD5D04AD537702DFD63A5378E9C67",
+  "source": "blueprint",
+  "text": "Target Blink Warp IV"
+ },
+ "83820719": {
+  "key": "AD220D1D4B333A7F0D567996B03CC519",
+  "source": "blueprint",
+  "text": "Target Blink Warp V"
+ },
+ "83820720": {
+  "key": "9E8581E34F0303FAAA8FAD8F1C107DBB",
+  "source": "blueprint",
+  "text": "Heavy Cloak IV"
+ },
+ "83820721": {
+  "key": "4FDCDB4D448369CA75B1E1B7099C5751",
+  "source": "blueprint",
+  "text": "Heavy Cloak V"
+ },
+ "83820722": {
+  "key": "D824EC6C4F848F39D70D8BAE119225CB",
+  "source": "blueprint",
+  "text": "Light Cloak IV"
+ },
+ "83820723": {
+  "key": "C825E51C4D3CA87E08EE9BAAA772E0B3",
+  "source": "blueprint",
+  "text": "Light Cloak III"
+ },
+ "83820724": {
+  "key": "47C7283C4A904ECD60B310AB2EE9EE0B",
+  "source": "blueprint",
+  "text": "Light Cloak V"
+ },
+ "83820725": {
+  "key": "E12368EE4E995C334DB4F6BBAF0309B3",
+  "source": "blueprint",
+  "text": "Medium Cloak IV"
+ },
+ "83820726": {
+  "key": "BDE3E1E945735EEE32BD92B5DB8DE82B",
+  "source": "blueprint",
+  "text": "Medium Cloak V"
+ },
+ "83820727": {
+  "key": "669576DA444FDD9D4E838DB01C715187",
+  "source": "preview-name",
+  "text": "Kinetic Armor Amplifier IV"
+ },
+ "83820728": {
+  "key": "2E8BDD2740345C5F837648BC4F79F4DC",
+  "source": "preview-name",
+  "text": "Kinetic Armor Amplifier V"
+ },
+ "83820729": {
+  "key": "235115214BBA37B548942E89BE314358",
+  "source": "blueprint",
+  "text": "Thrust Amplifier IV"
+ },
+ "83820730": {
+  "key": "6FD912E84E11AA91F8E29BB9BC861AF6",
+  "source": "blueprint",
+  "text": "Thrust Amplifier I"
+ },
+ "83820731": {
+  "key": "403D48274F08D37C46177EBF01DCFADD",
+  "source": "blueprint",
+  "text": "Thrust Amplifier II"
+ },
+ "83820732": {
+  "key": "19A0791843FD5A14A4A3CBA878EC35DF",
+  "source": "blueprint",
+  "text": "Thrust Amplifier III"
+ },
+ "83820733": {
+  "key": "AF97795A47EDD554A82799A7A2002B31",
+  "source": "blueprint",
+  "text": "Thrust Amplifier V"
+ },
+ "83820734": {
+  "key": "2BCAB18248077B47CA2958BF0DB60C69",
+  "source": "blueprint",
+  "text": "Kinetic Weapon Amplifier IV"
+ },
+ "83820735": {
+  "key": "FC5B312942DAF1DD32CDFAB3DEB09CC1",
+  "source": "blueprint",
+  "text": "Kinetic Weapon Amplifier III"
+ },
+ "83820736": {
+  "key": "81C3F9884D5FC3644028C1A3821A3674",
+  "source": "blueprint",
+  "text": "Kinetic Weapon Amplifier V"
+ },
+ "83820737": {
+  "key": "A40BC66C4322FE3806F96BBB12057530",
+  "source": "blueprint",
+  "text": "Light Proximity Mines IV"
+ },
+ "83820738": {
+  "key": "E2578ADE49373FF60A190E8E8B110298",
+  "source": "blueprint",
+  "text": "Light Proximity Mines V"
+ },
+ "83820739": {
+  "key": "22ADF8A148845EA3414D1DA3DBF88EBC",
+  "source": "blueprint",
+  "text": "Scrambler Mines IV"
+ },
+ "83820740": {
+  "key": "9EF7EF1B47778466733B27880717F562",
+  "source": "blueprint",
+  "text": "Scrambler Mines V"
+ },
+ "83820741": {
+  "key": "DC9F921441729F31958D358BBA7581FC",
+  "source": "blueprint",
+  "text": "Heavy Torpedo IV"
+ },
+ "83820742": {
+  "key": "7D554F0A4DF2C40DBC3C889D23BE7372",
+  "source": "blueprint",
+  "text": "Heavy Torpedo I"
+ },
+ "83820743": {
+  "key": "F5106BA54388621602D42AA5162F2AF1",
+  "source": "blueprint",
+  "text": "Heavy Torpedo II"
+ },
+ "83820744": {
+  "key": "351B74D54F8D859F2DF0DCA4B0E12DCE",
+  "source": "blueprint",
+  "text": "Heavy Torpedo III"
+ },
+ "83820745": {
+  "key": "603B1CE1420F2337FC6D94B4B33F57BB",
+  "source": "blueprint",
+  "text": "Heavy Torpedo V"
+ },
+ "83820746": {
+  "key": "6D4E48E242CEF1763F560C82D83CD721",
+  "source": "blueprint",
+  "text": "Drain Torpedo IV"
+ },
+ "83820747": {
+  "key": "EF92954F4DA8673B905A05B4FEDA92D8",
+  "source": "blueprint",
+  "text": "Drain Torpedo II"
+ },
+ "83820748": {
+  "key": "1D6878F44498CAE584D100A8E2C80658",
+  "source": "blueprint",
+  "text": "Drain Torpedo III"
+ },
+ "83820749": {
+  "key": "9B3DB7ED46F835EFCCE966874B37E092",
+  "source": "blueprint",
+  "text": "Drain Torpedo V"
+ },
+ "83820750": {
+  "key": "2BE2F3BC473BECCD9389958590579981",
+  "source": "blueprint",
+  "text": "Weaponbreaker Torpedo IV"
+ },
+ "83820751": {
+  "key": "22DBF3B54AC8A2517971EC8E1F90F06D",
+  "source": "blueprint",
+  "text": "Weaponbreaker Torpedo III"
+ },
+ "83820752": {
+  "key": "036FB5DA4AD80B42074590A789F0ECCF",
+  "source": "blueprint",
+  "text": "Weaponbreaker Torpedo V"
+ },
+ "83820753": {
+  "key": "C18CBC484DE3A96661EE02AF599BA431",
+  "source": "blueprint",
+  "text": "Torpedo Salvo IV"
+ },
+ "83820754": {
+  "key": "71EE549F433B39549B07DEBF0AA47074",
+  "source": "blueprint",
+  "text": "Torpedo Salvo IV"
+ },
+ "83820755": {
+  "key": "F7820E7F49BC2CF7ED51C480C80D515E",
+  "source": "blueprint",
+  "text": "Torpedo Salvo V"
+ },
+ "83820756": {
+  "key": "8891F5E843D8BAD8E2C31EAC577E7F97",
+  "source": "preview-name-equal-text",
+  "text": "Armor Amplifier IV"
+ },
+ "83820757": {
+  "key": "6D893D76486623E51EFA708F622399C0",
+  "source": "blueprint",
+  "text": "Turn Amplifier IV"
+ },
+ "83820758": {
+  "key": "42ECE701465C1F557BE6A4A7EE5E93EC",
+  "source": "blueprint",
+  "text": "Mobile Cloak IV"
+ },
+ "83820759": {
+  "key": "C8EF0B474635BAC7E25E539B60E18D44",
+  "source": "blueprint",
+  "text": "Mobile Cloak I"
+ },
+ "83820760": {
+  "key": "DAA3E82A41A98CB956D233BCDD2213FB",
+  "source": "blueprint",
+  "text": "Mobile Cloak II"
+ },
+ "83820761": {
+  "key": "903F752047FF5A25FF53398CF536DB03",
+  "source": "blueprint",
+  "text": "Mobile Cloak III"
+ },
+ "83820762": {
+  "key": "7F86EE3C4B377E94099AF68BA28847CE",
+  "source": "blueprint",
+  "text": "Mobile Cloak V"
+ },
+ "83820763": {
+  "key": "3285A4B5448B7B311D88C2BAD6C40B32",
+  "source": "blueprint",
+  "text": "Stationary Cloak IV"
+ },
+ "83820764": {
+  "key": "09B32738432A147B86C1F09275160B57",
+  "source": "blueprint",
+  "text": "Stationary Cloak N"
+ },
+ "83820765": {
+  "key": "EEA47181406B8A3EC54DE6935B07686B",
+  "source": "blueprint",
+  "text": "Stationary Cloak I"
+ },
+ "83820766": {
+  "key": "C84202144B027ABE8DC2CA8F2E23CE1F",
+  "source": "blueprint",
+  "text": "Stationary Cloak II"
+ },
+ "83820767": {
+  "key": "68ADFEB5403E4F2FD2B641A85F3D4D62",
+  "source": "blueprint",
+  "text": "Stationary Cloak III"
+ },
+ "83820768": {
+  "key": "246102AB43792C3D7A8DE2BDBE000A38",
+  "source": "blueprint",
+  "text": "Stationary Cloak V"
+ },
+ "83820769": {
+  "key": "A333F383434DEB7B11BF819B9D84FB39",
+  "source": "blueprint",
+  "text": "Dive Maneuver IV"
+ },
+ "83820770": {
+  "key": "8C753B114F403C50D1D026ADE49A7F80",
+  "source": "blueprint",
+  "text": "Dive Maneuver II"
+ },
+ "83820771": {
+  "key": "2B0C7E384444D644E35133805AAC1953",
+  "source": "blueprint",
+  "text": "Dive Maneuver III"
+ },
+ "83820772": {
+  "key": "C749B16B4358380D7EC056B2F1A02701",
+  "source": "blueprint",
+  "text": "Dive Maneuver V"
+ },
+ "83820773": {
+  "key": "4561C78141668C1C6E6DB48EE13FB601",
+  "source": "blueprint",
+  "text": "Evasive Maneuver IV"
+ },
+ "83820774": {
+  "key": "90AD1D574FBF035A7BE8708318AEA29D",
+  "source": "blueprint",
+  "text": "Evasive Maneuver V"
+ },
+ "83820775": {
+  "key": "8531803D4C1BB95E87A66D9D544FC961",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse IV"
+ },
+ "83820776": {
+  "key": "D1AFECFB4D941E8BAD12D8972E8AD7EA",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse V"
+ },
+ "83820777": {
+  "key": "F9AFB0BC40B7A03D97AE20821BE39EF0",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers IV"
+ },
+ "83820778": {
+  "key": "210163834B787B1095503C9A5F25F6BC",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers III"
+ },
+ "83820779": {
+  "key": "7537AF8E447C145B096EFA881476B0DA",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers V"
+ },
+ "83820780": {
+  "key": "7F28CD7F478F07D5D86FAA812B532173",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers IV"
+ },
+ "83820781": {
+  "key": "7465A817420D02A5221694AE6E3299A4",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers N"
+ },
+ "83820782": {
+  "key": "685820B34D9A93B13D40F4AE2A2F7ECB",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers I"
+ },
+ "83820783": {
+  "key": "4436BF1344B23447DCBC7A9E4E231388",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers II"
+ },
+ "83820784": {
+  "key": "F91447894F84C13D85A37B942990AEDE",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers III"
+ },
+ "83820785": {
+  "key": "AB8688E6484E75C66644998ACDCC4F40",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers V"
+ },
+ "83820786": {
+  "key": "3C00A7CC4F64AC5F1F04BABEA1E982AB",
+  "source": "blueprint",
+  "text": "Light Autoguns IV"
+ },
+ "83820787": {
+  "key": "BF02275C45E0ADA848CC64928C53DF94",
+  "source": "blueprint",
+  "text": "Light Autoguns II"
+ },
+ "83820788": {
+  "key": "C7BF65E04A1EB36E0DA758B1EA512F8E",
+  "source": "blueprint",
+  "text": "Light Autoguns III"
+ },
+ "83820789": {
+  "key": "B4CA1A394AD09178033DE08986F83F1B",
+  "source": "blueprint",
+  "text": "Light Autoguns V"
+ },
+ "83820790": {
+  "key": "D94FFBDA4BCCF8FBE17EEBBF347448E2",
+  "source": "blueprint",
+  "text": "Bomb Catapult IV"
+ },
+ "83820791": {
+  "key": "1C9868DB478DDF0FFAA1A5BE3A154B0F",
+  "source": "blueprint",
+  "text": "Bomb Catapult II"
+ },
+ "83820792": {
+  "key": "A1D583B84C2AD1D8C03287B0FEC3DF4B",
+  "source": "blueprint",
+  "text": "Bomb Catapult III"
+ },
+ "83820793": {
+  "key": "FE468E86449225A8D1157E946D2BF643",
+  "source": "blueprint",
+  "text": "Bomb Catapult V"
+ },
+ "83820794": {
+  "key": "59B278FB4D35A7D7CB135A995F7F2508",
+  "source": "blueprint",
+  "text": "Mine Catapult IV"
+ },
+ "83820795": {
+  "key": "BA5FB5134E1ECE9126277486CFA7EB63",
+  "source": "blueprint",
+  "text": "Mine Catapult V"
+ },
+ "83820796": {
+  "key": "1E12564A400FC56484B06EA1497DF21D",
+  "source": "blueprint",
+  "text": "Sentry Catapult IV"
+ },
+ "83820797": {
+  "key": "4CDB1E4047CE718F9ED88DA3DA1181CD",
+  "source": "blueprint",
+  "text": "Sentry Catapult V"
+ },
+ "83820798": {
+  "key": "E41173BC48E5A9DA3A3DFC8D5B4DB34D",
+  "source": "blueprint",
+  "text": "Siege Mode IV"
+ },
+ "83820799": {
+  "key": "CA953B6A4AEE1C1D9ADDB7978834260F",
+  "source": "blueprint",
+  "text": "Siege Mode N"
+ },
+ "83820800": {
+  "key": "12BB69A14CC74305E4A5FAB99109FAB6",
+  "source": "blueprint",
+  "text": "Siege Mode I"
+ },
+ "83820801": {
+  "key": "80206E96405CE9AC1777B7BE08B9062B",
+  "source": "blueprint",
+  "text": "Siege Mode II"
+ },
+ "83820802": {
+  "key": "6F0AD1034961D827E3CA9396F196F124",
+  "source": "blueprint",
+  "text": "Siege Mode III"
+ },
+ "83820803": {
+  "key": "A769206D40723BC1620078B8163E8C60",
+  "source": "blueprint",
+  "text": "Siege Mode V"
+ },
+ "83820804": {
+  "key": "60D690B2417B8621137789B37EF4C825",
+  "source": "blueprint",
+  "text": "Rapid Fire Mode IV"
+ },
+ "83820805": {
+  "key": "A5EED61A44CFAEC34B271E992A28C04C",
+  "source": "blueprint",
+  "text": "Rapid Fire Mode III"
+ },
+ "83820806": {
+  "key": "CDA531874D1F7F08491632ABFD648DFD",
+  "source": "blueprint",
+  "text": "Rapid Fire Mode V"
+ },
+ "83820807": {
+  "key": "31AF2B6A4E0FF198116D1D933C526E0F",
+  "source": "preview-name",
+  "text": "Purge Mode IV"
+ },
+ "83820808": {
+  "key": "383502144E2F19BAF612CFB28E96AFA7",
+  "source": "preview-name",
+  "text": "Purge Mode V"
+ },
+ "83820809": {
+  "key": "461EB287437BE01C0BE266A02F59EFC0",
+  "source": "blueprint",
+  "text": "Disruptor Autobeams IV"
+ },
+ "83820810": {
+  "key": "591065114D79588827A12C920BA57EB3",
+  "source": "blueprint",
+  "text": "Disruptor Autobeams V"
+ },
+ "83820811": {
+  "key": "1758ACF7489E64EEC7032C91DAA24224",
+  "source": "blueprint",
+  "text": "Damage Autobeams IV"
+ },
+ "83820812": {
+  "key": "F061FFA24579784044D7CFACC72A7A58",
+  "source": "blueprint",
+  "text": "Damage Autobeams V"
+ },
+ "83820813": {
+  "key": "E01841F14A1C0D90BD81DEBC5E41E9CA",
+  "source": "blueprint",
+  "text": "Stasis Autobeams IV"
+ },
+ "83820814": {
+  "key": "F115BD7C4C3BBD2B96AA798CD5B21BE7",
+  "source": "blueprint",
+  "text": "Stasis Autobeams V"
+ },
+ "83820815": {
+  "key": "FCB880F6469231A27F538BA7ACCB6D87",
+  "source": "blueprint",
+  "text": "Proximity Mines IV"
+ },
+ "83820816": {
+  "key": "7A40DEA2498EB8123FF9F79BE111466C",
+  "source": "blueprint",
+  "text": "Proximity Mines V"
+ },
+ "83820817": {
+  "key": "B1CC77324E85B697EA516B847CFF4FF2",
+  "source": "blueprint",
+  "text": "Stasis Mines IV"
+ },
+ "83820818": {
+  "key": "E979B4C34696C7E14F1C99A508AC2564",
+  "source": "blueprint",
+  "text": "Stasis Mines V"
+ },
+ "83820819": {
+  "key": "61677AF94612186F9177E1B5E4EB6CEC",
+  "source": "blueprint",
+  "text": "Drain Missile IV"
+ },
+ "83820820": {
+  "key": "671B978D4B39E528DC816F9E8D96F836",
+  "source": "blueprint",
+  "text": "Drain Missile III"
+ },
+ "83820821": {
+  "key": "3D87C19D4DD81E580403B5A04344369E",
+  "source": "blueprint",
+  "text": "Drain Missile V"
+ },
+ "83820822": {
+  "key": "84694BD649C962BDDF448CB2B184F5E7",
+  "source": "blueprint",
+  "text": "Scrambler Missile IV"
+ },
+ "83820823": {
+  "key": "B739577D4A46A1CF141C64900988A64D",
+  "source": "blueprint",
+  "text": "Scrambler Missile V"
+ },
+ "83820824": {
+  "key": "D23CB62C4D067BFF9EED538DC71A8D68",
+  "source": "blueprint",
+  "text": "Stasis Missile IV"
+ },
+ "83820825": {
+  "key": "8D3DCFCE4E16311D977D91B4270A3CB2",
+  "source": "blueprint",
+  "text": "Stasis Missile I"
+ },
+ "83820826": {
+  "key": "90C6A01542D04B77828EE79C4E413FC9",
+  "source": "blueprint",
+  "text": "Stasis Missile II"
+ },
+ "83820827": {
+  "key": "919572654493B9A710048395574F69A6",
+  "source": "blueprint",
+  "text": "Stasis Missile III"
+ },
+ "83820828": {
+  "key": "2BF385564C30F42C5BCC67BBB206069A",
+  "source": "blueprint",
+  "text": "Stasis Missile V"
+ },
+ "83820829": {
+  "key": "07ED598B4C1816C3709388A0C8BC6CCB",
+  "source": "blueprint",
+  "text": "Flechette Missiles IV"
+ },
+ "83820830": {
+  "key": "6A050C1C4949E9415B2D939ACF3D8E4B",
+  "source": "blueprint",
+  "text": "Flechette Missiles N"
+ },
+ "83820831": {
+  "key": "3746DE354527BB0BCC97AF96A4971566",
+  "source": "blueprint",
+  "text": "Flechette Missiles I"
+ },
+ "83820832": {
+  "key": "0F039B0844A5D7120A405CAA10A1C8FD",
+  "source": "blueprint",
+  "text": "Flechette Missiles II"
+ },
+ "83820833": {
+  "key": "AE4708484040266C7472E2949D43C5CA",
+  "source": "blueprint",
+  "text": "Flechette Missiles III"
+ },
+ "83820834": {
+  "key": "BB01352345E4BE34F8A23BB3FA7DAE97",
+  "source": "blueprint",
+  "text": "Flechette Missiles V"
+ },
+ "83820835": {
+  "key": "F942A3DC4D722AE4E4A23E9C103F162D",
+  "source": "blueprint",
+  "text": "Overclock Module IV"
+ },
+ "83820836": {
+  "key": "1CB06E054699F1643CF10D8D107EA877",
+  "source": "blueprint",
+  "text": "Armored Lockdown IV"
+ },
+ "83820837": {
+  "key": "71E968E84765C4D516329D910E2B0734",
+  "source": "blueprint",
+  "text": "Energy Generator IV"
+ },
+ "83820838": {
+  "key": "3AD744E840BC678810714A8C7B57AB80",
+  "source": "blueprint",
+  "text": "Autorepair IV"
+ },
+ "83820839": {
+  "key": "A6938C8149130A714308AC82A8348A0D",
+  "source": "blueprint",
+  "text": "Autorepair N"
+ },
+ "83820840": {
+  "key": "1DB9BF30410210F3B6CE4E8BDE0E22B3",
+  "source": "blueprint",
+  "text": "Emergency Evac IV"
+ },
+ "83820841": {
+  "key": "F07E30AD4DE6C27B71487E95BD8FC6D3",
+  "source": "blueprint",
+  "text": "Emergency Evac V"
+ },
+ "83820842": {
+  "key": "8065A06C408F58465EE637867EBB7F25",
+  "source": "blueprint",
+  "text": "Target Warp IV"
+ },
+ "83820843": {
+  "key": "B9E561004B07E4BFF0DB34ADBC21CA5F",
+  "source": "blueprint",
+  "text": "Target Warp V"
+ },
+ "83820844": {
+  "key": "C0BEDF92492D28053866B09F6C1F662A",
+  "source": "blueprint",
+  "text": "Cloak Pulse IV"
+ },
+ "83820845": {
+  "key": "DC1736D042E7B5291770E4BB6A96C21E",
+  "source": "blueprint",
+  "text": "Cloak Pulse V"
+ },
+ "83820846": {
+  "key": "323EB58E4E58241190A47CB39EC7DEE9",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers IV"
+ },
+ "83820847": {
+  "key": "07057217476DABDBCC7215B4F686FD8D",
+  "source": "blueprint",
+  "text": "Anti-Nuke Lasers V"
+ },
+ "83820848": {
+  "key": "85C9D45A4DD72483CF1879A71C97C098",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers IV"
+ },
+ "83820849": {
+  "key": "244A9B2E4C80687D03BDD3BB376CE2A2",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers V"
+ },
+ "83820850": {
+  "key": "1BB3F32F4DE424B6B4B9DBB388709534",
+  "source": "blueprint",
+  "text": "Repair Autobeams IV"
+ },
+ "83820851": {
+  "key": "A62A91F74D02E82F7537E793218E27A0",
+  "source": "blueprint",
+  "text": "Repair Autobeams N"
+ },
+ "83820852": {
+  "key": "6EADA83244F705104BC1979623181E80",
+  "source": "blueprint",
+  "text": "Repair Autobeams I"
+ },
+ "83820853": {
+  "key": "DD3F87074D142AEDE0024B9A9D048331",
+  "source": "blueprint",
+  "text": "Repair Autobeams II"
+ },
+ "83820854": {
+  "key": "5786BB01474B83DCC9AAD29E7839C1F8",
+  "source": "blueprint",
+  "text": "Repair Autobeams III"
+ },
+ "83820855": {
+  "key": "EC71371F44E6DAEDD43F418C94C8089D",
+  "source": "blueprint",
+  "text": "Repair Autobeams V"
+ },
+ "83820856": {
+  "key": "25D444674152D343A9110F9E68C84A28",
+  "source": "blueprint",
+  "text": "Beam Amplifier IV"
+ },
+ "83820857": {
+  "key": "9AB8AE8A4314C2F53CF5BAA544C7C001",
+  "source": "blueprint",
+  "text": "Beam Amplifier N"
+ },
+ "83820858": {
+  "key": "F2A8749E437BEBA7E0A6F592CB38A902",
+  "source": "blueprint",
+  "text": "Beam Amplifier I"
+ },
+ "83820860": {
+  "key": "F73B398E433C0089D371E09F22B86BF7",
+  "source": "blueprint",
+  "text": "Beam Amplifier III"
+ },
+ "83820861": {
+  "key": "B284E31E4D7441CBF1462EAC7DE585F0",
+  "source": "blueprint",
+  "text": "Beam Amplifier V"
+ },
+ "83820862": {
+  "key": "B0E25566464A71F58FB091A179981FDE",
+  "source": "blueprint",
+  "text": "Stasis Beam IV"
+ },
+ "83820863": {
+  "key": "9EA12CD24EC82252D8D458B3E5821F69",
+  "source": "blueprint",
+  "text": "Stasis Beam V"
+ },
+ "83820864": {
+  "key": "BCD50F214E66552748F2228C1CAA8A50",
+  "source": "preview-name",
+  "text": "Purge Beam IV"
+ },
+ "83820865": {
+  "key": "ED6EA71E4C5B66FC8CA2D3B797D8E7AF",
+  "source": "preview-name",
+  "text": "Purge Beam V"
+ },
+ "83820866": {
+  "key": "6FE4CFDA4C044510D7A014AEC819C7BD",
+  "source": "blueprint",
+  "text": "Artillery Pod IV"
+ },
+ "83820867": {
+  "key": "9010E3B0448378D9B6FD85B8141BD870",
+  "source": "blueprint",
+  "text": "Artillery Pod V"
+ },
+ "83820868": {
+  "key": "6BAD545C44DA4C9471DF4085E0C30013",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod IV"
+ },
+ "83820869": {
+  "key": "11FEAEDF4872EA3BC8521B95660AA501",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod II"
+ },
+ "83820870": {
+  "key": "9B76C2A74D48289F53A4C8B4ACBE56E6",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod III"
+ },
+ "83820871": {
+  "key": "C1B60DEF499600C839731EA80994BBE1",
+  "source": "blueprint",
+  "text": "Tesla Coil Pod V"
+ },
+ "83820872": {
+  "key": "44E073B54CCD058BC12500A9B3DFBB19",
+  "source": "blueprint",
+  "text": "Tractor Beam Pod IV"
+ },
+ "83820873": {
+  "key": "558CD7584D61F6DAAA0ACD96C2B25D8C",
+  "source": "blueprint",
+  "text": "Tractor Beam Pod III"
+ },
+ "83820874": {
+  "key": "66010C9845836CA6DEC948A5058DB9D2",
+  "source": "blueprint",
+  "text": "Tractor Beam Pod V"
+ },
+ "83820875": {
+  "key": "2110DDD543F8225CB2DA59AABAED590A",
+  "source": "blueprint",
+  "text": "Drain Drones IV"
+ },
+ "83820876": {
+  "key": "4F9059974A1660F13423B0824933CCC5",
+  "source": "blueprint",
+  "text": "Drain Drones V"
+ },
+ "83820877": {
+  "key": "255457EF45DEFCDE6FA7DFACE57D2EFD",
+  "source": "preview-name",
+  "text": "Surge Drones IV"
+ },
+ "83820878": {
+  "key": "2542E82749C7E4290450669ED6ACC5EB",
+  "source": "preview-name",
+  "text": "Surge Drones V"
+ },
+ "83820879": {
+  "key": "10B61600412D6E43214FFD900115E4E6",
+  "source": "blueprint",
+  "text": "Repair Drones IV"
+ },
+ "83820880": {
+  "key": "F9328A13481521DB672DAFA96B527152",
+  "source": "blueprint",
+  "text": "Repair Drones V"
+ },
+ "83820881": {
+  "key": "84152DEF4E0AC26590007B991641C012",
+  "source": "blueprint",
+  "text": "Repair Pod IV"
+ },
+ "83820882": {
+  "key": "FB16EB474173F78842994994F09DCE62",
+  "source": "blueprint",
+  "text": "Repair Pod N"
+ },
+ "83820883": {
+  "key": "40D698BC4C743C2C0B850BBAC56CA8DC",
+  "source": "blueprint",
+  "text": "Repair Pod I"
+ },
+ "83820884": {
+  "key": "A6A6366247F82E07E2D8778DDC300A5A",
+  "source": "blueprint",
+  "text": "Repair Pod II"
+ },
+ "83820885": {
+  "key": "AEE935A34D36BB8B2DB2408498A0F3E4",
+  "source": "blueprint",
+  "text": "Repair Pod III"
+ },
+ "83820886": {
+  "key": "5887C07F4D588CC0B29FAE870F41219C",
+  "source": "blueprint",
+  "text": "Repair Pod V"
+ },
+ "83820887": {
+  "key": "D7F5A2C14D9D83B8B5FFB38016E3AF17",
+  "source": "blueprint",
+  "text": "Nuclear Mine IV"
+ },
+ "83820888": {
+  "key": "C69C6A00401A8C2538AE67809A6F37AC",
+  "source": "blueprint",
+  "text": "Nuclear Mine V"
+ },
+ "83820889": {
+  "key": "441AD7E8426B765736E63B9756A2E7AF",
+  "source": "blueprint",
+  "text": "Drain Mine IV"
+ },
+ "83820890": {
+  "key": "5D9C50024C30147BED43629B006A2B07",
+  "source": "blueprint",
+  "text": "Drain Mine III"
+ },
+ "83820891": {
+  "key": "33CD43C84071B3786940FC8C04C76EA3",
+  "source": "blueprint",
+  "text": "Drain Mine V"
+ },
+ "83820892": {
+  "key": "45CB46524ED52E8B39A4FF884E095B74",
+  "source": "blueprint",
+  "text": "Armorbreaker Missile IV"
+ },
+ "83820893": {
+  "key": "0820AB65435CE2B901ABC7A7133D0FD9",
+  "source": "blueprint",
+  "text": "Armorbooster Missile IV"
+ },
+ "83820894": {
+  "key": "8636719E42A4ECD01642FAB7CDB3B21C",
+  "source": "blueprint",
+  "text": "Energy Missile IV"
+ },
+ "83820895": {
+  "key": "854CBAB142651F48B2E327B08E78F8E6",
+  "source": "blueprint",
+  "text": "Energy Missile V"
+ },
+ "83820896": {
+  "key": "908F38ED4CA21E2A551F17AE7FF41082",
+  "source": "blueprint",
+  "text": "Flechette Half-Battery II"
+ },
+ "83820897": {
+  "key": "C285CD754D5F6707B98E20895BB8699F",
+  "source": "blueprint",
+  "text": "Flechette Half-Battery III"
+ },
+ "83820898": {
+  "key": "F526630B4E300B3D5D3D6390DAA88FAD",
+  "source": "blueprint",
+  "text": "Flechette Half-Battery V"
+ },
+ "83820900": {
+  "key": "E75DE16C490D7C861428848C8AFB8004",
+  "source": "blueprint",
+  "text": "Autorepair III"
+ },
+ "83820901": {
+  "key": "DFA0C78344392CC03F54A79FE2BD6DD2",
+  "source": "blueprint",
+  "text": "Autorepair II"
+ },
+ "83820902": {
+  "key": "4F3FECEE4CFD95446A0CF7A2ACBD8253",
+  "source": "blueprint",
+  "text": "Autorepair I"
+ },
+ "83820903": {
+  "key": "4BE6405041F70445D33FE9A3E6E7DF58",
+  "source": "blueprint",
+  "text": "Energy Generator V"
+ },
+ "83820904": {
+  "key": "A21555DA41041184B250559C352A21EA",
+  "source": "blueprint",
+  "text": "Energy Generator III"
+ },
+ "83820905": {
+  "key": "9334D3524CCB3427F6B74BA217BADE51",
+  "source": "blueprint",
+  "text": "Energy Generator II"
+ },
+ "83820906": {
+  "key": "2DE741D6492D7737FB45EAB9651270CD",
+  "source": "blueprint",
+  "text": "Armored Lockdown V"
+ },
+ "83820907": {
+  "key": "9CDCC4A848720E9085F1A5ACEEA052B3",
+  "source": "blueprint",
+  "text": "Autorepair V"
+ },
+ "83820908": {
+  "key": "18D716434BD1265D5CAFE69818D7B682",
+  "source": "blueprint",
+  "text": "Overclock Pulse IV"
+ },
+ "83820909": {
+  "key": "501EB60246BEB269A461B4A52B153857",
+  "source": "blueprint",
+  "text": "Overclock Pulse III"
+ },
+ "83820910": {
+  "key": "077F272F40CAB73366C199A80EF17E60",
+  "source": "blueprint",
+  "text": "Overclock Pulse V"
+ },
+ "83820911": {
+  "key": "48E1BC0F459B23792511F3B06C6D2679",
+  "source": "blueprint",
+  "text": "Blast Pulse IV"
+ },
+ "83820912": {
+  "key": "9BFDE6334E592A4A349D02B6088EB027",
+  "source": "blueprint",
+  "text": "Blast Pulse II"
+ },
+ "83820913": {
+  "key": "59CE521943435298CC61B6B06BDBF33C",
+  "source": "blueprint",
+  "text": "Blast Pulse III"
+ },
+ "83820914": {
+  "key": "FBF4818D47DB68DB2E7028B7E1227221",
+  "source": "blueprint",
+  "text": "Blast Pulse V"
+ },
+ "83820915": {
+  "key": "74F3133947FDDB799CCADCA60CD53A93",
+  "source": "blueprint",
+  "text": "Beam Amplifier II"
+ },
+ "83820917": {
+  "key": "0B5E2DD646F3D7BA136397BB9134BDA8",
+  "source": "blueprint",
+  "text": "Module Reboot V"
+ },
+ "83820919": {
+  "key": "AD1AEF5D4D222A2D51505FBE0F5DE0CF",
+  "source": "blueprint",
+  "text": "Energy Generator V"
+ },
+ "83820920": {
+  "key": "FF09884C414FA0099E38538B1991275B",
+  "source": "blueprint",
+  "text": "Weapon Amplifier V"
+ },
+ "83820921": {
+  "key": "D7000F884C9297030DB652A2AA3427BB",
+  "source": "preview-name",
+  "text": "Warp Jump IV"
+ },
+ "83820922": {
+  "key": "3DC1C9014E2E64BE183220BADAE6489E",
+  "source": "blueprint",
+  "text": "Warp Jump I"
+ },
+ "83820923": {
+  "key": "1FCC54FD4CF327F77CFD94B570D23235",
+  "source": "blueprint",
+  "text": "Warp Jump II"
+ },
+ "83820924": {
+  "key": "D37F89CB4C41F2FE89CB24BC2F7AE2AD",
+  "source": "blueprint",
+  "text": "Warp Jump III"
+ },
+ "83820925": {
+  "key": "F1943032468B10B26F0FA9B4BC61ACDB",
+  "source": "blueprint",
+  "text": "Warp Jump V"
+ },
+ "83820927": {
+  "key": "B196A188447ACAF5D2087E862C1C63A1",
+  "source": "blueprint",
+  "text": "Disruptor Pulse IV"
+ },
+ "83820928": {
+  "key": "E60A05524EB8B5DE04DD08A79731DFFD",
+  "source": "blueprint",
+  "text": "Disruptor Pulse III"
+ },
+ "83820929": {
+  "key": "32F9368345A876C2718B1C8F91DEE3F2",
+  "source": "blueprint",
+  "text": "Disruptor Pulse V"
+ },
+ "83820930": {
+  "key": "8535A32D4B7960448C89E6AEA4BEDB8E",
+  "source": "blueprint",
+  "text": "Stasis Pulse IV"
+ },
+ "83820931": {
+  "key": "9120BF524E798C6AE71819BE587FB0FD",
+  "source": "blueprint",
+  "text": "Stasis Pulse V"
+ },
+ "83820932": {
+  "key": "B37C25444F242123A826E7BA95D98C58",
+  "source": "blueprint",
+  "text": "Weaponbooster Pulse III"
+ },
+ "83820933": {
+  "key": "FD063D284FC917281A7F1FABD93BC17D",
+  "source": "blueprint",
+  "text": "Stasis Pulse IV"
+ },
+ "83820934": {
+  "key": "234D245342FFBD52785338BF31463402",
+  "source": "blueprint",
+  "text": "Drain Pulse IV"
+ },
+ "83820935": {
+  "key": "1B144B8B461AEB3BBBFAFFA1A06546AF",
+  "source": "blueprint",
+  "text": "Drain Pulse V"
+ },
+ "83820936": {
+  "key": "E87E0AF3430BA894D3DD8BA4C67C3263",
+  "source": "blueprint",
+  "text": "Weaponbooster Pulse IV"
+ },
+ "83820937": {
+  "key": "226D8CD14DBD4BD3EFF0F5A4A6E922D8",
+  "source": "blueprint",
+  "text": "Weaponbooster Pulse II"
+ },
+ "83820938": {
+  "key": "3EAA5EDF404722A3D2A50081A49AF804",
+  "source": "blueprint",
+  "text": "Scrambler Pulse V"
+ },
+ "83820939": {
+  "key": "3ABE461143933EEAF71DB7A2A1668A2F",
+  "source": "blueprint",
+  "text": "Stasis Pulse III"
+ },
+ "83820941": {
+  "key": "50CC21924ED1DEB38D208E9AC2E6CC08",
+  "source": "blueprint",
+  "text": "Armor Amplifier II"
+ },
+ "83820942": {
+  "key": "C6D23C8F45303021497D69B5576CB4D9",
+  "source": "blueprint",
+  "text": "Stasis Pulse V"
+ },
+ "83820943": {
+  "key": "E4430CF24A52B0C1B1BB51B775240337",
+  "source": "blueprint",
+  "text": "Armorbooster Pulse V"
+ },
+ "83820944": {
+  "key": "4697AE914BCD9D5FF2FC56B647AE64A1",
+  "source": "blueprint",
+  "text": "Armorbooster Pulse IV"
+ },
+ "83820945": {
+  "key": "4975938648CB111D9D5B79874C98B647",
+  "source": "blueprint",
+  "text": "Scrubber Module IV"
+ },
+ "83820946": {
+  "key": "1D61854A4DAC89854AA0FEB62B7755C7",
+  "source": "blueprint",
+  "text": "Scrubber Module V"
+ },
+ "83820947": {
+  "key": "7D021FCB4FB47B2A55ACC1B4E49E71B4",
+  "source": "blueprint",
+  "text": "Autorepair II"
+ },
+ "83820948": {
+  "key": "5A8B5AC8483404A95B3603A7CA0FEF26",
+  "source": "blueprint",
+  "text": "Autorepair III"
+ },
+ "83820949": {
+  "key": "D36ADFB84A22B14DC1F66896B0D67197",
+  "source": "blueprint",
+  "text": "Autorepair V"
+ },
+ "83820950": {
+  "key": "BE3CD03443FC552B802D959028CB804C",
+  "source": "blueprint",
+  "text": "Disruptor Pulse IV"
+ },
+ "83820951": {
+  "key": "3E95991742BA89C29CE6DAB8A56A836C",
+  "source": "blueprint",
+  "text": "Disruptor Pulse II"
+ },
+ "83820952": {
+  "key": "0CC413534623C9A39E3C4499BA8C3FC6",
+  "source": "blueprint",
+  "text": "Disruptor Pulse III"
+ },
+ "83820953": {
+  "key": "06A4B6854248DB38588C56B9BC6A7743",
+  "source": "preview-name-equal-text",
+  "text": "Armor Amplifier V"
+ },
+ "83820954": {
+  "key": "697E5E70482C379336E556B01055A899",
+  "source": "blueprint",
+  "text": "Turn Amplifier V"
+ },
+ "83820955": {
+  "key": "D69BE7EC429AB83E94FE68B0EDE99B32",
+  "source": "blueprint",
+  "text": "Overclock Module V"
+ },
+ "83820956": {
+  "key": "271415234F70593AB2A5ACBE1777FBAB",
+  "source": "blueprint",
+  "text": "Armored Lockdown III"
+ },
+ "83820973": {
+  "key": "140ABCE241CA2B8D762E9AA99AB92630",
+  "source": "blueprint",
+  "text": "Kinetic Armor Amplifier"
+ },
+ "83820975": {
+  "key": "C32752C7401D30C3890E8CADF8641F67",
+  "source": "blueprint",
+  "text": "Stasis Ammo IV"
+ },
+ "83820976": {
+  "key": "E4B1BFA6418A92633A3733AA624AA055",
+  "source": "blueprint",
+  "text": "Module Reboot II"
+ },
+ "83820977": {
+  "key": "BD81B52E49D2AC554C86289DBDFA5E2C",
+  "source": "blueprint",
+  "text": "Module Reboot III"
+ },
+ "83820978": {
+  "key": "B8E8F58642EC9EBF31D3159240F2168D",
+  "source": "blueprint",
+  "text": "Weaponbooster Pulse V"
+ },
+ "83820980": {
+  "key": "0109F6D04DE802052C5381A579EE38B4",
+  "source": "blueprint",
+  "text": "Scrambler Pulse IV"
+ },
+ "83820981": {
+  "key": "01AD9ED6405EEE4E85CF1DA77338D846",
+  "source": "blueprint",
+  "text": "Scrambler Pulse III"
+ },
+ "83820982": {
+  "key": "794FE93848CA8DB014F732BFFE78344D",
+  "source": "blueprint",
+  "text": "Storm Missiles IV"
+ },
+ "83820983": {
+  "key": "2C4AFD8749406313A513B3B065C39EB9",
+  "source": "preview-name",
+  "text": "Purge Ram IV"
+ },
+ "83820984": {
+  "key": "96B7404A404F9F20C4C97ABD3D9FD83A",
+  "source": "blueprint",
+  "text": "Armor Amplifier III"
+ },
+ "83820985": {
+  "key": "C7660ED248AB2DBD3E936B9A722C9A87",
+  "source": "blueprint",
+  "text": "Armor Amplifier V"
+ },
+ "83820986": {
+  "key": "C3BB089640A22F88EC19158B6C9F2BEB",
+  "source": "blueprint",
+  "text": "Endurance Mode V"
+ },
+ "83820987": {
+  "key": "E3117C424B4DCE12DC54488D46923EFA",
+  "source": "blueprint",
+  "text": "Offensive Lockdown V"
+ },
+ "83820988": {
+  "key": "D1711F8E4E957952863749BCBF17ACA2",
+  "source": "blueprint",
+  "text": "Disruptor Pulse V"
+ },
+ "83820992": {
+  "key": "4D5C1BCC4F185B62B8344BB511B244DF",
+  "source": "blueprint",
+  "text": "Energy Generator III"
+ },
+ "83820993": {
+  "key": "9BC86323481EF9D13EA48FBAF9DB89FA",
+  "source": "blueprint",
+  "text": "Thrust Amplifier V"
+ },
+ "83820996": {
+  "key": "EA2863C840274BE55D6DCAA43924DB27",
+  "source": "blueprint",
+  "text": "Evasive Maneuver IV"
+ },
+ "83821004": {
+  "key": "1235F48F4DF590C95680A9A9E0FCE3EE",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile IV"
+ },
+ "83821005": {
+  "key": "2D0FED0D4A1FB1A913E823A6989F66C9",
+  "source": "blueprint",
+  "text": "Scattergun Broadside II"
+ },
+ "83821006": {
+  "key": "70369F8B44AF5BE362C9DEBA354A07CF",
+  "source": "blueprint",
+  "text": "Tractor Beam II"
+ },
+ "83821007": {
+  "key": "8A48E44444340974F627A88A2FC1EB96",
+  "source": "blueprint",
+  "text": "Rapid Fire Mode II"
+ },
+ "83821008": {
+  "key": "A9E955BA4EA87A61013F5AA88FE91DAE",
+  "source": "blueprint",
+  "text": "Drain Missile II"
+ },
+ "83821009": {
+  "key": "A4BF42BE4842B6A0324F509213F5E586",
+  "source": "blueprint",
+  "text": "Disruptor Pulse II"
+ },
+ "83821012": {
+  "key": "1C1DF14F41AACC97348620B9F3F7D115",
+  "source": "blueprint",
+  "text": "Warp Jammer"
+ },
+ "83821013": {
+  "key": "5C5FECEB49C7CD6110C573AA2D1C154D",
+  "source": "preview-name",
+  "text": "Purge Ram V"
+ },
+ "83821014": {
+  "key": "8BA5C9DC43FFEAE3FEC15488494DBCCE",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile V"
+ },
+ "83821056": {
+  "key": "108FA3BD4C52C7CE05C3128D35ED52DF",
+  "source": "blueprint",
+  "text": "Plasma Ram IV"
+ },
+ "83821067": {
+  "key": "9DB66BF8444A3CA50374FDB3F14D9979",
+  "source": "blueprint",
+  "text": "Heavy Torpedo II"
+ },
+ "83821068": {
+  "key": "754D96E247C2428D7D71969C311C26DE",
+  "source": "blueprint",
+  "text": "Scylla Torpedo III"
+ },
+ "83821069": {
+  "key": "3DAE73EA4E141303E77B5F999BBDE8B8",
+  "source": "blueprint",
+  "text": "Disruptor Missile III"
+ },
+ "83821070": {
+  "key": "622A1090408A68F4B057E096AA953B30",
+  "source": "blueprint",
+  "text": "Stasis Ammo III"
+ },
+ "83821071": {
+  "key": "B62D0FA843087ED0A71A9A87B6E8C3E2",
+  "source": "blueprint",
+  "text": "Hell Lasers III"
+ },
+ "83821072": {
+  "key": "603DE5D14FA68686D66918A9DADA1240",
+  "source": "blueprint",
+  "text": "Plasma Ram II"
+ },
+ "83821076": {
+  "key": "363A9BE74E85AA30E5E576B15ABB8436",
+  "source": "blueprint",
+  "text": "Warp Jump N"
+ },
+ "83821077": {
+  "key": "66501C764D37BF65C26ACA90C81AC54C",
+  "source": "blueprint",
+  "text": "Stasis Autobeams III"
+ },
+ "83821078": {
+  "key": "5C3865904D7033608BD7389A4DC21F04",
+  "source": "blueprint",
+  "text": "Scrambler Missile III"
+ },
+ "83821080": {
+  "key": "D0A36731466BB3A5D2EC4FB93CEF176A",
+  "source": "blueprint",
+  "text": "Anti-Missile Lasers III"
+ },
+ "83821081": {
+  "key": "16542FF8477B7B5FC1361B88BC2C7668",
+  "source": "blueprint",
+  "text": "Light Cloak II"
+ },
+ "83821082": {
+  "key": "4FBA83AC42965D2DBD157F93E450BA0E",
+  "source": "blueprint",
+  "text": "Plasma Broadside N"
+ },
+ "83821083": {
+  "key": "A7A4017C496D0124663136A2EA13D0E0",
+  "source": "blueprint",
+  "text": "Assault Blink Warp III"
+ },
+ "83821084": {
+  "key": "A54F553A451414A7768DE68CBC4DF214",
+  "source": "blueprint",
+  "text": "Anti Missile Lasers N"
+ },
+ "83821085": {
+  "key": "7864895C4F8827E992E158B8EA719EAC",
+  "source": "blueprint",
+  "text": "Disruptor Ammo III"
+ },
+ "83821087": {
+  "key": "CAEE33AA4AB07DFCC87D4E8E75735ADB",
+  "source": "blueprint",
+  "text": "Immelmann Maneuver II "
+ },
+ "83821088": {
+  "key": "61630DD3467CAC2E142A49B75BE958CC",
+  "source": "blueprint",
+  "text": "Missile Salvo III"
+ },
+ "83821089": {
+  "key": "80C04C7E4B7856A1FC62ECB8BC679C6D",
+  "source": "blueprint",
+  "text": "Offensive Lockdown III"
+ },
+ "83821097": {
+  "key": "1F299F3440F0268F18F083B79EF92C72",
+  "source": "blueprint",
+  "text": "Energy Generator II"
+ },
+ "83821102": {
+  "key": "F61E86804C29BFA6A295D7BD677A5EE7",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse III"
+ },
+ "83821103": {
+  "key": "9A33C6F941670A569B80268E6FE35E90",
+  "source": "blueprint",
+  "text": "Anti-Missile Pulse II"
+ },
+ "83821105": {
+  "key": "1EC05AF6411A29B3E37FCA84B1595DDA",
+  "source": "blueprint",
+  "text": "Flechette Missiles I"
+ },
+ "83821111": {
+  "key": "C938AE8D4A398BD516C1F488F661E75B",
+  "source": "blueprint",
+  "text": "Tartarus Missile II"
+ },
+ "83821113": {
+  "key": "C4210714483B0D411535D4AD2FD9BFD6",
+  "source": "blueprint",
+  "text": "Offensive Lockdown II"
+ },
+ "83821123": {
+  "key": "5B1032384B842325D9FD828749595361",
+  "source": "blueprint",
+  "text": "Storm Missiles III"
+ },
+ "83821124": {
+  "key": "25C2682F482209F48E3ED0B10C98E572",
+  "source": "blueprint",
+  "text": "Weapon Amplifier III"
+ },
+ "83821125": {
+  "key": "A2F8CDD24DA03BB8DEA1C7A85A53FD93",
+  "source": "blueprint",
+  "text": "Scrambler Mines III"
+ },
+ "83821126": {
+  "key": "0838F52447414085A386AD9092A796C4",
+  "source": "blueprint",
+  "text": "Tartarus Missile III"
+ },
+ "83821127": {
+  "key": "4BC3067D4FC8A339D57D1F9EFCD248A0",
+  "source": "blueprint",
+  "text": "Proximity Mines III"
+ },
+ "83821128": {
+  "key": "EFF7B9834523B323139691A6742F26EE",
+  "source": "blueprint",
+  "text": "Overclock Module III"
+ },
+ "83821129": {
+  "key": "3514D7CA41495C38ED2BAF9B192528F5",
+  "source": "blueprint",
+  "text": "Stasis Beam III"
+ },
+ "83821136": {
+  "key": "74F3133947FDDB799CCADCA60CD53A93",
+  "source": "blueprint",
+  "text": "Beam Amplifier II"
+ },
+ "83821137": {
+  "key": "908F38ED4CA21E2A551F17AE7FF41082",
+  "source": "blueprint",
+  "text": "Flechette Half-Battery II"
+ },
+ "83821138": {
+  "key": "9BFDE6334E592A4A349D02B6088EB027",
+  "source": "blueprint",
+  "text": "Blast Pulse II"
+ },
+ "83821139": {
+  "key": "9334D3524CCB3427F6B74BA217BADE51",
+  "source": "blueprint",
+  "text": "Energy Generator II"
+ },
+ "83825289": {
+  "key": "CA407B5F4ADC4DB299AA1C9A5A6AE9CE",
+  "source": "blueprint",
+  "text": "Blast Pulse III"
+ },
+ "83825290": {
+  "key": "7B454B464650D00A27BE8DB769957C45",
+  "source": "blueprint",
+  "text": "Torpedo Salvo III"
+ },
+ "83825291": {
+  "key": "AEC7050D4B6D9B93C679F38B0BE60FA6",
+  "source": "blueprint",
+  "text": "Vulture Missiles N"
+ },
+ "83825292": {
+  "key": "C39642AD4C63FE0DD93A4D946411D289",
+  "source": "blueprint",
+  "text": "Immelmann Maneuver III"
+ },
+ "83825293": {
+  "key": "29D3B8C14C3A7B4F6F2A3CB367C784FD",
+  "source": "blueprint",
+  "text": "Target Warp III"
+ },
+ "83825295": {
+  "key": "4B79879B4E5DA2906A6E718CD5013F0B",
+  "source": "blueprint",
+  "text": "Weaponbooster Missile III"
+ },
+ "83825296": {
+  "key": "10697AEC4A065E22FC011AB40C35D636",
+  "source": "blueprint",
+  "text": "Evasive Maneuver III"
+ }
+}

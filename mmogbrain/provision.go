@@ -14,7 +14,7 @@ import (
 //
 //	mmogbrain provision-test-account -user <32-hex player id> \
 //	    [-rank 20] [-credits 200000] [-premium 200000] [-free-xp 200000] \
-//	    [-save-blobs-from <player who finished the tutorial>]
+//	    [-save-blobs-from <player who finished the tutorial>] [-ship-xp 50000]
 //
 // The account must already exist in auth-server (register it through
 // /auth/register, so the password is hashed properly); this only fills in the
@@ -48,6 +48,7 @@ func runProvisionTestAccount(args []string) error {
 	freeXP := fs.Int64("free-xp", 200000, "free XP to SET")
 	maxTier := fs.Int("max-tier", 0, "only grant ships up to this tier (0 = every tier)")
 	withHeroes := fs.Bool("heroes", true, "also grant hero ships")
+	shipXP := fs.Int("ship-xp", 0, "set every owned ship's XP to this (0 = leave ship XP alone)")
 	withItems := fs.Bool("items", true, "also grant every weapon/ability/officer perk; false leaves "+
 		"modules to be unlocked in game, which is what testing the unlock flow needs")
 	saveFrom := fs.String("save-blobs-from", "", "copy the client's SGD/SCtA save blobs from this player "+
@@ -155,6 +156,16 @@ func runProvisionTestAccount(args []string) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+
+	// Ship XP, so research can be paid with it (YA_PlayerGet ShipXps). Keyed
+	// by pawn id, as match rewards record it (awardFleetShipXP).
+	if *shipXP > 0 {
+		if _, err := database.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp)
+			SELECT DISTINCT user_id, ship_id, ? FROM player_ship_loadouts WHERE user_id=? AND ship_id>0
+			ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=excluded.xp, updated_at=datetime('now')`, *shipXP, pid); err != nil {
+			return fmt.Errorf("set ship xp: %w", err)
+		}
 	}
 
 	var loadouts, purchases int

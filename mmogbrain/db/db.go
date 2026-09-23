@@ -286,6 +286,15 @@ var migrations = []string{
 	// the computed default on the next load -- the ship they built was never the
 	// ship they got back.
 	`ALTER TABLE player_ship_loadouts ADD COLUMN display_info TEXT NOT NULL DEFAULT ''`,
+	// The free XP a weapon/module cost to RESEARCH, kept apart from what it cost
+	// to BUY. Since 2026-09-23 research and purchase are two steps (XP, then
+	// credits); a bought row used to add the credits onto the research XP in
+	// price_paid (12000 = 2000 XP + 10000 CR). Now price_paid is what the
+	// purchase cost in `currency`, and research_xp is the XP -- see
+	// persistUnlockItem and claimResearchedItem. Rows bought before this
+	// migration keep the lumped value; research-only rows are backfilled below.
+	`ALTER TABLE player_purchases ADD COLUMN research_xp INTEGER NOT NULL DEFAULT 0`,
+	`UPDATE player_purchases SET research_xp=price_paid WHERE currency='freexp'`,
 }
 
 func Open(path string) (*sql.DB, error) {

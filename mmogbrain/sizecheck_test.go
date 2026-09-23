@@ -157,7 +157,16 @@ var targetSizes = map[string]int{
 	// 11899 -> 11970 (+71): line roots and heroes carry their line's legacy
 	// anchor id in ClassId instead of "0". Those 63 nodes were dropped by the
 	// loader gate (ClassId <= 0) and were the ships missing from the tree.
-	"YA_GetTechTree": 11970,
+	// 11970 -> 12058 (+88): weapon and module entries carry the per-ship id
+	// (inflatedItemID) instead of the shared 0xFF one. The entry count is
+	// unchanged; the ids simply repeat less across hulls, so zlib does worse.
+	// 12058 -> 14051 (+1993): each hull's research list is now read from the
+	// client's module preview table (dreadconfig.ShipResearchItems) instead of
+	// composed from sibling asset lines: 811 -> 1131 weapon/module entries
+	// (Trafalgar 4 -> 9, the tier-1 starters 0 -> 5). Still well inside the
+	// ~26KB proven safe; TestTechTreeFitsTheRingWhenEverythingIsOwned covers
+	// the owned-everything case.
+	"YA_GetTechTree": 14051,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
@@ -166,8 +175,16 @@ var targetSizes = map[string]int{
 	// Was 1097, +56: "owned" -> "m_isOwned" on every ship row (the old name is
 	// absent from the client binary), and PurchasesData entries changed from
 	// int32 to numeric strings so the client can actually read them.
-	"YA_GetPlayerProgression": 1153,
-	"YA_GetPlayerPurchases":   100,
+	// 1153 -> 1180 (+27): an empty root "ProgressionData" array -- the
+	// researched-items list the client reads off the document root (parser
+	// 0x2A79920 -> player-data +0x3F80, HasResearchedItem). Empty here because
+	// the default player has researched nothing.
+	"YA_GetPlayerProgression": 1180,
+	// 100 -> 436 (+336): "PurchasesData" moved from under "result" to the root,
+	// where the parser (0x2A796D0 -> player-data +0x3F90) reads it, and now
+	// includes the per-ship ids of the default player's fitted defaults, so the
+	// ship's own modules read as owned instead of asking to be researched.
+	"YA_GetPlayerPurchases": 436,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the
 	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,

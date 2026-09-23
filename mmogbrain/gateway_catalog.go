@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -517,7 +518,14 @@ func hullCatalogDescription(itemID int32) string {
 }
 
 func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
-	purchased := persistedMmogPlayerPurchasedItemIDSet(playerID)
+	// Owned = what PurchasesData says: bought items plus every owned ship's
+	// fitted defaults (clientOwnedItemIDs); research-only rows are not owned.
+	purchased := map[int32]struct{}{}
+	if playerID != "" {
+		for _, id := range clientOwnedItemIDs(playerID) {
+			purchased[id] = struct{}{}
+		}
+	}
 
 	// Starter gear already carries the ship/loadout it belongs to. Catalog
 	// entries must report the same association, otherwise an entry and the
@@ -553,6 +561,14 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		localizationKey := marketItemLocalizationKeys[sourceID]
 		if localizationKey == "" {
 			localizationKey = marketItemLocalizationKeys[itemID]
+		}
+		// A weapon's or ability's own blueprint headline wins over the
+		// name-matched table: that table assumed the lowest tier reads "I",
+		// but the game's base tier is "N" -- 23 of its 29 weapon/ability keys
+		// named the wrong tier ("Tempest Missiles I" for the T0 asset, whose
+		// blueprint says "Tempest Missiles N"; "Jump Drive II" for a IV).
+		if key, ok := dreadconfig.ItemHeadlineKey(itemID); ok {
+			localizationKey = key
 		}
 		seed := gatewayCatalogEntitySeed{
 			itemID:      itemID,
@@ -620,6 +636,115 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		}
 		if meta.itemType == "loadout" {
 			seed.loadoutID = itemID
+		}
+		seeds = append(seeds, seed)
+	}
+	// Per-ship offers ONLY for weapons/modules the player has RESEARCHED (and
+	// those already bought, marked owned). See researchedItemOfferSeeds.
+	for _, seed := range researchedItemOfferSeeds(playerID, purchased) {
+		if !emitted[seed.itemID] {
+			emitted[seed.itemID] = true
+			seeds = append(seeds, seed)
+		}
+	}
+	return seeds
+}
+
+// researchedItemOfferSeeds is a store offer for every per-ship weapon/module
+// the player has researched (and, marked owned, every one already bought).
+//
+// The tech tree's BUY button goes through the market: with no offer for the
+// item it showed price 0 and "insufficient funds" and sent nothing (live,
+// 2026-09-23, twice); with an offer it sent a real purchase,
+//
+//	Sending PurchaseItem request (99968026432, 1, CR, )
+//
+// i.e. YA_PurchaseItem{offer:"999"+itemId, quantity, currency, campaign} --
+// see buildMmogPurchasePayload. The shipped store sold these per ship only
+// (CatalogIDTable "Modules"/"Weapons": 1301 SKUs, every one a per-ship id).
+//
+// Why only RESEARCHED items. The first attempt offered every research item of
+// the player's ships, researched or not, and the operator reported research
+// itself broken in that session. Offering an item nobody has researched yet is
+// also not what the game does -- research comes first, buying second (the
+// operator, 2026-09-23). Scoped this way an unresearched item has no offer and
+// the research path is untouched; the catalog grows by one offer per research.
+// A new research's offer arrives with the next catalog fetch (login); until
+// then the client falls back to YA_ClaimItem (buildMmogClaimItemPayload), which
+// buys the same way.
+//
+// Price: gatewayMarketCreditPrice by type and the research row's tier -- an
+// ASSUMPTION, no real price table survives -- and purchasePriceForItem charges
+// the same. Hidden from the storefront grid; they exist for the buy button.
+//
+// DN_OFFER_ALL_RESEARCH=1 (EXPERIMENT, off by default) also offers everything
+// the player's owned ships can research but has not yet. The catalog is only
+// fetched at login -- its one mmog-side trigger is the login step at
+// 0x2A338A0, the other caller (0xAC8400) a client debug path -- so without this
+// an item researched mid-session is not buyable until the next login. The
+// shipped store did offer every per-ship module. It is off because the one
+// session that had such offers reported research broken; the disassembly says
+// the research action (0x4FDCE0, state 2) does not consult offers, and this
+// switch exists to settle it.
+func researchedItemOfferSeeds(playerID string, owned map[int32]struct{}) []gatewayCatalogEntitySeed {
+	if playerID == "" {
+		return nil
+	}
+	var seeds []gatewayCatalogEntitySeed
+	ids := persistedMmogPlayerPurchaseItemIDs(playerID)
+	if os.Getenv("DN_OFFER_ALL_RESEARCH") == "1" {
+		hullByLoadout := map[int32]baseShipLoadout{}
+		for _, h := range baseShipLoadouts {
+			hullByLoadout[h.loadoutID] = h
+		}
+		seen := map[int32]bool{}
+		for _, id := range ids {
+			seen[id] = true
+		}
+		for _, loadout := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerID), playerID) {
+			if hull, ok := hullByLoadout[loadout.precastLoadoutID]; ok {
+				for _, item := range techTreeModuleItems(hull, 0) {
+					if !seen[item.id] {
+						seen[item.id] = true
+						ids = append(ids, item.id)
+					}
+				}
+			}
+		}
+	}
+	for _, id := range ids {
+		row, ok := perShipResearchRow(id)
+		if !ok {
+			continue // not a per-ship weapon/module
+		}
+		itemType := itemTypeFromCategoryLaw(id)
+		base := baseItemID(id)
+		name, found := dreadconfig.AuthoritativeItemName(base)
+		if !found || name == "" {
+			name = row.Name
+		}
+		// The offer's "name" is a localization key the client resolves itself;
+		// an empty one rendered "<DNT> Empty Name in Json en" (live,
+		// 2026-09-24). The module's own blueprint headline names it, tier
+		// included ("Goliath Torpedo II"); see dreadconfig.ItemHeadlineKey.
+		key, found := dreadconfig.ItemHeadlineKey(base)
+		if !found {
+			key = marketItemLocalizationKeys[base]
+		}
+		seed := gatewayCatalogEntitySeed{
+			itemID:          id,
+			externalID:      extractedMarketItemExternalID(id, ""),
+			displayName:     name,
+			localizationKey: key,
+			entityType:      "item",
+			itemType:        itemType,
+			priceCurrencyID: "CR",
+			priceAmount:     gatewayMarketCreditPrice(itemType, row.Tier),
+			quantity:        1,
+			hidden:          true,
+		}
+		if _, bought := owned[id]; bought {
+			seed.owned = true
 		}
 		seeds = append(seeds, seed)
 	}
