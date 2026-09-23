@@ -6241,16 +6241,32 @@ func rosterSlotsFor(precastLoadoutID int32) (primary, secondary int32, abilities
 func appendMmogCompactShipLoadout(b []byte, stack []int, playerPID string, loadout mmogShipLoadoutSeed) ([]byte, []int) {
 	primary, secondary := loadout.weaponPrimaryItemID(), loadout.weaponSecondaryItemID()
 	abilities, perks := loadout.abilityIDs, loadout.perkIDs
-	if primary == 0 && secondary == 0 && abilities == ([4]int32{}) {
+	// "Empty" is <= 0, not == 0. player_ship_loadouts defaults every slot column
+	// to -1, and a ship granted by an unlock keeps that -- so the first version of
+	// this check (== 0) never fired, and every unlocked ship went out with ten
+	// "-1" slots. The client logged "LoadItemsAsync | Asset with ID -1 has no
+	// valid FStringReference" ten times for Trafalgar and loaded it with nothing
+	// fitted, while Agosta (a starter, slots stored) loaded all ten: reported
+	// live 2026-09-23 as "most of my owned ships have no module connected".
+	empty := func(v int32) bool { return v <= 0 }
+	allEmpty := empty(primary) && empty(secondary)
+	for _, a := range abilities {
+		allEmpty = allEmpty && empty(a)
+	}
+	if allEmpty {
 		if p, s2, a, k, ok := rosterSlotsFor(loadout.precastLoadoutID); ok {
 			primary, secondary, abilities = p, s2, a
-			if perks == ([4]int32{}) {
+			perksEmpty := true
+			for _, v := range perks {
+				perksEmpty = perksEmpty && empty(v)
+			}
+			if perksEmpty {
 				perks = k
 			}
 		}
 	}
 	str := func(b []byte, name string, v int32) []byte {
-		if v == 0 {
+		if empty(v) {
 			return b
 		}
 		return protocol.AppendStringField(b, name, strconv.Itoa(int(v)))

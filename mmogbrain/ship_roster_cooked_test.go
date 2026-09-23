@@ -501,3 +501,44 @@ func TestNewestUnlockedModuleSurvivesTheItemBudget(t *testing.T) {
 		t.Fatalf("module %d, unlocked after %d ships, was cut from the item list", module, len(ships))
 	}
 }
+
+// A ship granted by an unlock must go out with its default loadout, never with
+// "-1" slots. player_ship_loadouts defaults every slot column to -1; granted
+// ships kept that, the compact entry only filled slots that were exactly 0, and
+// the client loaded every unlocked ship with nothing fitted ("Asset with ID -1"
+// x10 for Trafalgar, while the starter Agosta loaded all ten).
+func TestGrantedShipGoesOutWithItsDefaultLoadout(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	database := currentMmogPlayerStateDB()
+	pid := "0123456789abcdef0123456789abcdec"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	const trafalgar int32 = 33489265
+	tx, _ := database.Begin()
+	if _, err := tx.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'loadout',0,'admin')`, pid, trafalgar); err != nil {
+		t.Fatal(err)
+	}
+	if err := grantUnlockedShipLoadout(tx, pid, trafalgar); err != nil {
+		t.Fatal(err)
+	}
+	_ = tx.Commit()
+	// Also cover rows granted BEFORE the fix, which still hold -1.
+	if _, err := database.Exec(`INSERT INTO player_ship_loadouts(user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active)
+		VALUES(?,33489266,'Default__VH_DreadnoughtMedium_T2_PrecastLoadout_BP_C',33489266,0,0,'Nav',98,1)`, pid); err != nil {
+		t.Fatal(err)
+	}
+	payload := buildMmogPlayerDataPayload("YA_PlayerGet", pid)
+	if bytes.Contains(payload, []byte("\x02-1")) {
+		t.Error("an owned ship went out with a -1 slot")
+	}
+	for _, id := range []int32{trafalgar, 33489266} {
+		p, _, _, _, ok := rosterSlotsFor(id)
+		if !ok {
+			t.Fatalf("%d not in roster", id)
+		}
+		if !bytes.Contains(payload, protocol.AppendStringField(nil, "weaponPrimary", strconv.Itoa(int(p)))) {
+			t.Errorf("ship %d went out without its default primary weapon %d", id, p)
+		}
+	}
+}

@@ -1247,10 +1247,25 @@ func grantUnlockedShipLoadout(tx *sql.Tx, playerPID string, precastLoadoutID int
 		playerPID).Scan(&nextPosition); err != nil {
 		return fmt.Errorf("next loadout position: %w", err)
 	}
+	// Store the ship's default loadout, not nothing. Every slot column defaults
+	// to -1, so a granted ship used to have no weapons, modules or officers at
+	// all, and went out that way. The roster is pinned to the client's cooked
+	// blueprints (ship_roster_cooked_test.go).
+	primary, secondary, abilities, perks, _ := rosterSlotsFor(precastLoadoutID)
+	slot := func(v int32) int32 {
+		if v <= 0 {
+			return -1 // the column's own "unset" value
+		}
+		return v
+	}
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO player_ship_loadouts(
-		user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active
-	) VALUES(?,?,?,?,?,0,?,?,1)`,
-		playerPID, precastLoadoutID, nativeID, precastLoadoutID, shipID, name, nextPosition); err != nil {
+		user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active,
+		weapon_primary_id,weapon_secondary_id,ability_primary_id,ability_secondary_id,ability_perimeter_id,ability_internal_id,
+		perk_com_id,perk_weapon_id,perk_navigation_id,perk_engineer_id
+	) VALUES(?,?,?,?,?,0,?,?,1,?,?,?,?,?,?,?,?,?,?)`,
+		playerPID, precastLoadoutID, nativeID, precastLoadoutID, shipID, name, nextPosition,
+		slot(primary), slot(secondary), slot(abilities[0]), slot(abilities[1]), slot(abilities[2]), slot(abilities[3]),
+		slot(perks[0]), slot(perks[1]), slot(perks[2]), slot(perks[3])); err != nil {
 		return fmt.Errorf("grant loadout for unlocked %d: %w", precastLoadoutID, err)
 	}
 	return nil
