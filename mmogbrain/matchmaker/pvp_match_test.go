@@ -34,7 +34,7 @@ func pvpTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE match_slots (match_id TEXT, user_id TEXT, team INTEGER,
 		 joined_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (match_id, user_id))`,
 		`CREATE TABLE queue_entries (id TEXT PRIMARY KEY, user_id TEXT, game_mode TEXT,
-		 tier_min INTEGER, status TEXT, queued_at TEXT)`,
+		 tier_min INTEGER, status TEXT, queued_at TEXT, fleet_type INTEGER NOT NULL DEFAULT 1)`,
 	} {
 		if _, err := database.Exec(ddl); err != nil {
 			t.Fatalf("create schema: %v", err)
@@ -82,7 +82,7 @@ func TestTwoQueuedPlayersShareOneMatchAndOneBattleServer(t *testing.T) {
 	queuePlayer(t, database, "q1", "alice", "TDM", "2026-08-04T10:00:00Z")
 	queuePlayer(t, database, "q2", "bob", "TDM", "2026-08-04T10:00:05Z")
 
-	if err := m.formMatch("TDM", 1); err != nil {
+	if err := m.formMatch("TDM", 1, 1); err != nil {
 		t.Fatalf("formMatch: %v", err)
 	}
 
@@ -141,7 +141,7 @@ func TestOneQueuedPlayerWaitsWhenTwoAreRequired(t *testing.T) {
 
 	queuePlayer(t, database, "q1", "alice", "TDM", "2026-08-04T10:00:00Z")
 
-	if err := m.formMatch("TDM", 1); err != nil {
+	if err := m.formMatch("TDM", 1, 1); err != nil {
 		t.Fatalf("formMatch: %v", err)
 	}
 	if got := atomic.LoadInt32(instances); got != 0 {
@@ -166,7 +166,7 @@ func TestPlayersInDifferentModesDoNotShareAMatch(t *testing.T) {
 	queuePlayer(t, database, "q1", "alice", "TDM", "2026-08-04T10:00:00Z")
 	queuePlayer(t, database, "q2", "bob", "Onslaught", "2026-08-04T10:00:05Z")
 
-	if err := m.formMatch("TDM", 1); err != nil {
+	if err := m.formMatch("TDM", 1, 1); err != nil {
 		t.Fatalf("formMatch: %v", err)
 	}
 	if got := atomic.LoadInt32(instances); got != 0 {

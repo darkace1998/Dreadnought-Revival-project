@@ -2455,6 +2455,7 @@ func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
 }
 
 func TestTunePayloadUsesClientParserShape(t *testing.T) {
+	t.Setenv("DN_TUNE_SEND", "1") // the document is opt-in since 2026-09-24; this checks the document
 	payload := buildMmogTunePayload()
 	// The client sends "YA_Tune" and listens for "YA_TuneReturn". Answering with
 	// the request name matched no dispatcher branch, so the response was dropped

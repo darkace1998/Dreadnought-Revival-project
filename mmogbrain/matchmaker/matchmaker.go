@@ -465,10 +465,13 @@ func (m *Matchmaker) tick() error {
 
 	// Group by game_mode and tier_min to match players within compatible tier ranges.
 	// Players with the same tier_min are treated as compatible for matchmaking.
+	// And by fleet_type: a match has ONE fleet tier for everyone in it (the
+	// battle server reads it once into its GameState, see fleetTierURLValue),
+	// so Recruit, Veteran and Legendary fleets never share a match.
 	rows, err := m.DB.Query(`
-		SELECT game_mode, tier_min, COUNT(*) as cnt
+		SELECT game_mode, tier_min, fleet_type, COUNT(*) as cnt
 		FROM queue_entries WHERE status='waiting'
-		GROUP BY game_mode, tier_min
+		GROUP BY game_mode, tier_min, fleet_type
 		HAVING cnt >= ?
 	`, m.PlayersPerMatch)
 	if err != nil {
@@ -479,14 +482,15 @@ func (m *Matchmaker) tick() error {
 	}()
 
 	type bucket struct {
-		GameMode string
-		TierMin  int
-		Count    int
+		GameMode  string
+		TierMin   int
+		FleetType int
+		Count     int
 	}
 	var ready []bucket
 	for rows.Next() {
 		var b bucket
-		if err := rows.Scan(&b.GameMode, &b.TierMin, &b.Count); err != nil {
+		if err := rows.Scan(&b.GameMode, &b.TierMin, &b.FleetType, &b.Count); err != nil {
 			return fmt.Errorf("scan ready queue counts: %w", err)
 		}
 		ready = append(ready, b)
@@ -496,10 +500,11 @@ func (m *Matchmaker) tick() error {
 	}
 
 	for _, b := range ready {
-		if err := m.formMatch(b.GameMode, b.TierMin); err != nil {
+		if err := m.formMatch(b.GameMode, b.TierMin, b.FleetType); err != nil {
 			m.Log.WithError(err).WithFields(logrus.Fields{
-				"game_mode": b.GameMode,
-				"tier_min":  b.TierMin,
+				"game_mode":  b.GameMode,
+				"tier_min":   b.TierMin,
+				"fleet_type": b.FleetType,
 			}).Warn("form match failed")
 		}
 	}
@@ -653,14 +658,14 @@ func substituteBrokenGameMode(queued string) string {
 // runnableGameMode.
 const DefaultSpawnableGameMode = "TM"
 
-func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
-	// Pull the oldest waiting players for this mode and tier
+func (m *Matchmaker) formMatch(gameMode string, tierMin int, fleetType int) error {
+	// Pull the oldest waiting players for this mode, tier and fleet type
 	rows, err := m.DB.Query(`
 		SELECT id, user_id FROM queue_entries
-		WHERE status='waiting' AND game_mode=? AND tier_min=?
+		WHERE status='waiting' AND game_mode=? AND tier_min=? AND fleet_type=?
 		ORDER BY queued_at ASC
 		LIMIT ?
-	`, gameMode, tierMin, m.PlayersPerMatch)
+	`, gameMode, tierMin, fleetType, m.PlayersPerMatch)
 	if err != nil {
 		return err
 	}
@@ -726,7 +731,7 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 	for i, e := range entries {
 		playerIDs[i] = e.UserID
 	}
-	serverIP, serverPort, instanceID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs)
+	serverIP, serverPort, instanceID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs, fleetTierURLValue(fleetType))
 	if err != nil {
 		// Rollback queue entries on failure
 		for _, e := range entries {
@@ -768,6 +773,7 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int) error {
 		"instance_id": instanceID,
 		"game_mode":   gameMode,
 		"tier_min":    tierMin,
+		"fleet_type":  fleetType,
 		"map":         mapName,
 		"players":     len(entries),
 		"server":      fmt.Sprintf("%s:%d", serverIP, serverPort),
@@ -799,13 +805,40 @@ func gameManagerRequestTimeout() time.Duration {
 	return 30 * time.Second
 }
 
-func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string) (string, int, string, error) {
-	body, err := json.Marshal(map[string]interface{}{
+// fleetTierURLValue is the value of the battle server's FleetTier= map-URL
+// option for a match of the given EYFleetType, or 0 to send none.
+//
+// The option is read once per match by the GameState (chunk 0x3A5831 of
+// 0x3A55E0: FURL option lookup "FleetTier=", _wtoi, then 4 -> EYFT_Veteran,
+// 5 -> EYFT_Legendary, anything else -> EYFT_Recruit, stored at
+// GameState+0x1D48, which GetFleetType (0x396C50) returns to the AI tier,
+// NPC set and loadout code). Verified by disassembly 2026-09-24. Only the
+// decoder is known -- not what the numbers mean -- so this sends exactly the
+// two values it decodes, and nothing for Recruit, which is its default.
+func fleetTierURLValue(fleetType int) int {
+	switch fleetType {
+	case 2: // EYFT_Veteran
+		return 4
+	case 3: // EYFT_Legendary
+		return 5
+	default:
+		return 0
+	}
+}
+
+func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string, fleetTier int) (string, int, string, error) {
+	spawn := map[string]interface{}{
 		"game_mode": gameMode,
 		"map":       mapName,
 		"map_path":  mapPath,
 		"players":   players,
-	})
+	}
+	// dn-dedicated turns this into ?FleetTier=<n> on the map URL. game-manager
+	// ignores unknown fields, so its matches stay Recruit.
+	if fleetTier != 0 {
+		spawn["fleet_tier"] = fleetTier
+	}
+	body, err := json.Marshal(spawn)
 	if err != nil {
 		return "", 0, "", fmt.Errorf("marshal game manager request: %w", err)
 	}

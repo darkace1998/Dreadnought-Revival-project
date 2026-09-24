@@ -295,6 +295,12 @@ var migrations = []string{
 	// migration keep the lumped value; research-only rows are backfilled below.
 	`ALTER TABLE player_purchases ADD COLUMN research_xp INTEGER NOT NULL DEFAULT 0`,
 	`UPDATE player_purchases SET research_xp=price_paid WHERE currency='freexp'`,
+	// The EYFleetType (1 Recruit, 2 Veteran, 3 Legendary) the player queued
+	// with. A match is one fleet tier for everyone in it -- the battle server
+	// reads it once, from the map URL's FleetTier= option, into the GameState
+	// (0x3A5831 -> GameState+0x1D48) -- so the matchmaker only groups players of
+	// the same fleet type. See queuedFleetType.
+	`ALTER TABLE queue_entries ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 1`,
 }
 
 func Open(path string) (*sql.DB, error) {

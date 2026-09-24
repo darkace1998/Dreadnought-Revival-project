@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,12 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		MapPath    string   `json:"map_path"`
 		Players    []string `json:"players"`
 		MaxPlayers int      `json:"max_players"`
+		// FleetTier becomes ?FleetTier=<n> on the map URL: the match's one fleet
+		// tier, read by the GameState at match start (0x3A5831: 4 -> Veteran,
+		// 5 -> Legendary, anything else or absent -> Recruit). A typed field
+		// rather than free-form URL options, so nothing a caller sends can reach
+		// argv except these two values.
+		FleetTier int `json:"fleet_tier"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -149,6 +156,12 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	urlOptions, err := fleetTierURLOptions(req.FleetTier)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	if s.Manager.PortsInUse() >= s.Manager.PortCapacity() {
 		writeError(w, http.StatusServiceUnavailable, "no ports available")
 		return
@@ -175,6 +188,7 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		GameMode:   mode,
 		MaxPlayers: req.MaxPlayers,
 		Players:    req.Players,
+		URLOptions: urlOptions,
 	})
 	if err != nil {
 		s.logf("launch failed: %v", err)
@@ -193,6 +207,20 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		// read the documented fields are unaffected.
 		"map_path": inst.MapPath,
 	})
+}
+
+// fleetTierURLOptions turns a request's fleet_tier into map-URL options. Only
+// the two values the GameState decodes are accepted (0x3A5831: 4 -> Veteran,
+// 5 -> Legendary); 0 means Recruit, the engine's default, and sends nothing.
+func fleetTierURLOptions(fleetTier int) ([]string, error) {
+	switch fleetTier {
+	case 0:
+		return nil, nil
+	case 4, 5:
+		return []string{"FleetTier=" + strconv.Itoa(fleetTier)}, nil
+	default:
+		return nil, fmt.Errorf("fleet_tier must be 4 (Veteran) or 5 (Legendary), or omitted for Recruit")
+	}
 }
 
 // resolveMap picks the map to load from the name and path a caller supplied.

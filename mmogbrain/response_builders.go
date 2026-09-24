@@ -321,8 +321,8 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 	database := currentMmogPlayerStateDB()
 	if database != nil {
 		_, _ = database.Exec(`DELETE FROM queue_entries WHERE user_id=? AND status='waiting'`, pid)
-		if _, err := database.Exec(`INSERT INTO queue_entries(id,user_id,game_mode,tier_min,tier_max,status) VALUES(?,?,?,?,?,'waiting')`,
-			entryID, pid, gameMode, tierMin, tierMax); err != nil {
+		if _, err := database.Exec(`INSERT INTO queue_entries(id,user_id,game_mode,tier_min,tier_max,fleet_type,status) VALUES(?,?,?,?,?,?,'waiting')`,
+			entryID, pid, gameMode, tierMin, tierMax, queuedFleetType(database, pid, payload)); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue insert failed")
 		}
 	}
@@ -332,6 +332,30 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 		state:    "waiting",
 		gameMode: gameMode,
 	})
+}
+
+// queuedFleetType is the EYFleetType (1 Recruit, 2 Veteran, 3 Legendary) a
+// player is queueing with, which becomes the match's fleet tier.
+//
+// The request's FleetID is not a reliable fleet reference: a captured
+// YA_EnterMatchmaking carried FleetID="650dd79476a1484b8adcd01ac2f17354", the
+// PLAYER's id. So it is honoured only when it names one of this player's fleets
+// (by token or numeric id); otherwise the player's ACTIVE fleet decides, which
+// is the fleet the hangar shows as selected. Recruit when neither resolves.
+func queuedFleetType(database *sql.DB, pid string, payload []byte) int32 {
+	fleetRef := protocol.FirstNonEmptyString(payload, "FleetID", "fleetId", "FleetId")
+	var fleetType int32
+	if fleetRef != "" {
+		if err := database.QueryRow(`SELECT fleet_type FROM player_fleets WHERE user_id=? AND (token=? OR CAST(fleet_id AS TEXT)=?) LIMIT 1`,
+			pid, fleetRef, fleetRef).Scan(&fleetType); err == nil && fleetType > 0 {
+			return fleetType
+		}
+	}
+	if err := database.QueryRow(`SELECT fleet_type FROM player_fleets WHERE user_id=? AND active=1 LIMIT 1`,
+		pid).Scan(&fleetType); err == nil && fleetType > 0 {
+		return fleetType
+	}
+	return 1
 }
 
 func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []byte {
@@ -5211,6 +5235,31 @@ func truncateJSONArray(src string, budget int) string {
 func buildMmogTunePayload() []byte {
 	var b []byte
 
+	// OFF by default since 2026-09-24, in two steps:
+	//
+	//  1. The client applied our packed document with an EMPTY version and none
+	//     of the tables resolving -- "YTuneManager::Set(): Received data,
+	//     setting tune values (version: )" -- replacing its working backup
+	//     tables with nothing. Every weapon lookup failed and, in the first
+	//     match that reached the arena, "SpawnProjectile(): Trying to spawn a
+	//     projectile without OTS data!" on every shot.
+	//
+	//  2. Dropping just "packed" did NOT help (verified live, 06:07 client
+	//     time: the same LoadWeaponRow/SpawnProjectile errors). Set() at
+	//     0x3D5160 logs "Received empty data object" when the document is empty
+	//     (0x3D5192) but does not return -- it falls through and overwrites
+	//     the tables (+0x80, +0xD0, +0x120, ...) with whatever it found, i.e.
+	//     nothing. ANY reply the dispatcher accepts wipes them.
+	//
+	// So by default the reply goes out under the request name, "YA_Tune", which
+	// no dispatcher branch matches (see below): the client drops it, Set()
+	// never runs, and the backup tables from its own assets stay in place.
+	// That is exactly the pre-2026-08 state, in which no weapon lookup ever
+	// failed (AGENT-CHAT S44 point 6). DN_TUNE_SEND=1 sends the real
+	// YA_TuneReturn + document, for work on the empty-version problem.
+	if os.Getenv("DN_TUNE_SEND") != "1" {
+		return protocol.AppendStringField(b, "RT", "YA_Tune")
+	}
 	b = protocol.AppendStringField(b, "RT", "YA_TuneReturn")
 	b = protocol.AppendBytesField(b, "packed", compressMmogDocument(buildMmogTuneDocument()))
 	return b

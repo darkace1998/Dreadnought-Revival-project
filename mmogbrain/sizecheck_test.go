@@ -234,7 +234,12 @@ var targetSizes = map[string]int{
 	// it, once per weapon per pawn. AbilitiesTune now fits the budget too.
 	// FeatsTune is still empty: including it would take the frame to ~32.4KB,
 	// 99% of the 32768-byte ring.
-	"YA_Tune":          21280,
+	// 21280 -> 49: the packed tune document is no longer sent by default
+	// (DN_TUNE_SEND=1 restores it). The client applied it with an empty version
+	// and no resolvable tables, replacing its working backup weapon tables with
+	// nothing -- no projectile could spawn in the first match that reached the
+	// arena (2026-09-24). Now only RT goes out and the client keeps its own.
+	"YA_Tune":          49,
 	"YA_GetSeasonData": 650,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,

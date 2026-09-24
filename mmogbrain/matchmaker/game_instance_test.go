@@ -42,7 +42,7 @@ func TestRequestGameInstanceTimesOut(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, _, _, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"})
+		_, _, _, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"}, 0)
 		done <- err
 	}()
 
@@ -73,7 +73,7 @@ func TestRequestGameInstanceRejectsUnusableAddress(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			_, _, _, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"})
+			_, _, _, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"}, 0)
 			if err == nil {
 				t.Fatalf("want an error for %s, got nil", tc.name)
 			}
@@ -95,7 +95,7 @@ func TestRequestGameInstanceAcceptsUsableAddress(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ip, port, id, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"})
+	ip, port, id, err := testMatchmaker(srv.URL).requestGameInstance("TM", "Highlands", "/Game/x", []string{"p1"}, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

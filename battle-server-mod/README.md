@@ -56,7 +56,111 @@ engine was designed to have and then gets out of the way. It stays correct if a
 real backend ever populates the manager, because it only runs when the manager
 could not answer.
 
-## Optional: fleet tier (`dn_host_fleet_tier.txt`) — try this one first
+## Dedicated net mode (`dn_host_dedicated.txt`) — this is what gets players out of orbit
+
+**Opt-in** like every host mod: an empty `dn_host_dedicated.txt` beside the
+executable, or `DN_HOST_DEDICATED=1`. Added 2026-09-24; not yet verified in a
+live match.
+
+**Why players stay in orbit** (verified by disassembly and the full host log of
+a match, `run/battle-logs/battle-20260923-204528-port7777.log`):
+
+- The teleport into the arena needs the pawn's in-orbit state, which the orbit
+  sequence sets only once the GameState readiness mask is complete
+  (`AYGameState_MP+0x1D60 == 0xF`, AGENT-CHAT S39).
+- On a **dedicated** server the game completes that mask itself. `0x3ACA40`,
+  called from `ServerReadyForJoining` and `ClientLoadingCompleted`:
+
+  ```text
+  if Role == Authority:
+      if GetNetMode() == NM_DedicatedServer (1): set bits 0x1|0x2|0x4|0x8
+  set bit 0x10
+  if Role == Authority: StartOrbitTransition
+  ```
+
+- The host is the shipping *game* exe, which is never dedicated: engine PreInit
+  sets `GIsClient = 1` on every non-commandlet launch (`0x228F71`) whatever the
+  command line says. That is why `-server`, and dropping it, changed nothing.
+  `UNetDriver::GetNetMode` (`0x1A5CF60`) returns `1 + (GIsClient != 0)` for a
+  server, so the host is a LISTEN server (2), the mask stops at `0x2`, and every
+  player gets "not in orbit".
+
+The hook calls the original `UNetDriver::GetNetMode` and turns a LISTEN answer
+into DEDICATED. Nothing is forced: the game then takes the path its shipping
+servers took. A client's net driver is not a server, so clients are unaffected,
+and `GIsClient` itself is left alone.
+
+What to look for in the host log:
+
+```text
+[dn-host-loadout] installed: UNetDriver::GetNetMode hooked at RVA 0x1A5CF60 (...)
+[dn-host-loadout] net mode: net driver ... answered LISTEN (2); reporting DEDICATED (1) ...
+... StartOrbitTransition | Start Orbit Transition for player 257
+... TeleportPlayersFromOrbit ...        and NO "that is not in orbit!" after it
+```
+
+## AI in the proving ground (`dn_host_bc_ai.txt`)
+
+**Opt-in.** Empty `dn_host_bc_ai.txt` beside the executable (or
+`DN_HOST_BC_AI=1`). Verified live 2026-09-24.
+
+The proving ground is game mode BC (`YGameMode_Bootcamp`, `EYGameModeType` 18).
+Its blueprint carries 45 NPC entries, but every spawn path (game-mode virtual
+`0x9D0` = `0x3678F0` -> fill `0x381FA0` -> `StartCombat`) is gated on
+`GameMode+0x961 m_enableSpawnAI`, which the native constructors set only for
+TrainingMatch (`0x362840`) and nothing in BC content overrides. On our host it
+read 0, so no bot ever spawned.
+
+The mod hooks the multiplayer game mode's once-a-second timer (`0x36A080`, the
+caller that fills the teams at `m_remainingTime <= 50` before the match starts)
+and, when the GameState's `m_gameModeType` is Bootcamp, sets the flag once. The
+game does the rest: at the 50 s mark both teams fill (T1 7 + the player, T2 8).
+
+```text
+[dn-host-loadout] bc ai: game mode ... is Bootcamp; m_enableSpawnAI 0 -> 1 ...
+... AYAICombatSceneManager::StartCombat - starting combat
+```
+
+Known noise: "No mmog tier data available for spawning AI ships, using default
+hardcoded data" (the host never logs in) and content warnings from the AI data.
+
+## Player ship physics (`dn_host_ship_physics.txt`)
+
+**Opt-in.** Empty `dn_host_ship_physics.txt` beside the executable (or
+`DN_HOST_SHIP_PHYSICS=1`). Verified live 2026-09-24: without it a player's ship
+moved on their screen but snapped back to a stale spot on every server
+correction (e.g. after firing or an ability).
+
+Ship movement is input-replicated: the client sends throttle/steering/vertical
+(`ServerUpdate*State`) and the server simulates. The force builder
+(`UYVehicleMovementComp`, `0x5C8C00`) skips all forces for a ship that is not
+locally controlled when `+0x489` is set, unless the ship is near and in front of
+the **local player's camera** (`+0x498`/`+0x49C`) -- a client optimisation.
+`+0x489` is set only by `0x5C4EB0`, and only when the world has a local player
+controller. A real dedicated server has none; our host (the game exe) has one,
+parked at the orbit camera, so player ships far from it were never simulated.
+
+The mod hooks `0x5C4EB0` and clears `+0x489` after it runs, on ships that are
+not locally controlled. AI ships are locally controlled on the host and are
+untouched.
+
+```text
+[dn-host-loadout] ship physics: movement component ... is a remote player's ship; cleared ...
+```
+
+## DISABLED: fleet tier (`dn_host_fleet_tier.txt`)
+
+**Disproved 2026-09-24 and switched off in code**; the marker is now ignored and
+the log says so. The gate below reads the **pawn**, not the PlayerState: the
+caller (`0x3838D1`) passes an IsA-checked element of an array of pawns, and the
+null branch logs "Trying to teleport into level a null YPawn!". `+0x948` on
+`AYPawn` is an unreflected native field -- the pawn's own orbit state -- and the
+SDK's `m_highestFleetUnlocked` merely shares the offset; the real PlayerState
+constructor (`0x5A8820`) already sets that to Recruit. So writing `+0x948` at
+`TeleportPlayerIntoLevel` forced the pawn's orbit flag, which is faking the
+gate. The analysis below is kept as a record of how that was reached.
+
+### Original section (superseded)
 
 **Off by default.** Enable with an empty `dn_host_fleet_tier.txt` beside the
 executable, or `DN_HOST_FLEET_TIER=1`.
@@ -218,8 +322,15 @@ from the executable's own directory first:
 1. Copy `build/dn_host_loadout.dll` next to `DreadGame-Win64-Shipping.exe`,
    renamed to `wer.dll`.
 2. Create an empty `dn_server_loadout.txt` in the same directory.
+3. Create an empty `dn_host_dedicated.txt` in the same directory, so players
+   can leave orbit (see "Dedicated net mode" above).
+4. Create an empty `dn_host_bc_ai.txt` for bots in the proving ground, and an
+   empty `dn_host_ship_physics.txt` so player ships are simulated on the host
+   (see the two sections above).
 
-Both steps are required, and either one can be undone by deleting a file.
+Steps 1 and 2 are required for the loadout fix; step 3 for the orbit; step 4
+for bots and for player movement. Each can
+be undone by deleting a file.
 
 The four `WerReport*` exports are no-op stubs. The engine only calls them while
 writing a crash report, and a host writing a crash report has already lost the
@@ -264,6 +375,9 @@ entries — not chained cold chunks, not mid-instruction.
 | `0x340340-0x3404D3` | `UYLoadoutManagerComponent::FindLoadoutByID(mgr, id, warn)`; `id` is an **FName** |
 | `0x3382F0-0x338330` | `AddLoadout(mgr, loadout, uint8 type)` — **add only** |
 | `0xD78110-0xD789B6` | `StaticLoadObject`/`StaticLoadClass`, 7 arguments |
+| `0x1A5CF60-0x1A5CF8D` | `UNetDriver::GetNetMode(driver)` -> 1 dedicated / 2 listen / 3 client |
+| `0x36A080-0x36A539` | `AYGameMode_Multiplayer` once-a-second timer (vtable `0x8E0`), `(this)` only |
+| `0x5C4EB0-0x5C511E` | `UYVehicleMovementComp` local-camera cull setup, `(this)`; only writer of `+0x489` |
 | `0x3F63A70` | `GObjects` (data) |
 | `0x3E069D0` | `GNames` (data, used for log text only) |
 

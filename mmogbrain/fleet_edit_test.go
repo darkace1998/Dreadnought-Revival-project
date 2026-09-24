@@ -913,3 +913,47 @@ func TestResearchSpendsTheShipsXP(t *testing.T) {
 		t.Error("result.ShipID must name the ship whose XP was spent")
 	}
 }
+
+// The fleet a player queues with decides the match's fleet tier. A captured
+// YA_EnterMatchmaking carried FleetID = the PLAYER's id, so FleetID is only
+// trusted when it names one of the player's fleets; otherwise the active fleet
+// decides.
+func TestQueuedFleetTypeFollowsTheActiveFleet(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	var fleets int
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_fleets WHERE user_id=?`, pid).Scan(&fleets)
+	if fleets == 0 {
+		for i, token := range []string{"RecruitFleet", "VeteranFleet", "LegendaryFleet"} {
+			if _, err := database.Exec(`INSERT INTO player_fleets(user_id,fleet_id,token,display_name,fleet_type,active) VALUES(?,?,?,?,?,?)`,
+				pid, i+1, token, token, i+1, boolToInt(i == 0)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	request := func(fleetID string) []byte {
+		b := protocol.AppendStringField(nil, "RT", "YA_EnterMatchmaking")
+		b = append(b, protocol.AppendStringField(nil, "FleetID", fleetID)...)
+		return protocol.AppendRootEnd(b)
+	}
+	setActive := func(fleetType int) {
+		if _, err := database.Exec(`UPDATE player_fleets SET active=(fleet_type=?) WHERE user_id=?`, fleetType, pid); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	setActive(2)
+	if got := queuedFleetType(database, pid, request(pid)); got != 2 {
+		t.Errorf("FleetID = the player's id: got fleet type %d, want the active fleet's 2", got)
+	}
+	if got := queuedFleetType(database, pid, request("LegendaryFleet")); got != 3 {
+		t.Errorf("FleetID = a fleet token: got fleet type %d, want 3", got)
+	}
+	setActive(1)
+	if got := queuedFleetType(database, pid, request("")); got != 1 {
+		t.Errorf("no FleetID: got %d, want the active Recruit fleet's 1", got)
+	}
+}

@@ -153,6 +153,12 @@ static uintptr_t g_base = 0;
 #define RVA_ADD_LOADOUT 0x3382F0
 #define RVA_STATIC_LOAD_CLASS 0xD78110
 
+// CORRECTED 2026-09-24: the second argument is the PAWN, not the PlayerState
+// (the null branch logs "Trying to teleport into level a null YPawn!", and the
+// caller passes an IsA-checked element of an array of pawns). This function is
+// no longer hooked; see the DISPROVED note above OFF_HIGHEST_FLEET and
+// HookGetNetMode. The original analysis follows, kept as a record.
+//
 // AYOrbitTransitionManager::TeleportPlayerIntoLevel(this, AYPlayerReplicationInfo*)
 //
 // The function that reads the fleet-tier gate. Verified 2026-08-15 by
@@ -174,7 +180,29 @@ static uintptr_t g_base = 0;
 // an EYFleetType there. Only rcx/rdx are read, so the two-argument passthrough
 // below is complete -- [rsp+0xC0] at 0x1403d9393 is a STORE into the caller's
 // home space, not a stack argument.
-#define RVA_TELEPORT_PLAYER_INTO_LEVEL 0x3D92A0
+// UNetDriver::GetNetMode -- 0x1A5CF60-0x1A5CF8D (.pdata entry, 45 bytes):
+//   if (this->IsServer())  return 1 + (GIsClient != 0);   // 1 Dedicated, 2 Listen
+//   else                   return 3;                       // Client
+// AActor::GetNetMode (0x1726F50) tail-jumps here with the actor's net driver.
+// See HookGetNetMode.
+#define RVA_NETDRIVER_GET_NET_MODE 0x1A5CF60
+#define NM_DEDICATED_SERVER 1
+#define NM_LISTEN_SERVER 2
+
+// AYGameMode_Multiplayer's once-a-second timer, 0x36A080-0x36A539 (.pdata
+// entry; vtable slot 0x8E0 of every multiplayer mode). Reads only rcx, so the
+// one-argument passthrough is complete. See HookGameModeTimer.
+#define RVA_GAMEMODE_MP_TIMER 0x36A080
+#define OFF_GM_GAMESTATE 0x458        // AGameModeBase -> AGameState*
+#define OFF_GM_ENABLE_SPAWN_AI 0x961  // AYGameMode_Multiplayer::m_enableSpawnAI
+#define OFF_GS_GAME_MODE_TYPE 0x500   // AYGameState::m_gameModeType
+#define YGMT_BOOTCAMP 18              // EYGameModeType -- the proving ground
+
+// UYVehicleMovementComp: 0x5C4EB0-0x5C511E (.pdata entry), one argument (this).
+// The only writer of +0x489. See HookVehicleViewCull.
+#define RVA_VEHICLE_VIEW_CULL_SETUP 0x5C4EB0
+#define OFF_VMC_LOCALLY_CONTROLLED 0x488  // = owner->IsLocallyControlled()
+#define OFF_VMC_VIEW_CULLED 0x489         // "cull my physics by the local camera"
 #define OFF_GOBJECTS 0x3F63A70
 #define OFF_GNAMES 0x3E069D0
 
@@ -705,9 +733,27 @@ static void *FindUObjectByName(const char *want, const char **outerOut) {
 
 // AController::PlayerState, from the SDK dump (Engine_Classes.h:797).
 #define OFF_PLAYERSTATE 0x3E0
-// AYPlayerReplicationInfo::m_highestFleetUnlocked (DreadGame_Classes.h:1920),
-// an EYFleetType from YMmogbrain_Structs.h: None=0 Recruit=1 Veteran=2
-// Legendary=3.
+// DISPROVED 2026-09-24 -- read before using anything in this block.
+//
+// The orbit gate does NOT read the PlayerState. TeleportPlayerIntoLevel
+// (0x3D92A0) is called from TeleportPlayersFromOrbit (call at 0x3838D1) with an
+// element of a weak-pointer array that passed an IsA check, and its null branch
+// logs "Trying to teleport into level a null YPawn!" -- the object is the PAWN,
+// and +0x948 on AYPawn is a native, unreflected field (the SDK has no member
+// there), i.e. the pawn's own in-orbit state. The SDK's
+// AYPlayerReplicationInfo::m_highestFleetUnlocked shares the offset by
+// coincidence; the real PlayerState constructor (0x5A8820, reached from the
+// class thunk at 0x5CE5D0) already sets it to Recruit.
+//
+// So the TeleportPlayerIntoLevel write this block fed forced the pawn's orbit
+// flag -- the "fake the gate" the repo rule warns about, and the operator
+// rejected it. The real cause is the net mode: see HookGetNetMode. The fleet
+// tier feature is therefore disabled (g_fleetTierArmed is never set) and kept
+// only as a record.
+//
+// Original text: AYPlayerReplicationInfo::m_highestFleetUnlocked
+// (DreadGame_Classes.h:1920), an EYFleetType from YMmogbrain_Structs.h:
+// None=0 Recruit=1 Veteran=2 Legendary=3.
 #define OFF_HIGHEST_FLEET 0x948
 #define EYFT_NONE 0
 #define EYFT_RECRUIT 1
@@ -801,41 +847,6 @@ static void EnsureFleetTier(void *pc, const char *where) {
     return;
   }
   EnsureFleetTierOnPlayerState(ps, where, verbose);
-}
-
-// HookTeleportPlayerIntoLevel is the trigger point that is PROVEN to run.
-//
-// Every earlier attempt hung the write off a UFunction dispatch, and the
-// 2026-08-15 host log settles that they do not fire: ProcessEvent was hooked
-// successfully ("post-login: ProcessEvent hooked at 0000000140D5B180") and
-// EnsureFleetTier then logged NOTHING from any of its four trigger points --
-// not even one of its failure paths, which all log. K2_PostLogin was resolved
-// on the base GameMode and never dispatched through ProcessEvent on this host.
-//
-// So write the byte where the engine reads it. The same log proves this
-// function runs, twice, once per player:
-//
-//   AYGameMode_Multiplayer::TeleportPlayersFromOrbit | Players are about to be
-//   teleported into the arena
-//   LogYOrbitTransitionManager:Error: Trying to teleport into level player 256
-//   that is not in orbit!
-//   ...player 257 that is not in orbit!
-//
-// This needs no UFunction lookup, no GObjects scan, and no guess about when a
-// PlayerState exists -- the engine hands us the exact object it is about to
-// test, at the moment it tests it.
-typedef void(__fastcall *tTeleportPlayerIntoLevel)(void *self, void *pri,
-                                                   void *a3, void *a4);
-static tTeleportPlayerIntoLevel g_origTeleportPlayerIntoLevel = NULL;
-
-static void __fastcall HookTeleportPlayerIntoLevel(void *self, void *pri,
-                                                   void *a3, void *a4) {
-  if (g_fleetTierArmed) {
-    static int s_logged = 0;
-    EnsureFleetTierOnPlayerState(pri, "TeleportPlayerIntoLevel",
-                                 s_logged++ < 24);
-  }
-  g_origTeleportPlayerIntoLevel(self, pri, a3, a4);
 }
 
 // SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
@@ -952,6 +963,133 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   return ret;
 }
 
+// ---------------------------------------------------------------------------
+// Dedicated net mode: let the game's own dedicated-server path run the orbit
+//
+// Why players never leave orbit (verified 2026-09-24 by disassembly and the
+// full battle-server log run/battle-logs/battle-20260923-204528-port7777.log):
+//
+//   - The teleport into the arena needs the pawn's in-orbit state, which the
+//     orbit sequence sets only once the GameState readiness mask is complete
+//     (AYGameState_MP+0x1D60 == 0xF, AGENT-CHAT S39).
+//   - On a DEDICATED server the game completes that mask itself.
+//     0x3ACA40, called from ServerReadyForJoining (0x592350) and
+//     ClientLoadingCompleted (0x390970), does:
+//         if Role == Authority:
+//             if GetNetMode() == NM_DedicatedServer: set bits 0x1|0x2|0x4|0x8
+//         set bit 0x10
+//         if Role == Authority: StartOrbitTransition
+//   - Our host is the shipping GAME exe, which is never dedicated: engine
+//     PreInit sets GIsClient = 1 on every non-commandlet launch (0x228F71),
+//     whatever the command line says -- which is why "-server" and dropping it
+//     changed nothing (S43). So GetNetMode() answers 2 (listen), the mask stops
+//     at 0x2 (only OrbitLevelReady), and TeleportPlayersFromOrbit logs "not in
+//     orbit" for every player. The log shows ServerReadyForJoining and
+//     StartOrbitTransition running, and none of the other three bits.
+//
+// The fix: a server net driver reports DEDICATED instead of LISTEN. Nothing is
+// forced; the engine then takes the path the shipping servers took. Clients
+// are untouched (their net driver is not a server, the original answers 3),
+// and GIsClient itself is left alone, so client-only systems in this process
+// keep the state they initialised with.
+//
+// Calls the original first and only changes a LISTEN answer, per the hooking
+// checklist. Logs the first rewrites so the effect is visible.
+typedef int(__fastcall *tGetNetMode)(void *netDriver);
+static tGetNetMode g_origGetNetMode = nullptr;
+
+static int __fastcall HookGetNetMode(void *netDriver) {
+  int mode = g_origGetNetMode(netDriver);
+  if (mode != NM_LISTEN_SERVER)
+    return mode;
+  static volatile LONG s_logged = 0;
+  if (InterlockedIncrement(&s_logged) <= 3)
+    Logf("net mode: net driver %p answered LISTEN (2); reporting DEDICATED (1) "
+         "so the game's dedicated-server orbit path runs",
+         netDriver);
+  return NM_DEDICATED_SERVER;
+}
+
+// ---------------------------------------------------------------------------
+// AI in the proving ground (dn_host_bc_ai.txt)
+//
+// Verified 2026-09-24 (disassembly + live memory of a BC host):
+//   - Every NPC spawn path ends in game-mode virtual 0x9D0 (0x3678F0), which
+//     fills the teams (0x381FA0 -> per-NPC 0x3671C0 -> StartCombat) only if
+//     GameMode+0x961 m_enableSpawnAI or +0x962 is set. +0x962 is written only by
+//     the cheat-manager commands SpawnAI / SpawnAITeams (0x32AC10, 0x32AD90).
+//   - For the proving ground the natural caller is this timer, at 0x36A806:
+//     m_enableSpawnAI && !GameState.m_isMatchStarted && m_remainingTime <= 50.
+//   - Native constructors: Multiplayer 0x361DF0 writes 0x961 = 0, TrainingMatch
+//     0x362840 writes 1. GameInfo_BC_BP does not override it, so on our host it
+//     read 0 with 45 NPC entries loaded and nothing ever spawned.
+//   - Writing the byte live (scratchpad bcpoke.py) made the game fill both teams
+//     at the 50 s mark (T1 7 + the player, T2 8) and log "StartCombat - starting
+//     combat"; the operator fought the bots.
+//
+// So this sets the designer switch the mode's own AI data is waiting for; the
+// game does the rest. Limited to Bootcamp: PvP modes have no bots by design.
+typedef void(__fastcall *tGameModeTimer)(void *gameMode);
+static tGameModeTimer g_origGameModeTimer = nullptr;
+
+static void __fastcall HookGameModeTimer(void *gameMode) {
+  uint8_t *gm = (uint8_t *)gameMode;
+  if (IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
+      gm[OFF_GM_ENABLE_SPAWN_AI] == 0 &&
+      IsReadable(gm + OFF_GM_GAMESTATE, sizeof(void *))) {
+    uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+    if (gs && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) &&
+        gs[OFF_GS_GAME_MODE_TYPE] == YGMT_BOOTCAMP) {
+      gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
+      Logf("bc ai: game mode %p is Bootcamp; m_enableSpawnAI 0 -> 1. The game "
+           "fills both teams when the pre-match countdown reaches 50 s.",
+           gameMode);
+    }
+  }
+  g_origGameModeTimer(gameMode);
+}
+
+// ---------------------------------------------------------------------------
+// Player ship physics (dn_host_ship_physics.txt)
+//
+// Verified 2026-09-24 (disassembly + live memory while the operator flew):
+//   - Ship inputs reach the host (ServerUpdateThrottle/Steering/VerticalState
+//     -> m_replicatedState +0x210, copied to +0x228.. for non-local ships at
+//     0x5C92E5): the host read throttle 1.0 / steering -1.0 as pressed.
+//   - The force builder 0x5C8C00 skips ALL forces for a ship that is not
+//     locally controlled (+0x488 = owner->IsLocallyControlled(), set at
+//     0x5C4910 -- false for every human player on any server) when +0x489 is
+//     set, unless the ship is near and in front of the LOCAL player's camera
+//     (+0x498 distance squared, +0x49C view dot, cvar via 0x5B9B40). A client
+//     optimisation: don't simulate remote ships nobody is looking at.
+//   - +0x489 is written only here, and only when the world has a first local
+//     player controller. A real dedicated server has none, so every ship is
+//     simulated. Our host is the game exe and has one (player 256, parked at the
+//     orbit camera), so player ships ~73,000 units away were never simulated:
+//     the host copy only drifted, and every server correction (e.g. on firing)
+//     snapped the client back -- "position resets and I can't move".
+//   - Clearing +0x489 live (scratchpad fixnow.py) made the host copy follow the
+//     inputs at once: accelerate, turn, climb; the operator confirmed no resets.
+//
+// So after the original runs, the flag is cleared again: the host behaves like
+// the dedicated server it stands in for. Locally controlled ships (AI) return
+// early in the original and are untouched.
+typedef void(__fastcall *tVehicleViewCull)(void *movementComp);
+static tVehicleViewCull g_origVehicleViewCull = nullptr;
+
+static void __fastcall HookVehicleViewCull(void *movementComp) {
+  g_origVehicleViewCull(movementComp);
+  uint8_t *mc = (uint8_t *)movementComp;
+  if (mc[OFF_VMC_LOCALLY_CONTROLLED] == 0 && mc[OFF_VMC_VIEW_CULLED] != 0) {
+    mc[OFF_VMC_VIEW_CULLED] = 0;
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 8)
+      Logf("ship physics: movement component %p is a remote player's ship; "
+           "cleared the local-camera physics cull so the host simulates it",
+           movementComp);
+  }
+}
+
 // Both of the switches below are opt-in separately from the loadout fix,
 // because both change what players see.
 static DWORD WINAPI PostLoginInstallThread(LPVOID);
@@ -981,10 +1119,37 @@ static bool PostLoginSpawnEnabled() {
   return SwitchOn("DN_HOST_POSTLOGIN_SPAWN", "dn_host_postlogin.txt");
 }
 
-// The fleet tier: lets the NORMAL orbit flow complete, keeping ship selection.
-// Preferred over the bypass, and useful on its own.
+// The fleet tier: DISABLED, see the DISPROVED note above OFF_HIGHEST_FLEET.
+// Still read, only so a leftover marker file is reported instead of ignored.
 static bool FleetTierEnabled() {
   return SwitchOn("DN_HOST_FLEET_TIER", "dn_host_fleet_tier.txt");
+}
+
+// Dedicated net mode (HookGetNetMode). Opt-in like every host mod, so a match
+// can still be diagnosed with it off.
+static bool DedicatedNetModeEnabled() {
+  return SwitchOn("DN_HOST_DEDICATED", "dn_host_dedicated.txt");
+}
+
+// AI in the proving ground (HookGameModeTimer).
+static bool BootcampAIEnabled() {
+  return SwitchOn("DN_HOST_BC_AI", "dn_host_bc_ai.txt");
+}
+
+// Player ship physics without the local-camera cull (HookVehicleViewCull).
+static bool ShipPhysicsEnabled() {
+  return SwitchOn("DN_HOST_SHIP_PHYSICS", "dn_host_ship_physics.txt");
+}
+
+// Installs one single-argument hook and reports it either way.
+static void InstallSwitchedHook(const char *what, uintptr_t rva, void *detour,
+                                void **orig) {
+  void *target = (void *)(g_base + rva);
+  if (MH_CreateHook(target, detour, (LPVOID *)orig) != MH_OK ||
+      MH_EnableHook(target) != MH_OK)
+    Logf("%s: FAILED to hook RVA 0x%X (%p)", what, (unsigned)rva, target);
+  else
+    Logf("installed: %s hooked at RVA 0x%X (%p)", what, (unsigned)rva, target);
 }
 
 // The install runs on its own thread and WAITS, because GObjects is not
@@ -1178,28 +1343,49 @@ static DWORD WINAPI Startup(LPVOID) {
        "loadout lookup.",
        RVA_FIND_LOADOUT_BY_ID, target);
 
-  // Read the switch here, not on the install thread: the teleport hook below
-  // needs it and must not race the thread that used to set it.
-  g_fleetTierArmed = FleetTierEnabled();
+  // The fleet tier write is disabled for good (see OFF_HIGHEST_FLEET). Say so
+  // if an old marker file is still asking for it.
+  g_fleetTierArmed = false;
+  if (FleetTierEnabled())
+    Logf("fleet tier: dn_host_fleet_tier.txt / DN_HOST_FLEET_TIER is set but "
+         "IGNORED -- it forced the pawn's orbit state. Use dn_host_dedicated.txt.");
 
-  // The teleport gate. Installed here rather than from the GObjects thread
-  // because it needs no reflection at all -- and because the thing it replaces
-  // (the UFunction trigger points) is exactly what failed by never running.
-  // A failure to hook is logged and survivable: everything else still works.
-  if (g_fleetTierArmed) {
-    void *tp = (void *)(g_base + RVA_TELEPORT_PLAYER_INTO_LEVEL);
-    if (MH_CreateHook(tp, &HookTeleportPlayerIntoLevel,
-                      (LPVOID *)&g_origTeleportPlayerIntoLevel) != MH_OK ||
-        MH_EnableHook(tp) != MH_OK) {
-      Logf("fleet tier: FAILED to hook TeleportPlayerIntoLevel at RVA 0x%X "
-           "(%p). The orbit gate will not be satisfied.",
-           RVA_TELEPORT_PLAYER_INTO_LEVEL, tp);
+  // Dedicated net mode. Installed here, before the map loads, so every
+  // GetNetMode the orbit code asks is answered the same way.
+  if (DedicatedNetModeEnabled()) {
+    void *nm = (void *)(g_base + RVA_NETDRIVER_GET_NET_MODE);
+    if (MH_CreateHook(nm, &HookGetNetMode, (LPVOID *)&g_origGetNetMode) != MH_OK ||
+        MH_EnableHook(nm) != MH_OK) {
+      Logf("net mode: FAILED to hook UNetDriver::GetNetMode at RVA 0x%X (%p). "
+           "The host stays a listen server and players will stay in orbit.",
+           RVA_NETDRIVER_GET_NET_MODE, nm);
     } else {
-      Logf("installed: TeleportPlayerIntoLevel hooked at RVA 0x%X (%p). Fleet "
-           "tier is written where the gate reads it.",
-           RVA_TELEPORT_PLAYER_INTO_LEVEL, tp);
+      Logf("installed: UNetDriver::GetNetMode hooked at RVA 0x%X (%p). A server "
+           "net driver now reports DEDICATED.",
+           RVA_NETDRIVER_GET_NET_MODE, nm);
     }
+  } else {
+    Logf("net mode: dedicated OFF (create dn_host_dedicated.txt beside the "
+         "executable, or set DN_HOST_DEDICATED=1). The host stays a listen "
+         "server; players will not leave orbit.");
   }
+
+  if (BootcampAIEnabled())
+    InstallSwitchedHook("bc ai (AYGameMode_Multiplayer timer)",
+                        RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
+                        (void **)&g_origGameModeTimer);
+  else
+    Logf("bc ai: OFF (create dn_host_bc_ai.txt beside the executable, or set "
+         "DN_HOST_BC_AI=1). The proving ground has no bots.");
+
+  if (ShipPhysicsEnabled())
+    InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",
+                        RVA_VEHICLE_VIEW_CULL_SETUP, (void *)&HookVehicleViewCull,
+                        (void **)&g_origVehicleViewCull);
+  else
+    Logf("ship physics: OFF (create dn_host_ship_physics.txt beside the "
+         "executable, or set DN_HOST_SHIP_PHYSICS=1). Player ships far from the "
+         "host's orbit camera are not simulated; players snap back.");
 
   // On its own thread: InstallPostLoginHook waits for GObjects, and Startup
   // must return so the FindLoadoutByID hook above is live immediately.

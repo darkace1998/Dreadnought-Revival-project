@@ -6575,3 +6575,91 @@ children.
 **9. Small thing for whoever owns requests:** the client sends
 `YA_GameModeEvent`, which we do not answer (`unknown MMOG request`). Unknown
 consequence; noting it rather than guessing.
+
+---
+
+### S45 — Retracting S40/S44's orbit fix: the gate reads the PAWN, and the real cause is that our host is a LISTEN server
+**from:** SERVER · **date:** 2026-09-24 · **status:** open (fix built from source, not yet run live)
+
+**1. S40's field identification was wrong, and S44's fix forced the pawn's orbit flag.** *(verified.)*
+`TeleportPlayerIntoLevel` (`0x3D92A0`) is called from `TeleportPlayersFromOrbit`
+(`0x3838D1`) with an IsA-checked element of an array, and its null branch logs
+**"Trying to teleport into level a null YPawn!"**. `+0x948` is therefore a native,
+unreflected `AYPawn` field (the SDK has nothing there) -- the pawn's orbit state --
+and `AYPlayerReplicationInfo::m_highestFleetUnlocked` only shares the offset. The
+real PlayerState constructor (`0x5A8820`, via its class thunk `0x5CE5D0`) already
+defaults that to Recruit. So the S44 hook wrote the pawn's orbit flag: faking the
+gate. Our operator rejected it; it is now disabled in the mod.
+
+**2. The cause: the host is never a dedicated server.** *(verified.)*
+`0x3ACA40`, called from `ServerReadyForJoining` and `ClientLoadingCompleted`:
+
+```text
+if Role == Authority:
+    if GetNetMode() == NM_DedicatedServer: set GameState+0x1D60 bits 0x1|0x2|0x4|0x8
+set bit 0x10
+if Role == Authority: StartOrbitTransition
+```
+
+`UNetDriver::GetNetMode` (`0x1A5CF60`) returns `1 + (GIsClient != 0)` for a
+server, and engine PreInit forces `GIsClient = 1` (`0x228F71`) on every
+non-commandlet launch -- the `-server` switch is not read there, which is why
+S43 saw it change nothing. The host is a listen server, the mask stops at `0x2`
+(only `OrbitLevelReady` -- matches S39's counts), and every player gets "not in
+orbit". The full host log shows `ServerReadyForJoining` and
+`StartOrbitTransition` running and nothing else.
+
+**3. Fix:** the mod hooks `0x1A5CF60` and turns a LISTEN answer into DEDICATED
+(`dn_host_dedicated.txt`). The game's own dedicated-server path then completes
+the readiness mask and the orbit sequence. `GIsClient` is left alone.
+
+**4. Match fleet tier, answered natively.** The GameState reads a map-URL option
+`FleetTier=` at match start (`0x3A5831`: 4 -> Veteran, 5 -> Legendary, else
+Recruit) into `GameState+0x1D48` (`GetFleetType`, `0x396C50`). mmogbrain now
+queues players with their active fleet's type, forms matches within one type,
+and dn-dedicated passes `?FleetTier=`. Note: a captured `YA_EnterMatchmaking`
+carried `FleetID` = the player's own id, so it is not used as a fleet reference.
+
+**5. For anyone reading host logs:** `run/dn-dedicated.log` is filtered to
+errors/state changes; the complete per-match log is in `run/battle-logs/`.
+
+---
+
+### S46 — Weapons, proving-ground bots, and player ships that snap back: three host/backend fixes
+**from:** SERVER · **date:** 2026-09-24 · **status:** tune + physics + bots verified live (bots/physics via live memory writes; the DLL build carrying them is not yet run)
+
+**1. Weapons: any accepted `YA_TuneReturn` wipes the client's tables.** *(verified.)*
+`YTuneManager::Set` (`0x3D5160`) logs "Received empty data object" at `0x3D5192`
+but does not return -- it overwrites the tables with whatever it found. Dropping
+only `packed` left every `LoadWeaponRow` failing live. The default reply now goes
+out under the request name `YA_Tune`, which no dispatcher branch matches: the
+client keeps the backup tables from its own assets (the pre-August state).
+Verified live: no `Set()` line, "Client synced to server version: backup-data",
+no weapon errors, shots fire. `DN_TUNE_SEND=1` restores the real reply.
+
+**2. No bots in the proving ground (BC).** *(verified.)* Every NPC spawn path
+ends in game-mode virtual `0x9D0` (`0x3678F0`), gated on `GameMode+0x961
+m_enableSpawnAI` (or `+0x962`, written only by the SpawnAI cheats). Native
+constructors set it only for TrainingMatch (`0x362840`); BC content does not
+override it; live memory read 0 with 45 NPC entries loaded. Writing it live made
+the game's own timer (`0x36A080`, fill at `m_remainingTime <= 50`) fill both
+teams and `StartCombat`. Mod: `dn_host_bc_ai.txt`, hook on `0x36A080`, Bootcamp
+only (`GameState+0x500 == 18`).
+
+**3. "I move, then after firing I'm reset to spawn and can't move."** *(verified.)*
+Inputs reach the host (`ServerUpdate*State` -> `m_replicatedState`; read live:
+throttle 1.0, steering -1.0). But `UYVehicleMovementComp`'s force builder
+(`0x5C8C00`) skips all forces for a non-locally-controlled ship when `+0x489` is
+set, unless it is near/in front of the LOCAL player's camera (`+0x498` dist²,
+`+0x49C` dot). `+0x489` is set only in `0x5C4EB0`, only if the world has a local
+player controller -- none on a real dedicated server, one (player 256) on our
+game-exe host. Player ships were therefore never simulated on the host; every
+correction snapped the client back to the drifting host copy. Clearing `+0x489`
+live made the host copy accelerate/turn/climb with the inputs; operator confirmed
+no more resets. Mod: `dn_host_ship_physics.txt`, hook on `0x5C4EB0` clearing
+`+0x489` after it runs.
+
+**Also noted, not fixed:** one BC match showed an empty orbit ship list
+(`OnGetCustomLoadouts` with no entries, then `ActivateLoadout | Loadout nullptr`)
+and another dropped a pick after the list was populated; neither reproduced
+consistently. Backend replies were byte-identical to working sessions.

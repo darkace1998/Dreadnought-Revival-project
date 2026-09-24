@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 // The ceiling on YA_Tune is the client's 32768-byte mmog RECEIVE RING, not the
 // 65535 the 16-bit frame delimiter allows. This test previously budgeted 60000
@@ -89,6 +92,7 @@ func TestTruncateJSONArrayCutsOnElementBoundaries(t *testing.T) {
 //
 // DN_TUNE_EMPTY=1 still restores the old behaviour for A/B testing.
 func TestTuneDefaultCarriesRealTables(t *testing.T) {
+	t.Setenv("DN_TUNE_SEND", "1") // the document is opt-in since 2026-09-24; this checks the document
 	payload := buildMmogTunePayload()
 	if len(payload) < 5000 {
 		t.Errorf("default YA_TuneReturn is only %d bytes; the real tables are "+
@@ -99,5 +103,23 @@ func TestTuneDefaultCarriesRealTables(t *testing.T) {
 	if empty := buildMmogTunePayload(); len(empty) > 1000 {
 		t.Errorf("DN_TUNE_EMPTY=1 gave %d bytes; it should be the small "+
 			"empty-tables payload", len(empty))
+	}
+}
+
+// By default the tune reply carries no "packed" document, so the client keeps
+// the backup tables it loaded from its own assets. Sending our document made it
+// apply an empty version with no resolvable tables, and weapons stopped
+// spawning projectiles (live, 2026-09-24).
+func TestTuneReplyOmitsTheDocumentByDefault(t *testing.T) {
+	t.Setenv("DN_TUNE_SEND", "")
+	payload := buildMmogTunePayload()
+	if bytes.Contains(payload, []byte("packed")) {
+		t.Fatal("YA_TuneReturn carries a packed document by default")
+	}
+	// Not even an empty YA_TuneReturn: Set() (0x3D5160) falls through its
+	// "empty data object" branch and overwrites the tables anyway. The reply
+	// must go out under a name the dispatcher drops.
+	if bytes.Contains(payload, []byte("YA_TuneReturn")) {
+		t.Fatal("default tune reply is a YA_TuneReturn; the client would wipe its backup tables")
 	}
 }
