@@ -99,6 +99,83 @@ What to look for in the host log:
 ... TeleportPlayersFromOrbit ...        and NO "that is not in orbit!" after it
 ```
 
+## The player's own fit (`dn_host_player_loadouts.txt`)
+
+**Opt-in.** The host used to spawn every ship with its DEFAULT precast fit,
+because a client only tells the server which loadout it picked
+(`ServerPlayerClickedShipLoadout(FName)`) and this exe's server side cannot look
+the fit up: its mmog `AutoLogin` (`0x2AABCB0`) is a stub and the fleet manager
+(`0x35FDF0`) only reads the host's own account. Now:
+
+1. mmogbrain adds `?DNPID=<pid>` to the `YA_Connect` travel address; the host
+   keeps the login URL at `UNetConnection+0x198` (verified live).
+2. On a loadout miss the mod asks mmogbrain
+   `GET http://127.0.0.1:8083/battle/loadout?pid=&id=` (loopback only;
+   `DN_MMOG_HTTP=host:port` overrides) for the record the client itself built
+   its loadout from.
+3. It builds the loadout the way the client does (`HandleMmogbrainLoadoutAdded`,
+   `0x348830`): `StaticConstructObject(UYShipLoadout)` -> `0x34D690(obj, owner+0x970, &info)`
+   -> cached init data -> `AddLoadout(mgr, obj, 2)`.
+
+It runs before any precast fallback (the client picks by the precast's name, so
+a registered default would shadow the fit). If mmogbrain has no record, the
+default precast is used as before.
+
+```text
+[dn-host-loadout] player loadout: Default__VH_..._PrecastLoadout_BP_C for <pid> -> precast N, weapons a/b, abilities ... -> registered
+```
+
+## Stack overflow at match end (always on)
+
+Verified 2026-09-24: the host died with `EXCEPTION_STACK_OVERFLOW` (c00000fd) the
+moment a proving-ground match was won, so no win screen. The overflowed stack
+(scraped from `/proc/<pid>/task/<tid>/mem`) held one 12-frame loop ~3,884 times:
+`ClientSetPlayerRestrictions` exec (`0x746B40`) -> `_Implementation` (`0x5743B0`)
+-> `SetPlayerRestrictions` (`0x5954F0`) -> the client RPC (`0x5E5B80`) -> back.
+On any server `0x5954F0` sends the RPC; for the host's own LOCAL player (256)
+a client RPC runs in-process, so it re-enters itself forever. The shipping
+servers had no local player. The mod hooks `0x5743B0` and drops a re-entrant
+call on the same thread; remote players are unaffected.
+
+```text
+[dn-host-loadout] restrictions: dropped a re-entrant ClientSetPlayerRestrictions on controller ...
+```
+
+## End-of-match screen (on; `dn_host_no_eom_stats.txt` turns it off)
+
+Symptom: the match ends, the screen fades to black and stays black. The client
+log shows the end-of-match stage graph stopping at `SetupUIWidgets`.
+
+That stage waits for `AYPlayerReplicationInfo+0x7E0`, which only the client RPC
+`ClientSetTopPlayerMatchStats` sets (body `0x5B0240`). Nothing in this exe sends
+that RPC: its FName global (`0x3E102F8`) is referenced only by its initializer.
+The ranking code lived in the separate server build. The mod hooks the one
+sender of `ClientStartEndOfMatchTransition` (`0x5E5D70`) and, right after it,
+sends `ClientSetTopPlayerMatchStats` with an empty array to that controller's PRI,
+the same way the engine's own RPC stubs do (`FindFunctionChecked` `0xD57C90`,
+`ProcessEvent` at vtable `0x1A8`). The MVP page gets no entries; the host has no
+ranking data to fill it with.
+
+Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller …`.
+
+## Researched ships: any precast on demand
+
+Part of the loadout fix, no switch of its own. The four T1 mediums are only the
+starter fleet; a player who fields a researched ship makes the host look up that
+ship's precast (`Default__VH_SniperLight_T2_PrecastLoadout_BP_C`, ...), which the
+T1 set cannot answer -- verified live: "STILL MISSING", then "Active Loadout not
+found. Can't spawn". On such a miss the mod resolves the requested precast by
+name through `src/precast_paths.h` (all 102 precasts, generated from the cooked
+asset list by `scripts/gen-precast-paths.py`; 48 of them live outside a
+`Precast/T<n>/` folder, so the path cannot be derived), loads it, and registers
+it with the asking manager.
+
+```text
+[dn-host-loadout] precast VH_SniperLight_T2_PrecastLoadout_BP (on demand): class=... cdo=... (N ms)
+[dn-host-loadout] register VH_SniperLight_T2_PrecastLoadout_BP with manager ... -> ok
+[dn-host-loadout] FindLoadoutByID miss for ... -> after registering: FOUND
+```
+
 ## AI in the proving ground (`dn_host_bc_ai.txt`)
 
 **Opt-in.** Empty `dn_host_bc_ai.txt` beside the executable (or
@@ -377,7 +454,15 @@ entries — not chained cold chunks, not mid-instruction.
 | `0xD78110-0xD789B6` | `StaticLoadObject`/`StaticLoadClass`, 7 arguments |
 | `0x1A5CF60-0x1A5CF8D` | `UNetDriver::GetNetMode(driver)` -> 1 dedicated / 2 listen / 3 client |
 | `0x36A080-0x36A539` | `AYGameMode_Multiplayer` once-a-second timer (vtable `0x8E0`), `(this)` only |
+| `0x5743B0-0x5744A0` | `ClientSetPlayerRestrictions_Implementation`, 18 args (this, 16 bytes, 1 pointer) |
 | `0x5C4EB0-0x5C511E` | `UYVehicleMovementComp` local-camera cull setup, `(this)`; only writer of `+0x489` |
+| `0x5E5D70-0x5E5DA9` | `ClientStartEndOfMatchTransition` RPC stub (`UYPlayerOrbitComponent`), `(this)`; the only sender |
+| `0xD57C90-0xD57CB9` | `UObject::FindFunctionChecked(obj, FName)`; `ProcessEvent` is vtable slot `0x1A8` |
+| `0x3E102F8` | FName global `ClientSetTopPlayerMatchStats` (data; referenced only by its initializer) |
+| `0x614E30` | `UYShipLoadout::StaticClass()` |
+| `0xD759E0` | `StaticConstructObject_Internal`, 8 arguments |
+| `0x34D690` | loadout init from `FYShipImportLoadoutInfo` `(obj, *(owner+0x970), &info)` |
+| `0x21F5E0` / `0x1CF3240` / `0xC9CF20` | `FString` assign / `TArray<int32>` assign / `FName(const wchar_t*, EFindName)` |
 | `0x3F63A70` | `GObjects` (data) |
 | `0x3E069D0` | `GNames` (data, used for log text only) |
 

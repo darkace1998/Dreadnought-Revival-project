@@ -49,15 +49,20 @@
 // GNames is used for log text only. If its layout were wrong the worst outcome
 // is an unnamed line in the log; no decision depends on it.
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
+#pragma comment(lib, "ws2_32.lib")
 
 #include <share.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "MinHook.h"
+#include "precast_paths.h"
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -201,6 +206,12 @@ static uintptr_t g_base = 0;
 // UYVehicleMovementComp: 0x5C4EB0-0x5C511E (.pdata entry), one argument (this).
 // The only writer of +0x489. See HookVehicleViewCull.
 #define RVA_VEHICLE_VIEW_CULL_SETUP 0x5C4EB0
+
+// AYPlayerController::ClientSetPlayerRestrictions_Implementation,
+// 0x5743B0-0x5744A0 (.pdata entry; referenced from 4 controller vtables, run by
+// the exec thunk 0x746B40). 18 arguments: this, 16 bytes, 1 pointer (read at
+// 0x5743BA-0x5744A0). See HookClientSetPlayerRestrictions.
+#define RVA_CLIENT_SET_PLAYER_RESTRICTIONS_IMPL 0x5743B0
 #define OFF_VMC_LOCALLY_CONTROLLED 0x488  // = owner->IsLocallyControlled()
 #define OFF_VMC_VIEW_CULLED 0x489         // "cull my physics by the local camera"
 #define OFF_GOBJECTS 0x3F63A70
@@ -556,11 +567,398 @@ static void RegisterPrecastLoadouts(void *mgr) {
 }
 
 // ---------------------------------------------------------------------------
+// Any precast, on demand
+//
+// The four T1 mediums above are only the starter fleet. A player who fields a
+// researched ship makes the host look up that ship's precast -- verified live
+// 2026-09-24: "FindLoadoutByID miss for ... (Default__VH_SniperLight_T2_
+// PrecastLoadout_BP_C) -> after registering: STILL MISSING", then "Active
+// Loadout not found. Can't spawn" and no pawn. So a miss that the T1 set does not
+// answer is resolved by NAME: "Default__<X>_C" -> <X> -> its class path from
+// precast_paths.h (generated from the cooked asset list; the path cannot be
+// derived, 48 of 102 precasts are outside a Precast/T<n>/ folder) ->
+// StaticLoadClass -> its default object -> AddLoadout on the asking manager.
+// Same mechanism as the T1 set, one class at a time, cached.
+// ---------------------------------------------------------------------------
+
+struct DynPrecast {
+  const char *name; // key into kAllPrecastPaths (static storage)
+  UObjectMin *cdo;  // nullptr if resolution failed (not retried)
+};
+static DynPrecast g_dynPrecast[128] = {};
+static int g_dynPrecastCount = 0;
+
+struct DynRegistration {
+  void *mgr;
+  UObjectMin *cdo;
+};
+static DynRegistration g_dynRegistered[256] = {};
+static int g_dynRegisteredCount = 0;
+
+static const PrecastPath *FindPrecastPath(const char *assetName) {
+  for (int i = 0; i < kAllPrecastCount; ++i)
+    if (strcmp(kAllPrecastPaths[i].name, assetName) == 0)
+      return &kAllPrecastPaths[i];
+  return nullptr;
+}
+
+// "Default__VH_SniperLight_T2_PrecastLoadout_BP_C" -> table entry, or nullptr.
+static const PrecastPath *PrecastForLoadoutId(const char *idText) {
+  if (!idText || strncmp(idText, "Default__", 9) != 0)
+    return nullptr;
+  char asset[160];
+  size_t n = strlen(idText + 9);
+  if (n < 3 || n >= sizeof(asset) || strcmp(idText + 9 + n - 2, "_C") != 0)
+    return nullptr;
+  memcpy(asset, idText + 9, n - 2);
+  asset[n - 2] = 0;
+  return FindPrecastPath(asset);
+}
+
+static UObjectMin *ResolvePrecastByName(const PrecastPath *pp) {
+  for (int i = 0; i < g_dynPrecastCount; ++i)
+    if (g_dynPrecast[i].name == pp->name)
+      return g_dynPrecast[i].cdo;
+
+  UObjectMin *cdo = nullptr;
+  UObjectMin *uclassClass = ResolveUClassClass();
+  if (uclassClass) {
+    tStaticLoadClass StaticLoadClass =
+        (tStaticLoadClass)(g_base + RVA_STATIC_LOAD_CLASS);
+    double t0 = NowMs();
+    UObjectMin *cls = nullptr;
+    __try {
+      cls = (UObjectMin *)StaticLoadClass(uclassClass, nullptr, pp->path,
+                                          nullptr, 0, nullptr, false);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+      cls = nullptr;
+    }
+    if (IsReadable(cls, sizeof(UObjectMin))) {
+      PinToRootSet(cls);
+      UObjectMin *classes[1] = {cls};
+      UObjectMin *cdos[1] = {};
+      FindCDOsForClasses(classes, cdos, 1);
+      cdo = cdos[0];
+      if (cdo)
+        PinToRootSet(cdo);
+    }
+    Logf("precast %s (on demand): class=%p cdo=%p (%.0f ms)", pp->name, cls,
+         cdo, NowMs() - t0);
+  }
+  if (g_dynPrecastCount < (int)(sizeof(g_dynPrecast) / sizeof(g_dynPrecast[0])))
+    g_dynPrecast[g_dynPrecastCount++] = {pp->name, cdo};
+  return cdo;
+}
+
+// Registers the named precast with this manager if the name is a known precast.
+// Returns true if something new was registered.
+static bool RegisterPrecastOnDemand(void *mgr, const char *idText) {
+  const PrecastPath *pp = PrecastForLoadoutId(idText);
+  if (!pp)
+    return false;
+  UObjectMin *cdo = ResolvePrecastByName(pp);
+  if (!cdo)
+    return false;
+  for (int i = 0; i < g_dynRegisteredCount; ++i)
+    if (g_dynRegistered[i].mgr == mgr && g_dynRegistered[i].cdo == cdo)
+      return false;
+  if (g_dynRegisteredCount <
+      (int)(sizeof(g_dynRegistered) / sizeof(g_dynRegistered[0])))
+    g_dynRegistered[g_dynRegisteredCount++] = {mgr, cdo};
+  bool ok = AddLoadoutGuarded(mgr, cdo);
+  Logf("register %s with manager %p -> %s", pp->name, mgr,
+       ok ? "ok" : "EXCEPTION");
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
 // The hook
 // ---------------------------------------------------------------------------
 
 typedef void *(__fastcall *tFindLoadoutByID)(void *mgr, void **id, uint8_t warn);
 static tFindLoadoutByID g_origFindLoadoutByID = nullptr;
+
+
+// ---------------------------------------------------------------------------
+// The player's own fit (dn_host_player_loadouts.txt)
+//
+// Verified 2026-09-25 from the exe: a client tells the host only WHICH loadout
+// it picked (ServerPlayerClickedShipLoadout(FName id)), and the host cannot
+// look the fit up itself -- its mmog AutoLogin (0x2AABCB0) is a stub and its
+// fleet manager (0x35FDF0) only reads the host's own account. The original
+// servers were a separate build. So:
+//
+//   1. mmogbrain adds ?DNPID=<pid> to the YA_Connect travel address; the host
+//      keeps the login URL at UNetConnection+0x198 (verified live), reached
+//      via loadoutManager+0xA8 (owner controller) -> +0x5A8 (NetConnection).
+//   2. The mod asks mmogbrain (GET /battle/loadout?pid=&id=, loopback) for the
+//      record the client built its own loadout from.
+//   3. It builds the loadout exactly as the client does in
+//      HandleMmogbrainLoadoutAdded (0x348830, verified):
+//        obj = StaticConstructObject(UYShipLoadout::StaticClass() 0x614E30,
+//                                    outer = manager)             0xD759E0
+//        FYShipImportLoadoutInfo from the record                  (0x34E550)
+//        0x34D690(obj, *(owner+0x970), &info)
+//        obj->m_cachedInitializationData (+0x38..) = info
+//        obj+0x1B1 = obj+0x1B2 = 1
+//        if !FindLoadoutByID(mgr, &obj->m_id) -> AddLoadout(mgr, obj, 2)
+//
+// The client picks by the precast's name, so registering a default precast
+// first would shadow the player's fit: this runs BEFORE any precast fallback.
+// ---------------------------------------------------------------------------
+
+#define RVA_YSHIPLOADOUT_STATICCLASS 0x614E30
+#define RVA_STATIC_CONSTRUCT_OBJECT 0xD759E0
+#define RVA_LOADOUT_INIT_FROM_INFO 0x34D690
+#define RVA_FSTRING_ASSIGN 0x21F5E0
+#define RVA_TARRAY_INT_ASSIGN 0x1CF3240
+#define RVA_FNAME_CTOR_WIDE 0xC9CF20
+#define OFF_COMPONENT_OWNER 0xA8
+#define OFF_PC_NETCONNECTION 0x5A8
+#define OFF_NETCONN_REQUEST_URL 0x198
+#define OFF_OWNER_INIT_ARG 0x970
+
+struct FStringMin {
+  wchar_t *data;
+  int32_t num; // characters including the terminator
+  int32_t max;
+};
+struct TArrayIntMin {
+  int32_t *data;
+  int32_t num;
+  int32_t max;
+};
+// FYShipImportLoadoutInfo, 0x70 bytes (dread-sdk DreadGame_Structs.h:4634).
+struct ShipImportInfoMin {
+  FNameMin loadoutID;  // 0x00
+  FNameMin pid;        // 0x08
+  int32_t precastID;   // 0x10
+  int32_t pad14;       // 0x14
+  FStringMin name;     // 0x18
+  int32_t shipClass;   // 0x28
+  int32_t pad2c;       // 0x2C
+  FStringMin display;  // 0x30
+  TArrayIntMin weapons;   // 0x40
+  TArrayIntMin abilities; // 0x50
+  TArrayIntMin perks;     // 0x60
+};
+static_assert(sizeof(ShipImportInfoMin) == 0x70, "FYShipImportLoadoutInfo size");
+
+typedef void *(__fastcall *tStaticClass)();
+typedef void *(__fastcall *tStaticConstructObject)(void *cls, void *outer,
+                                                   uint64_t name, uint32_t flags,
+                                                   uint32_t internalFlags,
+                                                   void *tmpl, bool copyTransients,
+                                                   void *instanceGraph);
+typedef void(__fastcall *tLoadoutInitFromInfo)(void *obj, void *ownerArg,
+                                               ShipImportInfoMin *info);
+typedef void(__fastcall *tAssign)(void *dst, const void *src);
+typedef FNameMin *(__fastcall *tFNameCtor)(FNameMin *out, const wchar_t *text,
+                                           int findType);
+
+static bool PlayerLoadoutsEnabled();
+
+// DNPID from the owning connection's login URL, or "" (the host's local
+// player 256 has no connection).
+static bool PlayerPIDForManager(void *mgr, char *out, size_t outLen) {
+  out[0] = 0;
+  __try {
+    uint8_t *owner = *(uint8_t **)((uint8_t *)mgr + OFF_COMPONENT_OWNER);
+    if (!IsReadable(owner, OFF_PC_NETCONNECTION + 8))
+      return false;
+    uint8_t *conn = *(uint8_t **)(owner + OFF_PC_NETCONNECTION);
+    if (!IsReadable(conn, OFF_NETCONN_REQUEST_URL + sizeof(FStringMin)))
+      return false;
+    FStringMin *url = (FStringMin *)(conn + OFF_NETCONN_REQUEST_URL);
+    if (!url->data || url->num <= 0 || url->num > 4096 ||
+        !IsReadable(url->data, (size_t)url->num * 2))
+      return false;
+    const wchar_t *p = wcsstr(url->data, L"DNPID=");
+    if (!p)
+      return false;
+    p += 6;
+    size_t n = 0;
+    while (p[n] && p[n] != L'?' && p[n] != L'&' && n + 1 < outLen) {
+      out[n] = (char)p[n];
+      ++n;
+    }
+    out[n] = 0;
+    return n > 0;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return false;
+  }
+}
+
+// Minimal HTTP/1.0 GET on loopback. Returns the body, or "" on any failure.
+static bool HttpGetLoopback(const char *pathAndQuery, char *body, size_t bodyLen) {
+  body[0] = 0;
+  static bool s_wsa = false;
+  if (!s_wsa) {
+    WSADATA wd;
+    if (WSAStartup(MAKEWORD(2, 2), &wd) != 0)
+      return false;
+    s_wsa = true;
+  }
+  char host[64] = "127.0.0.1";
+  int port = 8083;
+  char env[80];
+  DWORD n = GetEnvironmentVariableA("DN_MMOG_HTTP", env, sizeof(env));
+  if (n > 0 && n < sizeof(env)) { // "host:port"
+    char *colon = strrchr(env, ':');
+    if (colon) {
+      *colon = 0;
+      strncpy_s(host, sizeof(host), env, _TRUNCATE);
+      port = atoi(colon + 1);
+    }
+  }
+  SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (s == INVALID_SOCKET)
+    return false;
+  DWORD timeoutMs = 2000;
+  setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeoutMs, sizeof(timeoutMs));
+  setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeoutMs, sizeof(timeoutMs));
+  sockaddr_in a = {};
+  a.sin_family = AF_INET;
+  a.sin_port = htons((u_short)port);
+  inet_pton(AF_INET, host, &a.sin_addr);
+  if (connect(s, (sockaddr *)&a, sizeof(a)) != 0) {
+    closesocket(s);
+    return false;
+  }
+  char req[768];
+  int rl = _snprintf_s(req, sizeof(req), _TRUNCATE,
+                       "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n",
+                       pathAndQuery, host);
+  if (rl <= 0 || send(s, req, rl, 0) != rl) {
+    closesocket(s);
+    return false;
+  }
+  static char buf[8192];
+  int total = 0, got;
+  while (total < (int)sizeof(buf) - 1 &&
+         (got = recv(s, buf + total, (int)sizeof(buf) - 1 - total, 0)) > 0)
+    total += got;
+  closesocket(s);
+  buf[total] = 0;
+  if (strncmp(buf, "HTTP/1.", 7) != 0 || strncmp(buf + 9, "200", 3) != 0)
+    return false;
+  const char *b = strstr(buf, "\r\n\r\n");
+  if (!b)
+    return false;
+  strncpy_s(body, bodyLen, b + 4, _TRUNCATE);
+  return true;
+}
+
+static const char *FieldValue(const char *body, const char *key, char *out, size_t outLen) {
+  size_t kl = strlen(key);
+  for (const char *line = body; line && *line;) {
+    const char *end = strchr(line, '\n');
+    size_t len = end ? (size_t)(end - line) : strlen(line);
+    if (len > kl && strncmp(line, key, kl) == 0 && line[kl] == '=') {
+      size_t vl = len - kl - 1;
+      if (vl >= outLen)
+        vl = outLen - 1;
+      memcpy(out, line + kl + 1, vl);
+      out[vl] = 0;
+      return out;
+    }
+    line = end ? end + 1 : nullptr;
+  }
+  out[0] = 0;
+  return nullptr;
+}
+
+static int ParseInts(const char *csv, int32_t *out, int maxN) {
+  int n = 0;
+  while (csv && *csv && n < maxN) {
+    out[n++] = (int32_t)strtol(csv, nullptr, 10);
+    const char *c = strchr(csv, ',');
+    csv = c ? c + 1 : nullptr;
+  }
+  return n;
+}
+
+static bool RegisterPlayerLoadout(void *mgr, void **id, const char *idText) {
+  if (!PlayerLoadoutsEnabled() || !idText)
+    return false;
+  char pid[80];
+  if (!PlayerPIDForManager(mgr, pid, sizeof(pid)))
+    return false; // not a connected player (e.g. the host's local player)
+
+  char path[512], body[4096];
+  _snprintf_s(path, sizeof(path), _TRUNCATE, "/battle/loadout?pid=%s&id=%s", pid, idText);
+  if (!HttpGetLoopback(path, body, sizeof(body))) {
+    Logf("player loadout: %s for %s -- mmogbrain has no record (or unreachable); falling back to the default precast",
+         idText, pid);
+    return false;
+  }
+
+  char v[512];
+  static wchar_t nameW[128], displayW[512];
+  ShipImportInfoMin info = {};
+  info.loadoutID = *(FNameMin *)id;
+  static wchar_t pidW[80];
+  MultiByteToWideChar(CP_UTF8, 0, pid, -1, pidW, 80);
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&info.pid, pidW, 1 /* FNAME_Add */);
+  info.precastID = (int32_t)strtol(FieldValue(body, "precast", v, sizeof(v)) ? v : "0", nullptr, 10);
+  info.shipClass = (int32_t)strtol(FieldValue(body, "class", v, sizeof(v)) ? v : "0", nullptr, 10);
+  FieldValue(body, "name", v, sizeof(v));
+  int nl = MultiByteToWideChar(CP_UTF8, 0, v, -1, nameW, 128);
+  info.name = {nameW, nl > 0 ? nl : 1, 128};
+  FieldValue(body, "display", v, sizeof(v));
+  int dl = MultiByteToWideChar(CP_UTF8, 0, v, -1, displayW, 512);
+  info.display = {displayW, dl > 0 ? dl : 1, 512};
+  // Same shapes 0x34E550 builds: 3 weapon entries (2 slots + a trailing 0),
+  // 4 abilities, 4 perks, positional.
+  static int32_t weapons[3], abilities[4], perks[4];
+  memset(weapons, 0, sizeof(weapons));
+  memset(abilities, 0, sizeof(abilities));
+  memset(perks, 0, sizeof(perks));
+  ParseInts(FieldValue(body, "weapons", v, sizeof(v)), weapons, 2);
+  ParseInts(FieldValue(body, "abilities", v, sizeof(v)), abilities, 4);
+  ParseInts(FieldValue(body, "perks", v, sizeof(v)), perks, 4);
+  info.weapons = {weapons, 3, 3};
+  info.abilities = {abilities, 4, 4};
+  info.perks = {perks, 4, 4};
+
+  uint8_t *obj = nullptr;
+  __try {
+    void *cls = ((tStaticClass)(g_base + RVA_YSHIPLOADOUT_STATICCLASS))();
+    obj = (uint8_t *)((tStaticConstructObject)(g_base + RVA_STATIC_CONSTRUCT_OBJECT))(
+        cls, mgr, 0, 0, 0, nullptr, false, nullptr);
+    if (!obj)
+      return false;
+    uint8_t *owner = *(uint8_t **)((uint8_t *)mgr + OFF_COMPONENT_OWNER);
+    void *ownerArg = IsReadable(owner, OFF_OWNER_INIT_ARG + 8)
+                         ? *(void **)(owner + OFF_OWNER_INIT_ARG) : nullptr;
+    ((tLoadoutInitFromInfo)(g_base + RVA_LOADOUT_INIT_FROM_INFO))(obj, ownerArg, &info);
+    // m_cachedInitializationData, copied field by field as the client does
+    // (engine allocations for the strings and arrays; ours stay ours).
+    tAssign fstr = (tAssign)(g_base + RVA_FSTRING_ASSIGN);
+    tAssign tarr = (tAssign)(g_base + RVA_TARRAY_INT_ASSIGN);
+    *(FNameMin *)(obj + 0x38) = info.loadoutID;
+    *(FNameMin *)(obj + 0x40) = info.pid;
+    *(int32_t *)(obj + 0x48) = info.precastID;
+    fstr(obj + 0x50, &info.name);
+    *(int32_t *)(obj + 0x60) = info.shipClass;
+    fstr(obj + 0x68, &info.display);
+    tarr(obj + 0x78, &info.weapons);
+    tarr(obj + 0x88, &info.abilities);
+    tarr(obj + 0x98, &info.perks);
+    *(uint16_t *)(obj + 0x1B1) = 0x0101;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("player loadout: EXCEPTION building %s for %s", idText, pid);
+    return false;
+  }
+
+  if (g_origFindLoadoutByID(mgr, (void **)(obj + 0xB0), 0))
+    return true; // already there (the id matched an existing entry)
+  bool ok = AddLoadoutGuarded(mgr, obj);
+  Logf("player loadout: %s for %s -> precast %d, weapons %d/%d, abilities %d/%d/%d/%d -> %s",
+       idText, pid, info.precastID, weapons[0], weapons[1], abilities[0],
+       abilities[1], abilities[2], abilities[3], ok ? "registered" : "EXCEPTION");
+  return ok;
+}
 
 static void *__fastcall HookFindLoadoutByID(void *mgr, void **id,
                                             uint8_t warn) {
@@ -595,8 +993,19 @@ static void *__fastcall HookFindLoadoutByID(void *mgr, void **id,
   if (IsReadable(id, 8))
     wantText = NameText(*(FNameMin *)id);
 
-  RegisterPrecastLoadouts(mgr);
-  void *retry = g_origFindLoadoutByID(mgr, id, 0);
+  // Order matters: the client picks by the precast's name, so the player's
+  // own fit must be registered before any default precast could shadow it.
+  void *retry = nullptr;
+  if (RegisterPlayerLoadout(mgr, id, wantText))
+    retry = g_origFindLoadoutByID(mgr, id, 0);
+  // Otherwise that ship's default precast, on demand...
+  if (!retry && RegisterPrecastOnDemand(mgr, wantText))
+    retry = g_origFindLoadoutByID(mgr, id, 0);
+  // ...and the original four-T1 set as the last resort.
+  if (!retry) {
+    RegisterPrecastLoadouts(mgr);
+    retry = g_origFindLoadoutByID(mgr, id, 0);
+  }
 
   s_inRetry = false;
 
@@ -1090,6 +1499,126 @@ static void __fastcall HookVehicleViewCull(void *movementComp) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Stack overflow at match end (always on)
+//
+// Verified 2026-09-24 by scraping the overflowed game-thread stack of a host
+// that died as a proving-ground match was won (Wine: EXCEPTION_STACK_OVERFLOW
+// c00000fd): one 12-frame loop repeated ~3,884 times --
+//   exec ClientSetPlayerRestrictions (0x746B40) -> _Implementation (0x5743B0)
+//   -> SetPlayerRestrictions (0x5954F0) -> ClientSetPlayerRestrictions RPC
+//   (0x5E5B80) -> ProcessEvent ... -> exec 0x746B40 -> ...
+// 0x5954F0 applies the restrictions locally only if the world's net mode is
+// Standalone/Client (0x1CDB7C0 -> UNetDriver::GetNetMode) or world+0x840 == 3;
+// on any server it sends the client RPC instead. For a remote player that RPC
+// goes over the wire and the loop never forms. Our host also has a LOCAL
+// player (256, the game exe cannot run without one), and a client RPC on a
+// local controller executes in-process -- straight back into 0x5954F0, which
+// sends it again. The shipping servers had no local player, so this never
+// fired there. The same applies whether the host reports LISTEN or DEDICATED.
+//
+// The guard lets the first call through and drops a nested one on the same
+// thread: nesting here can only be that local loop. Remote players are
+// unaffected (their RPC is sent, not executed here).
+typedef void(__fastcall *tClientSetPlayerRestrictions)(
+    void *, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
+    uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
+    uint64_t, uint64_t, uint64_t, uint64_t);
+static tClientSetPlayerRestrictions g_origClientSetPlayerRestrictions = nullptr;
+
+static void __fastcall HookClientSetPlayerRestrictions(
+    void *pc, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6,
+    uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10, uint64_t a11,
+    uint64_t a12, uint64_t a13, uint64_t a14, uint64_t a15, uint64_t a16,
+    uint64_t a17, uint64_t a18) {
+  static thread_local int s_depth = 0;
+  if (s_depth > 0) {
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 3)
+      Logf("restrictions: dropped a re-entrant ClientSetPlayerRestrictions on "
+           "controller %p (the local player's RPC loop that overflowed the "
+           "stack at match end)",
+           pc);
+    return;
+  }
+  ++s_depth;
+  g_origClientSetPlayerRestrictions(pc, a2, a3, a4, a5, a6, a7, a8, a9, a10,
+                                    a11, a12, a13, a14, a15, a16, a17, a18);
+  --s_depth;
+}
+
+// ---------------------------------------------------------------------------
+// End-of-match screen (on unless dn_host_no_eom_stats.txt / DN_HOST_NO_EOM_STATS=1)
+//
+// Verified 2026-09-25 from a client log + the exe: the client's end-of-match
+// stage graph runs Init -> FadeToBlack -> UnloadSublevels -> LoadLevel ->
+// LoadContent -> SetupUIWidgets and stops there, on a black screen. That stage
+// (0x34B7E0) reads PC+0x3E0 (the AYPlayerReplicationInfo) and waits for
+// PRI+0x7E0: if clear it binds to the PRI+0x5E0 delegate and waits; once set it
+// moves on to stage 7. The only writer of +0x7E0 is 0x5B0240, the
+// ClientSetTopPlayerMatchStats(TArray<FYPlayerMatchStat>) body (exec thunk
+// 0x747180, vtable slot 0x6A8), which copies the array to PRI+0x7D0, sets the
+// flag and broadcasts.
+//
+// Nothing in this exe SENDS that RPC: the FName global it would be called by
+// (0x3E102F8) is referenced only by its own startup initializer (full .text
+// scan). The server code that ranked players at match end lived in the
+// separate server build, like the loadout lookup. So the mod sends it, at the
+// moment the host starts a player's end-of-match flow: right after the
+// ClientStartEndOfMatchTransition RPC stub (0x5E5D70, UYPlayerOrbitComponent,
+// the only sender; FindFunctionChecked 0xD57C90 + ProcessEvent vtable 0x1A8,
+// read from that stub), on the same controller's PRI.
+//
+// The array is sent EMPTY: the handler only copy-assigns it (0x410B60), and
+// ranking stats is data the host does not have. The MVP page shows no
+// entries rather than invented ones.
+#define RVA_CLIENT_START_EOM_TRANSITION 0x5E5D70
+#define RVA_FIND_FUNCTION_CHECKED 0xD57C90
+#define RVA_FNAME_CLIENT_SET_TOP_PLAYER_MATCH_STATS 0x3E102F8
+#define OFF_PC_ORBIT_COMPONENT 0xBE8 // AYPlayerController::m_orbitComponent
+#define OFF_PC_PLAYER_STATE 0x3E0
+#define VT_PROCESS_EVENT 0x1A8
+
+typedef void(__fastcall *tClientStartEomTransition)(void *orbitComp);
+static tClientStartEomTransition g_origClientStartEomTransition = nullptr;
+typedef void *(__fastcall *tFindFunctionChecked)(void *obj, uint64_t name);
+typedef void(__fastcall *tProcessEventVirt)(void *obj, void *fn, void *parms);
+
+static void __fastcall HookClientStartEomTransition(void *orbitComp) {
+  g_origClientStartEomTransition(orbitComp);
+  __try {
+    uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
+    if (!IsReadable(pc, OFF_PC_ORBIT_COMPONENT + 8) ||
+        *(void **)(pc + OFF_PC_ORBIT_COMPONENT) != orbitComp) {
+      Logf("eom stats: orbit component %p has no matching controller; not sent",
+           orbitComp);
+      return;
+    }
+    if (!*(void **)(pc + OFF_PC_NETCONNECTION))
+      return; // the host's own local player; its flow is not what anyone sees
+    uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
+    if (!IsReadable(pri, 0x800)) {
+      Logf("eom stats: controller %p has no player state; not sent", pc);
+      return;
+    }
+    uint64_t name = *(uint64_t *)(g_base + RVA_FNAME_CLIENT_SET_TOP_PLAYER_MATCH_STATS);
+    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(pri, name);
+    if (!fn) {
+      Logf("eom stats: ClientSetTopPlayerMatchStats not found on %p; not sent", pri);
+      return;
+    }
+    TArrayIntMin parms = {nullptr, 0, 0}; // TArray<FYPlayerMatchStat>, empty
+    void **vt = *(void ***)pri;
+    ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(pri, fn, &parms);
+    Logf("eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller %p "
+         "PRI %p -- the client's SetupUIWidgets stage waits for it",
+         pc, pri);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("eom stats: EXCEPTION sending ClientSetTopPlayerMatchStats for %p",
+         orbitComp);
+  }
+}
+
 // Both of the switches below are opt-in separately from the loadout fix,
 // because both change what players see.
 static DWORD WINAPI PostLoginInstallThread(LPVOID);
@@ -1129,6 +1658,11 @@ static bool FleetTierEnabled() {
 // can still be diagnosed with it off.
 static bool DedicatedNetModeEnabled() {
   return SwitchOn("DN_HOST_DEDICATED", "dn_host_dedicated.txt");
+}
+
+// The player's own fit via mmogbrain (RegisterPlayerLoadout).
+static bool PlayerLoadoutsEnabled() {
+  return SwitchOn("DN_HOST_PLAYER_LOADOUTS", "dn_host_player_loadouts.txt");
 }
 
 // AI in the proving ground (HookGameModeTimer).
@@ -1369,6 +1903,21 @@ static DWORD WINAPI Startup(LPVOID) {
          "executable, or set DN_HOST_DEDICATED=1). The host stays a listen "
          "server; players will not leave orbit.");
   }
+
+  // Not switchable: without it a host dies whenever restrictions change.
+  InstallSwitchedHook("restrictions (ClientSetPlayerRestrictions_Implementation)",
+                      RVA_CLIENT_SET_PLAYER_RESTRICTIONS_IMPL,
+                      (void *)&HookClientSetPlayerRestrictions,
+                      (void **)&g_origClientSetPlayerRestrictions);
+
+  if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
+    InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
+                        RVA_CLIENT_START_EOM_TRANSITION,
+                        (void *)&HookClientStartEomTransition,
+                        (void **)&g_origClientStartEomTransition);
+  else
+    Logf("eom stats: OFF (dn_host_no_eom_stats.txt / DN_HOST_NO_EOM_STATS=1). "
+         "Clients will stop on a black screen at SetupUIWidgets.");
 
   if (BootcampAIEnabled())
     InstallSwitchedHook("bc ai (AYGameMode_Multiplayer timer)",

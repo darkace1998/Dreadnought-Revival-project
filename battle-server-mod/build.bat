@@ -9,6 +9,25 @@ rem this directory deleted still builds and still runs a match.
 rem
 rem Usage:  build.bat            (from a normal shell -- finds MSVC itself)
 rem         build.bat            (from a Developer Command Prompt -- uses it)
+rem
+rem Everything the build prints also goes to build.log beside this script, so a
+rem failure can be sent over as a file. The script re-runs itself with its
+rem output redirected; goto rather than a parenthesised block because a path
+rem with parentheses in it would close the block early.
+
+if "%~1"=="__logged" goto :logged
+set "LOG=%~dp0build.log"
+call "%~f0" __logged > "%LOG%" 2>&1
+set "RC=%errorlevel%"
+type "%LOG%"
+echo.
+if not "%RC%"=="0" echo BUILD FAILED (exit code %RC%). Full log: %LOG%
+if "%RC%"=="0" echo Log written to %LOG%
+exit /b %RC%
+
+:logged
+echo build.bat started %DATE% %TIME% in %~dp0
+ver
 
 if defined VCINSTALLDIR goto :have_msvc
 
@@ -42,6 +61,13 @@ if errorlevel 1 (
 
 :have_msvc
 
+rem Which compiler and linker actually ran, and against which SDK.
+where cl link
+cl 2>&1 | findstr /i "version"
+echo VSPATH=%VSPATH%
+echo VCINSTALLDIR=%VCINSTALLDIR%
+echo WindowsSdkVersion=%WindowsSdkVersion%
+
 set "ROOT=%~dp0"
 set "OUT=%ROOT%build"
 set "MH=%ROOT%third_party\minhook"
@@ -50,12 +76,19 @@ if not exist "%OUT%" mkdir "%OUT%"
 pushd "%OUT%" || exit /b 1
 
 echo Building dn_host_loadout.dll ...
+rem A stale DLL must not pass for a fresh one.
+if exist dn_host_loadout.dll del /f dn_host_loadout.dll
+if exist dn_host_loadout.dll (
+  echo ERROR: could not delete the old build\dn_host_loadout.dll -- is it loaded by a running process?
+  popd
+  exit /b 1
+)
 
 cl /nologo /c /O2 /MT /W3 /D_CRT_SECURE_NO_WARNINGS /DWIN32_LEAN_AND_MEAN ^
    /I"%MH%\include" ^
    "%MH%\src\buffer.c" "%MH%\src\hook.c" "%MH%\src\trampoline.c" ^
    "%MH%\src\hde\hde64.c" ^
-   || (popd & exit /b 1)
+   || (echo ERROR: step 1/3 compiling MinHook failed & popd & exit /b 1)
 
 rem /EHa, not /EHsc: the loadout resolution uses __try/__except around calls
 rem into the game, and structured exception handling needs the asynchronous
@@ -64,13 +97,19 @@ cl /nologo /c /O2 /MT /W4 /EHa /std:c++17 /D_CRT_SECURE_NO_WARNINGS ^
    /DWIN32_LEAN_AND_MEAN ^
    /I"%MH%\include" ^
    "%ROOT%src\dn_host_loadout.cpp" ^
-   || (popd & exit /b 1)
+   || (echo ERROR: step 2/3 compiling dn_host_loadout.cpp failed & popd & exit /b 1)
 
 link /nologo /DLL /OUT:dn_host_loadout.dll ^
      dn_host_loadout.obj buffer.obj hook.obj trampoline.obj hde64.obj ^
-     kernel32.lib user32.lib ^
-     || (popd & exit /b 1)
+     kernel32.lib user32.lib ws2_32.lib ^
+     || (echo ERROR: step 3/3 linking failed & popd & exit /b 1)
 
+if not exist dn_host_loadout.dll (
+  echo ERROR: link reported success but build\dn_host_loadout.dll does not exist
+  popd
+  exit /b 1
+)
+dir dn_host_loadout.dll | findstr /i "dn_host_loadout"
 popd
 
 echo.
