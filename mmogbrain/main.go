@@ -94,6 +94,9 @@ func main() {
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
 	r.Handle("/metrics", promhttp.Handler())
 	r.HandleFunc("/mmog/chat", h.ChatHistory).Methods(http.MethodGet)
+	// Battle-server mod: a player's loadout by the id their client picked.
+	// Loopback only; see battle_loadout.go.
+	r.HandleFunc("/battle/loadout", battleLoadoutHandler).Methods(http.MethodGet)
 
 	// Admin endpoints
 	adminKey := requireAdminKey(log)

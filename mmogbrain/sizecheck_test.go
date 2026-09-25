@@ -33,11 +33,17 @@ var targetSizes = map[string]int{
 	// "result" the way the MaxSquadSize reader does, so a nested-only array read
 	// as zero and the client had an EMPTY game-mode list -- no mode selectable,
 	// Play could not start a match.
-	"YA_GetGameConfigData":     967,
-	"YA_GetStaticCareerData":   2153,
-	"YA_GetProgressionData":    126,
-	"YA_GetScoringData":        5753,
-	"YA_GetDailyContractsData": 227,
+	"YA_GetGameConfigData": 967,
+	// Was 2153. +594: goal m_title/m_description now go out as NSLOCTEXT(...)
+	// macros -- the FText import the client uses left bare strings blank.
+	"YA_GetStaticCareerData": 2747,
+	"YA_GetProgressionData":  126,
+	"YA_GetScoringData":      5753,
+	// Was 227. +4278 for the quest catalog (ContractTable: the client's 24
+	// MPQuestCollection rows, ContractConfigTable, ContractNextResetTime) --
+	// the fields the client's parser for this reply (0x2A6B7F0) actually reads.
+	// Without them its quest cycle recursed on hangar entry (mpquest_contracts.go).
+	"YA_GetDailyContractsData": 4505,
 	"YA_GetBoosterData":        1856,
 	"YA_GetCareerProgression":  382,
 	"YA_GetPlayerScores":       277,

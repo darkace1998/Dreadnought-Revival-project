@@ -52,13 +52,21 @@ const maxHandshakeBufferBytes = 16 * 1024
 // Seasons/Events, real season metadata, real vs fabricated daily-contract
 // ids, delaying the response, and withholding it — changed nothing. Fixing
 // it requires a client-side change, not a wire change.
+//
+// CORRECTED 2026-09-25: two claims above are wrong. The loader DOES read that
+// argument (RDX is passed straight to the copy at 0x14040446A; the decompile
+// drops it), and it is not the season block but the daily-contracts catalog
+// (+0x44A0 is filled from YA_GetDailyContractsData's ContractTable). With rows
+// that resolve to quest assets the collection map is non-empty and the cycle
+// takes its normal branch. It is a wire change after all; see
+// mpquest_contracts.go and the YA_GetDailyContractsData use site below.
 const seasonDataResponseDisabled = false
 
-// dailyContractsResponseDisabled withholds YA_GetDailyContractsData. See the
-// use site for the full trace: answering it sets interface+0x44c8 = 1, which
-// arms the UYPlayerMPQuestCycle recursion that crashes the client on hangar
-// entry. Set DN_ANSWER_DAILY_CONTRACTS=1 to restore the old behaviour.
-var dailyContractsResponseDisabled = os.Getenv("DN_ANSWER_DAILY_CONTRACTS") != "1"
+// dailyContractsResponseDisabled withholds YA_GetDailyContractsData. It was the
+// default until 2026-09-25, when the recursion it avoided was traced to our
+// reply lacking a ContractTable (see the use site). Now answered by default;
+// DN_ANSWER_DAILY_CONTRACTS=0 withholds it again.
+var dailyContractsResponseDisabled = os.Getenv("DN_ANSWER_DAILY_CONTRACTS") == "0"
 
 // deferPlayerFleetsDisabled restores the old behaviour of answering
 // YA_PlayerFleets immediately (DN_NO_DEFER_PLAYER_FLEETS=1). Escape hatch
@@ -557,9 +565,9 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetSeasonData response")
 				continue
 			}
-			// Withhold YA_GetDailyContractsData: answering it is what arms the
-			// client's hangar-entry stack overflow, and the payload cannot
-			// avoid it.
+			// YA_GetDailyContractsData: answering it arms the client's quest
+			// cycle. With an empty catalog that cycle overflowed the stack on
+			// hangar entry -- see the correction at the end of this trace.
 			//
 			// Traced in the shipping binary (the Ghidra export MISSES the
 			// relevant write; it was found by byte-scanning .text for the
@@ -585,14 +593,31 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			//   subscribed to — unbounded recursion (~2824 frames observed) and
 			//   EXCEPTION_STACK_OVERFLOW right after "Entering Hangar".
 			//
-			// This is why every earlier content-level attempt failed (empty
-			// Quests arrays, real vs fabricated YMPQ_ ids, empty/real seasons):
-			// the parser sets the gate before any of that is examined. Not
-			// answering at all is the only lever, and it leaves the cycle in
-			// its documented waiting state. Daily contracts are not needed to
-			// reach an interactive hangar.
+			// CORRECTED 2026-09-25: the conclusion drawn from this trace was
+			// wrong. The gate is set unconditionally, but whether the cycle
+			// recurses depends on the ContractTable ROWS. The loader
+			// (FUN_140404440) copies them in from its second argument (RDX,
+			// passed straight through at 0x14040446A; the decompile drops it,
+			// hence "never reads it"), and the callback adds every row whose Id
+			// matches a quest's m_id to the collection map at +0x98. A NON-empty
+			// map sends OnBackendDataAvailable down its normal branch
+			// (FUN_1403ff210) on re-entry. The recursion needs an empty map --
+			// which is what we always produced, because our reply never had a
+			// ContractTable (Quests/Contracts belong to YA_ContractReplace, and
+			// that is where the "real vs fabricated YMPQ_ ids" went). The reply
+			// now carries the client's own quest catalog (mpquest_contracts.go),
+			// so it is answered by default. DN_ANSWER_DAILY_CONTRACTS=0 restores
+			// withholding if a live client still overflows.
 			if requestName == "YA_GetDailyContractsData" && dailyContractsResponseDisabled {
-				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetDailyContractsData response (arms the quest-cycle recursion)")
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: withholding YA_GetDailyContractsData response (DN_ANSWER_DAILY_CONTRACTS=0)")
+				continue
+			}
+			// Answer it only once player data exists client-side, through the
+			// queue flushed after YA_PlayerGet -- the ordering YA_PlayerFleets
+			// was proven to need. Not proven necessary here; it costs nothing.
+			if requestName == "YA_GetDailyContractsData" && !state.playerGetResponded {
+				state.pendingDailyContracts = append(state.pendingDailyContracts, frame)
+				log.WithFields(logrus.Fields{"remote": remote, "pid": state.playerPID}).Info("mmog: deferring YA_GetDailyContractsData until YA_PlayerGet")
 				continue
 			}
 			// Defer the fleet response until player data exists client-side.
@@ -882,6 +907,7 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 			if err != nil {
 				log.WithError(err).Warn("mmog: failed to generate connect push id")
 			} else {
+				status.playerPID = normalizedPlayerStatePID(state.playerPID)
 				payload := buildMmogConnectPushPayload(status)
 				pushFrame := protocol.BuildResponseFrame(pushID, msgType, payload)
 				if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_Connect", pushFrame, appEncoder, encryptResponses, "connect push failed", "sent YA_Connect push"); err != nil {

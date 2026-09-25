@@ -274,6 +274,10 @@ type mmogMatchmakingStatus struct {
 	// echoed back in the YA_Connect push because the client appends it to the
 	// travel URL as "?TEAM=<team>".
 	team int32
+	// playerPID, when set, is appended to the travel address as ?DNPID=<pid>
+	// so the battle server knows which account each connection is (see
+	// appendMmogConnectFields).
+	playerPID string
 	// createdAt is when the match was formed, used to hold YA_Connect back
 	// until the battle server has had time to come up.
 	createdAt time.Time
@@ -593,6 +597,17 @@ func appendMmogConnectFields(b []byte, status mmogMatchmakingStatus) []byte {
 	connect := ""
 	if status.serverIP != "" && status.serverPort != 0 {
 		connect = net.JoinHostPort(status.serverIP, strconv.Itoa(int(status.serverPort)))
+	}
+	// The battle server never logs in (its mmog AutoLogin, 0x2AABCB0, is a stub
+	// in this exe) and the only loadout message a client sends is
+	// ServerPlayerClickedShipLoadout(FName). To rebuild a player's own fit it
+	// has to know whose connection it is, so the travel address carries the
+	// PID as a URL option: the client runs "TRAVEL <Connect>?TEAM=<Team>", UE
+	// parses multiple ?options, and the options reach the server's login URL
+	// ("Login request: ..." in the host log). DN_CONNECT_PID=0 turns it off.
+	// GUESS until that host log line shows ?DNPID= arriving.
+	if connect != "" && status.playerPID != "" && os.Getenv("DN_CONNECT_PID") != "0" {
+		connect += "?DNPID=" + status.playerPID
 	}
 	b = protocol.AppendStringField(b, "Connect", connect)
 	b = protocol.AppendStringField(b, "Team", strconv.Itoa(int(status.team)))
@@ -4446,6 +4461,9 @@ func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetDailyContractsData")
+	// The quest catalog the client's parser for THIS reply actually reads, at
+	// the root. See mpquest_contracts.go -- without it the quest cycle recurses.
+	b, stack = appendMmogContractCatalog(b, stack, time.Now())
 	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
 	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(time.Now().Unix()))
 	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(time.Now().Unix()))

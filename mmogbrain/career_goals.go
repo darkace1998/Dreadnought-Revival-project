@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
@@ -169,8 +170,8 @@ func appendCareerGoalsConfig(b []byte, stack []int) ([]byte, []int) {
 	for _, goal := range careerGoalsConfig() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "m_id", goal.id)
-		b = protocol.AppendStringField(b, "m_title", goal.title)
-		b = protocol.AppendStringField(b, "m_description", goal.description)
+		b = protocol.AppendStringField(b, "m_title", nsLocText(careerGoalTextNamespace, goal.id+".Title", goal.title))
+		b = protocol.AppendStringField(b, "m_description", nsLocText(careerGoalTextNamespace, goal.id+".Description", goal.description))
 		b = protocol.AppendBoolField(b, "m_uiGuideAvailable", goal.uiGuideAvailable)
 		b = protocol.AppendStringField(b, "m_counterID", goal.counterID)
 		b = protocol.AppendStringField(b, "m_counterSubId", goal.counterSubID)
@@ -289,4 +290,24 @@ func matchesPlayedByPlayer(playerPID string) int32 {
 		return 0
 	}
 	return count
+}
+
+// m_title and m_description are FText properties, and the client showed them
+// BLANK when sent as plain strings (live, 2026-09-25: both career slots had no
+// name). The original mmog data carried every player-facing text as an
+// NSLOCTEXT("namespace","key","source") macro -- the developers' own
+// Config/Localization/ExtractNsLocTextDataFromMmogData.py exists to pull those
+// macros out of the mmogbrain configs into DreadGame_MmogData.locres. UE4's
+// FText import reads that macro; an unquoted bare string it does not.
+//
+// Our goal texts are not in that locres (the real goal catalogue is lost,
+// see the GitHub issue on career goals), so they use their own namespace. A
+// key the client's locres does not contain displays its source text.
+const careerGoalTextNamespace = "DNPrivateServer.CareerGoals"
+
+// nsLocText formats an NSLOCTEXT macro, escaping what would end the quoted
+// arguments early.
+func nsLocText(namespace, key, source string) string {
+	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return `NSLOCTEXT("` + esc.Replace(namespace) + `", "` + esc.Replace(key) + `", "` + esc.Replace(source) + `")`
 }

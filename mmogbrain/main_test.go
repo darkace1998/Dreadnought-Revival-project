@@ -2699,11 +2699,12 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 		wantFrames  int
 		wantDelayed bool
 	}{
-		// YA_GetDailyContractsData is deliberately NOT answered — see the
-		// withholding site in response_connection.go: any response to it sets
-		// interface+0x44c8 = 1, which arms the client's hangar-entry
-		// stack-overflow recursion.
-		{requestName: "YA_GetDailyContractsData", wantFrames: 0},
+		// YA_GetDailyContractsData is answered, but only after YA_PlayerGet
+		// (the pending queue). It used to be withheld outright on the belief
+		// that any answer arms the hangar-entry recursion; 2026-09-25 traced
+		// that recursion to our reply lacking a ContractTable
+		// (mpquest_contracts.go).
+		{requestName: "YA_GetDailyContractsData", wantFrames: 0, wantDelayed: true},
 		{requestName: "YA_GetSeasonProgress", wantFrames: 1},
 	} {
 		requestName := tc.requestName
@@ -2746,37 +2747,50 @@ func TestObserverOnlyBootstrapResponsePolicy(t *testing.T) {
 	}
 }
 
-func TestDailyContractsResponseIsWithheld(t *testing.T) {
-	// Answering YA_GetDailyContractsData is what arms the hangar-entry crash:
-	// the client's handler parses the payload with FUN_142a6b7f0, which sets
-	// interface+0x44c8 = 1 UNCONDITIONALLY (whatever the contents) and then
-	// broadcasts interface+0x1070. That gate is what makes
-	// UYPlayerMPQuestCycle::OnBackendDataAvailable walk the quest collection
-	// and recurse until the stack is exhausted. While the gate stays 0 the
-	// cycle just binds to +0x1070 and waits, which is harmless.
-	conn := &captureConn{}
+// Once player data is out, YA_GetDailyContractsData is answered with the quest
+// catalog; DN_ANSWER_DAILY_CONTRACTS=0 still withholds it. Replaces
+// TestDailyContractsResponseIsWithheld, which pinned the withholding as the
+// only safe behaviour -- a belief disproved 2026-09-25 (see
+// response_connection.go, the CORRECTED notes).
+func TestDailyContractsResponseIsAnsweredWithTheCatalog(t *testing.T) {
 	request := protocol.AppendStringField(nil, "RT", "YA_GetDailyContractsData")
 	request = protocol.AppendRootEnd(request)
-	state := &mmogConnState{
-		playerPID:         defaultMmogPlayerPID,
-		loginResponseSent: true,
+	send := func() (*captureConn, *mmogConnState) {
+		conn := &captureConn{}
+		state := &mmogConnState{
+			playerPID:          defaultMmogPlayerPID,
+			loginResponseSent:  true,
+			playerGetResponded: true,
+		}
+		if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
+			MsgType:   0x0320,
+			RequestID: syntheticRequestID(0xd1),
+			Payload:   request,
+		}}, nil, false, state); err != nil {
+			t.Fatalf("processMmogAppFrames daily contracts: %v", err)
+		}
+		return conn, state
 	}
 
-	if err := processMmogAppFrames(logrus.New(), conn, "test-remote", []protocol.AppFrame{{
-		MsgType:   0x0320,
-		RequestID: syntheticRequestID(0xd1),
-		Payload:   request,
-	}}, nil, false, state); err != nil {
-		t.Fatalf("processMmogAppFrames daily contracts: %v", err)
+	conn, _ := send()
+	frames, _ := protocol.ParseAppFrames(conn.Bytes())
+	if len(frames) != 1 {
+		t.Fatalf("YA_GetDailyContractsData wrote %d frames, want 1", len(frames))
 	}
-	if conn.Len() != 0 {
-		frames, _ := protocol.ParseAppFrames(conn.Bytes())
-		t.Fatalf("YA_GetDailyContractsData wrote %d frames, want 0 (it must go unanswered)", len(frames))
+	if !bytes.Contains(conn.Bytes(), []byte("ContractTable")) {
+		// The frame is enciphered only when encryptResponses is set; it is
+		// not here, so the field name is visible.
+		t.Fatal("YA_GetDailyContractsData reply has no ContractTable")
 	}
-	if len(state.pendingDailyContracts) != 0 {
-		t.Fatal("YA_GetDailyContractsData must be dropped outright, not queued for later delivery")
+
+	saved := dailyContractsResponseDisabled
+	dailyContractsResponseDisabled = true
+	defer func() { dailyContractsResponseDisabled = saved }()
+	if conn, state := send(); conn.Len() != 0 || len(state.pendingDailyContracts) != 0 {
+		t.Fatal("with DN_ANSWER_DAILY_CONTRACTS=0 the request must be dropped outright")
 	}
 }
+
 func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	conn := &captureConn{}
 	state := &mmogConnState{

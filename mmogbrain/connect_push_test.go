@@ -186,3 +186,19 @@ func TestConnectPushGateRejectsAnAddresslessMatch(t *testing.T) {
 		t.Fatal("gate opened for a match with no server address")
 	}
 }
+
+// The battle server cannot log in, so the travel address tells it whose
+// connection this is. Without a PID the address stays bare (above).
+func TestConnectPushCarriesThePlayerIDAsAURLOption(t *testing.T) {
+	status := readyStatus()
+	status.playerPID = "fea9903d49d841bcbd679d96806b9fb7"
+	payload := buildMmogConnectPushPayload(status)
+	want := protocol.AppendStringField(nil, "Connect", "10.0.0.73:7777?DNPID=fea9903d49d841bcbd679d96806b9fb7")
+	if !bytes.Contains(payload, want) {
+		t.Error("Connect does not carry ?DNPID=<pid>")
+	}
+	t.Setenv("DN_CONNECT_PID", "0")
+	if !bytes.Contains(buildMmogConnectPushPayload(status), protocol.AppendStringField(nil, "Connect", "10.0.0.73:7777")) {
+		t.Error("DN_CONNECT_PID=0 did not restore the bare address")
+	}
+}
