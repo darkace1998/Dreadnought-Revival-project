@@ -54,6 +54,42 @@ type ManagerConfig struct {
 	// above -- that only decides how much of the captured stream is echoed to
 	// the console. Empty leaves the engine at its defaults.
 	EngineLogCmds string
+
+	// Reaper limits; zero means the default. Nothing else ever stops a battle
+	// server -- mmogbrain only marks the match ended -- so without these every
+	// match left a ~1.45 GB host behind until the OOM killer took a live one.
+	IdleStop    time.Duration // everyone left: stop after this long empty (default 60s)
+	NoJoinStop  time.Duration // nobody ever joined: stop this long after launch (default 5m)
+	MaxLifetime time.Duration // hard cap (default 45m, mmogbrain's MaxMatchLifetime)
+}
+
+const (
+	defaultIdleStop    = 60 * time.Second
+	defaultNoJoinStop  = 5 * time.Minute
+	defaultMaxLifetime = 45 * time.Minute
+	reapInterval       = 15 * time.Second
+)
+
+func orDefault(d, def time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return def
+}
+
+// reapReason says why an instance should be stopped now, or "" to keep it.
+// Pure, so the policy is testable without a process.
+func reapReason(now, started time.Time, players int, everJoined bool, since time.Time,
+	idle, noJoin, maxLife time.Duration) string {
+	switch {
+	case now.Sub(started) >= maxLife:
+		return "reached the maximum lifetime"
+	case everJoined && players == 0 && now.Sub(since) >= idle:
+		return "every player has left"
+	case !everJoined && now.Sub(started) >= noJoin:
+		return "no player joined"
+	}
+	return ""
 }
 
 // Manager owns the port pool and the set of running instances.
@@ -200,11 +236,41 @@ func (m *Manager) registerInstance(inst *Instance) {
 func (m *Manager) supervise(inst *Instance) {
 	ticker := time.NewTicker(master.HeartbeatInterval)
 	defer ticker.Stop()
+	reap := time.NewTicker(reapInterval)
+	defer reap.Stop()
+	idle := orDefault(m.cfg.IdleStop, defaultIdleStop)
+	noJoin := orDefault(m.cfg.NoJoinStop, defaultNoJoinStop)
+	maxLife := orDefault(m.cfg.MaxLifetime, defaultMaxLifetime)
 
 	for running := true; running; {
 		select {
 		case <-inst.Done():
 			running = false
+		case <-reap.C:
+			if inst.Mock {
+				continue
+			}
+			if leaderIsZombie(inst.PID()) {
+				inst.zombieTicks++
+			} else {
+				inst.zombieTicks = 0
+			}
+			players, joined, since := inst.PlayerState()
+			if inst.zombieTicks >= 2 { // two reap intervals (~30 s): not a transient state
+				fmt.Fprintf(m.cfg.LogTo, "[%s] stopping battle server on port %d: the engine's main thread has exited (host is dead; players=%d)\n",
+					shortID(inst.ID), inst.Port, players)
+				if err := inst.Stop(10 * time.Second); err != nil {
+					fmt.Fprintf(m.cfg.LogTo, "[%s] stop: %v\n", shortID(inst.ID), err)
+				}
+				continue
+			}
+			if why := reapReason(time.Now(), inst.StartedAt, players, joined, since, idle, noJoin, maxLife); why != "" {
+				fmt.Fprintf(m.cfg.LogTo, "[%s] stopping battle server on port %d: %s (players=%d)\n",
+					shortID(inst.ID), inst.Port, why, players)
+				if err := inst.Stop(10 * time.Second); err != nil {
+					fmt.Fprintf(m.cfg.LogTo, "[%s] stop: %v\n", shortID(inst.ID), err)
+				}
+			}
 		case <-ticker.C:
 			if m.cfg.Master != nil && inst.ServerID != "" {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -62,6 +63,9 @@ type LaunchConfig struct {
 // reports itself finished, matching game-manager's spawner.
 const mockMatchDuration = 30 * time.Minute
 
+// instanceEnvKey tags every process a launch creates; see killTaggedProcesses.
+const instanceEnvKey = "DN_INSTANCE_ID"
+
 // Instance is one running battle server process.
 type Instance struct {
 	ID         string
@@ -93,6 +97,39 @@ type Instance struct {
 	stopOnce  sync.Once
 	mu        sync.Mutex
 	err       error // exit error, readable after done is closed
+
+	// Player tracking, from the engine's own log (see playerEvent). Guarded by
+	// mu. lastPlayerChange is when players last changed, or StartedAt.
+	players          int
+	everJoined       bool
+	zombieTicks      int // supervise() only: consecutive reaps with a dead main thread
+	lastPlayerChange time.Time
+}
+
+// onPlayerEvent applies one join (+1) or disconnect (-1) seen in the log.
+func (i *Instance) onPlayerEvent(delta int) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.players += delta
+	if i.players < 0 {
+		i.players = 0
+	}
+	if delta > 0 {
+		i.everJoined = true
+	}
+	i.lastPlayerChange = time.Now()
+}
+
+// PlayerState reports the connected-player count, whether anyone ever joined,
+// and when the count last changed.
+func (i *Instance) PlayerState() (players int, everJoined bool, since time.Time) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	since = i.lastPlayerChange
+	if since.IsZero() {
+		since = i.StartedAt
+	}
+	return i.players, i.everJoined, since
 }
 
 // markReady closes the ready channel exactly once.
@@ -395,7 +432,11 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 	// "LogWindows:Error: libcef.dll" and exits with status 3 within seconds.
 	// The identical argv from the binary's own directory reaches InProgress.
 	cmd.Dir = filepath.Dir(cfg.GameBinary)
-	cmd.Env = buildEnv(cfg)
+	// DN_INSTANCE_ID tags every process this launch creates. Wine hands the
+	// environment down to the engine's own children (UnrealCEFSubProcess,
+	// verified in /proc/<pid>/environ), which is how Stop finds and kills the
+	// whole tree -- see killTaggedProcesses.
+	cmd.Env = append(buildEnv(cfg), instanceEnvKey+"="+inst.ID)
 
 	// A log file that cannot be created is reported and then tolerated: losing
 	// the log is much less bad than refusing to host the match.
@@ -417,6 +458,7 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 		fileOut = logFile
 	}
 	writer := newLogWriter(logTo, fileOut, inst.ID, cfg.Verbose, inst.markReady)
+	writer.onPlayer = inst.onPlayerEvent
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 
@@ -574,7 +616,14 @@ func buildEnv(cfg LaunchConfig) []string {
 	if prefix := os.Getenv("GAME_WINEPREFIX"); prefix != "" {
 		env = append(env, "WINEPREFIX="+prefix)
 	}
-	env = append(env, "WINEDEBUG=-all")
+	// GAME_WINEDEBUG overrides the channel list. -all by default because Wine is
+	// noisy, but a host that dies silently needs "-all,+seh": on 2026-09-24 a
+	// host's game thread exited 17 s into a match with nothing in any log.
+	if dbg := os.Getenv("GAME_WINEDEBUG"); dbg != "" {
+		env = append(env, "WINEDEBUG="+dbg)
+	} else {
+		env = append(env, "WINEDEBUG=-all")
+	}
 
 	// The shipping binary links WebBrowserWidget, so CEF initialises even with
 	// -nullrhi -unattended. CEF creates a real window and aborts the process
@@ -746,6 +795,12 @@ func (i *Instance) Stop(timeout time.Duration) error {
 	if err := i.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return fmt.Errorf("kill instance %s: %w", i.ID, err)
 	}
+	// The engine's CEF helpers outlive it and keep our stdout/stderr pipe
+	// open, so cmd.Wait never returns and the instance never finishes: that is
+	// how nine "running" hosts piled up (~1.45 GB each) until the OOM killer
+	// took a live match on 2026-09-24. Kill everything carrying this
+	// instance's tag.
+	killTaggedProcesses(i.ID)
 	select {
 	case <-i.done:
 		return nil
@@ -773,6 +828,8 @@ type logWriter struct {
 	instanceID string
 	verbose    bool
 	onReady    func()
+	onPlayer   func(delta int)
+	playerKeys map[string]bool // see playerEvent; guarded by mu
 	mu         sync.Mutex
 	buf        []byte
 
@@ -786,6 +843,19 @@ type logWriter struct {
 
 func newLogWriter(out, file io.Writer, instanceID string, verbose bool, onReady func()) *logWriter {
 	return &logWriter{out: out, file: file, instanceID: instanceID, verbose: verbose, onReady: onReady}
+}
+
+// seenPlayerEvent records key and reports whether it was already seen. Caller
+// holds w.mu.
+func (w *logWriter) seenPlayerEvent(key string) bool {
+	if w.playerKeys == nil {
+		w.playerKeys = map[string]bool{}
+	}
+	if w.playerKeys[key] {
+		return true
+	}
+	w.playerKeys[key] = true
+	return false
 }
 
 // stats reports how much the child actually produced.
@@ -802,6 +872,50 @@ func (w *logWriter) stats() (lines, bytes int64) {
 var readyMarkers = []string{
 	"Match State Changed from EnteringMap to WaitingToStart",
 	"Match State Changed from WaitingToStart to InProgress",
+}
+
+// playerEvent reads a join (+1) or a player disconnect (-1) from an engine log
+// line, 0 otherwise, plus a dedupe key. Both lines are the engine's own:
+//
+//	[0013.35][ 76]LogNet: Join succeeded: 257
+//	[0666.15][788]LogNet: UNetConnection::Close: [UNetConnection] RemoteAddr: ..., IsServer: YES, PC: VH_YPlayerCtrl_BP_C_1, ...
+//
+// A connection that closes before login has "PC: NULL" and never counted as a
+// join, so it is ignored. UChannel::Close lines are a different string.
+//
+// The key is the engine's own "[time][frame]" prefix. With GAME_WINEDEBUG's
+// warn+seh every engine line ALSO arrives as Wine's OutputDebugString copy, and
+// buffered stdout gets Wine's trace glued onto it ("Join succeeded: 2570024:warn:
+// seh:..."), so neither "skip Wine lines" nor "count every line" is right: both
+// copies carry the same prefix, and the caller counts each prefix once. A line
+// with no prefix yields key "".
+var playerEventRe = regexp.MustCompile(`\[(\d+\.\d+)\]\[ *(\d+)\]LogNet: (Join succeeded:|UNetConnection::Close:.*?IsServer: YES, PC: (\S+?),)`)
+
+func playerEvent(line string) (delta int, key string) {
+	m := playerEventRe.FindStringSubmatch(line)
+	if m == nil {
+		// Unprefixed plain lines (older captures, tests): fall back to the
+		// substring rules, ignoring Wine's trace copies.
+		if strings.Contains(line, ":seh:") {
+			return 0, ""
+		}
+		if strings.Contains(line, "Join succeeded:") {
+			return 1, ""
+		}
+		if strings.Contains(line, "UNetConnection::Close:") && strings.Contains(line, "IsServer: YES") &&
+			strings.Contains(line, ", PC: ") && !strings.Contains(line, ", PC: NULL") {
+			return -1, ""
+		}
+		return 0, ""
+	}
+	key = m[1] + "/" + m[2]
+	if strings.HasPrefix(m[3], "Join") {
+		return 1, key + "/join"
+	}
+	if m[4] == "" || m[4] == "NULL" {
+		return 0, ""
+	}
+	return -1, key + "/close/" + m[4]
 }
 
 func isReadyLine(line string) bool {
@@ -835,6 +949,13 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		}
 		if w.onReady != nil && isReadyLine(line) {
 			w.onReady()
+		}
+		if w.onPlayer != nil {
+			if d, key := playerEvent(line); d != 0 {
+				if key == "" || !w.seenPlayerEvent(key) {
+					w.onPlayer(d)
+				}
+			}
 		}
 	}
 	// Bound the buffer so a stream with no newlines cannot grow without limit.
