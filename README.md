@@ -224,7 +224,7 @@ Useful debug switches, all read by `mmogbrain`:
 | Variable | Effect |
 |---|---|
 | `DN_TECHTREE_LIMIT` | Cap tech tree items per manufacturer group (for bisecting client-side load failures) |
-| `DN_ANSWER_DAILY_CONTRACTS` | Send a daily-contracts payload instead of suppressing it |
+| `DN_ANSWER_DAILY_CONTRACTS` | `0` withholds the `YA_GetDailyContractsData` reply (answered by default since the quest catalogue fixed the hangar-entry recursion) |
 | `DN_NO_DEFER_PLAYER_FLEETS` | Answer `YA_PlayerFleets` immediately instead of after player data |
 | `DATA_DIR` | Override the location of the extracted game data |
 

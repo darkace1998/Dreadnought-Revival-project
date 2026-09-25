@@ -61,3 +61,6 @@ bin/
 # GitHub CLI config
 .config/
 screenlog.*
+
+# Python bytecode from scripts/gen-*.py
+__pycache__/

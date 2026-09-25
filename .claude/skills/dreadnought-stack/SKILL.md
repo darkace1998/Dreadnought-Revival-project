@@ -67,19 +67,27 @@ cd dn-dedicated && GOWORK=off go build ./... && GOWORK=off go test ./...
 tripwire. When one moves, update it **with a comment explaining what grew and
 why** — that comment block is a changelog of protocol findings.
 
-## Logs — all four sources
+## Logs — where each one really is
 
 | What | Where |
 | --- | --- |
-| Client (operator uploads) | `/root/projects/DreadGame.log` |
-| Our services | `run/<service>.log` (mmogbrain, gateway, auth-server, …) |
+| Client (operator uploads) | `/root/projects/Input/DreadGame.log` (older uploads: `/root/projects/DreadGame.log`) |
+| Our services | `run/<service>.log` (startup, warnings) |
+| **mmogbrain, every frame** | `mmogbrain.log` in mmogbrain's **working directory** = the repo root (`main.go:38`), NOT `run/`. Request names, request ids, send/defer decisions. |
 | Battle server stdout | `run/dn-dedicated.log`, prefixed by instance id |
+| **One battle server, whole run** | `run/battle-logs/battle-<date>-<time>-port<N>.log`, ends with `# exited at … (err: …)` |
 | Battle-server mod | `dn_host_loadout.log` **beside the game exe** |
+
+`run/mmogbrain.log` only has startup and warnings; the per-request trail is in
+the root `mmogbrain.log`. With two hosts up, both write the one
+`dn_host_loadout.log`, so read each host's mod lines from its `battle-logs` file.
 
 The mod's log is NOT in `run/`. `$GAME_BINARY`'s directory
 (`src/Dreadnought/DreadGame/DreadGame/Binaries/Win64/`) also holds its switch
-files (`dn_server_loadout.txt`, `dn_host_fleet_tier.txt`) and `wer.dll`, which is
-how the mod is side-loaded.
+files (`dn_host_dedicated.txt`, `dn_host_bc_ai.txt`, `dn_host_ship_physics.txt`,
+`dn_host_player_loadouts.txt`, and off-switches such as `dn_host_no_eom_stats.txt`)
+and `wer.dll`, which is how the mod is side-loaded. `battle-server-mod/build.bat`
+writes `build.log` next to itself -- ask for that file when a build fails.
 
 **Check the client log's timestamps before analysing it.** It is uploaded
 manually and is often an older run than you assume; client clock ran 2h behind
