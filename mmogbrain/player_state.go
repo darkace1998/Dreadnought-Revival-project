@@ -911,11 +911,19 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 		{column: "perk_navigation_id", fields: []string{"PerkNavigation", "perkNavigation"}},
 		{column: "perk_engineer_id", fields: []string{"PerkEngineer", "perkEngineer"}},
 	}
+	mode := loadoutOwnershipMode()
+	var owned map[int32]bool
+	if mode != "off" {
+		owned = ownedItemSet(playerPID)
+	}
 	for _, assignment := range assignments {
 		value := firstMmogInt32Field(payload, assignment.fields...)
 		if value == 0 {
 			// Zero is "not sent" here, not "cleared": the client sends 0 for the
 			// perk slots of a tier-1 hull, which legitimately has none.
+			continue
+		}
+		if !allowLoadoutItem(mode, owned, playerPID, loadoutID, assignment.column, value) {
 			continue
 		}
 		if _, err := database.Exec("UPDATE player_ship_loadouts SET "+assignment.column+"=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?", value, playerPID, loadoutID); err != nil {
@@ -927,7 +935,8 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 	// understand it, it only has to survive the round trip so the ship the
 	// player built is the ship they get back. Format and consumers are in
 	// shared/dreadgameconfig/ship_vanity.go.
-	if displayInfo := strings.TrimSpace(firstMmogStringField(payload, "DisplayInfo", "displayInfo", "m_displayInfo")); displayInfo != "" {
+	if displayInfo := strings.TrimSpace(firstMmogStringField(payload, "DisplayInfo", "displayInfo", "m_displayInfo")); displayInfo != "" &&
+		allowAppearance(mode, owned, playerPID, loadoutID, displayInfo) {
 		if _, err := database.Exec(`UPDATE player_ship_loadouts SET display_info=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?`,
 			displayInfo, playerPID, loadoutID); err != nil {
 			return fmt.Errorf("update loadout display_info: %w", err)
