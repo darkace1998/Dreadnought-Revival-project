@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,11 @@ type ManagerConfig struct {
 	PortStart  int
 	PortEnd    int
 	MaxPlayers int
+	// MaxInstances caps concurrent battle servers (0 = no cap). Each is a Wine
+	// process of ~1.45 GB, and the port range alone allowed 101 of them: nine
+	// "running" hosts were enough for the OOM killer to take a live match on
+	// 2026-09-24. Start refuses with ErrAtCapacity at the cap.
+	MaxInstances int
 
 	// Master is optional. When nil, instances run without being registered in
 	// the server browser -- which is the normal case for a purely local server.
@@ -143,6 +149,9 @@ type StartOptions struct {
 // port was already taken by something else, this fails here instead of
 // reporting a foreign process as a healthy battle server.
 func (m *Manager) Start(opts StartOptions) (*Instance, error) {
+	if m.AtCapacity() {
+		return nil, ErrAtCapacity
+	}
 	port, err := m.acquirePort(opts.Port)
 	if err != nil {
 		return nil, err
@@ -416,4 +425,37 @@ func (m *Manager) releasePort(port int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.inUse, port)
+}
+
+// ErrAtCapacity is returned by Start when MaxInstances battle servers are
+// already running.
+var ErrAtCapacity = errors.New("battle server capacity reached")
+
+// AtCapacity reports whether MaxInstances battle servers are running. Racy by
+// nature (a slot can free or fill right after), which is fine for a cap whose
+// point is not to run out of memory.
+func (m *Manager) AtCapacity() bool {
+	if m.cfg.MaxInstances <= 0 {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.instances) >= m.cfg.MaxInstances
+}
+
+// DefaultMaxInstances sizes the cap from physical memory: ~1.6 GB per battle
+// server (measured ~1.45 GB per Wine host) after keeping 2 GB for the rest of
+// the stack. 0 when memory cannot be read (no cap).
+func DefaultMaxInstances() int {
+	total := totalMemoryBytes()
+	if total <= 0 {
+		return 0
+	}
+	const perHost = 1600 << 20
+	const reserve = 2 << 30
+	n := int((total - reserve) / perHost)
+	if n < 1 {
+		n = 1
+	}
+	return n
 }

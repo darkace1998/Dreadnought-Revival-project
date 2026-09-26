@@ -166,6 +166,12 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "no ports available")
 		return
 	}
+	if s.Manager.AtCapacity() {
+		// The matchmaker rolls the queue back to waiting on any error, so the
+		// players are matched again when a battle server frees up.
+		writeError(w, http.StatusServiceUnavailable, "battle server capacity reached")
+		return
+	}
 
 	mode, err := gamedata.NormalizeGameMode(req.GameMode)
 	if err != nil {

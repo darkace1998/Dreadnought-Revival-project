@@ -201,6 +201,7 @@ matchmaker can drive it unchanged:
 		portStart  = fs.Int("port-start", getenvInt("PORT_RANGE_START", 7777), "first UDP port in the pool")
 		portEnd    = fs.Int("port-end", getenvInt("PORT_RANGE_END", 7877), "last UDP port in the pool")
 		maxPlayers = fs.Int("max-players", getenvInt("DN_MAX_PLAYERS", 10), "default maximum players per match")
+		maxInst    = fs.Int("max-instances", getenvInt("DN_MAX_INSTANCES", server.DefaultMaxInstances()), "maximum concurrent battle servers (0 = no cap; default from memory)")
 		key        = fs.String("internal-key", internalKeyFromEnv(), "required X-Internal-Key for write routes")
 		register   = fs.Bool("register", false, "register launched matches with master-server")
 		masterURL  = fs.String("master-url", getenv("MASTER_URL", "http://127.0.0.1:8084"), "master-server base URL")
@@ -251,6 +252,7 @@ matchmaker can drive it unchanged:
 		PortStart:         *portStart,
 		PortEnd:           *portEnd,
 		MaxPlayers:        *maxPlayers,
+		MaxInstances:      *maxInst,
 		Master:            masterClient,
 		LogDir:            *logDir,
 		AllowMock:         *allowMock,
@@ -285,6 +287,11 @@ matchmaker can drive it unchanged:
 		fmt.Printf("  binary   %s\n", binary)
 	}
 	fmt.Printf("  ports    %d-%d (%d slots)\n", *portStart, *portEnd, *portEnd-*portStart+1)
+	if *maxInst > 0 {
+		fmt.Printf("  capacity %d battle servers at once (DN_MAX_INSTANCES)\n", *maxInst)
+	} else {
+		fmt.Printf("  capacity no cap (DN_MAX_INSTANCES=0)\n")
+	}
 	fmt.Printf("  clients  connect to %s\n", *serverIP)
 	fmt.Printf("  logs     %s\n", *logDir)
 	if *register {
