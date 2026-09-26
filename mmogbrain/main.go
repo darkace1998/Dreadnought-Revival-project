@@ -34,8 +34,10 @@ func main() {
 	}
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
+	installLogRedaction(log) // no player credentials in any log (log_redact.go)
 
-	logFile, err := os.OpenFile("mmogbrain.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	// 0600: the frame log is the most detailed record of player sessions.
+	logFile, err := os.OpenFile("mmogbrain.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err == nil {
 		log.SetOutput(logFile)
 	}

@@ -64,3 +64,8 @@ screenlog.*
 
 # Python bytecode from scripts/gen-*.py
 __pycache__/
+
+# scripts/backup.sh output (contains secrets)
+backups/
+# rotated logs (scripts/install-log-rotation.sh)
+*.log.*
