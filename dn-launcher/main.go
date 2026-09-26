@@ -9,9 +9,9 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -271,12 +271,7 @@ func getJWT(authURL, playerID string) (token, username string, err error) {
 		return "", "", fmt.Errorf("marshal auth request: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: buildTLSConfig(),
-		},
-	}
+	client := launcherHTTPClient()
 	resp, err := client.Post(authURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return "", "", fmt.Errorf("POST %s: %w", authURL, err)
@@ -346,6 +341,16 @@ func writeAuthToken(jwtToken string) error {
 // ---- Config ----------------------------------------------------------
 
 type Config struct {
+	// Server is the public hostname or IP of the private server. When set, the
+	// launcher points the game at it and does the only machine setup needed (trusting the
+	// CA certificate; no hosts file, no admin) -- see setup_windows.go. This is the one setting a
+	// distributed launcher needs.
+	Server string `json:"server"`
+	// WebPort is the outside TCP port that reaches the server's HTTPS gateway
+	// (launcher sign-in and news) when it is not 443 -- e.g. a router mapping
+	// 8443 -> 443 because 443 is taken. Only the launcher uses that gateway;
+	// the game's ports (65443, 48843, UDP 7777-7877) are unaffected.
+	WebPort        string `json:"web_port"`
 	AuthURL        string `json:"auth_url"`
 	GatewayIP      string `json:"gateway_ip"`
 	GatewayPort    string `json:"gateway_port"`
@@ -363,8 +368,19 @@ type Config struct {
 	PlayerID string `json:"player_id"`
 }
 
+// defaultServer is the server a distributed launcher points at when its
+// dn-launcher.json does not say otherwise. Set at build time:
+//
+//	go build -ldflags "-X main.defaultServer=play.example.org" ./dn-launcher
+var defaultServer = ""
+
+// defaultWebPort goes with defaultServer: -X main.defaultWebPort=8443.
+var defaultWebPort = ""
+
 func defaultConfig() Config {
 	return Config{
+		Server:        defaultServer,
+		WebPort:       defaultWebPort,
 		AuthURL:       "https://profile-api.prod.greybox.sixfoot.live/auth/",
 		GatewayIP:     "10.0.0.73",
 		GatewayPort:   "65443",
@@ -485,6 +501,19 @@ func main() {
 	exeDir := filepath.Dir(exePath)
 
 	cfg := loadConfig(exeDir)
+	if err := runMachineSetup(exeDir, &cfg); err != nil {
+		fatalf("[!] Setting up this PC for the server failed: %v", err)
+	}
+
+	// The desktop window (WebView2) unless an identity is pinned -- that path
+	// has no sign-in to show -- or --console asks for the old flow. Without the
+	// WebView2 runtime it falls through to the console + browser sign-in below.
+	if strings.TrimSpace(cfg.PlayerID) == "" && os.Getenv("DN_PLAYER_ID") == "" && !flagRequested("console") {
+		if runDesktopLauncher(exeDir, cfg) {
+			return
+		}
+		fmt.Println("[*] The desktop window needs Microsoft Edge WebView2, which is not installed; using the browser sign-in instead.")
+	}
 
 	// Sign in with a real account when one is available, and fall back to the
 	// derived machine identity otherwise.
@@ -535,9 +564,17 @@ func main() {
 	}
 	_ = username
 
+	if _, err := startGame(exeDir, cfg, jwtToken); err != nil {
+		fatalf("[!] %v", err)
+	}
+}
+
+// startGame hands the token to the game (registry, DPAPI) and starts it with
+// the server's addresses. Shared by the console flow and the desktop window.
+func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 	fmt.Println("[*] Writing auth token to registry...")
 	if err := writeAuthToken(jwtToken); err != nil {
-		fatalf("[!] Registry write failed: %v", err)
+		return 0, fmt.Errorf("could not store the sign-in for the game: %w", err)
 	}
 	fmt.Println("[+] Auth token written.")
 
@@ -548,7 +585,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "    and copy DreadGame-Win64-Shipping-patched.exe into")
 		fmt.Fprintln(os.Stderr, "    DreadGame\\DreadGame\\Binaries\\Win64\\")
 		fmt.Fprintln(os.Stderr, "    Or set 'game_path' in dn-launcher.json to the full path.")
-		waitExit(1)
+		return 0, errors.New("could not find DreadGame-Win64-Shipping.exe -- put the launcher in your Dreadnought folder, or set game_path in dn-launcher.json")
 	}
 	fmt.Printf("[*] Game binary: %s\n", gamePath)
 
@@ -654,9 +691,10 @@ func main() {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		fatalf("[!] Failed to launch game: %v", err)
+		return 0, fmt.Errorf("could not start the game: %w", err)
 	}
 	fmt.Printf("[+] Game launched (PID %d). Launcher exiting.\n", cmd.Process.Pid)
+	return cmd.Process.Pid, nil
 }
 
 // authenticateWithDerivedIdentity is the pre-account path: derive this

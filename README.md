@@ -140,7 +140,43 @@ Restore rather than regenerate unless you are ready to redistribute a new
 does not produce it.
 </details>
 
-On each **client** machine:
+**Easiest: let the launcher do it -- no admin rights, no hosts file.** Put the
+server's public hostname or IP in `dn-launcher.json` beside `dn-launcher.exe`,
+and ship `certs/ca.crt` in the same folder:
+
+```json
+{ "server": "play.example.org" }
+```
+
+The launcher then:
+
+- passes the server's address to the game (`-GatewayAddress`,
+  `-YFirmamentAddress`). The game resolves no backend by name, so it needs no
+  DNS or hosts-file change;
+- sends its own sign-in straight to that address while keeping the original
+  host name, so the gateway still routes it, and verifies the server
+  certificate against the shipped `ca.crt`;
+- installs `ca.crt` into the **current user's** Trusted Root store, once. No
+  admin; Windows shows its own confirmation. The game needs it: it verifies the
+  gateway and Firmament certificates.
+
+If 443 is already taken on your router, map another outside port to the
+server's 443 and add `"web_port": "8443"` (only the launcher's sign-in and
+news use 443; the game's own ports are unaffected). Both settings can be built
+into a distributed launcher, so testers need no `dn-launcher.json` at all:
+
+```bash
+GOOS=windows go build -ldflags "-X main.defaultServer=play.example.org -X main.defaultWebPort=8443" ./dn-launcher
+```
+
+Ports to forward to the server: TCP `web_port` (-> 443), TCP 65443, TCP 48843,
+UDP 7777-7877, and optionally TCP 57005 (crash reports). Never 8081-8085.
+
+A tester's download is `dn-launcher.exe`, `dn-launcher.json` and `ca.crt`. The
+server's certificates must name the address testers use:
+`SERVER_IP=<public ip> bash scripts/gen-certs.sh`.
+
+**By hand** (older launchers, or without a `server` setting), on each **client** machine:
 
 ```powershell
 # Windows (elevated PowerShell)
@@ -159,9 +195,20 @@ Then install `certs/ca.crt` as a trusted root CA:
 
 ### 6. Launch the game
 
-Run `dn-launcher.exe` (built into `run/`) on the client. It offers **Create account** and **Sign in** with an email and password, stores the returned token with DPAPI so it is readable only by that Windows user, and starts the game. `dn-launcher.exe --sign-out` clears the stored credentials.
+Run `dn-launcher.exe` on the client. It opens a **desktop window** (Microsoft
+Edge WebView2, part of Windows 11 and installed with Edge on most Windows 10
+PCs) with **Sign in** / **Create account**, then a home screen with the
+server's news tiles (legacy-api's `/v2/dreadnought/launcher/dn/tiles/`), a
+server status light and **Play**. The sign-in is kept, DPAPI-protected for that
+Windows user, so the next start goes straight to the home screen.
 
-Because the account lives on the server rather than being derived from the machine, the same login works from any PC.
+Without WebView2 (detected before anything is created), or with `--console`,
+it falls back to the older flow: a console window and the same sign-in page in
+the default browser. `dn-launcher.exe --sign-out` clears the stored
+credentials.
+
+Because the account lives on the server rather than being derived from the
+machine, the same login works from any PC.
 
 ---
 
@@ -244,7 +291,11 @@ Set in `run/secrets.env` unless noted.
 | `SERVER_IP` | game-manager | auto-detected | Address handed to clients for battle servers |
 | `GAME_BINARY` | game-manager | — | Path to `DreadGame-Win64-Shipping.exe` |
 | `WINE_EXE` | game-manager | `wine` | Wine executable; `none` on Windows |
-| `PLAYERS_PER_MATCH` | mmogbrain | `1` | Queued players needed to form a match. **1 gives every player a private match** — two people queueing together get two servers and never meet. Use 2+ for PvP. |
+| `PLAYERS_PER_MATCH` | mmogbrain | `1` | Only with `DN_MATCH_AUTOSCALE=0`: a fixed number of queued players needed to form a match. **1 gives every player a private match** — two people queueing together get two servers and never meet. Use 2+ for PvP. |
+| `DN_MATCH_AUTOSCALE` | mmogbrain | on | Size matches by who is around: a match waits for every player who is **online and not in a battle**, up to `DN_MATCH_MAX_PLAYERS`, or `DN_MATCH_MAX_WAIT` after its first player queued. A lone player starts at once; two players online land in one match. `0` = the fixed `PLAYERS_PER_MATCH` |
+| `DN_MATCH_MAX_PLAYERS` | mmogbrain | `10` | Largest auto-scaled match (the host's `-maxplayers`) |
+| `DN_MATCH_MAX_WAIT` | mmogbrain | `60s` | How long an auto-scaled match waits for idle online players who have not queued |
+| `DN_MAX_INSTANCES` | dn-dedicated | from memory | Concurrent battle servers. Default `(RAM - 2 GB) / 1.6 GB` (8 on 16 GB): each Wine host is ~1.45 GB and nine of them got a live match OOM-killed. At the cap, new matches get 503 and their players stay queued until a server frees. `0` = no cap |
 | `MASTER_URL` | game-manager | `http://127.0.0.1:8084` | Master server URL |
 | `GAME_MGR_URL` | mmogbrain | `http://127.0.0.1:8085` | Game manager URL |
 | `DN_FORCE_GAME_MODE` | mmogbrain | *(unset — the queued mode runs)* | Forces every match into one game mode. A mode name, or `1` for `TM`. Off by default: TM is the only mode whose host logs `no orbit spawn locations set!`, and a player in it never reaches the ship selection screen. TM is also the only mode that supplies a loadout, so the two failures are mutually exclusive — see `docs/battle-server-data-path.md` |

@@ -15,6 +15,15 @@ mkdir -p "$CERT_DIR"
 SERVER_IP="${SERVER_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
 SERVER_IP="${SERVER_IP:-127.0.0.1}"
 echo "[*] Certificate will be valid for IP: $SERVER_IP (override with SERVER_IP=...)"
+# SERVER_NAME: the public DNS name players use (e.g. play.example.org). The
+# launcher hands the NAME to the game when it has one, so a home connection's
+# changing outside IP does not invalidate the certificates.
+SERVER_NAME="${SERVER_NAME:-${PUBLIC_HOST:-}}"
+NAME_SAN=""
+if [ -n "$SERVER_NAME" ]; then
+  NAME_SAN=",DNS:${SERVER_NAME}"
+  echo "[*] Certificate will also be valid for name: $SERVER_NAME"
+fi
 
 echo "[*] Generating CA key and certificate..."
 openssl genrsa -out "$CERT_DIR/ca.key" 4096
@@ -33,7 +42,7 @@ openssl req -new -key "$CERT_DIR/server.key" \
 echo "[*] Creating SAN extension file..."
 cat > "$CERT_DIR/san.ext" << EOF
 [SAN]
-subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:${SERVER_IP},IP:127.0.0.1
+subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:${SERVER_IP},IP:127.0.0.1${NAME_SAN}
 EOF
 
 echo "[*] Signing server certificate with CA..."
@@ -102,7 +111,7 @@ cert = (x509.CertificateBuilder()
         x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
         x509.DNSName("firmament.greybox.aviary.cloud"),
         x509.DNSName("firmament.prod.greybox.sixfoot.live"),
-    ]), critical=False)
+    ] + ([x509.DNSName("${SERVER_NAME}")] if "${SERVER_NAME}" else [])), critical=False)
     .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
     .sign(key, hashes.SHA256()))
 with open("$CERT_DIR/firmament.crt", "wb") as f:

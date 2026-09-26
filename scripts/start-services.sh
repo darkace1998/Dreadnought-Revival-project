@@ -36,7 +36,14 @@ fi
 # SERVER_IP is the address CLIENTS are handed for a battle server, so it has to
 # be this host's LAN address, not loopback. It must also match the IP the TLS
 # certificate was generated for; see scripts/gen-certs.sh.
-if [ -z "${SERVER_IP:-}" ]; then
+#
+# PUBLIC_HOST (e.g. play.example.org) wins when set: players on the internet are
+# handed the NAME, which keeps working when a home connection's outside IP
+# changes. The certificates must carry it -- gen-certs.sh SERVER_NAME, which
+# defaults to PUBLIC_HOST.
+if [ -n "${PUBLIC_HOST:-}" ]; then
+    SERVER_IP="$PUBLIC_HOST"
+elif [ -z "${SERVER_IP:-}" ]; then
     SERVER_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')"
     SERVER_IP="${SERVER_IP:-127.0.0.1}"
 fi
