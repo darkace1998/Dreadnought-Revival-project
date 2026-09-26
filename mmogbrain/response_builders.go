@@ -1984,7 +1984,7 @@ func buildMmogPlayerProgressionPayload(playerPID string) []byte {
 	// receive ring (37,652 bytes measured, with 63 ships of ship progression
 	// in front of it). Plain array for the same reason as PurchasesData.
 	// Verified from the disassembly 2026-09-23; not yet live.
-	b, _ = protocol.AppendStringArrayField(b, nil, "ProgressionData", int32SliceToStrings(persistedMmogPlayerPurchaseItemIDs(playerPID)))
+	b, _ = protocol.AppendStringArrayField(b, nil, "ProgressionData", int32SliceToStrings(withoutVanity(persistedMmogPlayerPurchaseItemIDs(playerPID))))
 	return b
 }
 
@@ -2510,8 +2510,8 @@ var (
 	// which is the shape of "worse for some ships than others".
 	techTreeAbilityAssetUntiered = regexp.MustCompile(`/Abilities/(\w+)/(Pri|Sec|Per|Int)_([A-Za-z0-9_]+?)/[A-Za-z0-9_]+$`)
 	// A current-build filename carries its tier: ..._T5_BP or ..._T5_Hero_BP.
-	techTreeTierTokenedFile      = regexp.MustCompile(`_T\d+(_Hero)?_BP$`)
-	techTreeWeaponAsset          = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
+	techTreeTierTokenedFile = regexp.MustCompile(`_T\d+(_Hero)?_BP$`)
+	techTreeWeaponAsset     = regexp.MustCompile(`/Weapons/(\w+)/(\w+)/BP/T(\d+)/(WP_[A-Za-z0-9]+_weapon\d+)_T\d+`)
 )
 
 // techTreeSlotGroup indexes every registered slot asset by family group, then
@@ -3120,6 +3120,7 @@ func buildMmogTechTreeDocument() []byte {
 // ClassId has two consumers, and they looked like they were in conflict:
 //
 //  1. It keys the per-ship record that a ship's modules resolve through.
+//
 //  2. It is the id the client RECURSES INTO. UYTechTreeManager's walk at
 //     FUN_3F4880 reads the current item's ClassId (item+0x28), asks
 //     FUN_3F51A0 for an item whose Id equals it, and if one exists calls
@@ -4150,7 +4151,10 @@ func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 	// the children and never looks one up by name, so the "0","1",... names
 	// only cost bytes -- ~3.5 per id, which for an account owning everything
 	// (1745 ids) is the difference between fitting the ring and not.
-	b, _ = protocol.AppendStringArrayField(b, nil, "PurchasesData", int32SliceToStrings(clientOwnedItemIDs(playerPID)))
+	// Cosmetics are left out: this list is the tech tree's, it is budgeted
+	// against the receive ring, and cosmetics reach the client through the
+	// owned-item Items list (vanity_store.go).
+	b, _ = protocol.AppendStringArrayField(b, nil, "PurchasesData", int32SliceToStrings(withoutVanity(clientOwnedItemIDs(playerPID))))
 	return b
 }
 
@@ -5760,6 +5764,9 @@ func purchasePriceForItem(itemID int32) int32 {
 // purchasePriceForItemChecked reports whether the price was actually derived
 // rather than defaulted.
 func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
+	if isVanity, sold, p := vanityOffer(itemID); isVanity && sold {
+		return p, true
+	}
 	// A per-ship weapon/module id is offered by perShipResearchOfferSeeds at
 	// the tier of its research row; charge exactly what that offer shows.
 	if row, ok := perShipResearchRow(itemID); ok {
@@ -5786,6 +5793,10 @@ func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 // purchase regardless of what was actually bought — see issue #36's finding
 // that several catalogPrices entries were also mislabeled by category.
 func purchasedItemType(itemID int32) string {
+	// Cosmetics fell through to the "ship" default below.
+	if isVanityItemID(itemID) {
+		return "vanity"
+	}
 	category, ok := dreadconfig.GetCategoryForItemID(itemID)
 	if !ok {
 		// ItemIDTable is an incomplete index -- it has known orphans -- and the
@@ -5963,6 +5974,12 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("bought", "ok", charged, balance)
 	}
 
+	if isVanity, sold, _ := vanityOffer(itemID); isVanity && !sold {
+		return reply("failed", "not for sale", 0, 0)
+	}
+	if isVanityItemID(itemID) {
+		quantity = 1 // a cosmetic is owned once
+	}
 	price := purchasePriceForItem(itemID) * quantity
 	itemType := purchasedItemType(itemID)
 
@@ -6064,6 +6081,9 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 	if strings.HasPrefix(offer, "999") {
 		if id, err := strconv.ParseInt(offer[3:], 10, 32); err == nil && id > 0 {
 			if _, ok := perShipResearchRow(int32(id)); ok {
+				return int32(id)
+			}
+			if isVanity, sold, _ := vanityOffer(int32(id)); isVanity && sold {
 				return int32(id)
 			}
 		}
@@ -6739,12 +6759,22 @@ func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byt
 	}
 	for _, wantShips := range []bool{false, true} {
 		for _, itemID := range purchased {
-			if emitted[itemID] || isShip(itemID) != wantShips {
+			if emitted[itemID] || isShip(itemID) != wantShips || isVanityItemID(itemID) {
 				continue // a starter item bought again is still one entry
 			}
 			emitted[itemID] = true
 			ids, amounts = append(ids, itemID), append(amounts, 1)
 		}
+	}
+	// Cosmetics LAST and NEWEST FIRST: if the budget below ever cuts the list,
+	// it drops the oldest cosmetic, never a module (see vanity_store.go).
+	for i := len(purchased) - 1; i >= 0; i-- {
+		itemID := purchased[i]
+		if emitted[itemID] || !isVanityItemID(itemID) {
+			continue
+		}
+		emitted[itemID] = true
+		ids, amounts = append(ids, itemID), append(amounts, 1)
 	}
 	// Never let the inventory push the frame past the budget. Dropping the tail
 	// makes some owned items look unowned; overrunning the ring makes the whole

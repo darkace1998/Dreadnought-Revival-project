@@ -401,4 +401,3 @@ func configureMatchAutoscale(mm *matchmaker.Matchmaker, log *logrus.Logger) {
 	log.WithFields(logrus.Fields{"max_players": maxPlayers, "max_wait": maxWait}).
 		Info("matchmaker: auto-scaled match size (online players not in a battle)")
 }
-

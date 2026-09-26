@@ -279,6 +279,12 @@ func gatewayShipByID(shipID int32) (mmogShipSeed, bool) {
 }
 
 func gatewayMarketCategoryMetadata(seed gatewayCatalogEntitySeed) (string, string, string, string) {
+	if seed.itemType == "vanity" {
+		if v, ok := dreadconfig.VanityItemByID(seed.itemID); ok {
+			name := vanityCategoryName(v)
+			return "", name, "", name
+		}
+	}
 	categoryName := gatewayMarketCategoryName(seed.itemType)
 	parentCategoryName := ""
 	extractedMeta, hasExtractedMeta := extractedMarketItemMetadataForID(seed.itemID)
@@ -642,6 +648,13 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	// Per-ship offers ONLY for weapons/modules the player has RESEARCHED (and
 	// those already bought, marked owned). See researchedItemOfferSeeds.
 	for _, seed := range researchedItemOfferSeeds(playerID, purchased) {
+		if !emitted[seed.itemID] {
+			emitted[seed.itemID] = true
+			seeds = append(seeds, seed)
+		}
+	}
+	// Cosmetics: see vanity_store.go.
+	for _, seed := range vanityCatalogSeeds(purchased) {
 		if !emitted[seed.itemID] {
 			emitted[seed.itemID] = true
 			seeds = append(seeds, seed)

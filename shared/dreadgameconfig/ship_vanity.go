@@ -232,3 +232,30 @@ func itoa(v int32) string {
 	}
 	return string(digits[i:])
 }
+
+// AllDefaultShipVanityItemIDs is every item that appears in some hull's
+// default appearance: the shared emblem and decal, every maker's base paint,
+// every hull line's pattern and mesh parts. These are free (see VanityItemIsFree).
+func AllDefaultShipVanityItemIDs() map[int32]bool {
+	vanityOnce.Do(buildDefaultShipVanity)
+	out := map[int32]bool{}
+	add := func(id int32) {
+		if id != 0 {
+			out[id] = true
+		}
+	}
+	add(defaultEmblemItemID)
+	add(defaultDecalItemID)
+	for _, id := range defaultPaintByMaker {
+		add(id)
+	}
+	for _, id := range defaultPatternByHull {
+		add(id)
+	}
+	for _, ids := range defaultMeshByHull {
+		for _, id := range ids {
+			add(id)
+		}
+	}
+	return out
+}

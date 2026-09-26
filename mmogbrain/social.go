@@ -792,4 +792,3 @@ func (h *socialHub) onlinePlayerIDs() []string {
 	}
 	return ids
 }
-
