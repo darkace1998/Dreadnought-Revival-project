@@ -254,10 +254,14 @@ func careerGoalProgressForPlayer(playerPID string, goalID string) int32 {
 		if value := playerStatsCounterValue(playerPID, goal.counterID, goal.counterSubID); value > 0 {
 			return value
 		}
-		// Otherwise fall back to what this server observed. Only matches
-		// PLAYED is derivable: nothing records who won a match yet -- the
-		// matches table has no result column at all -- so a wins goal stays at
-		// zero rather than being fabricated from something else.
+		// Otherwise fall back to what this server observed. Since 2026-09-26
+		// battle-server-mod reports every finished match (battle_result.go), so
+		// matches played, matches won and ships destroyed come from recorded
+		// results. (Before that nothing recorded a result, and a wins goal
+		// stayed at zero rather than being fabricated.)
+		if v := battleResultCounter(playerPID, goal.counterID); v > 0 {
+			return v
+		}
 		if goal.counterID == counterMatchesPlayed {
 			return matchesPlayedByPlayer(playerPID)
 		}
@@ -266,10 +270,11 @@ func careerGoalProgressForPlayer(playerPID string, goalID string) int32 {
 	return 0
 }
 
-// counterMatchesPlayed is the one counter this server can satisfy from its own
-// records. There is deliberately no counterMatchesWon: nothing writes a match
-// result anywhere, so a wins goal has no honest source and stays at zero until
-// one exists.
+// counterMatchesPlayed is the counter this server could satisfy from its own
+// records before results existed. CORRECTED 2026-09-26: this said there was
+// deliberately no counterMatchesWon because nothing wrote a match result; since
+// battle-server-mod reports results (battle_result.go), MatchesWon and
+// ShipsDestroyed come from battle_results via battleResultCounter.
 const counterMatchesPlayed = "MatchesPlayed"
 
 // matchesPlayedByPlayer counts finished matches the player held a slot in. A

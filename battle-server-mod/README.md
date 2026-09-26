@@ -158,6 +158,28 @@ ranking data to fill it with.
 
 Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller …`.
 
+## Match results (on; `dn_host_no_match_result.txt` turns it off)
+
+Nothing in this exe reports a finished match -- the server build did -- so no
+match paid XP or credits. At the same moment as the eom stats above, once per
+connected player, the mod reads that player's `AYPlayerReplicationInfo`
+(`m_kills` `+0x848`, `m_deaths` `+0x850`, `m_assists` `+0x858`, damage floats
+`+0x908`/`+0x90C`, `m_team` `+0x940`) and the game state's `m_finalMatchResult`
+(`+0x56B`; PRI -> level -> world -> `GameState` `+0x58`, checked by class name),
+and calls
+
+```text
+GET http://127.0.0.1:8083/battle/result?match=&pid=&team=&final=&kills=&deaths=&assists=&damage=&ships=
+```
+
+`ships` are the loadout ids mmogbrain served this player (`/battle/loadout`),
+for ship XP. mmogbrain pays the rewards once per (match, player); the reward
+values are placeholders (`DN_REWARD_*`, see the main README).
+
+Log: `match result: <pid> team 1 final 1 kills 3 ... -> mmogbrain: outcome=win credits=1800 xp=1150 new=true`.
+`final 0` means the match result was not yet set when the transition started
+(mmogbrain logs `outcome=unknown` and pays it as a loss) -- not verified live yet.
+
 ## Researched ships: any precast on demand
 
 Part of the loadout fix, no switch of its own. The four T1 mediums are only the

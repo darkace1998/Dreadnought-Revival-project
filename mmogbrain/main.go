@@ -351,6 +351,9 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	// Battle-server mod: a player's loadout by the id their client picked.
 	// Loopback only; see battle_loadout.go.
 	r.HandleFunc("/battle/loadout", battleLoadoutHandler).Methods(http.MethodGet)
+	// Battle-server mod: a player's match result, once per match. Loopback
+	// only; see battle_result.go.
+	r.HandleFunc("/battle/result", battleResultHandler).Methods(http.MethodGet)
 
 	// Admin endpoints
 	adminSub := r.PathPrefix("/admin").Subrouter()

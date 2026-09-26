@@ -301,6 +301,23 @@ var migrations = []string{
 	// (0x3A5831 -> GameState+0x1D48) -- so the matchmaker only groups players of
 	// the same fleet type. See queuedFleetType.
 	`ALTER TABLE queue_entries ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 1`,
+	// One row per player per finished match, reported by battle-server-mod at
+	// the end of the match (GET /battle/result, battle_result.go). The primary
+	// key makes the report idempotent: rewards are granted once.
+	`CREATE TABLE IF NOT EXISTS battle_results (
+		match_id   TEXT NOT NULL,
+		user_id    TEXT NOT NULL,
+		team       INTEGER NOT NULL DEFAULT 0,
+		outcome    TEXT NOT NULL,
+		kills      INTEGER NOT NULL DEFAULT 0,
+		deaths     INTEGER NOT NULL DEFAULT 0,
+		assists    INTEGER NOT NULL DEFAULT 0,
+		damage     INTEGER NOT NULL DEFAULT 0,
+		credits    INTEGER NOT NULL DEFAULT 0,
+		xp         INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (match_id, user_id)
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

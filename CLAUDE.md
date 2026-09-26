@@ -80,8 +80,11 @@ Open (see `issues.md` and GitHub issues):
   the paks. Kills/deaths/K-D are fine.
 - **Career goals** on the progression screen are placeholders (#68); only their
   text format (`NSLOCTEXT`) is recovered. Tech-tree costs are guesses too (#66).
-- **No match results are reported**: nothing calls legacy-api's
-  `/match/result`, so no XP, credits, stats or quest progress are ever awarded.
+- **Match rewards are placeholders**: since 2026-09-26 the mod reports each
+  player's result (kills/deaths/team/match result) to mmogbrain's loopback
+  `GET /battle/result`, which pays credits and XP (`DN_REWARD_*`, GUESS values)
+  and feeds the MatchesPlayed/MatchesWon/ShipsDestroyed career counters. Not yet
+  verified live; the real reward tables are #71.
 - **Daily contracts:** the catalogue is sent; the player's *assigned* contracts
   come through a message not yet traced.
 - **Statistics screen** overflows the client's stack on open (cause unknown;

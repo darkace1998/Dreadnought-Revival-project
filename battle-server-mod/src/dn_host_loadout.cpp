@@ -60,6 +60,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "MinHook.h"
 #include "precast_paths.h"
@@ -758,12 +759,11 @@ typedef FNameMin *(__fastcall *tFNameCtor)(FNameMin *out, const wchar_t *text,
 
 static bool PlayerLoadoutsEnabled();
 
-// DNPID from the owning connection's login URL, or "" (the host's local
+// DNPID from the controller's connection login URL, or "" (the host's local
 // player 256 has no connection).
-static bool PlayerPIDForManager(void *mgr, char *out, size_t outLen) {
+static bool PlayerPIDForController(uint8_t *owner, char *out, size_t outLen) {
   out[0] = 0;
   __try {
-    uint8_t *owner = *(uint8_t **)((uint8_t *)mgr + OFF_COMPONENT_OWNER);
     if (!IsReadable(owner, OFF_PC_NETCONNECTION + 8))
       return false;
     uint8_t *conn = *(uint8_t **)(owner + OFF_PC_NETCONNECTION);
@@ -787,6 +787,58 @@ static bool PlayerPIDForManager(void *mgr, char *out, size_t outLen) {
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     return false;
   }
+}
+
+static bool PlayerPIDForManager(void *mgr, char *out, size_t outLen) {
+  out[0] = 0;
+  __try {
+    return PlayerPIDForController(*(uint8_t **)((uint8_t *)mgr + OFF_COMPONENT_OWNER),
+                                  out, outLen);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return false;
+  }
+}
+
+// The loadouts each player picked this match, for the match result's ship XP
+// (ReportMatchResult). Recorded when mmogbrain served the fit; only touched on
+// the game thread (FindLoadoutByID and the end-of-match RPC both run there).
+struct FlownShips {
+  char pid[80];
+  char ids[512]; // comma-separated loadout ids
+};
+static FlownShips g_flown[64];
+
+static void RecordFlownShip(const char *pid, const char *id) {
+  FlownShips *slot = nullptr;
+  for (auto &f : g_flown) {
+    if (strcmp(f.pid, pid) == 0) { slot = &f; break; }
+    if (!slot && !f.pid[0]) slot = &f;
+  }
+  if (!slot)
+    return;
+  if (!slot->pid[0])
+    strncpy_s(slot->pid, sizeof(slot->pid), pid, _TRUNCATE);
+  for (const char *p = strstr(slot->ids, id); p; p = strstr(p + 1, id)) {
+    size_t n = strlen(id);
+    if ((p == slot->ids || p[-1] == ',') && (p[n] == 0 || p[n] == ','))
+      return; // already recorded
+  }
+  if (slot->ids[0])
+    strncat_s(slot->ids, sizeof(slot->ids), ",", _TRUNCATE);
+  strncat_s(slot->ids, sizeof(slot->ids), id, _TRUNCATE);
+}
+
+static void ClearFlownShips(const char *pid) {
+  for (auto &f : g_flown)
+    if (f.pid[0] && strcmp(f.pid, pid) == 0)
+      f.ids[0] = 0;
+}
+
+static const char *FlownShipsFor(const char *pid) {
+  for (auto &f : g_flown)
+    if (f.pid[0] && strcmp(f.pid, pid) == 0)
+      return f.ids;
+  return "";
 }
 
 // Minimal HTTP/1.0 GET on loopback. Returns the body, or "" on any failure.
@@ -825,7 +877,7 @@ static bool HttpGetLoopback(const char *pathAndQuery, char *body, size_t bodyLen
     closesocket(s);
     return false;
   }
-  char req[768];
+  char req[2048];
   int rl = _snprintf_s(req, sizeof(req), _TRUNCATE,
                        "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n",
                        pathAndQuery, host);
@@ -892,6 +944,7 @@ static bool RegisterPlayerLoadout(void *mgr, void **id, const char *idText) {
          idText, pid);
     return false;
   }
+  RecordFlownShip(pid, idText);
 
   char v[512];
   static wchar_t nameW[128], displayW[512];
@@ -1584,6 +1637,156 @@ static tClientStartEomTransition g_origClientStartEomTransition = nullptr;
 typedef void *(__fastcall *tFindFunctionChecked)(void *obj, uint64_t name);
 typedef void(__fastcall *tProcessEventVirt)(void *obj, void *fn, void *parms);
 
+// ---------------------------------------------------------------------------
+// Match result -> mmogbrain (on unless dn_host_no_match_result.txt /
+// DN_HOST_NO_MATCH_RESULT=1)
+//
+// Added 2026-09-26. The original backend paid XP and credits from a result the
+// server build reported; nothing in this exe does, so no match ever paid
+// anything. At the same moment the eom stats go out -- once per connected
+// player, as that player's end-of-match flow starts -- this reads the player's
+// numbers from the host and sends them to mmogbrain's loopback
+// GET /battle/result, which is idempotent per (match, player).
+//
+// Field offsets and types from the AYPlayerReplicationInfo property
+// registration (0x140647C00: m_kills/m_deaths/m_assists are IntProperty,
+// damage is the FloatProperty constructor shared with m_rawDamageReceived*,
+// m_team a ByteProperty), AYGameState m_finalMatchResult +0x56B (EYMatchResult:
+// 1 team 1, 2 team 2, 3 draw). The game state is reached PRI -> Outer (level)
+// -> Outer (world) -> UWorld::GameState +0x58, and checked by class name.
+// NOT verified live: whether m_finalMatchResult is already set when the
+// transition starts. A 0 is reported as-is (mmogbrain pays it as a loss and
+// logs outcome=unknown), which is the line to look for.
+#define OFF_PRI_KILLS 0x848
+#define OFF_PRI_DEATHS 0x850
+#define OFF_PRI_ASSISTS 0x858
+#define OFF_PRI_DAMAGE_WEAPONS 0x908
+#define OFF_PRI_DAMAGE_ABILITIES 0x90C
+#define OFF_PRI_TEAM 0x940
+#define OFF_WORLD_GAMESTATE 0x58
+#define OFF_GS_FINAL_MATCH_RESULT 0x56B
+#define OFF_USTRUCT_SUPER 0x30
+
+static bool ClassChainContains(UObjectMin *obj, const char *needle) {
+  UObjectMin *cls = IsReadable(obj, sizeof(UObjectMin)) ? obj->Class : nullptr;
+  for (int depth = 0; cls && depth < 8; ++depth) {
+    if (!IsReadable(cls, OFF_USTRUCT_SUPER + 8))
+      return false;
+    const char *n = NameText(cls->Name);
+    if (n && strstr(n, needle))
+      return true;
+    cls = *(UObjectMin **)((uint8_t *)cls + OFF_USTRUCT_SUPER);
+  }
+  return false;
+}
+
+static uint8_t *GameStateForPRI(uint8_t *pri) {
+  UObjectMin *level = ((UObjectMin *)pri)->Outer;
+  UObjectMin *world = IsReadable(level, sizeof(UObjectMin)) ? level->Outer : nullptr;
+  if (!IsReadable(world, OFF_WORLD_GAMESTATE + 8))
+    return nullptr;
+  uint8_t *gs = *(uint8_t **)((uint8_t *)world + OFF_WORLD_GAMESTATE);
+  if (!IsReadable(gs, OFF_GS_FINAL_MATCH_RESULT + 1) ||
+      !ClassChainContains((UObjectMin *)gs, "GameState"))
+    return nullptr;
+  return gs;
+}
+
+// -MatchID=<id> from the host's command line (dn-dedicated passes it).
+static bool MatchIDFromCommandLine(char *out, size_t outLen) {
+  out[0] = 0;
+  const wchar_t *cmd = GetCommandLineW();
+  const wchar_t *p = cmd ? wcsstr(cmd, L"MatchID=") : nullptr;
+  if (!p)
+    return false;
+  p += 8;
+  size_t n = 0;
+  while (p[n] && p[n] != L' ' && p[n] != L'"' && p[n] != L'?' && p[n] != L'&' &&
+         n + 1 < outLen) {
+    wchar_t c = p[n];
+    out[n] = (c < 128 && (isalnum((int)c) || c == L'-' || c == L'_' || c == L'.'))
+                 ? (char)c : '_';
+    ++n;
+  }
+  out[n] = 0;
+  return n > 0;
+}
+
+static int s_round = 0;
+
+static void ReportMatchResult(void *orbitComp) {
+  char pid[80], match[96], path[1536], body[512];
+  int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
+  float damage = 0;
+  __try {
+    uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
+    if (!PlayerPIDForController(pc, pid, sizeof(pid)))
+      return; // the host's local player, or a player without a DNPID
+    uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
+    if (!IsReadable(pri, OFF_PRI_TEAM + 1)) {
+      Logf("match result: %s has no player state; not reported", pid);
+      return;
+    }
+    kills = *(int32_t *)(pri + OFF_PRI_KILLS);
+    deaths = *(int32_t *)(pri + OFF_PRI_DEATHS);
+    assists = *(int32_t *)(pri + OFF_PRI_ASSISTS);
+    damage = *(float *)(pri + OFF_PRI_DAMAGE_WEAPONS) +
+             *(float *)(pri + OFF_PRI_DAMAGE_ABILITIES);
+    team = pri[OFF_PRI_TEAM];
+    uint8_t *gs = GameStateForPRI(pri);
+    // One -MatchID per host process, but the process could play a second
+    // round after a map travel; a new game state object is a new round, so
+    // mmogbrain's (match, player) key does not swallow it.
+    static uint8_t *s_lastGS = nullptr;
+    if (gs && gs != s_lastGS) {
+      s_lastGS = gs;
+      ++s_round;
+    }
+    if (gs)
+      result = gs[OFF_GS_FINAL_MATCH_RESULT];
+    else
+      Logf("match result: game state not found from PRI %p; reporting final=0", pri);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("match result: EXCEPTION reading the result for %p", orbitComp);
+    return;
+  }
+  if (!MatchIDFromCommandLine(match, sizeof(match))) {
+    Logf("match result: no -MatchID= on the command line; not reported");
+    return;
+  }
+  if (s_round > 1) {
+    size_t ml = strlen(match);
+    _snprintf_s(match + ml, sizeof(match) - ml, _TRUNCATE, "-r%d", s_round);
+  }
+  if (!(damage >= 0 && damage < 1e9f))
+    damage = 0;
+  // Loadout ids are FName text; escape anything a query string cannot carry.
+  char ships[1024];
+  size_t o = 0;
+  for (const char *c = FlownShipsFor(pid); *c && o + 4 < sizeof(ships); ++c) {
+    if (isalnum((unsigned char)*c) || strchr("-_.,", *c))
+      ships[o++] = *c;
+    else
+      o += _snprintf_s(ships + o, sizeof(ships) - o, _TRUNCATE, "%%%02X", (unsigned char)*c);
+  }
+  ships[o] = 0;
+  _snprintf_s(path, sizeof(path), _TRUNCATE,
+              "/battle/result?match=%s&pid=%s&team=%d&final=%d&kills=%d&deaths=%d"
+              "&assists=%d&damage=%d&ships=%s",
+              match, pid, team, result, kills, deaths, assists, (int)damage, ships);
+  bool ok = HttpGetLoopback(path, body, sizeof(body));
+  for (char *c = body; *c; ++c)
+    if (*c == '\n') *c = ' ';
+  Logf("match result: %s team %d final %d kills %d deaths %d assists %d damage %d "
+       "ships [%s] -> %s%s",
+       pid, team, result, kills, deaths, assists, (int)damage, FlownShipsFor(pid),
+       ok ? "mmogbrain: " : "FAILED (mmogbrain unreachable or refused)", ok ? body : "");
+  if (ok)
+    ClearFlownShips(pid);
+}
+
+static bool SwitchOn(const char *envName, const char *markerFile);
+
 static void __fastcall HookClientStartEomTransition(void *orbitComp) {
   g_origClientStartEomTransition(orbitComp);
   __try {
@@ -1617,6 +1820,8 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
     Logf("eom stats: EXCEPTION sending ClientSetTopPlayerMatchStats for %p",
          orbitComp);
   }
+  if (!SwitchOn("DN_HOST_NO_MATCH_RESULT", "dn_host_no_match_result.txt"))
+    ReportMatchResult(orbitComp);
 }
 
 // Both of the switches below are opt-in separately from the loadout fix,
