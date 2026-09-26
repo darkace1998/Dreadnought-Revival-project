@@ -229,6 +229,11 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 	w.Header().Set("Authorization", "Session "+sessionID+", "+username)
 
 	gwJSON(w, map[string]any{
+		// "SessionID" and "Username" are the WebServicesPlugin's own response
+		// field names (its literal table, getters 0x20E7A0 / 0x20E7E0, verified
+		// 2026-09-26). JSON lookups are case-sensitive and "SessionID" was never
+		// among the spellings below. The rest stay: none is proven unused.
+		"SessionID":  sessionID,
 		"SessionId":  sessionID,
 		"sessionId":  sessionID,
 		"session_id": sessionID,
@@ -344,6 +349,11 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 
 	w.Header().Set("Authorization", "Session "+sessionID+", "+username)
 	gwJSON(w, map[string]any{
+		// "SessionID" and "Username" are the WebServicesPlugin's own response
+		// field names (its literal table, getters 0x20E7A0 / 0x20E7E0, verified
+		// 2026-09-26). JSON lookups are case-sensitive and "SessionID" was never
+		// among the spellings below. The rest stay: none is proven unused.
+		"SessionID":  sessionID,
 		"SessionId":  sessionID,
 		"sessionId":  sessionID,
 		"session_id": sessionID,

@@ -908,6 +908,7 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 				log.WithError(err).Warn("mmog: failed to generate connect push id")
 			} else {
 				status.playerPID = normalizedPlayerStatePID(state.playerPID)
+				status.playerName = connectURLName(mmogPlayerStateForPID(state.playerPID).displayName)
 				payload := buildMmogConnectPushPayload(status)
 				pushFrame := protocol.BuildResponseFrame(pushID, msgType, payload)
 				if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_Connect", pushFrame, appEncoder, encryptResponses, "connect push failed", "sent YA_Connect push"); err != nil {

@@ -202,3 +202,36 @@ func TestConnectPushCarriesThePlayerIDAsAURLOption(t *testing.T) {
 		t.Error("DN_CONNECT_PID=0 did not restore the bare address")
 	}
 }
+
+// The host names a player from ParseOption(Options, "Name") -- first match --
+// and falls back to PlayerId ("257") when it is empty. Ours goes before the
+// client's own empty ?Name=.
+func TestConnectPushCarriesThePlayerNameBeforeTheClientsOwn(t *testing.T) {
+	status := readyStatus()
+	status.playerPID = "fea9903d49d841bcbd679d96806b9fb7"
+	status.playerName = connectURLName("UnlockAll")
+	want := protocol.AppendStringField(nil, "Connect", "10.0.0.73:7777?DNPID=fea9903d49d841bcbd679d96806b9fb7?Name=UnlockAll")
+	if !bytes.Contains(buildMmogConnectPushPayload(status), want) {
+		t.Error("Connect does not carry ?Name=<name> after ?DNPID=")
+	}
+	t.Setenv("DN_CONNECT_NAME", "0")
+	if bytes.Contains(buildMmogConnectPushPayload(status), []byte("?Name=")) {
+		t.Error("DN_CONNECT_NAME=0 still sends the name")
+	}
+}
+
+func TestConnectURLNameIsTravelSafe(t *testing.T) {
+	for in, want := range map[string]string{
+		"UnlockAll":                  "UnlockAll",
+		"  Captain Nemo ":            "Captain_Nemo",
+		"a?b=c#d":                    "a_b_c_d",
+		"Local":                      "",
+		"":                           "",
+		"ThisNameIsLongerThanTwenty": "ThisNameIsLongerThan",
+		"Zoë":                        "Zo_",
+	} {
+		if got := connectURLName(in); got != want {
+			t.Errorf("connectURLName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

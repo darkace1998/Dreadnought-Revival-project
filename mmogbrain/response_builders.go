@@ -278,6 +278,9 @@ type mmogMatchmakingStatus struct {
 	// so the battle server knows which account each connection is (see
 	// appendMmogConnectFields).
 	playerPID string
+	// playerName, when set, is appended as ?Name=<name> (see
+	// appendMmogConnectFields); already reduced to travel-URL-safe characters.
+	playerName string
 	// createdAt is when the match was formed, used to hold YA_Connect back
 	// until the battle server has had time to come up.
 	createdAt time.Time
@@ -608,6 +611,16 @@ func appendMmogConnectFields(b []byte, status mmogMatchmakingStatus) []byte {
 	// GUESS until that host log line shows ?DNPID= arriving.
 	if connect != "" && status.playerPID != "" && os.Getenv("DN_CONNECT_PID") != "0" {
 		connect += "?DNPID=" + status.playerPID
+	}
+	// The player's NAME, for the same reason: the host's stock
+	// AGameMode::InitNewPlayer takes ParseOption(Options, "Name") and, when it is
+	// empty, names the player DefaultPlayerName (empty here) + PlayerId -- which
+	// is exactly the "257" the end-of-match scoreboard showed. The client's own
+	// "?Name=" is empty (its name would come from Steam, and dn-launcher passes
+	// -NoSteam). ParseOption returns the FIRST match, and ours precedes the
+	// client's, so it wins. DN_CONNECT_NAME=0 turns it off.
+	if connect != "" && status.playerName != "" && os.Getenv("DN_CONNECT_NAME") != "0" {
+		connect += "?Name=" + status.playerName
 	}
 	b = protocol.AppendStringField(b, "Connect", connect)
 	b = protocol.AppendStringField(b, "Team", strconv.Itoa(int(status.team)))
@@ -6925,4 +6938,29 @@ func buildMmogClaimItemPushPayload(playerPID string) []byte {
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+// connectURLName makes a display name safe inside a travel URL. The address is
+// run as a console command ("TRAVEL <url>"), so a space would end it, and '?',
+// '=' and '#' are URL syntax; everything outside [A-Za-z0-9_.-] becomes '_'.
+// The engine keeps the first 20 characters (InitNewPlayer's .Left(20)).
+// "Local" is the seed placeholder, not a name.
+func connectURLName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "Local" {
+		return ""
+	}
+	out := []rune{}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '.', r == '-':
+			out = append(out, r)
+		default:
+			out = append(out, '_')
+		}
+		if len(out) == 20 {
+			break
+		}
+	}
+	return string(out)
 }
