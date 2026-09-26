@@ -49,7 +49,7 @@ func main() {
 	if v, err := strconv.Atoi(os.Getenv("PLAYERS_PER_MATCH")); err == nil && v > 0 {
 		playersPerMatch = v
 	}
-	if playersPerMatch == 1 {
+	if playersPerMatch == 1 && os.Getenv("DN_MATCH_AUTOSCALE") == "0" {
 		// Worth shouting about now that players can actually spawn. With 1, a
 		// match forms the moment ANYONE queues, so two people queueing together
 		// get two separate battle servers and can never meet. Combined with a
@@ -84,40 +84,12 @@ func main() {
 		log.Warn("neither INTERNAL_API_KEY nor ADMIN_KEY is set; game-manager will reject match requests with 403")
 	}
 	mm := matchmaker.New(database, log, gameMgrURL, internalKey, playersPerMatch)
+	configureMatchAutoscale(mm, log)
 	mm.Start()
 	defer mm.Stop()
 
-	r := mux.NewRouter()
-	r.Use(loggingMiddleware(log))
-
-	// Public
-	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
-	r.Handle("/metrics", promhttp.Handler())
-	r.HandleFunc("/mmog/chat", h.ChatHistory).Methods(http.MethodGet)
-	// Battle-server mod: a player's loadout by the id their client picked.
-	// Loopback only; see battle_loadout.go.
-	r.HandleFunc("/battle/loadout", battleLoadoutHandler).Methods(http.MethodGet)
-
-	// Admin endpoints
 	adminKey := requireAdminKey(log)
-	adminSub := r.PathPrefix("/admin").Subrouter()
-	adminSub.Use(adminKeyMiddleware(adminKey))
-	adminSub.HandleFunc("/queue", h.AdminQueue).Methods(http.MethodGet)
-	adminSub.HandleFunc("/players", h.AdminPlayers).Methods(http.MethodGet)
-	adminSub.HandleFunc("/grant", h.AdminGrant).Methods(http.MethodPost)
-
-	// Authenticated
-	auth := r.PathPrefix("/mmog").Subrouter()
-	auth.Use(jwtMiddleware(secret, log))
-	auth.HandleFunc("/queue", h.QueueJoin).Methods(http.MethodPost)
-	auth.HandleFunc("/queue/status", h.QueueStatus).Methods(http.MethodGet)
-	auth.HandleFunc("/queue", h.QueueLeave).Methods(http.MethodDelete)
-	auth.HandleFunc("/match/{id}", h.GetMatch).Methods(http.MethodGet)
-	auth.HandleFunc("/chat", h.ChatSend).Methods(http.MethodPost)
-	auth.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
-	internal := r.PathPrefix("/internal").Subrouter()
-	internal.Use(internalKeyMiddleware(getenv("INTERNAL_API_KEY", adminKey)))
-	internal.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
+	r := newRouter(h, secret, adminKey, getenv("INTERNAL_API_KEY", adminKey), log)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -363,3 +335,70 @@ func buildStamp() string {
 	}
 	return fi.ModTime().UTC().Format(time.RFC3339)
 }
+
+// newRouter registers every HTTP route. Split out of main so the route table --
+// in particular what a PLAYER token can reach -- is testable.
+func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey string, log *logrus.Logger) *mux.Router {
+	r := mux.NewRouter()
+	r.Use(loggingMiddleware(log))
+
+	// Public
+	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
+	r.Handle("/metrics", promhttp.Handler())
+	r.HandleFunc("/mmog/chat", h.ChatHistory).Methods(http.MethodGet)
+	// Battle-server mod: a player's loadout by the id their client picked.
+	// Loopback only; see battle_loadout.go.
+	r.HandleFunc("/battle/loadout", battleLoadoutHandler).Methods(http.MethodGet)
+
+	// Admin endpoints
+	adminSub := r.PathPrefix("/admin").Subrouter()
+	adminSub.Use(adminKeyMiddleware(adminKey))
+	adminSub.HandleFunc("/queue", h.AdminQueue).Methods(http.MethodGet)
+	adminSub.HandleFunc("/players", h.AdminPlayers).Methods(http.MethodGet)
+	adminSub.HandleFunc("/grant", h.AdminGrant).Methods(http.MethodPost)
+
+	// Authenticated
+	auth := r.PathPrefix("/mmog").Subrouter()
+	auth.Use(jwtMiddleware(secret, log))
+	auth.HandleFunc("/queue", h.QueueJoin).Methods(http.MethodPost)
+	auth.HandleFunc("/queue/status", h.QueueStatus).Methods(http.MethodGet)
+	auth.HandleFunc("/queue", h.QueueLeave).Methods(http.MethodDelete)
+	auth.HandleFunc("/match/{id}", h.GetMatch).Methods(http.MethodGet)
+	auth.HandleFunc("/chat", h.ChatSend).Methods(http.MethodPost)
+	// NO /mmog/progression here. It used to be registered on this JWT
+	// subrouter, where any logged-in player could POST {"user_id": <anyone>,
+	// "xp": <any>} and grant XP, rank, season/ship XP and credits to any
+	// account (the handler trusts the body's user_id). Nothing called it.
+	// Progression is awarded only through the key-guarded /internal route.
+	internal := r.PathPrefix("/internal").Subrouter()
+	internal.Use(internalKeyMiddleware(internalAPIKey))
+	internal.HandleFunc("/progression", h.UpdateProgression).Methods(http.MethodPost)
+	return r
+}
+
+// configureMatchAutoscale sizes matches by who is around instead of a fixed
+// PLAYERS_PER_MATCH: a match waits for every player who is online and not in a
+// battle (capped at DN_MATCH_MAX_PLAYERS, default 10 = the host's -maxplayers),
+// or DN_MATCH_MAX_WAIT (default 60s) after its first player queued. A lone
+// player still starts at once; two players online land in ONE match instead of
+// two private ones. DN_MATCH_AUTOSCALE=0 restores the fixed size.
+func configureMatchAutoscale(mm *matchmaker.Matchmaker, log *logrus.Logger) {
+	if os.Getenv("DN_MATCH_AUTOSCALE") == "0" {
+		log.WithField("players_per_match", mm.PlayersPerMatch).Info("matchmaker: fixed match size (DN_MATCH_AUTOSCALE=0)")
+		return
+	}
+	maxPlayers := 10
+	if v, err := strconv.Atoi(os.Getenv("DN_MATCH_MAX_PLAYERS")); err == nil && v > 0 {
+		maxPlayers = v
+	}
+	maxWait := 60 * time.Second
+	if v, err := time.ParseDuration(os.Getenv("DN_MATCH_MAX_WAIT")); err == nil && v >= 0 {
+		maxWait = v
+	}
+	mm.PlayersPerMatch = maxPlayers
+	mm.MaxWait = maxWait
+	mm.OnlinePlayers = socialHubInstance.onlinePlayerIDs
+	log.WithFields(logrus.Fields{"max_players": maxPlayers, "max_wait": maxWait}).
+		Info("matchmaker: auto-scaled match size (online players not in a battle)")
+}
+

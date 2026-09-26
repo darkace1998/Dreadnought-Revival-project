@@ -780,3 +780,16 @@ func (h *socialHub) searchUsers(terms, requesterID string) []any {
 	}
 	return out
 }
+
+// onlinePlayerIDs lists every player with a live Firmament connection -- the
+// matchmaker's notion of "logged in".
+func (h *socialHub) onlinePlayerIDs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ids := make([]string, 0, len(h.peers))
+	for id := range h.peers {
+		ids = append(ids, id)
+	}
+	return ids
+}
+

@@ -48,8 +48,12 @@ func pvpTestDB(t *testing.T) *sql.DB {
 func pvpMatchmaker(t *testing.T, database *sql.DB, playersPerMatch int) (*Matchmaker, *int32) {
 	t.Helper()
 	var instances int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&instances, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Count only spawns: tick() also polls GET /instances/<id> for live
+		// matches, and that is not a battle server being asked for.
+		if r.Method == http.MethodPost {
+			atomic.AddInt32(&instances, 1)
+		}
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"ip":"10.0.0.73","port":7777,"instance_id":"inst-1"}`))
 	}))

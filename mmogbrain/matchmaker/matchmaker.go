@@ -167,6 +167,15 @@ type Matchmaker struct {
 	// seconds later, forever.
 	InternalKey     string
 	PlayersPerMatch int
+	// OnlinePlayers turns on auto-scaling. When set, PlayersPerMatch is the
+	// CAP, and the size a match waits for is the number of players who are
+	// online and not in a battle (see requiredMatchSize). Nil keeps the fixed
+	// size. main wires it to the Firmament hub's connected peers.
+	OnlinePlayers func() []string
+	// MaxWait bounds how long an auto-scaled match waits for idle players who
+	// have not queued: once the oldest queued player has waited this long, the
+	// match starts with whoever is queued.
+	MaxWait time.Duration
 	// seenInstance remembers which instance ids the control plane has ever
 	// answered a 200 for. Without it a 404 cannot be read: it means "the host
 	// is gone" on dn-dedicated and "there is no such route" on game-manager,
@@ -469,11 +478,10 @@ func (m *Matchmaker) tick() error {
 	// battle server reads it once into its GameState, see fleetTierURLValue),
 	// so Recruit, Veteran and Legendary fleets never share a match.
 	rows, err := m.DB.Query(`
-		SELECT game_mode, tier_min, fleet_type, COUNT(*) as cnt
+		SELECT game_mode, tier_min, fleet_type, COUNT(*) as cnt, MIN(queued_at)
 		FROM queue_entries WHERE status='waiting'
 		GROUP BY game_mode, tier_min, fleet_type
-		HAVING cnt >= ?
-	`, m.PlayersPerMatch)
+	`)
 	if err != nil {
 		return fmt.Errorf("queue query: %w", err)
 	}
@@ -486,29 +494,124 @@ func (m *Matchmaker) tick() error {
 		TierMin   int
 		FleetType int
 		Count     int
+		Oldest    string
 	}
-	var ready []bucket
+	var buckets []bucket
 	for rows.Next() {
 		var b bucket
-		if err := rows.Scan(&b.GameMode, &b.TierMin, &b.FleetType, &b.Count); err != nil {
+		if err := rows.Scan(&b.GameMode, &b.TierMin, &b.FleetType, &b.Count, &b.Oldest); err != nil {
 			return fmt.Errorf("scan ready queue counts: %w", err)
 		}
-		ready = append(ready, b)
+		buckets = append(buckets, b)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate ready queue counts: %w", err)
 	}
+	_ = rows.Close()
 
-	for _, b := range ready {
-		if err := m.formMatch(b.GameMode, b.TierMin, b.FleetType); err != nil {
+	available := -1 // fixed size
+	if m.OnlinePlayers != nil && len(buckets) > 0 {
+		available = m.availablePlayers()
+	}
+	now := time.Now().UTC()
+	for _, b := range buckets {
+		size := m.PlayersPerMatch
+		if available >= 0 {
+			waited := time.Duration(0)
+			if t, ok := parseQueuedAt(b.Oldest); ok {
+				waited = now.Sub(t)
+			}
+			size = requiredMatchSize(b.Count, available, m.PlayersPerMatch, waited, m.MaxWait)
+		}
+		if size < 1 || b.Count < size {
+			continue
+		}
+		if err := m.formMatchOfSize(b.GameMode, b.TierMin, b.FleetType, size); err != nil {
 			m.Log.WithError(err).WithFields(logrus.Fields{
 				"game_mode":  b.GameMode,
 				"tier_min":   b.TierMin,
 				"fleet_type": b.FleetType,
+				"size":       size,
 			}).Warn("form match failed")
 		}
 	}
 	return nil
+}
+
+// requiredMatchSize is how many queued players an auto-scaled group needs
+// before it starts: everyone who could still join (online and not in a
+// battle), capped at maxSize -- so a lone player gets a match at once, and two
+// players online both land in one match instead of two private ones. Once the
+// group's oldest player has waited maxWait, whoever is queued starts: an idle
+// player in the hangar must not hold the queue forever. 0 means "not yet".
+func requiredMatchSize(queued, available, maxSize int, waited, maxWait time.Duration) int {
+	if queued < 1 {
+		return 0
+	}
+	if maxSize < 1 {
+		maxSize = 1
+	}
+	want := available
+	if want < queued {
+		want = queued // queued players are available by definition
+	}
+	if want > maxSize {
+		want = maxSize
+	}
+	if queued >= want {
+		return want
+	}
+	if maxWait > 0 && waited >= maxWait {
+		return queued
+	}
+	return 0
+}
+
+// availablePlayers counts players who could join a match now: online or
+// queued, and not in an active match.
+func (m *Matchmaker) availablePlayers() int {
+	set := map[string]bool{}
+	for _, id := range m.OnlinePlayers() {
+		if id = normalizeUserID(id); id != "" {
+			set[id] = true
+		}
+	}
+	if rows, err := m.DB.Query(`SELECT user_id FROM queue_entries WHERE status='waiting'`); err == nil {
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil && normalizeUserID(id) != "" {
+				set[normalizeUserID(id)] = true
+			}
+		}
+		_ = rows.Close()
+	}
+	if rows, err := m.DB.Query(`SELECT s.user_id FROM match_slots s JOIN matches m ON m.id = s.match_id WHERE m.status='active'`); err == nil {
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil {
+				delete(set, normalizeUserID(id))
+			}
+		}
+		_ = rows.Close()
+	}
+	return len(set)
+}
+
+// normalizeUserID folds the two spellings a player id takes in this system
+// (dashed UUID in the database, undashed on the mmog wire).
+func normalizeUserID(id string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(id), "-", ""))
+}
+
+// parseQueuedAt reads queue_entries.queued_at: SQLite's datetime('now')
+// ("2006-01-02 15:04:05", UTC) or RFC 3339.
+func parseQueuedAt(s string) (time.Time, bool) {
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // runnableGameMode maps the mode a player queued for onto one their pawn can
@@ -659,13 +762,17 @@ func substituteBrokenGameMode(queued string) string {
 const DefaultSpawnableGameMode = "TM"
 
 func (m *Matchmaker) formMatch(gameMode string, tierMin int, fleetType int) error {
+	return m.formMatchOfSize(gameMode, tierMin, fleetType, m.PlayersPerMatch)
+}
+
+func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int, size int) error {
 	// Pull the oldest waiting players for this mode, tier and fleet type
 	rows, err := m.DB.Query(`
 		SELECT id, user_id FROM queue_entries
 		WHERE status='waiting' AND game_mode=? AND tier_min=? AND fleet_type=?
 		ORDER BY queued_at ASC
 		LIMIT ?
-	`, gameMode, tierMin, fleetType, m.PlayersPerMatch)
+	`, gameMode, tierMin, fleetType, size)
 	if err != nil {
 		return err
 	}
@@ -689,7 +796,7 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int, fleetType int) erro
 		return fmt.Errorf("iterate queue entries: %w", err)
 	}
 
-	if len(entries) < m.PlayersPerMatch {
+	if len(entries) < size {
 		return nil
 	}
 
