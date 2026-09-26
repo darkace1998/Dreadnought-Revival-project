@@ -130,3 +130,28 @@ func TestCosmeticsComeLastNewestFirst(t *testing.T) {
 		t.Errorf("order weapon=%d eyes=%d emblem=%d, want weapon < newest cosmetic (eyes) < oldest (emblem)", weapon, eyes, emblem)
 	}
 }
+
+// Audit 2026-09-26: a client-sent quantity multiplied the price in int32, so
+// quantity 85901 on a 25000-credit hull wrapped to a negative price and GAVE
+// the player ~2.1 billion credits. Quantity is now always 1.
+func TestPurchaseQuantityCannotOverflowThePrice(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	const hull int32 = 33489198 // a 25000-credit hull the new player does not own
+	price := purchasePriceForItem(hull)
+	if price <= 0 {
+		t.Fatalf("hull %d has no price", hull)
+	}
+	setCredits(t, pid, int(price))
+	req := protocol.AppendStringField(nil, "ItemID", strconv.Itoa(int(hull)))
+	req = protocol.AppendInt32Field(req, "quantity", int32(2147483647/price)+2)
+	reply := string(buildMmogPurchasePayload("YA_PurchaseItem", pid, req))
+	if got := credits(t, pid); got != 0 {
+		t.Fatalf("after buying one hull with a huge quantity: %d credits, want exactly 0 (reply %q)", got, reply)
+	}
+	var paid int
+	_ = currentMmogPlayerStateDB().QueryRow(`SELECT price_paid FROM player_purchases WHERE user_id=? AND item_id=?`, pid, hull).Scan(&paid)
+	if paid != int(price) {
+		t.Errorf("recorded price %d, want %d", paid, price)
+	}
+}

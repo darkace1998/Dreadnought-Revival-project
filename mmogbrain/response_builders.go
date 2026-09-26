@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"reflect"
@@ -5977,10 +5978,21 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	if isVanity, sold, _ := vanityOffer(itemID); isVanity && !sold {
 		return reply("failed", "not for sale", 0, 0)
 	}
-	if isVanityItemID(itemID) {
-		quantity = 1 // a cosmetic is owned once
+	// Every purchasable item is owned once: player_purchases is keyed by
+	// (user_id, item_id) and the INSERT below is OR IGNORE, so quantity > 1
+	// charged N times and granted one item. It was also an exploit: the price
+	// was price*quantity in int32, and a client-sent quantity of 85901 on a
+	// 25000-credit hull wrapped it to -2147442296, which passed the balance
+	// check and ADDED ~2.1 billion credits (reproduced in
+	// TestPurchaseQuantityCannotOverflowThePrice). Quantity is always 1, and
+	// the price is computed wide and range-checked so no future pricing can
+	// wrap it either.
+	quantity = 1
+	price64 := int64(purchasePriceForItem(itemID)) * int64(quantity)
+	if price64 < 0 || price64 > math.MaxInt32 {
+		return reply("failed", "invalid price", 0, 0)
 	}
-	price := purchasePriceForItem(itemID) * quantity
+	price := int32(price64)
 	itemType := purchasedItemType(itemID)
 
 	// Check-then-update was a TOCTOU race: two concurrent purchase requests

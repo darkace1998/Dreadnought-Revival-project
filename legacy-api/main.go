@@ -81,9 +81,12 @@ func main() {
 	auth.HandleFunc("/store", h.Store).Methods(http.MethodGet)
 	auth.HandleFunc("/season", h.Season).Methods(http.MethodGet)
 	auth.HandleFunc("/xp/convert", h.XPConvert).Methods(http.MethodPost)
-	auth.HandleFunc("/v2/dreadnought/projectiles", h.Projectiles).Methods(http.MethodGet)
-auth.HandleFunc("/v2/dreadnought/shipfeats", h.ShipFeats).Methods(http.MethodGet)
-auth.HandleFunc("/v2/dreadnought/abilities", h.Abilities).Methods(http.MethodGet)
+	// These sit on the /v2/dreadnought subrouter, so the path is relative to
+	// it. They were registered as "/v2/dreadnought/..." and so only existed at
+	// /v2/dreadnought/v2/dreadnought/... (found in the 2026-09-26 audit).
+	auth.HandleFunc("/projectiles", h.Projectiles).Methods(http.MethodGet)
+	auth.HandleFunc("/shipfeats", h.ShipFeats).Methods(http.MethodGet)
+	auth.HandleFunc("/abilities", h.Abilities).Methods(http.MethodGet)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -195,31 +198,31 @@ func jwtMiddleware(secret []byte, log *logrus.Logger, sessionChecker *sessionChe
 					break
 				}
 			}
-		if !hasAud {
-			http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
-			return
-		}
-		// A signature/expiry-valid JWT doesn't mean the session is still
-		// live — auth-server tracks logout/ban revocation via its own
-		// sessions table, which legacy-api has no visibility into. Ask
-		// auth-server directly rather than silently accepting any
-		// not-yet-expired token for its full lifetime after logout/ban.
-		valid, err := sessionChecker.isValid(tokenStr)
-		if err != nil {
-			log.WithError(err).Warn("session validation check failed")
-			http.Error(w, `{"error":"session validation unavailable"}`, http.StatusServiceUnavailable)
-			return
-		}
-		if !valid {
-			http.Error(w, `{"error":"session revoked"}`, http.StatusUnauthorized)
-			return
-		}
-		ctx := context.WithValue(r.Context(), middleware.UserIDKey, c.UserID)
-		ctx = context.WithValue(ctx, middleware.UsernameKey, c.Username)
-		r = r.WithContext(ctx)
-		r.Header.Set("X-User-ID", c.UserID)
-		r.Header.Set("X-Username", c.Username)
-		next.ServeHTTP(w, r)
+			if !hasAud {
+				http.Error(w, `{"error":"invalid audience"}`, http.StatusUnauthorized)
+				return
+			}
+			// A signature/expiry-valid JWT doesn't mean the session is still
+			// live — auth-server tracks logout/ban revocation via its own
+			// sessions table, which legacy-api has no visibility into. Ask
+			// auth-server directly rather than silently accepting any
+			// not-yet-expired token for its full lifetime after logout/ban.
+			valid, err := sessionChecker.isValid(tokenStr)
+			if err != nil {
+				log.WithError(err).Warn("session validation check failed")
+				http.Error(w, `{"error":"session validation unavailable"}`, http.StatusServiceUnavailable)
+				return
+			}
+			if !valid {
+				http.Error(w, `{"error":"session revoked"}`, http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), middleware.UserIDKey, c.UserID)
+			ctx = context.WithValue(ctx, middleware.UsernameKey, c.Username)
+			r = r.WithContext(ctx)
+			r.Header.Set("X-User-ID", c.UserID)
+			r.Header.Set("X-Username", c.Username)
+			next.ServeHTTP(w, r)
 		})
 	}
 }
