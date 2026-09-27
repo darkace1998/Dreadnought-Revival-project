@@ -40,3 +40,28 @@ func TestBattleLoadoutRefusesNonLoopback(t *testing.T) {
 		t.Fatalf("status %d, want 403 for a non-loopback caller", rec.Code)
 	}
 }
+
+func TestBattlePlayerNameLookup(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET display_name='Tester' WHERE user_id=?`, pid); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/battle/player?pid="+pid, nil)
+	req.RemoteAddr = "127.0.0.1:5000"
+	rec := httptest.NewRecorder()
+	battlePlayerHandler(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "name=Tester\n" {
+		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/battle/player?pid="+pid, nil)
+	req.RemoteAddr = "10.0.0.5:5000"
+	rec = httptest.NewRecorder()
+	battlePlayerHandler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("non-loopback: %d", rec.Code)
+	}
+}

@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // battleLoadoutHandler serves one player's loadout to the battle-server mod.
@@ -80,4 +82,31 @@ func formatBattleLoadout(id, pid string, loadout mmogShipLoadoutSeed) string {
 	fmt.Fprintf(&b, "abilities=%s\n", ints(loadout.abilityItemID(0), loadout.abilityItemID(1), loadout.abilityItemID(2), loadout.abilityItemID(3)))
 	fmt.Fprintf(&b, "perks=%s\n", ints(loadout.perkItemID(0), loadout.perkItemID(1), loadout.perkItemID(2), loadout.perkItemID(3)))
 	return b.String()
+}
+
+// battlePlayerHandler answers GET /battle/player?pid= with "name=<display
+// name>": the name battle-server-mod gives a joining player. Added 2026-09-28:
+// the host can only name players from their join URL, whose Name= the client
+// empties (UYGameEngine::Browse) and whose PlayerName= (dn-launcher's start
+// token) survives only the first match after the game starts -- a later
+// 3-player proving ground joined without it and everyone was a number again.
+// Loopback only, like /battle/loadout.
+func battlePlayerHandler(w http.ResponseWriter, r *http.Request) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(host).IsLoopback() {
+		http.Error(w, "loopback only", http.StatusForbidden)
+		return
+	}
+	pid := protocol.NormalizePlayerPID(r.URL.Query().Get("pid"))
+	if pid == "" {
+		http.Error(w, "pid is required", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(mmogPlayerStateForPID(pid).displayName)
+	if name == "" || name == "Local" {
+		http.Error(w, "no name for this player", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = fmt.Fprintf(w, "name=%s\n", name)
 }
