@@ -158,30 +158,36 @@ ranking data to fill it with.
 
 Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller …`.
 
-## Team sync (on; `dn_host_no_team_sync.txt` turns it off)
+## Teams, names and bot balance (on; `dn_host_no_team_sync.txt` turns it off)
 
-The host never reads the `?TEAM=` join option: the only `TEAM=` in the exe is
-the client's own `TRAVEL %s?TEAM=%s`. The original server build knew the teams
-from its match data. So two deathmatch players joining with `TEAM=2` and
-`TEAM=1` landed on the same team. The mod reads `TEAM=` from each player's
-connection URL (like `DNPID`) and calls the game's
-`AYPlayerController::SetTeam(EYTeam)` on that controller, at `PostLogin` and
-again at the join-time server calls (`ServerReadyForJoining`,
-`ServerSpawnNearActor`, `ServerPlayerReadyUpForMatch`) if the host reassigned
-it. mmogbrain decides the teams: 1 for everyone in co-op modes, 1/2 in PvP.
+Three things the host lacks because the original server build fed it match
+data. All run once a second from the game-mode timer hook (`PlayersTick`), for
+every human (a player controller with a network connection):
 
-Log: `team sync [PostLogin]: controller … TEAM=2 -- controller 1 -> 2, player state 1 -> 2`.
-Not verified live yet. (The first build logged `SetTeam not found`: the mod's
-wide-string FName constructor pointed at the ANSI one, `0xC9CF20`; the wide one
-is `0xC9CFA0`.)
+- **Teams.** The host never reads the `?TEAM=` join option (the only `TEAM=` in
+  the exe is the client's own `TRAVEL %s?TEAM=%s`), so each human's PlayerState
+  team (`+0x940`) stayed `YT_NONE` 0: missing from the scoreboard, and two
+  deathmatch players on one side. The mod writes the `TEAM=` from the player's
+  connection URL into the PlayerState and controller (`+0xC30`) team when they
+  differ.
+- **Names.** Joins arrive with an empty `?Name=`, so players were `257`, `258`.
+  The mod asks mmogbrain for the display name by `DNPID`
+  (`GET /battle/player`), else takes the join URL's `PlayerName=`, and calls
+  the game mode's `AGameMode::ChangeName`.
+- **Bot balance** (proving ground; `dn_host_no_bot_balance.txt` turns just this
+  off). The bot targets are the mode's fixed team size (`gm+0x97C`); nothing
+  subtracted the humans, so three players still got 8 bots on their side. Once
+  the bots are set up, the mod calls the game's `SetTeamSizeAI` (`0x381550`)
+  with `teamSize - humans`, which trims the surplus.
 
-Player names ride on the same switch. Every join arrives with an empty
-`?Name=` (the client's `Browse` replaces it with its empty nickname), so the host
-named players `257`, `258`. dn-launcher's `?PlayerName=<account>` token does
-reach the host in the join URL, so at `PostLogin` the mod calls the game mode's
-`AGameMode::ChangeName(Controller, NewName, false)` with it. Log:
-`names: controller … is now "UnlockAll"`. Needs the current launcher; not
-verified live yet.
+The first version did teams at `PostLogin` through the `ProcessEvent` hook and
+`AYPlayerController::SetTeam`. With it, only the last player to join got his
+own loadout; with it off both players' fits registered. It is gone.
+
+Logs: `team sync: controller … TEAM=1 -- player state 0 -> 1, …`,
+`names: controller … is now "…" (from mmogbrain)`,
+`bot balance: 3 human(s) on team 1; team size 8 -> team 1 bots 8 -> 5`.
+Not verified live yet.
 
 ## Match results (on; `dn_host_no_match_result.txt` turns it off)
 

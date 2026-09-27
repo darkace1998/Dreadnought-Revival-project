@@ -1455,10 +1455,8 @@ static void SpawnJoiningPlayer(void *params) {
 }
 
 // Team sync (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1),
-// see SyncTeam.
+// see PlayersTick.
 static bool g_teamSyncArmed = false;
-static void SyncTeam(void *pc, const char *where);
-static void SyncName(void *gameMode, void *pc);
 
 static void *__fastcall HookProcessEvent(void *object, void *function,
                                          void *params) {
@@ -1478,17 +1476,14 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   // the teleport. Writing twice is free -- the second call sees a non-zero tier
   // and leaves it.
   if (function == g_fnServerReadyForJoining) {
-    SyncTeam(object, "ServerReadyForJoining");
     EnsureFleetTier(object, "ServerReadyForJoining");
     return ret;
   }
   if (function == g_fnServerSpawnNearActor) {
-    SyncTeam(object, "ServerSpawnNearActor");
     EnsureFleetTier(object, "ServerSpawnNearActor");
     return ret;
   }
   if (function == g_fnServerPlayerReadyUp) {
-    SyncTeam(object, "ServerPlayerReadyUpForMatch");
     EnsureFleetTier(object, "ServerPlayerReadyUpForMatch");
     return ret;
   }
@@ -1504,10 +1499,6 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   if (s_inSpawn)
     return ret;
   // AGameMode_K2_PostLogin_Params: APlayerController* NewPlayer at +0x00.
-  if (IsReadable(params, sizeof(void *))) {
-    SyncTeam(*(void **)params, "PostLogin");
-    SyncName(object, *(void **)params); // K2_PostLogin runs on the game mode
-  }
   s_inSpawn = true;
   SpawnJoiningPlayer(params);
   s_inSpawn = false;
@@ -1584,9 +1575,12 @@ static int __fastcall HookGetNetMode(void *netDriver) {
 typedef void(__fastcall *tGameModeTimer)(void *gameMode);
 static tGameModeTimer g_origGameModeTimer = nullptr;
 
+static bool g_bcAIArmed = false;
+static void PlayersTick(uint8_t *gm);
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
-  if (IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
+  if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
       gm[OFF_GM_ENABLE_SPAWN_AI] == 0 &&
       IsReadable(gm + OFF_GM_GAMESTATE, sizeof(void *))) {
     uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
@@ -1599,6 +1593,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
     }
   }
   g_origGameModeTimer(gameMode);
+  PlayersTick(gm);
 }
 
 // ---------------------------------------------------------------------------
@@ -1896,120 +1891,192 @@ static void ReportMatchResult(void *orbitComp) {
 }
 
 // ---------------------------------------------------------------------------
-// Team sync (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)
+// Teams, names and bot balance, from the game-mode timer
+// (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)
 //
-// Verified 2026-09-28: the host never reads the ?TEAM= join option. The only
-// "TEAM=" in the exe is the CLIENT's "TRAVEL %s?TEAM=%s" (it appends the Team
-// mmogbrain sent in YA_Connect); no ParseOption(.., "TEAM") exists. The
-// original server build knew the teams from its own match data. So on our host
-// two TDM players who joined with TEAM=2 and TEAM=1 (host log 2026-09-28
-// 00:04) ended up on the same team.
+// Three gaps the host has because the original server build fed it match data:
 //
-// This reads TEAM= from the player's own connection URL (like DNPID) and calls
-// the game's AYPlayerController::SetTeam(EYTeam) UFunction on that controller
-// (FindFunctionChecked + ProcessEvent, as the eom stats do), at PostLogin and
-// again at the join-time server RPCs in case the host reassigned it. Only when
-// the controller or its PlayerState disagree; logs before/after. NOT verified
-// live: whether SetTeam also updates the PlayerState and the spawn side.
-static void SyncTeam(void *pcv, const char *where) {
-  if (!g_teamSyncArmed || !g_origProcessEvent)
-    return;
-  uint8_t *pc = (uint8_t *)pcv;
-  __try {
-    if (!IsReadable(pc, OFF_PC_TEAM + 1) ||
-        !ClassChainContains((UObjectMin *)pc, "PlayerController"))
-      return;
-    char v[8];
-    if (!UrlOptionForController(pc, L"TEAM=", v, sizeof(v)))
-      return; // the host's local player, or a join without TEAM=
-    int want = atoi(v);
-    if (want < 1 || want > 2) {
-      Logf("team sync [%s]: controller %p joined with TEAM=%s; not a team (1, 2)",
-           where, pc, v);
-      return;
-    }
-    uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
-    int pcTeam = pc[OFF_PC_TEAM];
-    int priTeam = IsReadable(pri, OFF_PRI_TEAM + 1) ? pri[OFF_PRI_TEAM] : -1;
-    if (pcTeam == want && (priTeam == want || priTeam == -1))
-      return;
+//   Teams. The host never reads ?TEAM= (the only "TEAM=" in the exe is the
+//   CLIENT's "TRAVEL %s?TEAM=%s"), and each human's PlayerState team
+//   (AYPlayerReplicationInfo::m_team +0x940) stayed YT_NONE 0 -- so players
+//   were missing from the scoreboard, results scored them as no team, and two
+//   TDM players shared a side.
+//
+//   Names. Every join arrives with an empty ?Name= (the client's Browse
+//   replaces it with its empty nickname), so AGameMode::InitNewPlayer named
+//   players 257, 258. The name comes from mmogbrain by DNPID
+//   (GET /battle/player), else the join URL's PlayerName=.
+//
+//   Bots. In the proving ground the bot targets are the mode's fixed team size
+//   (gm+0x97C, copied to gm+0x980 / +0x984 by 0x3678F0); nothing subtracts the
+//   humans, so three players still got 8 bots on their side. The game's own
+//   SetTeamSizeAI (body 0x381550: sets the target, then 0x381FA0 trims surplus
+//   bots) is called with teamSize - humans.
+//
+// CHANGED 2026-09-28: the first version did the team and name at PostLogin
+// through the ProcessEvent hook, calling AYPlayerController::SetTeam. With it,
+// only the LAST player to join got his own loadout (the others' ship picks
+// never reached FindLoadoutByID -- host logs 01:07 and 01:09); with it off
+// (DN_HOST_NO_TEAM_SYNC=1, 01:24) both players' fits registered. So this runs
+// from the once-a-second game-mode timer instead, writes only the team bytes
+// that are wrong (the controller already had the right team in the proving
+// ground), and calls no SetTeam. NOT verified live yet.
+#define OFF_GS_PLAYER_ARRAY 0x470 // AGameState::PlayerArray (SDK)
+#define OFF_ACTOR_OWNER 0xC8      // AActor::Owner (SDK)
+#define OFF_GM_TEAM_SIZE 0x97C    // per-team size from the mode's data
+#define OFF_GM_AI_TARGET_T1 0x980
+#define RVA_SET_TEAM_SIZE_AI 0x381550
 
-    static uint64_t s_setTeam = 0;
-    if (!s_setTeam) {
-      FNameMin n = {};
-      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"SetTeam", 1 /* FNAME_Add */);
-      s_setTeam = *(uint64_t *)&n;
-    }
-    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(pc, s_setTeam);
-    if (!fn) {
-      Logf("team sync [%s]: SetTeam not found on controller %p", where, pc);
-      return;
-    }
-    uint8_t parms[16] = {};
-    parms[0] = (uint8_t)want; // AYPlayerController::SetTeam(EYTeam Team)
-    g_origProcessEvent(pc, fn, parms);
-    int pcAfter = pc[OFF_PC_TEAM];
-    int priAfter = IsReadable(pri, OFF_PRI_TEAM + 1) ? pri[OFF_PRI_TEAM] : -1;
-    Logf("team sync [%s]: controller %p TEAM=%d -- controller %d -> %d, "
-         "player state %d -> %d",
-         where, pc, want, pcTeam, pcAfter, priTeam, priAfter);
-  } __except (EXCEPTION_EXECUTE_HANDLER) {
-    Logf("team sync [%s]: EXCEPTION for controller %p", where, pcv);
+typedef void(__fastcall *tSetTeamSizeAI)(void *gameMode, int team, int size);
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+struct PlayerSeen {
+  void *pc;
+  bool named;
+  int lastTeamFix;
+};
+static PlayerSeen g_seen[64];
+
+static PlayerSeen *SeenFor(void *pc) {
+  PlayerSeen *freeSlot = nullptr;
+  for (auto &p : g_seen) {
+    if (p.pc == pc)
+      return &p;
+    if (!freeSlot && !p.pc)
+      freeSlot = &p;
   }
+  if (freeSlot) {
+    freeSlot->pc = pc;
+    freeSlot->named = false;
+    freeSlot->lastTeamFix = -1;
+  }
+  return freeSlot;
 }
 
-// ---------------------------------------------------------------------------
-// Player names (with team sync; off with dn_host_no_team_sync.txt)
-//
-// Verified 2026-09-28 from host logs: every join arrives with an EMPTY
-// "?Name=" -- UYGameEngine::Browse (0x140535840) replaces any Name= with the
-// client's nickname, which stays empty on this backend -- so AGameMode::
-// InitNewPlayer names players DefaultPlayerName + PlayerId: "257", "258". But
-// dn-launcher's "?PlayerName=<account>" token DOES reach the host in the same
-// URL ("Launch_P?PlayerName=UnlockAll?DNPID=..?TEAM=1?Name="). So at PostLogin
-// the mod calls the game mode's own AGameMode::ChangeName(Controller, NewName,
-// bNameChange=false) with it (params per the SDK: Controller +0x00, FString
-// +0x08, bool +0x18), which sets the PlayerState name that replicates to the
-// scoreboard. NOT verified live yet.
-static void SyncName(void *gameModeV, void *pcV) {
-  if (!g_teamSyncArmed || !g_origProcessEvent)
+static void NamePlayer(uint8_t *gm, uint8_t *pc, PlayerSeen *seen) {
+  seen->named = true; // one attempt per player, logged either way
+  static wchar_t name[64];
+  name[0] = 0;
+  const char *source = "mmogbrain";
+  char pid[80], path[160], body[256], v[128];
+  if (PlayerPIDForController(pc, pid, sizeof(pid))) {
+    _snprintf_s(path, sizeof(path), _TRUNCATE, "/battle/player?pid=%s", pid);
+    if (HttpGetLoopback(path, body, sizeof(body)) && FieldValue(body, "name", v, sizeof(v)) && v[0])
+      MultiByteToWideChar(CP_UTF8, 0, v, -1, name, 32);
+  }
+  if (!name[0]) {
+    source = "join URL";
+    if (!UrlOptionWideForController(pc, L"PlayerName=", name, 32)) {
+      Logf("names: no name for controller %p (pid %s): mmogbrain had none and "
+           "the join URL has no PlayerName", pc, pid[0] ? pid : "<none>");
+      return;
+    }
+  }
+  static uint64_t s_changeName = 0;
+  if (!s_changeName) {
+    FNameMin n = {};
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"ChangeName", 1 /* FNAME_Add */);
+    s_changeName = *(uint64_t *)&n;
+  }
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gm, s_changeName);
+  if (!fn) {
+    Logf("names: ChangeName not found on game mode %p", gm);
     return;
-  uint8_t *pc = (uint8_t *)pcV;
+  }
+  // AGameMode_ChangeName_Params (SDK): Controller +0x00, FString +0x08,
+  // bool bNameChange +0x18.
+  struct {
+    void *controller;
+    FStringMin newName;
+    uint8_t bNameChange;
+    uint8_t pad[7];
+  } parms = {};
+  parms.controller = pc;
+  int len = (int)wcslen(name);
+  parms.newName = {name, len + 1, len + 1};
+  void **vt = *(void ***)gm;
+  ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(gm, fn, &parms);
+  char narrow[64];
+  WideCharToMultiByte(CP_UTF8, 0, name, -1, narrow, sizeof(narrow), nullptr, nullptr);
+  Logf("names: controller %p is now \"%s\" (from %s)", pc, narrow, source);
+}
+
+static void FixTeam(uint8_t *pc, uint8_t *pri, PlayerSeen *seen) {
+  char v[8];
+  if (!UrlOptionForController(pc, L"TEAM=", v, sizeof(v)))
+    return;
+  int want = atoi(v);
+  if (want < 1 || want > 2)
+    return;
+  int priTeam = pri[OFF_PRI_TEAM];
+  int pcTeam = IsReadable(pc + OFF_PC_TEAM, 1) ? pc[OFF_PC_TEAM] : want;
+  if (priTeam == want && pcTeam == want)
+    return;
+  pri[OFF_PRI_TEAM] = (uint8_t)want;
+  if (IsReadable(pc + OFF_PC_TEAM, 1))
+    pc[OFF_PC_TEAM] = (uint8_t)want;
+  if (seen->lastTeamFix != want) // do not repeat the line every second
+    Logf("team sync: controller %p TEAM=%d -- player state %d -> %d, controller %d -> %d",
+         pc, want, priTeam, want, pcTeam, want);
+  seen->lastTeamFix = want;
+}
+
+// Runs once a second on the game thread (HookGameModeTimer).
+static void PlayersTick(uint8_t *gm) {
+  if (!g_teamSyncArmed)
+    return;
   __try {
-    if (!IsReadable(gameModeV, sizeof(UObjectMin)) ||
-        !ClassChainContains((UObjectMin *)gameModeV, "GameMode") ||
-        !IsReadable(pc, OFF_PC_NETCONNECTION + 8))
+    if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
       return;
-    static wchar_t name[64];
-    if (!UrlOptionWideForController(pc, L"PlayerName=", name, 32))
-      return; // an older launcher (no PlayerName token) or the local player
-    static uint64_t s_changeName = 0;
-    if (!s_changeName) {
-      FNameMin n = {};
-      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"ChangeName", 1 /* FNAME_Add */);
-      s_changeName = *(uint64_t *)&n;
-    }
-    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gameModeV, s_changeName);
-    if (!fn) {
-      Logf("names: ChangeName not found on game mode %p", gameModeV);
+    uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+    if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
       return;
+    uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+    int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+    if (count <= 0 || count > 256 || !IsReadable(arr, (size_t)count * 8))
+      return;
+    int humans = 0;
+    for (int i = 0; i < count; ++i) {
+      uint8_t *pri = arr[i];
+      if (!IsReadable(pri, OFF_PRI_TEAM + 1))
+        continue;
+      uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+      // Humans only: a player controller with a network connection -- not the
+      // host's own local player, not a bot's AI controller.
+      if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) ||
+          !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+          !*(void **)(pc + OFF_PC_NETCONNECTION))
+        continue;
+      ++humans;
+      PlayerSeen *seen = SeenFor(pc);
+      if (!seen)
+        continue;
+      FixTeam(pc, pri, seen);
+      if (!seen->named)
+        NamePlayer(gm, pc, seen);
     }
-    struct {
-      void *controller;
-      FStringMin newName;
-      uint8_t bNameChange;
-      uint8_t pad[7];
-    } parms = {};
-    parms.controller = pc;
-    int len = (int)wcslen(name);
-    parms.newName = {name, len + 1, len + 1};
-    parms.bNameChange = 0;
-    g_origProcessEvent(gameModeV, fn, &parms);
-    char narrow[64];
-    WideCharToMultiByte(CP_UTF8, 0, name, -1, narrow, sizeof(narrow), nullptr, nullptr);
-    Logf("names: controller %p is now \"%s\" (from the join URL's PlayerName)", pc, narrow);
+
+    // Proving ground: the humans take bot slots on team 1.
+    static int s_botBalance = -1;
+    if (s_botBalance < 0)
+      s_botBalance = SwitchOn("DN_HOST_NO_BOT_BALANCE", "dn_host_no_bot_balance.txt") ? 0 : 1;
+    if (s_botBalance && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) &&
+        gs[OFF_GS_GAME_MODE_TYPE] == YGMT_BOOTCAMP) {
+      int size = *(int32_t *)(gm + OFF_GM_TEAM_SIZE);
+      int target = *(int32_t *)(gm + OFF_GM_AI_TARGET_T1);
+      int want = size - humans;
+      if (want < 0)
+        want = 0;
+      // target > 0: the bots have been set up (0x3678F0 ran); before that a
+      // call would fill early.
+      if (size > 0 && target > 0 && humans > 0 && target != want) {
+        ((tSetTeamSizeAI)(g_base + RVA_SET_TEAM_SIZE_AI))(gm, 1, want);
+        Logf("bot balance: %d human(s) on team 1; team size %d -> team 1 bots %d -> %d",
+             humans, size, target, want);
+      }
+    }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
-    Logf("names: EXCEPTION naming controller %p", pcV);
+    Logf("players tick: EXCEPTION on game mode %p", gm);
   }
 }
 
@@ -2163,20 +2230,15 @@ static void InstallPostLoginHook() {
 
   // The ProcessEvent hook carries both features, so it installs if either is
   // wanted.
-  g_teamSyncArmed = !SwitchOn("DN_HOST_NO_TEAM_SYNC", "dn_host_no_team_sync.txt");
-  if (!g_teamSyncArmed)
-    Logf("team sync: OFF (dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1). "
-         "Players keep whatever team the host picks.");
-  if (!g_spawnArmed && !g_fleetTierArmed && !g_teamSyncArmed) {
+  if (!g_spawnArmed && !g_fleetTierArmed) {
     Logf("post-login hook is OFF. Enable the fleet tier "
          "(dn_host_fleet_tier.txt or DN_HOST_FLEET_TIER=1) to let the normal "
          "orbit flow finish, and/or the spawn bypass (dn_host_postlogin.txt or "
          "DN_HOST_POSTLOGIN_SPAWN=1) to skip orbit entirely.");
     return;
   }
-  Logf("post-login hook: fleet tier %s, spawn bypass %s, team sync %s",
-       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off",
-       g_teamSyncArmed ? "ON" : "off");
+  Logf("post-login hook: fleet tier %s, spawn bypass %s",
+       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off");
 
   const char *outer = nullptr;
   int waited = 0;
@@ -2359,13 +2421,19 @@ static DWORD WINAPI Startup(LPVOID) {
     Logf("eom stats: OFF (dn_host_no_eom_stats.txt / DN_HOST_NO_EOM_STATS=1). "
          "Clients will stop on a black screen at SetupUIWidgets.");
 
-  if (BootcampAIEnabled())
-    InstallSwitchedHook("bc ai (AYGameMode_Multiplayer timer)",
-                        RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
-                        (void **)&g_origGameModeTimer);
-  else
+  // The game-mode timer carries the proving-ground bots AND the per-second
+  // team/name/bot-balance pass (PlayersTick), so it installs if either is on.
+  g_bcAIArmed = BootcampAIEnabled();
+  g_teamSyncArmed = !SwitchOn("DN_HOST_NO_TEAM_SYNC", "dn_host_no_team_sync.txt");
+  if (!g_bcAIArmed)
     Logf("bc ai: OFF (create dn_host_bc_ai.txt beside the executable, or set "
          "DN_HOST_BC_AI=1). The proving ground has no bots.");
+  Logf("team sync / names / bot balance: %s", g_teamSyncArmed ? "ON (game-mode timer)"
+       : "OFF (dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)");
+  if (g_bcAIArmed || g_teamSyncArmed)
+    InstallSwitchedHook("game-mode timer (bc ai, teams, names, bot balance)",
+                        RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
+                        (void **)&g_origGameModeTimer);
 
   if (ShipPhysicsEnabled())
     InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",
