@@ -808,6 +808,39 @@ struct FlownShips {
 };
 static FlownShips g_flown[64];
 
+// The pid each controller had when its loadout was served. FIXED 2026-09-27:
+// the first live match (20:53 host) sent the eom stats and then reported
+// nothing -- ReportMatchResult's only silent exit was reading DNPID from the
+// connection URL, which had worked for the same player's loadouts minutes
+// earlier. Why it failed at match end is not known; this cache is the
+// fallback, and every exit now logs.
+struct ControllerPID {
+  void *pc;
+  char pid[80];
+};
+static ControllerPID g_controllerPIDs[64];
+
+static void RememberControllerPID(void *pc, const char *pid) {
+  ControllerPID *slot = nullptr;
+  for (auto &c : g_controllerPIDs) {
+    if (c.pc == pc) { slot = &c; break; }
+    if (!slot && !c.pc) slot = &c;
+  }
+  if (!slot)
+    return;
+  slot->pc = pc;
+  strncpy_s(slot->pid, sizeof(slot->pid), pid, _TRUNCATE);
+}
+
+static bool RememberedControllerPID(void *pc, char *out, size_t outLen) {
+  for (auto &c : g_controllerPIDs)
+    if (c.pc && c.pc == pc) {
+      strncpy_s(out, outLen, c.pid, _TRUNCATE);
+      return out[0] != 0;
+    }
+  return false;
+}
+
 static void RecordFlownShip(const char *pid, const char *id) {
   FlownShips *slot = nullptr;
   for (auto &f : g_flown) {
@@ -945,6 +978,10 @@ static bool RegisterPlayerLoadout(void *mgr, void **id, const char *idText) {
     return false;
   }
   RecordFlownShip(pid, idText);
+  __try {
+    RememberControllerPID(*(void **)((uint8_t *)mgr + OFF_COMPONENT_OWNER), pid);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
 
   char v[512];
   static wchar_t nameW[128], displayW[512];
@@ -1720,8 +1757,15 @@ static void ReportMatchResult(void *orbitComp) {
   float damage = 0;
   __try {
     uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
-    if (!PlayerPIDForController(pc, pid, sizeof(pid)))
-      return; // the host's local player, or a player without a DNPID
+    if (!PlayerPIDForController(pc, pid, sizeof(pid))) {
+      if (!RememberedControllerPID(pc, pid, sizeof(pid))) {
+        Logf("match result: controller %p has no DNPID (connection URL unreadable "
+             "and no loadout was served to it); not reported", pc);
+        return;
+      }
+      Logf("match result: controller %p -- DNPID not readable from the connection "
+           "at match end; using %s from its loadout", pc, pid);
+    }
     uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
     if (!IsReadable(pri, OFF_PRI_TEAM + 1)) {
       Logf("match result: %s has no player state; not reported", pid);
@@ -1822,6 +1866,8 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
   }
   if (!SwitchOn("DN_HOST_NO_MATCH_RESULT", "dn_host_no_match_result.txt"))
     ReportMatchResult(orbitComp);
+  else
+    Logf("match result: OFF (dn_host_no_match_result.txt / DN_HOST_NO_MATCH_RESULT=1)");
 }
 
 // Both of the switches below are opt-in separately from the loadout fix,
