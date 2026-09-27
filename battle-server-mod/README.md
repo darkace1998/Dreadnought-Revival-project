@@ -158,6 +158,31 @@ ranking data to fill it with.
 
 Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller …`.
 
+## Team sync (on; `dn_host_no_team_sync.txt` turns it off)
+
+The host never reads the `?TEAM=` join option: the only `TEAM=` in the exe is
+the client's own `TRAVEL %s?TEAM=%s`. The original server build knew the teams
+from its match data. So two deathmatch players joining with `TEAM=2` and
+`TEAM=1` landed on the same team. The mod reads `TEAM=` from each player's
+connection URL (like `DNPID`) and calls the game's
+`AYPlayerController::SetTeam(EYTeam)` on that controller, at `PostLogin` and
+again at the join-time server calls (`ServerReadyForJoining`,
+`ServerSpawnNearActor`, `ServerPlayerReadyUpForMatch`) if the host reassigned
+it. mmogbrain decides the teams: 1 for everyone in co-op modes, 1/2 in PvP.
+
+Log: `team sync [PostLogin]: controller … TEAM=2 -- controller 1 -> 2, player state 1 -> 2`.
+Not verified live yet. (The first build logged `SetTeam not found`: the mod's
+wide-string FName constructor pointed at the ANSI one, `0xC9CF20`; the wide one
+is `0xC9CFA0`.)
+
+Player names ride on the same switch. Every join arrives with an empty
+`?Name=` (the client's `Browse` replaces it with its empty nickname), so the host
+named players `257`, `258`. dn-launcher's `?PlayerName=<account>` token does
+reach the host in the join URL, so at `PostLogin` the mod calls the game mode's
+`AGameMode::ChangeName(Controller, NewName, false)` with it. Log:
+`names: controller … is now "UnlockAll"`. Needs the current launcher; not
+verified live yet.
+
 ## Match results (on; `dn_host_no_match_result.txt` turns it off)
 
 Nothing in this exe reports a finished match -- the server build did -- so no

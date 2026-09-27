@@ -713,7 +713,12 @@ static tFindLoadoutByID g_origFindLoadoutByID = nullptr;
 #define RVA_LOADOUT_INIT_FROM_INFO 0x34D690
 #define RVA_FSTRING_ASSIGN 0x21F5E0
 #define RVA_TARRAY_INT_ASSIGN 0x1CF3240
-#define RVA_FNAME_CTOR_WIDE 0xC9CF20
+// FName(const WIDECHAR*, EFindName). FIXED 2026-09-28: this was 0xC9CF20,
+// which is the ANSI (char*) constructor -- the game calls 0xC9CF20 with
+// "YMmogbrain" and 0xC9CFA0 with L"m_team". Given a wide string, 0xC9CF20
+// built a garbage name: team sync logged "SetTeam not found", and the
+// loadout's pid FName was garbage too (nothing read it).
+#define RVA_FNAME_CTOR_WIDE 0xC9CFA0
 #define OFF_COMPONENT_OWNER 0xA8
 #define OFF_PC_NETCONNECTION 0x5A8
 #define OFF_NETCONN_REQUEST_URL 0x198
@@ -759,9 +764,9 @@ typedef FNameMin *(__fastcall *tFNameCtor)(FNameMin *out, const wchar_t *text,
 
 static bool PlayerLoadoutsEnabled();
 
-// DNPID from the controller's connection login URL, or "" (the host's local
-// player 256 has no connection).
-static bool PlayerPIDForController(uint8_t *owner, char *out, size_t outLen) {
+// One ?KEY=value option from the controller's connection login URL (e.g.
+// "DNPID=", "TEAM="), or false (the host's local player 256 has no connection).
+static bool UrlOptionForController(uint8_t *owner, const wchar_t *key, char *out, size_t outLen) {
   out[0] = 0;
   __try {
     if (!IsReadable(owner, OFF_PC_NETCONNECTION + 8))
@@ -773,10 +778,10 @@ static bool PlayerPIDForController(uint8_t *owner, char *out, size_t outLen) {
     if (!url->data || url->num <= 0 || url->num > 4096 ||
         !IsReadable(url->data, (size_t)url->num * 2))
       return false;
-    const wchar_t *p = wcsstr(url->data, L"DNPID=");
+    const wchar_t *p = wcsstr(url->data, key);
     if (!p)
       return false;
-    p += 6;
+    p += wcslen(key);
     size_t n = 0;
     while (p[n] && p[n] != L'?' && p[n] != L'&' && n + 1 < outLen) {
       out[n] = (char)p[n];
@@ -787,6 +792,40 @@ static bool PlayerPIDForController(uint8_t *owner, char *out, size_t outLen) {
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     return false;
   }
+}
+
+// The same, as wide text (player names are not ASCII-only).
+static bool UrlOptionWideForController(uint8_t *owner, const wchar_t *key, wchar_t *out, size_t outLen) {
+  out[0] = 0;
+  __try {
+    if (!IsReadable(owner, OFF_PC_NETCONNECTION + 8))
+      return false;
+    uint8_t *conn = *(uint8_t **)(owner + OFF_PC_NETCONNECTION);
+    if (!IsReadable(conn, OFF_NETCONN_REQUEST_URL + sizeof(FStringMin)))
+      return false;
+    FStringMin *url = (FStringMin *)(conn + OFF_NETCONN_REQUEST_URL);
+    if (!url->data || url->num <= 0 || url->num > 4096 ||
+        !IsReadable(url->data, (size_t)url->num * 2))
+      return false;
+    const wchar_t *p = wcsstr(url->data, key);
+    if (!p)
+      return false;
+    p += wcslen(key);
+    size_t n = 0;
+    while (p[n] && p[n] != L'?' && p[n] != L'&' && n + 1 < outLen) {
+      out[n] = p[n];
+      ++n;
+    }
+    out[n] = 0;
+    return n > 0;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return false;
+  }
+}
+
+// DNPID from the controller's connection login URL.
+static bool PlayerPIDForController(uint8_t *owner, char *out, size_t outLen) {
+  return UrlOptionForController(owner, L"DNPID=", out, outLen);
 }
 
 static bool PlayerPIDForManager(void *mgr, char *out, size_t outLen) {
@@ -1415,6 +1454,12 @@ static void SpawnJoiningPlayer(void *params) {
        pc, kPrecastLabels[idx], loadout);
 }
 
+// Team sync (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1),
+// see SyncTeam.
+static bool g_teamSyncArmed = false;
+static void SyncTeam(void *pc, const char *where);
+static void SyncName(void *gameMode, void *pc);
+
 static void *__fastcall HookProcessEvent(void *object, void *function,
                                          void *params) {
   void *ret = g_origProcessEvent ? g_origProcessEvent(object, function, params)
@@ -1433,14 +1478,17 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   // the teleport. Writing twice is free -- the second call sees a non-zero tier
   // and leaves it.
   if (function == g_fnServerReadyForJoining) {
+    SyncTeam(object, "ServerReadyForJoining");
     EnsureFleetTier(object, "ServerReadyForJoining");
     return ret;
   }
   if (function == g_fnServerSpawnNearActor) {
+    SyncTeam(object, "ServerSpawnNearActor");
     EnsureFleetTier(object, "ServerSpawnNearActor");
     return ret;
   }
   if (function == g_fnServerPlayerReadyUp) {
+    SyncTeam(object, "ServerPlayerReadyUpForMatch");
     EnsureFleetTier(object, "ServerPlayerReadyUpForMatch");
     return ret;
   }
@@ -1455,6 +1503,11 @@ static void *__fastcall HookProcessEvent(void *object, void *function,
   static thread_local bool s_inSpawn = false;
   if (s_inSpawn)
     return ret;
+  // AGameMode_K2_PostLogin_Params: APlayerController* NewPlayer at +0x00.
+  if (IsReadable(params, sizeof(void *))) {
+    SyncTeam(*(void **)params, "PostLogin");
+    SyncName(object, *(void **)params); // K2_PostLogin runs on the game mode
+  }
   s_inSpawn = true;
   SpawnJoiningPlayer(params);
   s_inSpawn = false;
@@ -1842,6 +1895,124 @@ static void ReportMatchResult(void *orbitComp) {
     ClearFlownShips(pid);
 }
 
+// ---------------------------------------------------------------------------
+// Team sync (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)
+//
+// Verified 2026-09-28: the host never reads the ?TEAM= join option. The only
+// "TEAM=" in the exe is the CLIENT's "TRAVEL %s?TEAM=%s" (it appends the Team
+// mmogbrain sent in YA_Connect); no ParseOption(.., "TEAM") exists. The
+// original server build knew the teams from its own match data. So on our host
+// two TDM players who joined with TEAM=2 and TEAM=1 (host log 2026-09-28
+// 00:04) ended up on the same team.
+//
+// This reads TEAM= from the player's own connection URL (like DNPID) and calls
+// the game's AYPlayerController::SetTeam(EYTeam) UFunction on that controller
+// (FindFunctionChecked + ProcessEvent, as the eom stats do), at PostLogin and
+// again at the join-time server RPCs in case the host reassigned it. Only when
+// the controller or its PlayerState disagree; logs before/after. NOT verified
+// live: whether SetTeam also updates the PlayerState and the spawn side.
+static void SyncTeam(void *pcv, const char *where) {
+  if (!g_teamSyncArmed || !g_origProcessEvent)
+    return;
+  uint8_t *pc = (uint8_t *)pcv;
+  __try {
+    if (!IsReadable(pc, OFF_PC_TEAM + 1) ||
+        !ClassChainContains((UObjectMin *)pc, "PlayerController"))
+      return;
+    char v[8];
+    if (!UrlOptionForController(pc, L"TEAM=", v, sizeof(v)))
+      return; // the host's local player, or a join without TEAM=
+    int want = atoi(v);
+    if (want < 1 || want > 2) {
+      Logf("team sync [%s]: controller %p joined with TEAM=%s; not a team (1, 2)",
+           where, pc, v);
+      return;
+    }
+    uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
+    int pcTeam = pc[OFF_PC_TEAM];
+    int priTeam = IsReadable(pri, OFF_PRI_TEAM + 1) ? pri[OFF_PRI_TEAM] : -1;
+    if (pcTeam == want && (priTeam == want || priTeam == -1))
+      return;
+
+    static uint64_t s_setTeam = 0;
+    if (!s_setTeam) {
+      FNameMin n = {};
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"SetTeam", 1 /* FNAME_Add */);
+      s_setTeam = *(uint64_t *)&n;
+    }
+    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(pc, s_setTeam);
+    if (!fn) {
+      Logf("team sync [%s]: SetTeam not found on controller %p", where, pc);
+      return;
+    }
+    uint8_t parms[16] = {};
+    parms[0] = (uint8_t)want; // AYPlayerController::SetTeam(EYTeam Team)
+    g_origProcessEvent(pc, fn, parms);
+    int pcAfter = pc[OFF_PC_TEAM];
+    int priAfter = IsReadable(pri, OFF_PRI_TEAM + 1) ? pri[OFF_PRI_TEAM] : -1;
+    Logf("team sync [%s]: controller %p TEAM=%d -- controller %d -> %d, "
+         "player state %d -> %d",
+         where, pc, want, pcTeam, pcAfter, priTeam, priAfter);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("team sync [%s]: EXCEPTION for controller %p", where, pcv);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Player names (with team sync; off with dn_host_no_team_sync.txt)
+//
+// Verified 2026-09-28 from host logs: every join arrives with an EMPTY
+// "?Name=" -- UYGameEngine::Browse (0x140535840) replaces any Name= with the
+// client's nickname, which stays empty on this backend -- so AGameMode::
+// InitNewPlayer names players DefaultPlayerName + PlayerId: "257", "258". But
+// dn-launcher's "?PlayerName=<account>" token DOES reach the host in the same
+// URL ("Launch_P?PlayerName=UnlockAll?DNPID=..?TEAM=1?Name="). So at PostLogin
+// the mod calls the game mode's own AGameMode::ChangeName(Controller, NewName,
+// bNameChange=false) with it (params per the SDK: Controller +0x00, FString
+// +0x08, bool +0x18), which sets the PlayerState name that replicates to the
+// scoreboard. NOT verified live yet.
+static void SyncName(void *gameModeV, void *pcV) {
+  if (!g_teamSyncArmed || !g_origProcessEvent)
+    return;
+  uint8_t *pc = (uint8_t *)pcV;
+  __try {
+    if (!IsReadable(gameModeV, sizeof(UObjectMin)) ||
+        !ClassChainContains((UObjectMin *)gameModeV, "GameMode") ||
+        !IsReadable(pc, OFF_PC_NETCONNECTION + 8))
+      return;
+    static wchar_t name[64];
+    if (!UrlOptionWideForController(pc, L"PlayerName=", name, 32))
+      return; // an older launcher (no PlayerName token) or the local player
+    static uint64_t s_changeName = 0;
+    if (!s_changeName) {
+      FNameMin n = {};
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"ChangeName", 1 /* FNAME_Add */);
+      s_changeName = *(uint64_t *)&n;
+    }
+    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gameModeV, s_changeName);
+    if (!fn) {
+      Logf("names: ChangeName not found on game mode %p", gameModeV);
+      return;
+    }
+    struct {
+      void *controller;
+      FStringMin newName;
+      uint8_t bNameChange;
+      uint8_t pad[7];
+    } parms = {};
+    parms.controller = pc;
+    int len = (int)wcslen(name);
+    parms.newName = {name, len + 1, len + 1};
+    parms.bNameChange = 0;
+    g_origProcessEvent(gameModeV, fn, &parms);
+    char narrow[64];
+    WideCharToMultiByte(CP_UTF8, 0, name, -1, narrow, sizeof(narrow), nullptr, nullptr);
+    Logf("names: controller %p is now \"%s\" (from the join URL's PlayerName)", pc, narrow);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("names: EXCEPTION naming controller %p", pcV);
+  }
+}
+
 static bool SwitchOn(const char *envName, const char *markerFile);
 
 static void __fastcall HookClientStartEomTransition(void *orbitComp) {
@@ -1992,15 +2163,20 @@ static void InstallPostLoginHook() {
 
   // The ProcessEvent hook carries both features, so it installs if either is
   // wanted.
-  if (!g_spawnArmed && !g_fleetTierArmed) {
+  g_teamSyncArmed = !SwitchOn("DN_HOST_NO_TEAM_SYNC", "dn_host_no_team_sync.txt");
+  if (!g_teamSyncArmed)
+    Logf("team sync: OFF (dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1). "
+         "Players keep whatever team the host picks.");
+  if (!g_spawnArmed && !g_fleetTierArmed && !g_teamSyncArmed) {
     Logf("post-login hook is OFF. Enable the fleet tier "
          "(dn_host_fleet_tier.txt or DN_HOST_FLEET_TIER=1) to let the normal "
          "orbit flow finish, and/or the spawn bypass (dn_host_postlogin.txt or "
          "DN_HOST_POSTLOGIN_SPAWN=1) to skip orbit entirely.");
     return;
   }
-  Logf("post-login hook: fleet tier %s, spawn bypass %s",
-       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off");
+  Logf("post-login hook: fleet tier %s, spawn bypass %s, team sync %s",
+       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off",
+       g_teamSyncArmed ? "ON" : "off");
 
   const char *outer = nullptr;
   int waited = 0;
@@ -2074,8 +2250,8 @@ static void InstallPostLoginHook() {
          "directly as %s, bypassing the orbit flow.",
          processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
   else
-    Logf("post-login: ProcessEvent hooked at %p; fleet tier only -- players "
-         "keep ship selection and the normal orbit flow.",
+    Logf("post-login: ProcessEvent hooked at %p; players keep ship selection "
+         "and the normal orbit flow.",
          processEvent);
 }
 
