@@ -1700,6 +1700,13 @@ typedef void(__fastcall *tProcessEventVirt)(void *obj, void *fn, void *parms);
 #define OFF_PRI_DAMAGE_WEAPONS 0x908
 #define OFF_PRI_DAMAGE_ABILITIES 0x90C
 #define OFF_PRI_TEAM 0x940
+// AYPlayerController::m_team (SDK: Net, 0x0C30). FIXED 2026-09-27: the first
+// reported match read PRI m_team = 0 (YT_NONE; EYTeam is NONE 0, TEAM1 1,
+// TEAM2 2 per its registration 0x140697ED0) on a proving-ground host, so a won
+// match was paid as a loss. The controller's copy is the fallback. Offset from
+// the SDK dump, which matched every PRI/GameState offset verified live
+// (0x654, 0x848, 0x56B); this one is NOT yet verified live.
+#define OFF_PC_TEAM 0xC30
 #define OFF_WORLD_GAMESTATE 0x58
 #define OFF_GS_FINAL_MATCH_RESULT 0x56B
 #define OFF_USTRUCT_SUPER 0x30
@@ -1754,6 +1761,7 @@ static int s_round = 0;
 static void ReportMatchResult(void *orbitComp) {
   char pid[80], match[96], path[1536], body[512];
   int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
+  const char *teamSource = "none";
   float damage = 0;
   __try {
     uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
@@ -1777,6 +1785,11 @@ static void ReportMatchResult(void *orbitComp) {
     damage = *(float *)(pri + OFF_PRI_DAMAGE_WEAPONS) +
              *(float *)(pri + OFF_PRI_DAMAGE_ABILITIES);
     team = pri[OFF_PRI_TEAM];
+    teamSource = "PRI";
+    if ((team < 1 || team > 2) && IsReadable(pc + OFF_PC_TEAM, 1)) {
+      team = pc[OFF_PC_TEAM];
+      teamSource = "controller";
+    }
     uint8_t *gs = GameStateForPRI(pri);
     // One -MatchID per host process, but the process could play a second
     // round after a map travel; a new game state object is a new round, so
@@ -1821,9 +1834,9 @@ static void ReportMatchResult(void *orbitComp) {
   bool ok = HttpGetLoopback(path, body, sizeof(body));
   for (char *c = body; *c; ++c)
     if (*c == '\n') *c = ' ';
-  Logf("match result: %s team %d final %d kills %d deaths %d assists %d damage %d "
+  Logf("match result: %s team %d (%s) final %d kills %d deaths %d assists %d damage %d "
        "ships [%s] -> %s%s",
-       pid, team, result, kills, deaths, assists, (int)damage, FlownShipsFor(pid),
+       pid, team, teamSource, result, kills, deaths, assists, (int)damage, FlownShipsFor(pid),
        ok ? "mmogbrain: " : "FAILED (mmogbrain unreachable or refused)", ok ? body : "");
   if (ok)
     ClearFlownShips(pid);
