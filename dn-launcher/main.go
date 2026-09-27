@@ -512,7 +512,14 @@ func main() {
 		if runDesktopLauncher(exeDir, cfg) {
 			return
 		}
+		ensureConsole()
 		fmt.Println("[*] The desktop window needs Microsoft Edge WebView2, which is not installed; using the browser sign-in instead.")
+	}
+	ensureConsole()
+	if pendingCA != nil {
+		if err := ensureCAInstalled(pendingCA); err != nil {
+			fatalf("[!] %v", err)
+		}
 	}
 
 	// Sign in with a real account when one is available, and fall back to the
@@ -748,6 +755,12 @@ func signOutRequested() bool {
 }
 
 func fatalf(format string, args ...any) {
+	if !consoleReady {
+		// Built as a GUI program (-H windowsgui): with no console, a message
+		// printed here would go nowhere.
+		messageBox("Dreadnought launcher", strings.TrimSpace(strings.TrimPrefix(fmt.Sprintf(format, args...), "[!]")))
+		os.Exit(1)
+	}
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	waitExit(1)
 }

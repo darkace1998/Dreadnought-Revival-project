@@ -28,6 +28,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -101,15 +102,30 @@ func resolveServerIP(server string) (string, error) {
 
 var procCertAddEncodedCertificateToStore = syscall.NewLazyDLL("crypt32.dll").NewProc("CertAddEncodedCertificateToStore")
 
-// readCACert loads ca.crt (PEM or DER) from beside the launcher. Absent means
-// "nothing to install".
+// defaultCA is the server's CA built into the launcher (-ldflags
+// "-X main.defaultCA=<base64 of ca.crt>"), so a tester downloads one exe. A
+// ca.crt beside the launcher still wins, so a re-issued CA needs no rebuild.
+var defaultCA = ""
+
+// pendingCA is the CA runMachineSetup found. It is NOT installed there: the
+// desktop window asks the player first (dnInstallCert), and the console flow
+// installs it with Windows' own confirmation (ensureCAInstalled).
+var pendingCA []byte
+
+// readCACert loads ca.crt (PEM or DER) from beside the launcher, else the
+// built-in one. Neither means "nothing to install".
 func readCACert(exeDir string) ([]byte, error) {
 	raw, err := os.ReadFile(filepath.Join(exeDir, "ca.crt"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if strings.TrimSpace(defaultCA) == "" {
 			return nil, nil
 		}
-		return nil, err
+		if raw, err = base64.StdEncoding.DecodeString(strings.TrimSpace(defaultCA)); err != nil {
+			return nil, fmt.Errorf("built-in CA: %w", err)
+		}
 	}
 	der := raw
 	if block, _ := pem.Decode(raw); block != nil {
@@ -125,31 +141,70 @@ func readCACert(exeDir string) ([]byte, error) {
 	return der, nil
 }
 
-// ensureCAInstalled adds the CA to the current user's Trusted Root store
-// unless an identical certificate is already there.
-func ensureCAInstalled(der []byte) error {
-	want := sha256.Sum256(der)
-
+func openUserRootStore() (windows.Handle, error) {
 	name, _ := windows.UTF16PtrFromString("ROOT")
 	store, err := windows.CertOpenStore(windows.CERT_STORE_PROV_SYSTEM, 0, 0,
 		windows.CERT_SYSTEM_STORE_CURRENT_USER, uintptr(unsafe.Pointer(name)))
 	if err != nil {
-		return fmt.Errorf("open the Trusted Root store: %w", err)
+		return 0, fmt.Errorf("open the Trusted Root store: %w", err)
+	}
+	return store, nil
+}
+
+// caTrusted reports whether this exact certificate is in the current user's
+// Trusted Root store.
+func caTrusted(der []byte) bool {
+	store, err := openUserRootStore()
+	if err != nil {
+		return false
 	}
 	defer func() { _ = windows.CertCloseStore(store, 0) }()
-
+	want := sha256.Sum256(der)
 	var ctx *windows.CertContext
 	for {
 		ctx, err = windows.CertEnumCertificatesInStore(store, ctx)
 		if err != nil || ctx == nil {
-			break
+			return false
 		}
 		if sha256.Sum256(unsafe.Slice(ctx.EncodedCert, ctx.Length)) == want {
 			_ = windows.CertFreeCertificateContext(ctx)
-			fmt.Println("[+] Server certificate already trusted.")
-			return nil
+			return true
 		}
 	}
+}
+
+// caSummary is what the certificate prompt shows: the name and the SHA-256
+// fingerprint a player can compare with the one the operator publishes.
+func caSummary(der []byte) (name, fingerprint string) {
+	sum := sha256.Sum256(der)
+	parts := make([]string, len(sum))
+	for i, b := range sum {
+		parts[i] = fmt.Sprintf("%02X", b)
+	}
+	if cert, err := x509.ParseCertificate(der); err == nil {
+		name = cert.Subject.CommonName
+	}
+	return name, strings.Join(parts, ":")
+}
+
+// ensureCAInstalled adds the CA to the current user's Trusted Root store
+// unless an identical certificate is already there.
+func ensureCAInstalled(der []byte) error {
+	if caTrusted(der) {
+		fmt.Println("[+] Server certificate already trusted.")
+		return nil
+	}
+	return installCA(der)
+}
+
+// installCA adds the CA to the current user's Trusted Root store. Windows
+// shows its own confirmation; declining it returns an error.
+func installCA(der []byte) error {
+	store, err := openUserRootStore()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = windows.CertCloseStore(store, 0) }()
 
 	fmt.Println("[*] Installing the server's certificate; Windows will ask you to confirm it once.")
 	if r, _, callErr := procCertAddEncodedCertificateToStore.Call(uintptr(store),
@@ -200,5 +255,6 @@ func runMachineSetup(exeDir string, cfg *Config) error {
 	cert, _ := x509.ParseCertificate(der) // validated by readCACert
 	serverCAPool = x509.NewCertPool()
 	serverCAPool.AddCert(cert)
-	return ensureCAInstalled(der)
+	pendingCA = der
+	return nil
 }

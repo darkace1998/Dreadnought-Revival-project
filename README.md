@@ -166,13 +166,27 @@ news use 443; the game's own ports are unaffected). Both settings can be built
 into a distributed launcher, so testers need no `dn-launcher.json` at all:
 
 ```bash
-GOOS=windows go build -ldflags "-X main.defaultServer=play.example.org -X main.defaultWebPort=8443" ./dn-launcher
+GOOS=windows go build -ldflags "-H windowsgui \
+  -X main.defaultServer=play.example.org -X main.defaultWebPort=8443 \
+  -X main.defaultCA=$(base64 -w0 certs/ca.crt)" ./dn-launcher
 ```
+
+`-H windowsgui` opens the desktop window with no console flashing up (the
+console flow opens its own console when it needs one). `defaultCA` builds the
+server's CA into the exe, so testers download **only `dn-launcher.exe`**. On
+first start the window shows an **Install the public testing certificate**
+screen with the CA's SHA-256 fingerprint (publish it so testers can compare,
+`openssl x509 -in certs/ca.crt -noout -fingerprint -sha256`); Play stays
+blocked until it is installed. A `ca.crt` beside the exe overrides the built-in
+one. Rebuild after regenerating the CA.
 
 Ports to forward to the server: TCP `web_port` (-> 443), TCP 65443, TCP 48843,
 UDP 7777-7877, and optionally TCP 57005 (crash reports). Never 8081-8085.
+The battle-server range is `PORT_RANGE_START`/`PORT_RANGE_END` in
+`run/secrets.env` (e.g. 7900/8000 when 7777+ is taken): players are sent each
+match's exact port, so any free range works -- forward it unchanged.
 
-A tester's download is `dn-launcher.exe`, `dn-launcher.json` and `ca.crt`. The
+Without those build flags, a tester's download is `dn-launcher.exe`, `dn-launcher.json` and `ca.crt`. The
 server's certificates must name the address testers use:
 `SERVER_IP=<public ip> bash scripts/gen-certs.sh`.
 

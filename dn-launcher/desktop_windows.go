@@ -79,7 +79,26 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 		if server == "" {
 			server = cfg.GatewayIP
 		}
-		return map[string]any{"signedIn": st.token != "", "username": st.username, "server": server}
+		out := map[string]any{"signedIn": st.token != "", "username": st.username, "server": server}
+		if pendingCA != nil && !caTrusted(pendingCA) {
+			name, fp := caSummary(pendingCA)
+			out["cert"] = map[string]any{"name": name, "fingerprint": fp}
+		}
+		return out
+	})
+
+	// The certificate prompt. Runs on the UI thread on purpose: Windows' own
+	// confirmation dialog then belongs to this window instead of opening
+	// behind it.
+	_ = w.Bind("dnInstallCert", func() map[string]any {
+		if pendingCA == nil || caTrusted(pendingCA) {
+			return map[string]any{"ok": true}
+		}
+		if err := installCA(pendingCA); err != nil || !caTrusted(pendingCA) {
+			return map[string]any{"ok": false, "error": "The certificate was not installed. " +
+				"Windows asks you to confirm it -- choose Yes to continue."}
+		}
+		return map[string]any{"ok": true}
 	})
 
 	_ = w.Bind("dnSubmit", func(mode, username, identifier, password string) {
@@ -142,6 +161,11 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 			st.mu.Lock()
 			token := st.token
 			st.mu.Unlock()
+			if pendingCA != nil && !caTrusted(pendingCA) {
+				reply("dnPlayResult", map[string]any{"ok": false, "cert": true,
+					"error": "Install the public testing certificate first; the game cannot connect without it."})
+				return
+			}
 			if token == "" || launcherTokenExpired(token) {
 				reply("dnPlayResult", map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true})
 				return
@@ -243,6 +267,13 @@ const desktopPageHTML = `<!doctype html>
   .go:disabled { opacity:.55; cursor:default; }
   .msg { margin-top:12px; min-height:19px; font-size:13px; }
   .msg.bad { color:#ff9b8f; } .msg.good { color:#8fe0a8; }
+  /* certificate */
+  #cert { align-items:center; justify-content:center; }
+  #cert .panel { width:min(560px,94vw); }
+  #cert h2 { margin:0 0 10px; font-size:18px; color:#9fe4ff; letter-spacing:.04em; }
+  #cert p { margin:0 0 10px; color:#b8c7d3; font-size:13.5px; }
+  .fp { font:12px/1.5 Consolas, monospace; color:#9fb4c4; word-break:break-all; user-select:text;
+    background:#0c1621; border:1px solid #24405a; border-radius:6px; padding:8px 10px; margin:4px 0 6px; }
   /* home */
   #home { flex-direction:row; }
   .news { flex:1; overflow:auto; padding:22px 26px; display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:start; }
@@ -263,6 +294,23 @@ const desktopPageHTML = `<!doctype html>
   <span class="pill" id="status">Connecting…</span>
 </header>
 <main>
+  <section class="view" id="cert">
+    <div class="panel">
+      <h2>Install the public testing certificate</h2>
+      <p>This server uses its own certificate for its encrypted connections. Windows does
+        not know it yet, so the game refuses to connect until you trust it once.</p>
+      <p>Installing adds <b id="cert-name"></b> to <b>your</b> Windows user's trusted
+        certificates. No administrator rights are needed. Windows asks you to confirm;
+        choose <b>Yes</b>.</p>
+      <label>SHA-256 fingerprint</label>
+      <div class="fp" id="cert-fp"></div>
+      <p style="font-size:12.5px;color:var(--dim)">To remove it later: run <b>certmgr.msc</b>, open
+        Trusted Root Certification Authorities, Certificates, and delete it.</p>
+      <button class="go" id="cert-go" onclick="installCert()">Install certificate</button>
+      <div class="msg" id="certmsg"></div>
+      <button class="link" style="margin-top:8px" onclick="afterCert()">Not now</button>
+    </div>
+  </section>
   <section class="view" id="signin">
     <div class="panel">
       <div class="tabs" role="tablist">
@@ -299,7 +347,7 @@ const desktopPageHTML = `<!doctype html>
   let mode = 'login';
   const $ = id => document.getElementById(id);
   function show(view) {
-    for (const v of ['signin', 'home']) $(v).classList.toggle('shown', v === view);
+    for (const v of ['cert', 'signin', 'home']) $(v).classList.toggle('shown', v === view);
     if (view === 'signin') setTimeout(() => $(mode === 'register' ? 'username' : 'identifier').focus(), 50);
   }
   function say(el, text, kind) { $(el).textContent = text; $(el).className = 'msg ' + (kind || ''); }
@@ -340,7 +388,19 @@ const desktopPageHTML = `<!doctype html>
     if (r.ok) { say('playmsg', 'Game started. Good hunting, Captain.', 'good'); return; }
     say('playmsg', r.error, 'bad');
     $('play').disabled = false;
+    if (r.cert) { say('certmsg', r.error, 'bad'); show('cert'); return; }
     if (r.signIn) signOut();
+  }
+  let state = {};
+  function afterCert() { if (state.signedIn) home(state.username); else show('signin'); }
+  async function installCert() {
+    $('cert-go').disabled = true;
+    say('certmsg', 'Waiting for Windows…');
+    const r = await dnInstallCert();
+    $('cert-go').disabled = false;
+    if (!r.ok) { say('certmsg', r.error, 'bad'); return; }
+    say('certmsg', 'Installed.', 'good');
+    setTimeout(afterCert, 600);
   }
   function dnNewsResult(r) {
     const s = $('status');
@@ -369,8 +429,12 @@ const desktopPageHTML = `<!doctype html>
   });
   (async () => {
     pick('login');
-    const s = await dnInit();
-    if (s.signedIn) home(s.username); else show('signin');
+    const s = state = await dnInit();
+    if (s.cert) {
+      $('cert-name').textContent = s.cert.name || 'the server certificate';
+      $('cert-fp').textContent = s.cert.fingerprint;
+      show('cert');
+    } else afterCert();
     dnNews();
   })();
 </script>
