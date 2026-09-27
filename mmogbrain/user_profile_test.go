@@ -22,3 +22,15 @@ func TestSelfUserProfileEventMatchesTheOwnID(t *testing.T) {
 		t.Fatalf("status = %v, want 1 (online)", data["status"])
 	}
 }
+
+// The join handler (0x142A377D0) sets the channel name only when
+// data.notice.user parses to the same GUID as the player's own profile.
+func TestJoinNoticeUserMatchesOwnProfileGUID(t *testing.T) {
+	const pid = "0123456789abcdef0123456789abcdef"
+	own := selfUserProfileEvent(pid, "peer")["data"].(map[string]any)["guid"]
+	notice := chatJoinNotice("dreadnought.global", socialHubInstance.presenceEntry(pid))
+	got := notice["data"].(map[string]any)["notice"].(map[string]any)["user"]
+	if got != own {
+		t.Fatalf("notice.user = %#v, own profile guid = %#v; they must be the same string", got, own)
+	}
+}

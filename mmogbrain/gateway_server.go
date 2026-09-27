@@ -83,7 +83,13 @@ func startGatewayServer(ctx context.Context, log *logrus.Logger, addr, certFile,
 	mux.HandleFunc("/api/v1/catalog/digital_items_rmt", makeGatewayHandler(log, secret, handleGWCatalog))
 	mux.HandleFunc("/api/v1/catalog/currency_pack_rmt", makeGatewayHandler(log, secret, handleGWCatalog))
 	mux.HandleFunc("/api/v1/account/legal", makeGatewayHandler(log, secret, handleGWLegalItems))
-	mux.HandleFunc("/api/v1/account/legal/en/text", makeGatewayHandler(log, secret, handleGWLegalItems))
+	// The legal text for EVERY client language, not just en. FIXED 2026-09-28:
+	// only /legal/en/text was routed, so a German client's /legal/de/text hit
+	// the catch-all "{}" -- no Code field, "Could not handle response. Unknown
+	// response." -- and its sign-in stopped there: no /play/lkg, no MMOG
+	// connection (a Steam Deck tester's log). /legal/document/{type}/{lang}/text
+	// was already language-agnostic (prefix route below).
+	mux.HandleFunc("/api/v1/account/legal/", makeGatewayHandler(log, secret, handleGWLegalByLanguage))
 	mux.HandleFunc("/api/v1/account/legal/attest", makeGatewayHandler(log, secret, handleGWLegal))
 	mux.HandleFunc("/api/v1/account/legal/document/accept", makeGatewayHandler(log, secret, handleGWLegal))
 	mux.HandleFunc("/api/v1/account/legal/document/", makeGatewayHandler(log, secret, handleGWLegalDocument))
@@ -252,7 +258,19 @@ func handleGWLogout(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims
 	gwJSON(w, map[string]any{})
 }
 
-// handleGWLegalDocument handles GET /api/v1/account/legal/document/{type}/en/text.
+// handleGWLegalByLanguage routes /api/v1/account/legal/{lang}/text (any
+// language) to the legal items; other paths under /legal/ that have no route
+// of their own get the old catch-all answer.
+func handleGWLegalByLanguage(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/account/legal/"), "/")
+	if parts := strings.Split(rest, "/"); len(parts) == 2 && parts[1] == "text" && parts[0] != "" {
+		handleGWLegalItems(w, r, claims)
+		return
+	}
+	gwJSON(w, map[string]any{})
+}
+
+// handleGWLegalDocument handles GET /api/v1/account/legal/document/{type}/{lang}/text.
 // Ghidra FUN_142ab23a0 uses FUN_142ab4e90 which returns 5 when "Documents" OR "Attestations"
 // field is present. Without these, it returns the "Code" value (unknown → fails).
 // Returning {"Code":0,"Documents":[]} satisfies the handler: "Documents" present → type=5.

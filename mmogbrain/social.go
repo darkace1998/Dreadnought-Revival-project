@@ -520,6 +520,7 @@ func (h *socialHub) presenceEntry(playerID string) map[string]any {
 	entry := map[string]any{
 		"pid":     guid,
 		"PID":     guid,
+		"guid":    guid,
 		"peer_id": "",
 		"name":    "",
 		"status":  "offline",
@@ -675,10 +676,28 @@ func chatChannelNotice(channel string, event string, user map[string]any) map[st
 		"notice": map[string]any{
 			"action":  event,
 			"channel": channel,
-			"user":    user,
-			"users":   []any{user},
+			// The joining user's GUID as a STRING. FIXED 2026-09-27: this was
+			// the user object. The parser (0x142A52390) reads data.notice.user
+			// as a string into message+0x590; the channel handler
+			// (0x142AA7450) parses it as a GUID and the join handler
+			// (0x142A377D0) compares it with the player's own profile GUID
+			// (+0x3A8): equal means "I joined", which is the ONLY path that
+			// sets the channel name; different means "someone else joined".
+			// An object stringified to "" -> zero GUID, which matched the
+			// all-zero own GUID by accident until the user.profile push set a
+			// real one; then every client logged "channel name is empty".
+			"user":  noticeUserGUID(user),
+			"users": []any{user},
 		},
 	})
+}
+
+// noticeUserGUID is the dashed GUID of a presence entry (see presenceEntry).
+func noticeUserGUID(user map[string]any) string {
+	if g, ok := user["pid"].(string); ok {
+		return g
+	}
+	return ""
 }
 
 // firmamentEvent wraps a server-initiated event in the envelope the client's
