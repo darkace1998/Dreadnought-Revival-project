@@ -742,6 +742,46 @@ func firmamentSelfProfile(playerID, peerID string) map[string]any {
 	}
 }
 
+// selfUserProfileEvent is the push that sets the client's own profile, the
+// prerequisite of the whole social layer. Five handlers -- chat channel and
+// user messages, friend confirm/cancel/remove -- warn "user profile was not
+// setup!" and drop the event while the 16 bytes at FirmamentClient+0x3A8 are
+// zero (0x142A65F80). Verified from the decompile, 2026-09-27:
+//
+//   - The client registers a callback for event type "user.profile"
+//     (0x142AA18D0 -> 0x142AA1290 -> 0x142AA9B60). Its parser (0x142A52390)
+//     keeps "data" whole for any type it has no special case for.
+//   - The dispatcher (0x142A8DFA0) stores data in the profile map keyed by
+//     data.guid; the record builder (0x142A8CE00) reads guid, full_display_name,
+//     display_name, number, public_id, status_message, global_silence_expires
+//     and the is_* / status flags.
+//   - The callback is keyed by data.profile, and 0x142AA9B60 accepts it only if
+//     it equals the client's own id -- server.notice data.notice.user_token --
+//     then parses the record's guid as a GUID into +0x3A8.
+//
+// So guid, profile and user_token must all be the same dashed GUID.
+func selfUserProfileEvent(playerID, peerID string) map[string]any {
+	guid := dashedPlayerGUID(playerID)
+	name := mmogPlayerStateForPID(playerID).displayName
+	return firmamentEvent("user.profile", map[string]any{
+		"guid":              guid,
+		"profile":           guid,
+		"public_id":         guid,
+		"display_name":      name,
+		"full_display_name": name,
+		"status_message":    "",
+		"is_online":         true,
+		"is_idle":           false,
+		"is_away":           false,
+		"is_private":        false,
+		"is_admin":          false,
+		// Numeric in the record builder (0x142A8CE00 sets online = status == 1);
+		// overrides the envelope's "success", which would read as offline.
+		"status":  1,
+		"peer_id": peerID,
+	})
+}
+
 // searchUsers returns the players whose display name matches a search term.
 //
 // Case-insensitive, substring, and it always includes the searcher when their

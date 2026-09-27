@@ -292,11 +292,19 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 		"type": "server.notice",
 		"data": map[string]interface{}{
 			"notice": map[string]interface{}{
-				fieldStatus:         "success",
-				"action":            "auth.refresh.redeem",
-				"authentication":    "success",
-				"token":             jwtToken,
-				"user_token":        jwtToken,
+				fieldStatus:      "success",
+				"action":         "auth.refresh.redeem",
+				"authentication": "success",
+				"token":          jwtToken,
+				// user_token is the client's OWN IDENTITY, not a credential.
+				// FIXED 2026-09-27: it carried the JWT. The dispatcher
+				// (0x142A8DFA0) copies server.notice data.notice.user_token
+				// (parsed to message+0xF8 by 0x142A52390) into the Firmament
+				// client's own-id string (+0x50) when data.notice.authentication
+				// is "success". The profile gate then matches a user.profile
+				// event against that string and parses it as a GUID
+				// (see sendSelfUserProfile) -- a JWT can never match.
+				"user_token":        dashedPlayerGUID(playerID),
 				"refresh_token":     jwtToken,
 				"client_id":         peerID,
 				"recipient_peer":    peerID,
@@ -369,6 +377,13 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 		// asks -- it creates its Global and English room types at startup and
 		// waits. Observed live as one "Send chat to Global failed: channel name
 		// is empty" per keystroke.
+		// The player's own profile. Without it every social handler drops its
+		// message: "_OnChatChannelMessage: user profile was not setup!".
+		if err := peer.send(selfUserProfileEvent(playerID, peerID)); err != nil {
+			log.WithError(err).WithField("remote", remote).Warn("firmament: write user.profile failed")
+			return
+		}
+		log.WithFields(logrus.Fields{"remote": remote, "pid": playerID}).Info("firmament: sent user.profile for the player's own profile")
 		for _, name := range defaultChatChannels {
 			if err := peer.send(chatJoinNotice(name, socialHubInstance.presenceEntry(playerID))); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write chat join notice failed")
