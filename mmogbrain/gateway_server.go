@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -296,8 +297,49 @@ func mmogHostAddress() string {
 	return "127.0.0.1"
 }
 
+// lkgHostForClient is the serverHost this client is told: always an IPv4
+// address.
+//
+// FIXED 2026-09-27: setting PUBLIC_HOST made SERVER_IP a DNS name, and this
+// handed the name to every client. The game parses serverHost as an IP only
+// (the same FInternetAddr::SetIp that rejects a name in -GatewayAddress, where
+// a live client logged "Invalid address: <name>"), and every client -- old
+// launcher or new -- crashed with a stack overflow right after /play/lkg,
+// without ever opening the MMOG connection (mmogbrain.log 22:07-22:08: login,
+// legal texts, lkg, then nothing).
+//
+// Preference: MMOG_HOST (operator override); else the IP the client used to
+// reach THIS gateway (the Host header) -- it is already proven reachable from
+// that client, and it is the LAN IP for a LAN launcher and the outside IP for
+// the public one; else SERVER_IP, resolved to IPv4 if it is a name.
+func lkgHostForClient(r *http.Request) (host, source string) {
+	if h := getenv("MMOG_HOST", ""); h != "" {
+		return h, "MMOG_HOST"
+	}
+	reqHost := r.Host
+	if h, _, err := net.SplitHostPort(reqHost); err == nil {
+		reqHost = h
+	}
+	if ip := net.ParseIP(reqHost); ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+		return ip.String(), "request host"
+	}
+	h := mmogHostAddress()
+	if ip := net.ParseIP(h); ip != nil {
+		return h, "SERVER_IP"
+	}
+	if addrs, err := net.LookupIP(h); err == nil {
+		for _, a := range addrs {
+			if v4 := a.To4(); v4 != nil {
+				return v4.String(), "SERVER_IP resolved"
+			}
+		}
+	}
+	return h, "SERVER_IP (UNRESOLVED name -- the client cannot use it)"
+}
+
 func handleGWPlayLkg(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
-	host := mmogHostAddress()
+	host, source := lkgHostForClient(r)
+	logrus.WithFields(logrus.Fields{"serverHost": host, "source": source, "request_host": r.Host}).Info("play/lkg: MMOG address")
 	port := getenv("FIRMAMENT_PORT", "48843")
 	gwJSON(w, map[string]any{
 		"Code":       0,

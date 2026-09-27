@@ -13,7 +13,7 @@ func TestBattleOutcome(t *testing.T) {
 		want        string
 	}{
 		{1, 1, "win"}, {2, 2, "win"}, {1, 2, "loss"}, {2, 1, "loss"},
-		{1, 3, "draw"}, {1, 0, "unknown"}, {0, 1, "loss"},
+		{1, 3, "draw"}, {1, 0, "unknown"}, {0, 1, "unknown"}, {0, 3, "draw"},
 	} {
 		if got := battleOutcome(c.team, c.final); got != c.want {
 			t.Errorf("battleOutcome(%d,%d)=%q want %q", c.team, c.final, got, c.want)

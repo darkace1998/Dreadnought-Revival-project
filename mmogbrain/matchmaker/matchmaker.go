@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -848,6 +849,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 		}
 		return fmt.Errorf("request game instance: %w", err)
 	}
+	serverIP = battleServerIPv4(serverIP, m.Log)
 
 	// Record match in DB
 	matchID := uuid.New().String()
@@ -859,7 +861,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 		return fmt.Errorf("insert match %s: %w", matchID, err)
 	}
 	for i, e := range entries {
-		team := i % 2
+		team := matchTeam(gameMode, i)
 		if _, err := m.DB.Exec(
 			`INSERT INTO match_slots(match_id,user_id,team) VALUES(?,?,?)`,
 			matchID, e.UserID, team,
@@ -985,4 +987,53 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, play
 		return "", 0, "", fmt.Errorf("game manager returned no usable address (ip=%q port=%v)", ip, result["port"])
 	}
 	return ip, int(portF), instID, nil
+}
+
+// battleServerIPv4 turns the control plane's server address into an IPv4
+// address before any client is told it. With PUBLIC_HOST set it is a DNS name,
+// and the game has twice refused names where it expects an address:
+// -GatewayAddress ("Invalid address: <name>") and /play/lkg's serverHost (a
+// stack overflow right after lkg, 2026-09-27). Whether TRAVEL resolves a name
+// is not verified, so it is never asked to. Resolved per match, so a changed
+// outside IP is picked up without a restart.
+func battleServerIPv4(host string, log *logrus.Logger) string {
+	if host == "" || net.ParseIP(host) != nil {
+		return host
+	}
+	addrs, err := net.LookupIP(host)
+	if err == nil {
+		for _, a := range addrs {
+			if v4 := a.To4(); v4 != nil {
+				if log != nil {
+					log.WithFields(logrus.Fields{"name": host, "ip": v4.String()}).Info("matchmaker: battle server name resolved")
+				}
+				return v4.String()
+			}
+		}
+	}
+	if log != nil {
+		log.WithError(err).WithField("name", host).Warn("matchmaker: battle server name did not resolve to IPv4; sending the name")
+	}
+	return host
+}
+
+// matchTeam is the EYTeam the i-th player of a match joins with. EYTeam is
+// YT_NONE 0, YT_TEAM1 1, YT_TEAM2 2 (registration 0x140697ED0).
+//
+// FIXED 2026-09-27, twice over: this was i % 2, so the first player of every
+// match joined with ?TEAM=0 -- no team. Seen live: a 2-player TDM and a
+// 2-player proving ground both logged Login requests with TEAM=1 and TEAM=0,
+// the team-0 player was missing from the scoreboard and player list, and a
+// proving-ground result came back team 0 and was scored as a loss.
+//
+// Co-operative modes put every human on team 1: the bots fill both teams
+// around the players (a proving-ground host filled T1 with 7 bots + the player
+// and T2 with 8), so a second human on team 2 would fight the first. PvP modes
+// alternate 1, 2.
+func matchTeam(gameMode string, i int) int {
+	switch gameMode {
+	case "BC", "Onslaught", "TM":
+		return 1
+	}
+	return i%2 + 1
 }

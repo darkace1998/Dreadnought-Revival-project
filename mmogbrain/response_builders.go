@@ -616,10 +616,15 @@ func appendMmogConnectFields(b []byte, status mmogMatchmakingStatus) []byte {
 	// The player's NAME, for the same reason: the host's stock
 	// AGameMode::InitNewPlayer takes ParseOption(Options, "Name") and, when it is
 	// empty, names the player DefaultPlayerName (empty here) + PlayerId -- which
-	// is exactly the "257" the end-of-match scoreboard showed. The client's own
-	// "?Name=" is empty (its name would come from Steam, and dn-launcher passes
-	// -NoSteam). ParseOption returns the FIRST match, and ours precedes the
-	// client's, so it wins. DN_CONNECT_NAME=0 turns it off.
+	// is exactly the "257" the end-of-match scoreboard showed.
+	//
+	// CORRECTED 2026-09-27: this said ParseOption's first match wins, so ours
+	// beats the client's empty one. Disproved live: the host logged a single
+	// empty "?Name=" after TEAM. UYGameEngine::Browse (0x140535840) REMOVES
+	// every Name= option and appends Name=<its own nickname>, so this option
+	// never arrives. The real fix is dn-launcher passing -PlayerName=, which
+	// FYMmogClient::Init reads into that nickname. Kept (harmless, and correct
+	// should Browse ever keep it); DN_CONNECT_NAME=0 turns it off.
 	if connect != "" && status.playerName != "" && os.Getenv("DN_CONNECT_NAME") != "0" {
 		connect += "?Name=" + status.playerName
 	}

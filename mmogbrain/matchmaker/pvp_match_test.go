@@ -126,6 +126,13 @@ func TestTwoQueuedPlayersShareOneMatchAndOneBattleServer(t *testing.T) {
 	if teams["alice"] == teams["bob"] {
 		t.Errorf("alice and bob are both on team %d; they cannot fight each other", teams["alice"])
 	}
+	// And real teams: EYTeam 0 is YT_NONE. Teams 0/1 put the first player of
+	// every match on no team (seen live, 2026-09-27).
+	for user, team := range teams {
+		if team != 1 && team != 2 {
+			t.Errorf("%s is on team %d; the game's teams are 1 and 2 (0 = none)", user, team)
+		}
+	}
 
 	// And the queue is emptied, or they would be matched again on the next tick.
 	var waiting int

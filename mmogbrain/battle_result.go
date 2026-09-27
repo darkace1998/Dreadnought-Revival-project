@@ -60,6 +60,11 @@ func battleOutcome(team, final int) string {
 	switch {
 	case final == 3:
 		return "draw"
+	case team < 1 || team > 2:
+		// The host could not say which side the player was on (the first
+		// live report read YT_NONE); a result against "no team" is unknown,
+		// not a loss.
+		return "unknown"
 	case final >= 1 && final <= 2 && final == team:
 		return "win"
 	case final >= 1 && final <= 2:
