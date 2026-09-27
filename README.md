@@ -213,6 +213,19 @@ Then install `certs/ca.crt` as a trusted root CA:
 - **Windows:** `certmgr.msc` → Trusted Root Certification Authorities → Import
 - **Linux:** `sudo cp certs/ca.crt /usr/local/share/ca-certificates/dn-ps.crt && sudo update-ca-certificates`
 
+**Linux players:** the game runs through Proton or Wine, and the certificate,
+the sign-in token and the game's arguments must be set up inside that same
+Wine/Proton prefix. `dn-launcher/linux/dn-launcher-linux.sh` therefore runs the
+Windows launcher there: it finds the game in the Steam libraries (or
+`DN_GAME_DIR`), uses the game's Proton prefix when Steam created one (else Wine
+with `~/.local/share/dreadnought-wine`), and passes the game path as
+`DN_GAME_PATH`. WebView2 is not available under Wine, so the launcher opens in
+the Linux browser instead: the same page as the desktop window (sign-in, the
+certificate, the game folder, options, Play), served on a random loopback port
+(`browser_windows.go`). Windows PCs without WebView2, or `--console`, get the
+same browser page. Ship the script with `dn-launcher.exe` and `icon.png` beside it;
+`--install` adds a menu entry.
+
 ### 6. Launch the game
 
 Run `dn-launcher.exe` on the client. It opens a **desktop window** (Microsoft

@@ -26,6 +26,18 @@ func ensureConsole() {
 	if consoleReady {
 		return
 	}
+	// Output that already goes somewhere stays there: a pipe or file, or --
+	// under Wine, where dn-launcher-linux.sh runs this launcher -- the Unix
+	// terminal. Allocating a console there opened a separate Wine console
+	// window and the terminal lost every line after "Server: ...", including
+	// the sign-in address. A GUI program double-clicked on Windows has no
+	// standard handles at all, so it still gets its own console below.
+	if h, err := windows.GetStdHandle(windows.STD_OUTPUT_HANDLE); err == nil && h != 0 && h != windows.InvalidHandle {
+		if t, err := windows.GetFileType(h); err == nil && t != windows.FILE_TYPE_UNKNOWN {
+			consoleReady = true
+			return
+		}
+	}
 	if hwnd, _, _ := kernel32.NewProc("GetConsoleWindow").Call(); hwnd == 0 {
 		if r, _, _ := kernel32.NewProc("AllocConsole").Call(); r == 0 {
 			return

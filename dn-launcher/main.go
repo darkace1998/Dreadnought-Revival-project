@@ -350,14 +350,17 @@ type Config struct {
 	// (launcher sign-in and news) when it is not 443 -- e.g. a router mapping
 	// 8443 -> 443 because 443 is taken. Only the launcher uses that gateway;
 	// the game's ports (65443, 48843, UDP 7777-7877) are unaffected.
-	WebPort        string `json:"web_port"`
-	AuthURL        string `json:"auth_url"`
-	GatewayIP      string `json:"gateway_ip"`
-	GatewayPort    string `json:"gateway_port"`
-	FirmamentHost  string `json:"firmament_host"`
-	FirmamentPort  string `json:"firmament_port"`
-	GamePath       string `json:"game_path"`
-	VerboseLogging bool   `json:"verbose_logging"`
+	WebPort       string `json:"web_port"`
+	AuthURL       string `json:"auth_url"`
+	GatewayIP     string `json:"gateway_ip"`
+	GatewayPort   string `json:"gateway_port"`
+	FirmamentHost string `json:"firmament_host"`
+	FirmamentPort string `json:"firmament_port"`
+	GamePath      string `json:"game_path"`
+	// detectedGamePath comes from DN_GAME_PATH (the Linux wrapper's find). It
+	// ranks BELOW a folder chosen in the launcher window, unlike game_path.
+	detectedGamePath string
+	VerboseLogging   bool `json:"verbose_logging"`
 	// LogWindow opens the game's log console (-LOG); also a toggle in the
 	// launcher window, and DN_LOG_WINDOW=1.
 	LogWindow      bool `json:"log_window"`
@@ -422,6 +425,13 @@ func loadConfig(exeDir string) Config {
 	// DN_SKIP_ONBOARDING is a debugging escape hatch that jumps straight to the
 	// hangar. Onboarding is on by default so new players get the same first-run
 	// experience they had on the live servers.
+	// DN_GAME_PATH points at the game executable (a Windows path). Set by the
+	// Linux wrapper (dn-launcher-linux.sh), which runs this launcher inside the
+	// game's Wine/Proton prefix while the game lives outside the launcher's
+	// folder.
+	if v := strings.TrimSpace(os.Getenv("DN_GAME_PATH")); v != "" {
+		cfg.detectedGamePath = v
+	}
 	if v := strings.TrimSpace(os.Getenv("DN_LOG_WINDOW")); v != "" && v != "0" {
 		cfg.LogWindow = true
 	}
@@ -444,59 +454,50 @@ func loadConfig(exeDir string) Config {
 
 // ---- Game binary detection -------------------------------------------
 
-// findGameBinary locates the game binary to launch, preferring the patched build
-// (DreadGame-Win64-Shipping-patched.exe) which bypasses Firmament TLS cert pinning.
-// Falls back to the original binary, then to the EAC wrapper.
-func findGameBinary(exeDir string, cfg Config) string {
+// Where the game came from, for the launcher window.
+const (
+	gameSourceConfig = "dn-launcher.json"
+	gameSourceChosen = "chosen"
+	gameSourceLocal  = "launcher folder"
+	gameSourceSteam  = "Steam"
+	gameSourceLinux  = "Linux launcher"
+)
+
+// gameLocation finds the game executable and says how it was found. Order: a
+// game_path in dn-launcher.json, then the folder chosen in the launcher window,
+// then DN_GAME_PATH (what dn-launcher-linux.sh found), then the launcher's own
+// folder, then Steam's libraries.
+// A manual choice therefore always wins over detection, and "Use automatic
+// detection" in the window clears it.
+func gameLocation(exeDir string, cfg Config) (path, source string) {
 	if cfg.GamePath != "" {
 		if _, err := os.Stat(cfg.GamePath); err == nil {
-			return cfg.GamePath
+			return cfg.GamePath, gameSourceConfig
 		}
 	}
-	// The folder chosen in the launcher window.
 	if p := gameBinaryIn(loadSettings().GameDir); p != "" {
-		return p
+		return p, gameSourceChosen
 	}
-
-	// Paths relative to the Dreadnought install root.
-	// The actual game binary lives in DreadGame\DreadGame\Binaries\Win64\
-	// Prefer the patched build (cert pinning bypassed) over the original.
-	candidates := []string{
-		filepath.Join(exeDir, `DreadGame`, `DreadGame`, `Binaries`, `Win64`, `DreadGame-Win64-Shipping-patched.exe`),
-		filepath.Join(exeDir, `DreadGame`, `DreadGame`, `Binaries`, `Win64`, `DreadGame-Win64-Shipping.exe`),
-		// EAC wrapper fallback (may reject patched binary via integrity check)
-		filepath.Join(exeDir, `Launcher_DreadGame-Win64-Shipping.exe`),
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
+	if cfg.detectedGamePath != "" {
+		if _, err := os.Stat(cfg.detectedGamePath); err == nil {
+			return cfg.detectedGamePath, gameSourceLinux
 		}
 	}
-
-	// Steam registry fallback — look in the registered install location.
-	k, err := registry.OpenKey(
-		registry.LOCAL_MACHINE,
-		`SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 835860`,
-		registry.QUERY_VALUE,
-	)
-	if err == nil {
-		defer func() {
-			_ = k.Close()
-		}()
-		if installDir, _, err := k.GetStringValue("InstallLocation"); err == nil && installDir != "" {
-			for _, rel := range []string{
-				filepath.Join(`DreadGame`, `DreadGame`, `Binaries`, `Win64`, `DreadGame-Win64-Shipping-patched.exe`),
-				filepath.Join(`DreadGame`, `DreadGame`, `Binaries`, `Win64`, `DreadGame-Win64-Shipping.exe`),
-				`Launcher_DreadGame-Win64-Shipping.exe`,
-			} {
-				p := filepath.Join(installDir, rel)
-				if _, err := os.Stat(p); err == nil {
-					return p
-				}
-			}
-		}
+	if p := gameBinaryIn(exeDir); p != "" {
+		return p, gameSourceLocal
 	}
-	return ""
+	if p := gameBinaryIn(steamGameDir(steamLibraries(steamRoots()))); p != "" {
+		return p, gameSourceSteam
+	}
+	if p := gameBinaryIn(steamUninstallDir()); p != "" {
+		return p, gameSourceSteam
+	}
+	return "", ""
+}
+
+func findGameBinary(exeDir string, cfg Config) string {
+	p, _ := gameLocation(exeDir, cfg)
+	return p
 }
 
 // ---- Main ------------------------------------------------------------
@@ -515,71 +516,37 @@ func main() {
 		fatalf("[!] Setting up this PC for the server failed: %v", err)
 	}
 
-	// The desktop window (WebView2) unless an identity is pinned -- that path
-	// has no sign-in to show -- or --console asks for the old flow. Without the
-	// WebView2 runtime it falls through to the console + browser sign-in below.
-	if strings.TrimSpace(cfg.PlayerID) == "" && os.Getenv("DN_PLAYER_ID") == "" && !flagRequested("console") {
-		if runDesktopLauncher(exeDir, cfg) {
+	// The launcher page: in the desktop window (WebView2), or -- without the
+	// WebView2 runtime, under Wine (dn-launcher-linux.sh), or with --console --
+	// the SAME page in the default browser (browser_windows.go). Both offer
+	// sign-in, the certificate, the game folder, the options and Play.
+	pinned := strings.TrimSpace(cfg.PlayerID) != "" || os.Getenv("DN_PLAYER_ID") != ""
+	if !pinned {
+		if !flagRequested("console") && runDesktopLauncher(exeDir, cfg) {
 			return
 		}
 		ensureConsole()
-		fmt.Println("[*] The desktop window needs Microsoft Edge WebView2, which is not installed; using the browser sign-in instead.")
+		if !flagRequested("console") {
+			fmt.Println("[*] The desktop window needs Microsoft Edge WebView2, which is not installed; opening the launcher in your web browser instead.")
+		}
+		if signOutRequested() {
+			clearCredentials()
+		}
+		if err := runBrowserLauncher(exeDir, cfg); err != nil {
+			fatalf("[!] %v", err)
+		}
+		return
 	}
+
+	// An explicitly pinned identity (player_id / DN_PLAYER_ID) is how an
+	// account is moved or recovered: no sign-in page, straight into the game.
 	ensureConsole()
 	if pendingCA != nil {
 		if err := ensureCAInstalled(pendingCA); err != nil {
 			fatalf("[!] %v", err)
 		}
 	}
-
-	// Sign in with a real account when one is available, and fall back to the
-	// derived machine identity otherwise.
-	//
-	// The fallback is what shipped before: an id derived from the machine and
-	// user, hashed into a Steam ticket, which the server auto-registers on first
-	// sight. It cannot move between PCs, cannot be shared, and quietly strands
-	// the old save whenever the derivation changes. An account removes all of
-	// that, so it is preferred whenever the player has one -- but existing
-	// installs keep working untouched until they choose to sign in.
-	var (
-		jwtToken string
-		username string
-	)
-	creds, haveCreds := loadCredentials()
-	// A saved token is only worth reusing while it is still alive. It used to be
-	// replayed unconditionally, so once it aged out every restart rewrote the
-	// SAME dead token and the game failed with an opaque 401 -- and restarting
-	// the launcher, the obvious thing to try, changed nothing. There is no
-	// password or refresh token saved, so the only honest recovery is to ask the
-	// player to sign in again.
-	credsUsable := haveCreds && !signOutRequested() && !launcherTokenExpired(creds.Token)
-
-	if strings.TrimSpace(cfg.PlayerID) != "" || os.Getenv("DN_PLAYER_ID") != "" {
-		// An explicitly pinned identity wins, which is how an account is moved
-		// or recovered.
-		jwtToken, username = authenticateWithDerivedIdentity(cfg)
-	} else if credsUsable {
-		fmt.Printf("[*] Signed in as %s.\n", creds.Username)
-		jwtToken, username = creds.Token, creds.Username
-	} else {
-		if signOutRequested() {
-			clearCredentials()
-		} else if haveCreds {
-			fmt.Printf("[*] Your saved sign-in for %s has expired; please sign in again.\n", creds.Username)
-			clearCredentials()
-		}
-		fmt.Println("[*] Opening the sign-in window...")
-		creds, signInErr := runSignInUI(cfg.AuthURL)
-		if signInErr != nil {
-			fatalf("[!] Sign-in failed: %v", signInErr)
-		}
-		if saveErr := saveCredentials(creds); saveErr != nil {
-			fmt.Printf("[!] Could not remember this sign-in (%v); you will be asked again next time.\n", saveErr)
-		}
-		fmt.Printf("[+] Signed in as %s.\n", creds.Username)
-		jwtToken, username = creds.Token, creds.Username
-	}
-	_ = username
+	jwtToken, _ := authenticateWithDerivedIdentity(cfg)
 
 	if _, err := startGame(exeDir, cfg, jwtToken); err != nil {
 		fatalf("[!] %v", err)
@@ -614,20 +581,29 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 
 	// The launcher window's toggles (settings.json) add to dn-launcher.json.
 	settings := loadSettings()
-	// The player's name. FYMmogClient::Init (0x142A33C70) reads -PlayerName=
-	// from the command line into the client's nickname (+0x3540), which is
-	// what FYOnlineIdentityMmog::GetPlayerNickname returns and what
-	// UYGameEngine::Browse (0x140535840) puts in the battle server's join URL:
-	// it REMOVES any Name= option and adds Name=<nickname>. Without this the
-	// nickname was empty, the host named players by number ("Join succeeded:
-	// 257"), and the ?Name= mmogbrain appends to the travel address was
-	// stripped by that same Browse.
+	// The player's name, as the URL-style argument "?PlayerName=<name>".
+	// UYGameEngine::Browse (0x140535840) takes the first command-line TOKEN
+	// that contains '?' (0x14052BD30) and hands it to FYMmogClient::Init
+	// (0x142A33C70), which reads its PlayerName option into the client's
+	// nickname (+0x3540) -- what FYOnlineIdentityMmog::GetPlayerNickname
+	// returns and what Browse puts in the battle server's join URL: it REMOVES
+	// any Name= option and adds Name=<nickname>. Without it the host named
+	// players by number ("Join succeeded: 257").
+	//
+	// CORRECTED 2026-09-28: first passed as a -PlayerName= switch, which Init
+	// never sees (switches are not tokens); the next host log still showed an
+	// empty "?Name=". A token with only options leaves the startup map at the
+	// engine default.
 	playerName := tokenUsername(jwtToken)
-	args := []string{
-		"-GatewayAddress=" + cfg.GatewayIP,
-		"-GatewayPort=" + cfg.GatewayPort,
-		"-YFirmamentAddress=" + firmamentHost,
-		"-YFirmamentPort=" + cfg.FirmamentPort,
+	var args []string
+	if playerName != "" {
+		args = append(args, "?PlayerName="+playerName)
+	}
+	args = append(args,
+		"-GatewayAddress="+cfg.GatewayIP,
+		"-GatewayPort="+cfg.GatewayPort,
+		"-YFirmamentAddress="+firmamentHost,
+		"-YFirmamentPort="+cfg.FirmamentPort,
 		"-noeac",
 		// DreadGame/Config/DefaultEngine.ini sets NativePlatformService=Steam,
 		// so the client still initializes the real Steam online subsystem for
@@ -656,7 +632,7 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 		// the name and the avatar are blank. Unproven -- hence opt-in rather
 		// than a default change, because the timeout above is a real cost.
 		// Set allow_steam in dn-launcher.json, or DN_ALLOW_STEAM=1.
-	}
+	)
 	if cfg.AllowSteam {
 		fmt.Println("[+] Steam: leaving the client's Steam subsystem enabled (allow_steam)")
 	} else {
@@ -682,9 +658,6 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 		fmt.Println("[*] Onboarding disabled (DN_SKIP_ONBOARDING / skip_onboarding) — the tutorial gate is bypassed.")
 	}
 
-	if playerName != "" {
-		args = append(args, "-PlayerName="+playerName)
-	}
 	if cfg.LogWindow || settings.LogWindow {
 		// -LOG only opens the console window; the log FILE (Saved\Logs\
 		// DreadGame.log) is written either way.

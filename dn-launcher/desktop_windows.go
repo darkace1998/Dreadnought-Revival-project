@@ -17,8 +17,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"time"
 
 	webview2 "github.com/jchv/go-webview2"
@@ -29,12 +27,6 @@ import (
 // newsURL is the original launcher's tiles feed, still served by legacy-api
 // (public route /v2/dreadnought/launcher/dn/tiles/{lang}/).
 const newsURL = "https://legacyapi.prod.greybox.sixfoot.live/v2/dreadnought/launcher/dn/tiles/en/"
-
-type desktopState struct {
-	mu       sync.Mutex
-	token    string
-	username string
-}
 
 // runDesktopLauncher shows the launcher window and returns once it is closed.
 // false means WebView2 is not available and nothing was shown.
@@ -64,10 +56,7 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	defer w.Destroy()
 	hideConsole()
 
-	st := &desktopState{}
-	if creds, ok := loadCredentials(); ok && !signOutRequested() && !launcherTokenExpired(creds.Token) {
-		st.token, st.username = creds.Token, creds.Username
-	}
+	api := newLauncherAPI(exeDir, cfg, func() uintptr { return uintptr(w.Window()) })
 
 	// reply runs js on the UI thread with a JSON argument.
 	reply := func(fn string, v any) {
@@ -75,151 +64,31 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 		w.Dispatch(func() { w.Eval(fn + "(" + string(b) + ")") })
 	}
 
-	_ = w.Bind("dnInit", func() map[string]any {
-		st.mu.Lock()
-		defer st.mu.Unlock()
-		server := cfg.Server
-		if server == "" {
-			server = cfg.GatewayIP
-		}
-		settings := loadSettings()
-		out := map[string]any{"signedIn": st.token != "", "username": st.username, "server": server,
-			"game": gameFolderForDisplay(exeDir, cfg), "logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog}
-		if pendingCA != nil && !caTrusted(pendingCA) {
-			name, fp := caSummary(pendingCA)
-			out["cert"] = map[string]any{"name": name, "fingerprint": fp}
-		}
-		return out
-	})
-
-	// Game folder: Windows' folder picker, owned by this window (so it runs on
-	// the UI thread). The choice is kept per Windows user (settings.json).
-	_ = w.Bind("dnPickGame", func() map[string]any {
-		dir, ok := pickFolder(uintptr(w.Window()), "Select the folder where Dreadnought is installed")
-		if !ok {
-			return map[string]any{"ok": false}
-		}
-		if gameBinaryIn(dir) == "" {
-			return map[string]any{"ok": false, "error": "Dreadnought was not found in " + dir +
-				". Pick the folder that contains the DreadGame folder."}
-		}
-		settings := loadSettings()
-		settings.GameDir = dir
-		if err := saveSettings(settings); err != nil {
-			return map[string]any{"ok": false, "error": "Could not save the setting: " + err.Error()}
-		}
-		return map[string]any{"ok": true, "game": gameFolderForDisplay(exeDir, cfg)}
-	})
-
-	// Option toggles, saved per Windows user.
-	_ = w.Bind("dnSetOption", func(name string, on bool) bool {
-		settings := loadSettings()
-		switch name {
-		case "logWindow":
-			settings.LogWindow = on
-		case "verboseLog":
-			settings.VerboseLog = on
-		default:
-			return false
-		}
-		return saveSettings(settings) == nil
-	})
-
-	// The certificate prompt. Runs on the UI thread on purpose: Windows' own
-	// confirmation dialog then belongs to this window instead of opening
-	// behind it.
-	_ = w.Bind("dnInstallCert", func() map[string]any {
-		if pendingCA == nil || caTrusted(pendingCA) {
-			return map[string]any{"ok": true}
-		}
-		if err := installCA(pendingCA); err != nil || !caTrusted(pendingCA) {
-			return map[string]any{"ok": false, "error": "The certificate was not installed. " +
-				"Windows asks you to confirm it -- choose Yes to continue."}
-		}
-		return map[string]any{"ok": true}
-	})
-
+	// Synchronous calls return to the page's promise. Those on the UI thread
+	// on purpose: the folder picker and Windows' certificate confirmation then
+	// belong to this window instead of opening behind it.
+	_ = w.Bind("dnInit", api.Init)
+	_ = w.Bind("dnPickGame", api.PickGame)
+	_ = w.Bind("dnSetGameDir", api.SetGameDir)
+	_ = w.Bind("dnAutoGame", api.AutoGame)
+	_ = w.Bind("dnSetOption", api.SetOption)
+	_ = w.Bind("dnInstallCert", api.InstallCert)
+	_ = w.Bind("dnSignOut", api.SignOut)
+	// Network calls run off the UI thread and report back through a callback.
 	_ = w.Bind("dnSubmit", func(mode, username, identifier, password string) {
-		go func() {
-			identifier, username = strings.TrimSpace(identifier), strings.TrimSpace(username)
-			fail := func(msg string) { reply("dnAuthResult", map[string]any{"ok": false, "error": msg}) }
-			if identifier == "" || password == "" {
-				fail("Fill in every field.")
-				return
-			}
-			if mode == "register" {
-				if username == "" {
-					fail("Pick a callsign.")
-					return
-				}
-				if len(password) < 6 {
-					fail("Use at least 6 characters for the password.")
-					return
-				}
-				if err := registerAccount(cfg.AuthURL, username, identifier, password); err != nil {
-					fail(capitalise(err.Error()))
-					return
-				}
-			}
-			creds, err := loginAccount(cfg.AuthURL, identifier, password)
-			if err != nil {
-				fail(capitalise(err.Error()))
-				return
-			}
-			if err := saveCredentials(creds); err != nil {
-				fmt.Printf("[!] Could not remember this sign-in (%v)\n", err)
-			}
-			st.mu.Lock()
-			st.token, st.username = creds.Token, creds.Username
-			st.mu.Unlock()
-			reply("dnAuthResult", map[string]any{"ok": true, "username": creds.Username})
-		}()
+		go func() { reply("dnAuthResult", api.Submit(mode, username, identifier, password)) }()
 	})
-
-	_ = w.Bind("dnSignOut", func() {
-		clearCredentials()
-		st.mu.Lock()
-		st.token, st.username = "", ""
-		st.mu.Unlock()
-	})
-
 	_ = w.Bind("dnNews", func() {
-		go func() {
-			tiles, err := fetchNews()
-			if err != nil {
-				reply("dnNewsResult", map[string]any{"online": false, "error": err.Error()})
-				return
-			}
-			reply("dnNewsResult", map[string]any{"online": true, "tiles": tiles})
-		}()
+		go func() { reply("dnNewsResult", api.News()) }()
 	})
-
 	_ = w.Bind("dnPlay", func() {
 		go func() {
-			st.mu.Lock()
-			token := st.token
-			st.mu.Unlock()
-			if pendingCA != nil && !caTrusted(pendingCA) {
-				reply("dnPlayResult", map[string]any{"ok": false, "cert": true,
-					"error": "Install the public testing certificate first; the game cannot connect without it."})
-				return
+			r := api.Play()
+			reply("dnPlayResult", r)
+			if r["ok"] == true {
+				time.Sleep(2500 * time.Millisecond)
+				w.Dispatch(w.Terminate)
 			}
-			if findGameBinary(exeDir, cfg) == "" {
-				reply("dnPlayResult", map[string]any{"ok": false, "game": true,
-					"error": "Dreadnought was not found. Choose your game folder above."})
-				return
-			}
-			if token == "" || launcherTokenExpired(token) {
-				reply("dnPlayResult", map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true})
-				return
-			}
-			if _, err := startGame(exeDir, cfg, token); err != nil {
-				reply("dnPlayResult", map[string]any{"ok": false, "error": capitalise(err.Error())})
-				return
-			}
-			reply("dnPlayResult", map[string]any{"ok": true})
-			time.Sleep(2500 * time.Millisecond)
-			w.Dispatch(w.Terminate)
 		}()
 	})
 
@@ -236,12 +105,14 @@ type newsTile struct {
 	Size   string `json:"section_size"`
 }
 
-// gameFolderForDisplay is the install folder the launcher will use, or "".
-func gameFolderForDisplay(exeDir string, cfg Config) string {
-	if p := findGameBinary(exeDir, cfg); p != "" {
-		return gameInstallRoot(p)
+// gameInfo is the install folder the launcher will use and how it was found,
+// for the window ("" when the game was not found).
+func gameInfo(exeDir string, cfg Config) map[string]any {
+	p, source := gameLocation(exeDir, cfg)
+	if p == "" {
+		return map[string]any{"path": "", "source": ""}
 	}
-	return ""
+	return map[string]any{"path": gameInstallRoot(p), "source": source}
 }
 
 func fetchNews() ([]newsTile, error) {
@@ -342,6 +213,7 @@ const desktopPageHTML = `<!doctype html>
   .opt small { display:block; color:var(--dim); font-size:11.5px; }
   .path { font-size:12.5px; color:#b8c7d3; word-break:break-all; user-select:text; }
   .path.missing { color:#ff9b8f; }
+  .path-src { font-size:11.5px; color:var(--dim); margin-top:-6px; }
   .link { background:none; border:0; color:var(--dim); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; padding:0; align-self:flex-start; }
 </style>
 <header>
@@ -395,7 +267,13 @@ const desktopPageHTML = `<!doctype html>
       <button class="link" onclick="signOut()">Sign out</button>
       <span class="who" style="margin-top:18px">Game folder</span>
       <span class="path" id="gamepath"></span>
+      <span class="path-src" id="gamesrc"></span>
       <button class="link" onclick="pickGame()">Change…</button>
+      <button class="link" id="autogame" onclick="autoGame()" hidden>Use automatic detection</button>
+      <div id="gamedir-row" hidden>
+        <input id="gamedir" placeholder="C:\Games\Dreadnought" spellcheck="false">
+        <button class="link" onclick="typedGameDir()">Use this folder</button>
+      </div>
       <div class="msg" id="gamemsg"></div>
       <span class="who" style="margin-top:10px">Options</span>
       <label class="opt"><input type="checkbox" id="opt-logWindow" onchange="setOpt('logWindow', this)">
@@ -458,9 +336,31 @@ const desktopPageHTML = `<!doctype html>
     if (r.signIn) signOut();
   }
   let state = {};
-  function showGame(path) {
-    $('gamepath').textContent = path || 'Not found. Choose the folder where Dreadnought is installed.';
-    $('gamepath').classList.toggle('missing', !path);
+  const gameSources = {
+    'Steam': 'Found in your Steam library',
+    'chosen': 'Chosen by you',
+    'launcher folder': "The launcher's own folder",
+    'dn-launcher.json': 'Set in dn-launcher.json',
+    'Linux launcher': 'Found by the Linux launcher',
+  };
+  function showGame(g) {
+    g = g || {};
+    $('gamepath').textContent = g.path || 'Not found. Choose the folder where Dreadnought is installed.';
+    $('gamepath').classList.toggle('missing', !g.path);
+    $('gamesrc').textContent = g.path ? (gameSources[g.source] || '') : '';
+    $('autogame').hidden = g.source !== 'chosen';
+  }
+  async function typedGameDir() {
+    say('gamemsg', '');
+    const r = await dnSetGameDir($('gamedir').value);
+    if (r.ok) { showGame(r.game); say('playmsg', ''); say('gamemsg', 'Saved.', 'good'); }
+    else say('gamemsg', r.error, 'bad');
+  }
+  async function autoGame() {
+    say('gamemsg', '');
+    const r = await dnAutoGame();
+    if (r.ok) { showGame(r.game); say('gamemsg', r.game.path ? 'Using automatic detection.' : 'Not found automatically; choose the folder.', r.game.path ? 'good' : 'bad'); }
+    else say('gamemsg', r.error, 'bad');
   }
   async function setOpt(name, box) {
     if (!(await dnSetOption(name, box.checked))) { box.checked = !box.checked; say('gamemsg', 'Could not save the option.', 'bad'); }
@@ -510,6 +410,9 @@ const desktopPageHTML = `<!doctype html>
     pick('login');
     const s = state = await dnInit();
     showGame(s.game);
+    // The browser version can also take a typed path (the folder dialog it
+    // opens may appear behind the browser).
+    if (window.dnBrowser) $('gamedir-row').hidden = false;
     $('opt-logWindow').checked = !!s.logWindow;
     $('opt-verboseLog').checked = !!s.verboseLog;
     if (s.cert) {
