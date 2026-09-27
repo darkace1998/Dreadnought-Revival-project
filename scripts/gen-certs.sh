@@ -15,9 +15,12 @@ mkdir -p "$CERT_DIR"
 SERVER_IP="${SERVER_IP:-$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}"
 SERVER_IP="${SERVER_IP:-127.0.0.1}"
 echo "[*] Certificate will be valid for IP: $SERVER_IP (override with SERVER_IP=...)"
-# SERVER_NAME: the public DNS name players use (e.g. play.example.org). The
-# launcher hands the NAME to the game when it has one, so a home connection's
-# changing outside IP does not invalidate the certificates.
+# SERVER_NAME: the public DNS name players use (e.g. play.example.org); the
+# launcher's own sign-in and news are checked against it. CORRECTED 2026-09-27:
+# this said the launcher hands the NAME to the game so a changing outside IP
+# would not matter. The game's gateway accepts only an IP (FInternetAddr::SetIp),
+# so the launcher passes the resolved IP -- and SERVER_IP must be the CURRENT
+# outside IP. If it changes, re-run this script (note: it also makes a new CA).
 SERVER_NAME="${SERVER_NAME:-${PUBLIC_HOST:-}}"
 NAME_SAN=""
 if [ -n "$SERVER_NAME" ]; then

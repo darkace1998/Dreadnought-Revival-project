@@ -52,3 +52,13 @@ func TestLauncherTokenExpiry(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenUsernameReadsTheClaim(t *testing.T) {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x","username":"Tester","exp":1}`))
+	if got := tokenUsername("h." + payload + ".s"); got != "Tester" {
+		t.Fatalf("tokenUsername = %q, want Tester", got)
+	}
+	if got := tokenUsername("not-a-jwt"); got != "" {
+		t.Fatalf("tokenUsername(garbage) = %q, want empty", got)
+	}
+}

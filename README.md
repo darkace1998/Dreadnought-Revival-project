@@ -171,6 +171,12 @@ GOOS=windows go build -ldflags "-H windowsgui \
   -X main.defaultCA=$(base64 -w0 certs/ca.crt)" ./dn-launcher
 ```
 
+The exe's icon, version information and manifest (runs without admin rights)
+come from `dn-launcher/rsrc_windows_amd64.syso`, which `go build` links in
+automatically. It is generated from `dn-launcher/winres/` (`winres.json` and
+`icon.png`); after changing either, regenerate it:
+`cd dn-launcher && go run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --arch amd64`.
+
 `-H windowsgui` opens the desktop window with no console flashing up (the
 console flow opens its own console when it needs one). `defaultCA` builds the
 server's CA into the exe, so testers download **only `dn-launcher.exe`**. On

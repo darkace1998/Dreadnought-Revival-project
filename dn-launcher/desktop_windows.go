@@ -49,7 +49,10 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 		AutoFocus: true,
 		DataPath:  dataDir,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "Dreadnought — Private Server",
+			Title: "Dreadnought — Private Server",
+			// Group icon #1 from winres/winres.json (rsrc_windows_amd64.syso);
+			// 0 would give the window the generic application icon.
+			IconId: 1,
 			Width:  980,
 			Height: 620,
 			Center: true,
@@ -79,12 +82,47 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 		if server == "" {
 			server = cfg.GatewayIP
 		}
-		out := map[string]any{"signedIn": st.token != "", "username": st.username, "server": server}
+		settings := loadSettings()
+		out := map[string]any{"signedIn": st.token != "", "username": st.username, "server": server,
+			"game": gameFolderForDisplay(exeDir, cfg), "logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog}
 		if pendingCA != nil && !caTrusted(pendingCA) {
 			name, fp := caSummary(pendingCA)
 			out["cert"] = map[string]any{"name": name, "fingerprint": fp}
 		}
 		return out
+	})
+
+	// Game folder: Windows' folder picker, owned by this window (so it runs on
+	// the UI thread). The choice is kept per Windows user (settings.json).
+	_ = w.Bind("dnPickGame", func() map[string]any {
+		dir, ok := pickFolder(uintptr(w.Window()), "Select the folder where Dreadnought is installed")
+		if !ok {
+			return map[string]any{"ok": false}
+		}
+		if gameBinaryIn(dir) == "" {
+			return map[string]any{"ok": false, "error": "Dreadnought was not found in " + dir +
+				". Pick the folder that contains the DreadGame folder."}
+		}
+		settings := loadSettings()
+		settings.GameDir = dir
+		if err := saveSettings(settings); err != nil {
+			return map[string]any{"ok": false, "error": "Could not save the setting: " + err.Error()}
+		}
+		return map[string]any{"ok": true, "game": gameFolderForDisplay(exeDir, cfg)}
+	})
+
+	// Option toggles, saved per Windows user.
+	_ = w.Bind("dnSetOption", func(name string, on bool) bool {
+		settings := loadSettings()
+		switch name {
+		case "logWindow":
+			settings.LogWindow = on
+		case "verboseLog":
+			settings.VerboseLog = on
+		default:
+			return false
+		}
+		return saveSettings(settings) == nil
 	})
 
 	// The certificate prompt. Runs on the UI thread on purpose: Windows' own
@@ -166,6 +204,11 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 					"error": "Install the public testing certificate first; the game cannot connect without it."})
 				return
 			}
+			if findGameBinary(exeDir, cfg) == "" {
+				reply("dnPlayResult", map[string]any{"ok": false, "game": true,
+					"error": "Dreadnought was not found. Choose your game folder above."})
+				return
+			}
 			if token == "" || launcherTokenExpired(token) {
 				reply("dnPlayResult", map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true})
 				return
@@ -191,6 +234,14 @@ type newsTile struct {
 	Body   string `json:"body"`
 	Active bool   `json:"active"`
 	Size   string `json:"section_size"`
+}
+
+// gameFolderForDisplay is the install folder the launcher will use, or "".
+func gameFolderForDisplay(exeDir string, cfg Config) string {
+	if p := findGameBinary(exeDir, cfg); p != "" {
+		return gameInstallRoot(p)
+	}
+	return ""
 }
 
 func fetchNews() ([]newsTile, error) {
@@ -286,6 +337,11 @@ const desktopPageHTML = `<!doctype html>
   aside .name { font-size:22px; color:#e6eef5; margin-top:-6px; word-break:break-all; }
   aside .spacer { flex:1; }
   .play { padding:18px 0; font-size:20px; }
+  .opt { display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:#b8c7d3; cursor:pointer; margin:0; letter-spacing:0; }
+  .opt input { width:auto; margin:2px 0 0; accent-color:#3ba7d8; }
+  .opt small { display:block; color:var(--dim); font-size:11.5px; }
+  .path { font-size:12.5px; color:#b8c7d3; word-break:break-all; user-select:text; }
+  .path.missing { color:#ff9b8f; }
   .link { background:none; border:0; color:var(--dim); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; padding:0; align-self:flex-start; }
 </style>
 <header>
@@ -337,6 +393,15 @@ const desktopPageHTML = `<!doctype html>
       <span class="who">Captain</span>
       <span class="name" id="name"></span>
       <button class="link" onclick="signOut()">Sign out</button>
+      <span class="who" style="margin-top:18px">Game folder</span>
+      <span class="path" id="gamepath"></span>
+      <button class="link" onclick="pickGame()">Change…</button>
+      <div class="msg" id="gamemsg"></div>
+      <span class="who" style="margin-top:10px">Options</span>
+      <label class="opt"><input type="checkbox" id="opt-logWindow" onchange="setOpt('logWindow', this)">
+        <span>Show the game's log window</span></label>
+      <label class="opt"><input type="checkbox" id="opt-verboseLog" onchange="setOpt('verboseLog', this)">
+        <span>Detailed log<small>For bug reports. Makes the log file much larger.</small></span></label>
       <span class="spacer"></span>
       <div class="msg" id="playmsg"></div>
       <button class="go play" id="play" onclick="play()">Play</button>
@@ -389,9 +454,23 @@ const desktopPageHTML = `<!doctype html>
     say('playmsg', r.error, 'bad');
     $('play').disabled = false;
     if (r.cert) { say('certmsg', r.error, 'bad'); show('cert'); return; }
+    if (r.game) { $('gamepath').classList.add('missing'); return; }
     if (r.signIn) signOut();
   }
   let state = {};
+  function showGame(path) {
+    $('gamepath').textContent = path || 'Not found. Choose the folder where Dreadnought is installed.';
+    $('gamepath').classList.toggle('missing', !path);
+  }
+  async function setOpt(name, box) {
+    if (!(await dnSetOption(name, box.checked))) { box.checked = !box.checked; say('gamemsg', 'Could not save the option.', 'bad'); }
+  }
+  async function pickGame() {
+    say('gamemsg', '');
+    const r = await dnPickGame();
+    if (r.ok) { showGame(r.game); say('playmsg', ''); say('gamemsg', 'Saved.', 'good'); }
+    else if (r.error) say('gamemsg', r.error, 'bad');
+  }
   function afterCert() { if (state.signedIn) home(state.username); else show('signin'); }
   async function installCert() {
     $('cert-go').disabled = true;
@@ -430,6 +509,9 @@ const desktopPageHTML = `<!doctype html>
   (async () => {
     pick('login');
     const s = state = await dnInit();
+    showGame(s.game);
+    $('opt-logWindow').checked = !!s.logWindow;
+    $('opt-verboseLog').checked = !!s.verboseLog;
     if (s.cert) {
       $('cert-name').textContent = s.cert.name || 'the server certificate';
       $('cert-fp').textContent = s.cert.fingerprint;

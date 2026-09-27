@@ -358,7 +358,10 @@ type Config struct {
 	FirmamentPort  string `json:"firmament_port"`
 	GamePath       string `json:"game_path"`
 	VerboseLogging bool   `json:"verbose_logging"`
-	SkipOnboarding bool   `json:"skip_onboarding"`
+	// LogWindow opens the game's log console (-LOG); also a toggle in the
+	// launcher window, and DN_LOG_WINDOW=1.
+	LogWindow      bool `json:"log_window"`
+	SkipOnboarding bool `json:"skip_onboarding"`
 	// AllowSteam drops the -NoSteam switch, letting the client keep its Steam
 	// online subsystem alive. See the note where the switch is built.
 	AllowSteam bool `json:"allow_steam"`
@@ -419,6 +422,9 @@ func loadConfig(exeDir string) Config {
 	// DN_SKIP_ONBOARDING is a debugging escape hatch that jumps straight to the
 	// hangar. Onboarding is on by default so new players get the same first-run
 	// experience they had on the live servers.
+	if v := strings.TrimSpace(os.Getenv("DN_LOG_WINDOW")); v != "" && v != "0" {
+		cfg.LogWindow = true
+	}
 	if v := strings.TrimSpace(os.Getenv("DN_SKIP_ONBOARDING")); v != "" && v != "0" {
 		cfg.SkipOnboarding = true
 	}
@@ -446,6 +452,10 @@ func findGameBinary(exeDir string, cfg Config) string {
 		if _, err := os.Stat(cfg.GamePath); err == nil {
 			return cfg.GamePath
 		}
+	}
+	// The folder chosen in the launcher window.
+	if p := gameBinaryIn(loadSettings().GameDir); p != "" {
+		return p
 	}
 
 	// Paths relative to the Dreadnought install root.
@@ -587,12 +597,11 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 
 	gamePath := findGameBinary(exeDir, cfg)
 	if gamePath == "" {
-		fmt.Fprintln(os.Stderr, "[!] Could not find game binary.")
-		fmt.Fprintln(os.Stderr, "    Place dn-launcher.exe in your Dreadnought install directory")
-		fmt.Fprintln(os.Stderr, "    and copy DreadGame-Win64-Shipping-patched.exe into")
-		fmt.Fprintln(os.Stderr, "    DreadGame\\DreadGame\\Binaries\\Win64\\")
-		fmt.Fprintln(os.Stderr, "    Or set 'game_path' in dn-launcher.json to the full path.")
-		return 0, errors.New("could not find DreadGame-Win64-Shipping.exe -- put the launcher in your Dreadnought folder, or set game_path in dn-launcher.json")
+		fmt.Fprintln(os.Stderr, "[!] Could not find the game.")
+		fmt.Fprintln(os.Stderr, "    Choose your Dreadnought folder in the launcher window (Game folder, Change),")
+		fmt.Fprintln(os.Stderr, "    put dn-launcher.exe in your Dreadnought install directory,")
+		fmt.Fprintln(os.Stderr, "    or set 'game_path' in dn-launcher.json to the full path.")
+		return 0, errors.New("could not find Dreadnought -- choose your game folder under Game folder")
 	}
 	fmt.Printf("[*] Game binary: %s\n", gamePath)
 
@@ -603,8 +612,18 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 		firmamentHost = cfg.GatewayIP
 	}
 
+	// The launcher window's toggles (settings.json) add to dn-launcher.json.
+	settings := loadSettings()
+	// The player's name. FYMmogClient::Init (0x142A33C70) reads -PlayerName=
+	// from the command line into the client's nickname (+0x3540), which is
+	// what FYOnlineIdentityMmog::GetPlayerNickname returns and what
+	// UYGameEngine::Browse (0x140535840) puts in the battle server's join URL:
+	// it REMOVES any Name= option and adds Name=<nickname>. Without this the
+	// nickname was empty, the host named players by number ("Join succeeded:
+	// 257"), and the ?Name= mmogbrain appends to the travel address was
+	// stripped by that same Browse.
+	playerName := tokenUsername(jwtToken)
 	args := []string{
-		"-LOG",
 		"-GatewayAddress=" + cfg.GatewayIP,
 		"-GatewayPort=" + cfg.GatewayPort,
 		"-YFirmamentAddress=" + firmamentHost,
@@ -663,7 +682,15 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 		fmt.Println("[*] Onboarding disabled (DN_SKIP_ONBOARDING / skip_onboarding) — the tutorial gate is bypassed.")
 	}
 
-	if cfg.VerboseLogging {
+	if playerName != "" {
+		args = append(args, "-PlayerName="+playerName)
+	}
+	if cfg.LogWindow || settings.LogWindow {
+		// -LOG only opens the console window; the log FILE (Saved\Logs\
+		// DreadGame.log) is written either way.
+		args = append(args, "-LOG")
+	}
+	if cfg.VerboseLogging || settings.VerboseLog {
 		// Bumps every UE4 log category (LogNet, LogHTTP, LogOnline,
 		// LogYMmogbrain, LogWebServicesPlugin, etc.) to Verbose, and forces
 		// the log file to flush after every line so nothing is lost if the

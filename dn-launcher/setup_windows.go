@@ -8,7 +8,8 @@ package main
 //   - The GAME never resolves a backend by name. Its only compiled-in backend
 //     host is a default Firmament address (firmament.integration.greybox.
 //     aviary.cloud) that -YFirmamentAddress overrides; the web-services gateway
-//     comes from -GatewayAddress. Both are passed as the server's IP below.
+//     comes from -GatewayAddress. Both are passed as the server's IP below
+//     (the gateway parser accepts only an IP; see runMachineSetup).
 //     Measured from run/gateway.log: every by-name request that ever reached
 //     the gateway was the LAUNCHER's own sign-in (POST /auth/, /auth/register)
 //     plus one July visit to the old launcher tiles page.
@@ -234,14 +235,17 @@ func runMachineSetup(exeDir string, cfg *Config) error {
 		serverWebPort = p
 		fmt.Printf("[*] Sign-in and news via port %s\n", p)
 	}
-	// The GAME gets the name when there is one: it resolves names itself (its
-	// gateway address becomes an https:// URL; Firmament logs "Connecting to
-	// <host>:<port> (<resolved>)"), and a name keeps working when a home
-	// connection's outside IP changes -- the certificates carry it as a SAN
-	// (gen-certs.sh SERVER_NAME).
-	cfg.GatewayIP = server
+	// The GAME gets the resolved IP, never the name. CORRECTED 2026-09-27: this
+	// passed the name, on the belief that the game resolves names itself. It
+	// does not for the web-services gateway: WebServiceSessionManager
+	// (0x14041D6E0) hands -GatewayAddress to FInternetAddr::SetIp (vtable +8),
+	// which parses dotted IPv4 only, and a live client logged "Invalid address:
+	// <name>, Port: 65443 ... Cannot init request". Resolving here, at every
+	// start, still follows a home connection's changing outside IP; the
+	// certificates carry the IP as a SAN (gen-certs.sh SERVER_IP).
+	cfg.GatewayIP = ip
 	if cfg.FirmamentHost == "" {
-		cfg.FirmamentHost = server
+		cfg.FirmamentHost = ip
 	}
 
 	der, err := readCACert(exeDir)
