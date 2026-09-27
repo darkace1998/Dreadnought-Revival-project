@@ -25,6 +25,17 @@ if [ -n "$SERVER_NAME" ]; then
   echo "[*] Certificate will also be valid for name: $SERVER_NAME"
 fi
 
+# EXTRA_IPS: more addresses to put in both certificates, comma-separated -- e.g.
+# the LAN IP when SERVER_IP is the outside one, so PCs at home that dial the
+# server directly keep working.
+EXTRA_IP_SAN=""
+EXTRA_IP_PY=""
+for ip in $(echo "${EXTRA_IPS:-}" | tr ',' ' '); do
+  EXTRA_IP_SAN="${EXTRA_IP_SAN},IP:${ip}"
+  EXTRA_IP_PY="${EXTRA_IP_PY}x509.IPAddress(ipaddress.IPv4Address(\"${ip}\")),"
+  echo "[*] Certificate will also be valid for IP: $ip"
+done
+
 echo "[*] Generating CA key and certificate..."
 openssl genrsa -out "$CERT_DIR/ca.key" 4096
 openssl req -new -x509 -days 3650 -key "$CERT_DIR/ca.key" \
@@ -42,7 +53,7 @@ openssl req -new -key "$CERT_DIR/server.key" \
 echo "[*] Creating SAN extension file..."
 cat > "$CERT_DIR/san.ext" << EOF
 [SAN]
-subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:${SERVER_IP},IP:127.0.0.1${NAME_SAN}
+subjectAltName=DNS:profile-api.prod.greybox.sixfoot.live,DNS:legacyapi.prod.greybox.sixfoot.live,DNS:mmog.greybox.sixfoot.live,DNS:masterserver.local,DNS:gamemanager.local,DNS:localhost,DNS:firmament.prod.greybox.sixfoot.live,DNS:*.prod.greybox.sixfoot.live,DNS:*.greybox.sixfoot.live,DNS:*.sixfoot.live,IP:${SERVER_IP},IP:127.0.0.1${EXTRA_IP_SAN}${NAME_SAN}
 EOF
 
 echo "[*] Signing server certificate with CA..."
@@ -109,6 +120,7 @@ cert = (x509.CertificateBuilder()
         # the IP SAN, so nobody hit it -- but a stricter path would.
         x509.IPAddress(ipaddress.IPv4Address("${SERVER_IP}")),
         x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+        ${EXTRA_IP_PY}
         x509.DNSName("firmament.greybox.aviary.cloud"),
         x509.DNSName("firmament.prod.greybox.sixfoot.live"),
     ] + ([x509.DNSName("${SERVER_NAME}")] if "${SERVER_NAME}" else [])), critical=False)
