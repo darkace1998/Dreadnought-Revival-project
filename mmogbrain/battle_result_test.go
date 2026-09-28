@@ -139,3 +139,57 @@ func TestMatchFleetTypeFromBattleMatchID(t *testing.T) {
 		}
 	}
 }
+
+// The end-of-match screen shows the payout by EYXPPoolType; the pools must add
+// up (as the client adds them: all but 1, 2, 10, 11) to exactly what is paid.
+func TestRewardPoolsAddUpToThePayout(t *testing.T) {
+	r := battleRewards{winCredits: 1500, lossCredits: 750, killCredits: 100, winXP: 1000, lossXP: 500, killXP: 50,
+		xpBonuses: []float64{1.25, 0.25}, creditBonuses: []float64{0.75, 0.25}, fleetBonuses: []float64{1.00, 1.25, 1.50}}
+	for _, fleet := range []int{1, 2, 3} {
+		for _, kills := range []int32{0, 3, 7} {
+			credits, xp := r.poolsFor("win", kills, fleet)
+			wantC, wantX := r.forOutcome("win", kills, fleet)
+			if credits.total() != wantC || xp.total() != wantX {
+				t.Errorf("fleet %d kills %d: pools total %d/%d, paid %d/%d", fleet, kills, credits.total(), xp.total(), wantC, wantX)
+			}
+			if xp[0] != xp[1]+xp[2] || xp[1] != 1000 || xp[2] != 50*kills {
+				t.Errorf("fleet %d kills %d: scoring %d = base %d + performance %d?", fleet, kills, xp[0], xp[1], xp[2])
+			}
+			if xp[6+fleet] == 0 {
+				t.Errorf("fleet %d: fleet bonus not in BattleReady pool %d: %v", fleet, 6+fleet, xp)
+			}
+		}
+	}
+	// Win + 3 kills, Recruit: credits 1800 scoring + 1350 gold + 450 teammates + 1800 fleet.
+	credits, _ := r.poolsFor("win", 3, 1)
+	if credits[0] != 1800 || credits[5] != 1350 || credits[6] != 450 || credits[7] != 1800 {
+		t.Errorf("credit pools %v", credits)
+	}
+}
+
+// The rewards screen looks each fleet ship up by its fleet ship id; pawn ids
+// made the client file ShipXpError for every ship (2026-09-28).
+func TestBattleFleetShipIDsAreFleetShipIDs(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	state := mmogPlayerStateForPID(pid)
+	fleet := state.activeFleet()
+	ids := battleFleetShipIDs(pid, int(fleet.fleetType))
+	if len(ids) == 0 {
+		t.Fatal("no fleet ship ids")
+	}
+	pawn := map[int32]bool{}
+	for _, l := range fleet.shipLoadouts {
+		if l.ship.id != fleetShipKey(l) {
+			pawn[l.ship.id] = true
+		}
+	}
+	for _, id := range ids {
+		if pawn[id] {
+			t.Errorf("id %d is a pawn id, not a fleet ship id", id)
+		}
+	}
+}

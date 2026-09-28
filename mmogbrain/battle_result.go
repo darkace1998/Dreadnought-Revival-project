@@ -138,6 +138,51 @@ func battleOutcome(team, final int) string {
 }
 
 func (r battleRewards) forOutcome(outcome string, kills int32, fleetType int) (credits, xp int32) {
+	c, x := r.poolsFor(outcome, kills, fleetType)
+	return c.total(), x.total()
+}
+
+// rewardPools is a payout split the way the client's end-of-match screen
+// shows it: one amount per EYXPPoolType (registration 0x6A3CFE):
+//
+//	0 Scoring  1 ScoringBase  2 ScoringPerformance  3 BoosterWin
+//	4 BoosterFirstWinOfTheDay  5 GoldMembership  6 TeammatesGoldMembership
+//	7 BattleReadyRecruit  8 BattleReadyVeteran  9 BattleReadyLegendary
+//	10 FreeXPFleetBonus  11 FreeXPFleetBonusBoosted  12 None
+//
+// The client allocates 13 (0x0D) entries and totals every pool except 1-2
+// (the breakdown of 0) and 10-11 (0x3FAFA0), so Scoring carries base +
+// performance. The operator's formula maps onto it: Intermediate = base +
+// performance -> pools 1, 2 and 0; the bonus terms -> 5 (1.25 XP / 0.75
+// credits) and 6 (0.25); the fleet battle bonus -> 7/8/9 by fleet type.
+// GUESS: which named pool each operator term is (the numbers fit Gold /
+// Teammates-gold / BattleReady; nothing states it); EliteTeam% and any extra
+// bonus term go to 3 (BoosterWin).
+const rewardPoolCount = 13
+
+type rewardPools [rewardPoolCount]int32
+
+// total is what the player is paid: every pool the client sums.
+func (p rewardPools) total() int32 {
+	var t int32
+	for i, v := range p {
+		if i == 1 || i == 2 || i == 10 || i == 11 {
+			continue
+		}
+		t += v
+	}
+	return t
+}
+
+func (p rewardPools) csv() string {
+	parts := make([]string, len(p))
+	for i, v := range p {
+		parts[i] = strconv.Itoa(int(v))
+	}
+	return strings.Join(parts, ",")
+}
+
+func (r battleRewards) poolsFor(outcome string, kills int32, fleetType int) (credits, xp rewardPools) {
 	if kills < 0 {
 		kills = 0
 	}
@@ -148,10 +193,39 @@ func (r battleRewards) forOutcome(outcome string, kills int32, fleetType int) (c
 	if outcome == "win" {
 		baseCredits, baseXP = r.winCredits, r.winXP
 	}
-	intermediateCredits := baseCredits + r.killCredits*kills
-	intermediateXP := baseXP + r.killXP*kills
-	return int32(math.Round(float64(intermediateCredits) * r.multiplier(r.creditBonuses, fleetType))),
-		int32(math.Round(float64(intermediateXP) * r.multiplier(r.xpBonuses, fleetType)))
+	credits = r.split(baseCredits, r.killCredits*kills, r.creditBonuses, fleetType)
+	xp = r.split(baseXP, r.killXP*kills, r.xpBonuses, fleetType)
+	return credits, xp
+}
+
+// split builds the pools for one currency. The total is the formula rounded
+// once; per-pool rounding differences go to the fleet pool, so the pools
+// always add up to exactly what is paid.
+func (r battleRewards) split(base, performance int32, bonuses []float64, fleetType int) rewardPools {
+	var p rewardPools
+	intermediate := base + performance
+	p[0], p[1], p[2] = intermediate, base, performance
+	part := func(f float64) int32 { return int32(math.Round(float64(intermediate) * f)) }
+	for i, b := range bonuses {
+		switch i {
+		case 0:
+			p[5] += part(b)
+		case 1:
+			p[6] += part(b)
+		default:
+			p[3] += part(b)
+		}
+	}
+	p[3] += part(r.eliteTeamPct / 100)
+	ft := fleetType
+	if ft < 1 || ft > 3 {
+		ft = 1
+	}
+	fleetPool := 6 + ft // 7 Recruit, 8 Veteran, 9 Legendary
+	p[fleetPool] += part(r.fleetBonus(fleetType))
+	want := int32(math.Round(float64(intermediate) * r.multiplier(bonuses, fleetType)))
+	p[fleetPool] += want - p.total()
+	return p
 }
 
 func battleResultHandler(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +254,8 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 			res.ships = append(res.ships, id)
 		}
 	}
-	credits, xp, fresh, err := recordBattleResult(res, currentBattleRewards())
+	rewards := currentBattleRewards()
+	credits, xp, fresh, err := recordBattleResult(res, rewards)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{"match": match, "player": pid}).Error("battle result: not recorded")
 		http.Error(w, "not recorded", http.StatusInternalServerError)
@@ -190,6 +265,26 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)
+	// The same payout split into pools, for the end-of-match screen: the mod
+	// writes these into the player's m_creditsInfo / m_matchXPInfo (the data
+	// the missing server build used to fill), so the screen shows what was
+	// paid. See rewardPools.
+	database := currentMmogPlayerStateDB()
+	fleetType := 0
+	if database != nil {
+		fleetType = matchFleetType(database, res.match)
+	}
+	creditPools, xpPools := rewards.poolsFor(res.outcome, res.kills, fleetType)
+	flown := flownFleetShipIDs(res.pid, res.ships)
+	shipPools := xpPools
+	if len(flown) > 1 {
+		for i := range shipPools {
+			shipPools[i] /= int32(len(flown))
+		}
+	}
+	_, _ = fmt.Fprintf(w, "credit_pools=%s\nxp_pools=%s\nship_xp_pools=%s\nfleet_ships=%s\nflown_ships=%s\n",
+		creditPools.csv(), xpPools.csv(), shipPools.csv(),
+		joinInt32s(battleFleetShipIDs(res.pid, fleetType)), joinInt32s(flown))
 }
 
 type battleResult struct {
@@ -216,14 +311,7 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	// Ship XP goes to the hulls actually flown, resolved to pawn ids the way
 	// player_ship_xp keys them. Resolved BEFORE the transaction: the store has
 	// one connection, and a query inside an open transaction waits for itself.
-	var ships []int32
-	seen := map[int32]bool{}
-	for _, id := range res.ships {
-		if loadout, ok := battleLoadoutFor(res.pid, id); ok && loadout.ship.id != 0 && !seen[loadout.ship.id] {
-			seen[loadout.ship.id] = true
-			ships = append(ships, loadout.ship.id)
-		}
-	}
+	ships := flownShipIDs(res.pid, res.ships)
 
 	tx, err := database.Begin()
 	if err != nil {
@@ -259,6 +347,82 @@ func matchFleetType(database *sql.DB, battleMatchID string) int {
 		return 0
 	}
 	return fleetType
+}
+
+// flownShipIDs resolves the loadout ids a player picked to pawn (ship item)
+// ids, once each.
+func flownShipIDs(pid string, loadoutIDs []string) []int32 {
+	var ships []int32
+	seen := map[int32]bool{}
+	for _, id := range loadoutIDs {
+		if loadout, ok := battleLoadoutFor(pid, id); ok && loadout.ship.id != 0 && !seen[loadout.ship.id] {
+			seen[loadout.ship.id] = true
+			ships = append(ships, loadout.ship.id)
+		}
+	}
+	return ships
+}
+
+// battleFleetShipIDs lists the ships of the fleet the player fought with (the
+// active fleet of the match's fleet type), by FLEET SHIP id. The client's
+// rewards screen walks every ship of its active fleet and looks each up by
+// that id (GatherEomRewardsData 0x340C40 -> 0x3FB0D0); a ship with no entry
+// is reported as "Ship XP pools were not gathered correctly. ... Ship ID {1}"
+// (YA_LogSpecial, client_reports).
+//
+// VERIFIED 2026-09-28: keyed by pawn id (184483981...), the client filed
+// ShipXpError for Ship IDs 33489265/67/68/69/70 -- exactly the fleetShipID
+// (= precast loadout id) of the five ships in that player's active fleet.
+func battleFleetShipIDs(pid string, fleetType int) []int32 {
+	state := mmogPlayerStateForPID(pid)
+	fleets := state.activeFleets()
+	fleet := state.activeFleet()
+	for _, f := range fleets {
+		if int(f.fleetType) == fleetType {
+			fleet = f
+			break
+		}
+	}
+	var ids []int32
+	seen := map[int32]bool{}
+	for _, l := range fleet.shipLoadouts {
+		if id := fleetShipKey(l); id != 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func fleetShipKey(l mmogShipLoadoutSeed) int32 {
+	if l.fleetShipID != 0 {
+		return l.fleetShipID
+	}
+	return l.precastLoadoutID
+}
+
+// flownFleetShipIDs is flownShipIDs keyed the way the rewards screen looks
+// ships up (fleet ship id), not by pawn id.
+func flownFleetShipIDs(pid string, loadoutIDs []string) []int32 {
+	var ids []int32
+	seen := map[int32]bool{}
+	for _, id := range loadoutIDs {
+		if loadout, ok := battleLoadoutFor(pid, id); ok {
+			if k := fleetShipKey(loadout); k != 0 && !seen[k] {
+				seen[k] = true
+				ids = append(ids, k)
+			}
+		}
+	}
+	return ids
+}
+
+func joinInt32s(v []int32) string {
+	parts := make([]string, len(v))
+	for i, x := range v {
+		parts[i] = strconv.Itoa(int(x))
+	}
+	return strings.Join(parts, ",")
 }
 
 func grantBattleRewards(tx *sql.Tx, pid string, credits, xp int32, ships []int32) error {
