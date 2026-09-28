@@ -93,6 +93,29 @@ func main() {
 	adminKey := requireAdminKey(log)
 	r := newRouter(h, secret, adminKey, getenv("INTERNAL_API_KEY", adminKey), log)
 
+	// Balance mutations outside the binary protocol (admin grants,
+	// progression sync) must still reach a connected client's display:
+	// handlers has no connection registry, so it calls back here.
+	handlers.OnBalanceChanged = markCurrencyDirty
+
+	// Queue surgery and the forced match need the live Matchmaker, which
+	// newRouter does not receive. Same X-Admin-Key guard as the other
+	// /admin routes above.
+	queueAdmin := r.PathPrefix("/admin").Subrouter()
+	queueAdmin.Use(adminKeyMiddleware(adminKey))
+	queueAdmin.HandleFunc("/player/{id}", h.AdminPlayerDetail).Methods(http.MethodGet)
+	queueAdmin.HandleFunc("/queue/kick/{entry}", adminQueueKick).Methods(http.MethodDelete)
+	queueAdmin.HandleFunc("/queue/clear", adminQueueClear).Methods(http.MethodPost)
+	queueAdmin.HandleFunc("/reset", adminReset).Methods(http.MethodPost)
+	queueAdmin.HandleFunc("/force-match", func(w http.ResponseWriter, r *http.Request) {
+		info, err := mm.ForceMatch()
+		if err != nil {
+			writeAdminLiveError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeAdminLiveJSON(w, http.StatusOK, info)
+	}).Methods(http.MethodPost)
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      r,
@@ -363,6 +386,10 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	adminSub.HandleFunc("/queue", h.AdminQueue).Methods(http.MethodGet)
 	adminSub.HandleFunc("/players", h.AdminPlayers).Methods(http.MethodGet)
 	adminSub.HandleFunc("/grant", h.AdminGrant).Methods(http.MethodPost)
+	adminSub.HandleFunc("/results", h.AdminResults).Methods(http.MethodGet)
+	adminSub.HandleFunc("/online", adminOnline).Methods(http.MethodGet)
+	adminSub.HandleFunc("/broadcast", adminBroadcast).Methods(http.MethodPost)
+	adminSub.HandleFunc("/provision", adminProvision).Methods(http.MethodPost)
 
 	// Authenticated
 	auth := r.PathPrefix("/mmog").Subrouter()

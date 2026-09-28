@@ -363,6 +363,7 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 		"new_rank":    newRank,
 		"new_rank_xp": newRankXP,
 	}).Info("progression: player progressed")
+	OnBalanceChanged(pid)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		fieldStatus: "ok",

@@ -72,6 +72,8 @@ func main() {
 	admin.Use(adminKeyMiddleware(requireAdminKey(log)))
 	admin.HandleFunc("/ban", h.AdminBan).Methods(http.MethodPost)
 	admin.HandleFunc("/unban", h.AdminUnban).Methods(http.MethodPost)
+	admin.HandleFunc("/users", h.AdminUsers).Methods(http.MethodGet)
+	admin.HandleFunc("/bans", h.AdminBans).Methods(http.MethodGet)
 
 	// Internal endpoints (protected by X-Internal-Key header middleware) —
 	// for other services to check session revocation state, not for players.

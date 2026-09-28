@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreadnought Ops — Web Dashboard</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="bg-orbs" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<!-- Login overlay -->
+<div id="login-overlay" class="overlay hidden">
+  <div class="login-card glass">
+    <div class="login-logo">◈</div>
+    <h1>Dreadnought Ops</h1>
+    <p class="muted">Operator dashboard · sign in with <code>ADMIN_KEY</code></p>
+    <input id="login-key" type="password" placeholder="Paste ADMIN_KEY …" autocomplete="off">
+    <button id="login-btn" class="btn primary">Sign in</button>
+    <p id="login-error" class="error hidden"></p>
+    <p class="hint">The key stays on the server — the browser only gets a session cookie.</p>
+  </div>
+</div>
+
+<header class="topbar glass">
+  <div class="brand"><span class="logo">◈</span> Dreadnought <b>Ops</b></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="online">Online</button>
+    <button data-tab="players">Players</button>
+    <button data-tab="queue">Queue</button>
+    <button data-tab="matches">Matches</button>
+    <button data-tab="servers">Servers</button>
+    <button data-tab="chat">Chat</button>
+    <button data-tab="news">News</button>
+    <button data-tab="logs">Logs</button>
+    <button data-tab="metrics">Metrics</button>
+    <button data-tab="backups">Backups</button>
+    <button data-tab="config">Config</button>
+  </nav>
+  <div class="top-right">
+    <span id="live-dot" class="live-dot" title="Polling status">●</span>
+    <span id="clock" class="clock">--:--:--</span>
+    <button id="logout-btn" class="btn ghost">Logout</button>
+  </div>
+</header>
+
+<main>
+  <!-- OVERVIEW -->
+  <section id="tab-overview" class="tab active">
+    <div class="hero-grid">
+      <div class="hero-card glass"><div class="hero-label">Services online</div><div class="hero-value" id="hero-up">–</div><div class="hero-sub" id="hero-up-sub">–</div></div>
+      <div class="hero-card glass"><div class="hero-label">Players in queue</div><div class="hero-value" id="hero-queue">–</div><div class="hero-sub">waiting for match</div></div>
+      <div class="hero-card glass"><div class="hero-label">Active matches</div><div class="hero-value" id="hero-matches">–</div><div class="hero-sub">per mmogbrain</div></div>
+      <div class="hero-card glass"><div class="hero-label">Battle instances</div><div class="hero-value" id="hero-instances">–</div><div class="hero-sub" id="hero-instances-sub">–</div></div>
+      <div class="hero-card glass"><div class="hero-label">Registered servers</div><div class="hero-value" id="hero-servers">–</div><div class="hero-sub">master browser</div></div>
+      <div class="hero-card glass"><div class="hero-label">Online</div><div class="hero-value" id="hero-online">–</div><div class="hero-sub">connected players</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card glass">
+        <h2>Services</h2>
+        <div id="service-grid" class="service-grid"></div>
+      </div>
+      <div class="card glass">
+        <h2>Live history <span class="muted-sm">last ~5 min</span></h2>
+        <canvas id="chart-history" height="180"></canvas>
+        <div class="legend"><span><i class="sw q"></i>Queue</span><span><i class="sw m"></i>Matches</span><span><i class="sw i"></i>Instances</span></div>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Events</h2>
+      <div id="event-feed" class="feed"><p class="muted">No status changes this session.</p></div>
+    </div>
+  </section>
+
+  <!-- ONLINE -->
+  <section id="tab-online" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Online <span id="online-count" class="pill"></span></h2>
+      <button id="online-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="online-table">
+        <thead><tr><th>Name</th><th>Player ID</th><th>Channels</th><th>Queue</th><th>Match</th><th>Team</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Straight from the Firmament hub — who is really connected right now (autoscale input).</p>
+    </div>
+  </section>
+
+  <!-- PLAYERS -->
+  <section id="tab-players" class="tab">
+    <div class="card glass">
+      <div class="row-between">
+        <h2>Players <span id="accounts-count" class="pill"></span></h2>
+        <div class="row">
+          <input id="accounts-search" placeholder="Search (name / email / ID) …">
+          <button id="accounts-reload" class="btn">↻ Reload</button>
+        </div>
+      </div>
+      <p class="hint">Every <b>registered</b> account (auth server) with live balance (mmogbrain). No game data: never been in game.</p>
+      <div class="table-wrap"><table id="accounts-table">
+        <thead><tr><th>Username</th><th>Email</th><th>Player ID</th><th>Credits</th><th>Premium</th><th>Free XP</th><th>Rank</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+    <div class="card glass" id="player-detail-card">
+      <h2>Player details</h2>
+      <div id="player-detail"><p class="muted">Click 🔍 on a row (fleets, ships, purchases, queue, match, results).</p></div>
+    </div>
+    <div class="grid-2">
+      <div class="card glass">
+        <h2>Grant balance</h2>
+        <p class="muted">Like <code>admin-cli grant</code>. Whole numbers ≥ 0 only.</p>
+        <label>User ID (32-hex)<input id="grant-id" placeholder="…"></label>
+        <div class="grid-3">
+          <label>Credits<input id="grant-credits" type="number" min="0" value="1000"></label>
+          <label>Premium<input id="grant-premium" type="number" min="0" value="0"></label>
+          <label>Free XP<input id="grant-xp" type="number" min="0" value="0"></label>
+        </div>
+        <button id="grant-btn" class="btn primary">Grant</button>
+      </div>
+      <div class="card glass">
+        <h2>Ban / Unban</h2>
+        <p class="muted">Like <code>admin-cli ban</code>. Username rule: 1–64 chars.</p>
+        <label>Username<input id="ban-user" placeholder="Name"></label>
+        <label>Reason (ban only)<input id="ban-reason" placeholder="…"></label>
+        <div class="row"><button id="ban-btn" class="btn danger">Ban</button><button id="unban-btn" class="btn">Unban</button></div>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Give to all</h2>
+      <p class="muted">Same amounts to <b>every account with game data</b> — e.g. equip all testers for an event. Adds up, like a single grant.</p>
+      <div class="row">
+        <label>Credits<input id="grant-all-credits" type="number" min="0" value="5000"></label>
+        <label>Premium<input id="grant-all-premium" type="number" min="0" value="0"></label>
+        <label>Free XP<input id="grant-all-xp" type="number" min="0" value="5000"></label>
+        <button id="grant-all-btn" class="btn primary">Give to all</button>
+      </div>
+      <div id="grant-all-result" class="hint"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card glass">
+        <h2>Equip test account</h2>
+        <p class="muted">Like <code>provision-test-account</code>, but live (no stack stop): all ships, items, rank + currency are <b>SET</b>.</p>
+        <label>User ID (32-hex)<input id="prov-id" placeholder="…"></label>
+        <div class="grid-3">
+          <label>Rank<input id="prov-rank" type="number" min="1" max="50" value="20"></label>
+          <label>Credits<input id="prov-credits" type="number" min="0" value="200000"></label>
+          <label>Premium<input id="prov-premium" type="number" min="0" value="200000"></label>
+        </div>
+        <label>Free XP<input id="prov-xp" type="number" min="0" value="200000"></label>
+        <button id="prov-btn" class="btn primary">Apply loadout</button>
+        <div id="prov-result" class="hint"></div>
+      </div>
+      <div class="card glass">
+        <h2>Active bans <span id="bans-count" class="pill"></span></h2>
+        <div class="table-wrap"><table id="bans-table">
+          <thead><tr><th>Username</th><th>Reason</th><th>Since</th><th>Action</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="card glass">
+      <h2>Reset values & research</h2>
+      <p class="muted">Reset account to fresh: <b>currencies</b> = starter values (10,000 credits, rank 1), <b>research</b> = all purchases/ship XP/fleets gone, starter fleet rebuilt. Savegames, contracts, bans and match history stay.</p>
+      <div class="row">
+        <label>User ID (32-hex)<input id="reset-id" placeholder="…" style="min-width:280px"></label>
+        <label class="chk"><input type="checkbox" id="reset-currencies" checked> Currencies</label>
+        <label class="chk"><input type="checkbox" id="reset-research" checked> Research</label>
+        <button id="reset-btn" class="btn danger">Reset</button>
+      </div>
+      <div id="reset-result" class="hint"></div>
+    </div>
+  </section>
+
+  <!-- QUEUE -->
+  <section id="tab-queue" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Matchmaking queue <span id="queue-count" class="pill"></span></h2>
+      <div class="row">
+        <button id="force-match-btn" class="btn primary">Force match</button>
+        <button id="queue-clear-btn" class="btn danger">Clear queue</button>
+        <button id="queue-reload" class="btn">↻ Reload</button>
+      </div></div>
+      <canvas id="chart-queue" height="120"></canvas>
+      <div class="table-wrap"><table id="queue-table">
+        <thead><tr><th>ID</th><th>User</th><th>Mode</th><th>Tier</th><th>Status</th><th>Queued at</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- MATCHES -->
+  <section id="tab-matches" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Battle instances <span id="instances-count" class="pill"></span></h2>
+      <button id="instances-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="instances-table">
+        <thead><tr><th>Instance ID</th><th>Port</th><th>Mode</th><th>Map</th><th>Players</th><th>Ready</th><th>Started</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Stop = <code>DELETE /instances/{id}</code> on the control plane (:8085). UUID-guarded, with confirmation.</p>
+    </div>
+    <div class="card glass">
+      <div class="row-between"><h2>Match results <span id="results-count" class="pill"></span></h2>
+      <button id="results-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="results-table">
+        <thead><tr><th>Match</th><th>Player</th><th>Team</th><th>Outcome</th><th>Kills</th><th>Credits</th><th>XP</th><th>Reported</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Reported by the battle-server mod — who earned what (win pays more than loss/unknown).</p>
+    </div>
+  </section>
+
+  <!-- SERVERS -->
+  <section id="tab-servers" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Server browser <span id="servers-count" class="pill"></span></h2>
+      <button id="servers-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="servers-table">
+        <thead><tr><th>ID</th><th>Name</th><th>IP:Port</th><th>Mode</th><th>Map</th><th>Players</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- CHAT -->
+  <section id="tab-chat" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Chat <span class="pill" id="chat-channel-pill">global</span></h2>
+      <div class="row"><input id="chat-channel" value="global"><button id="chat-reload" class="btn">↻</button></div></div>
+      <div id="chat-feed" class="feed"></div>
+    </div>
+    <div class="card glass">
+      <h2>Broadcast to all</h2>
+      <p class="muted">Write to the channel as <b>operator</b> — reaches all connected players live (e.g. restart notice).</p>
+      <div class="row">
+        <input id="bc-channel" value="dreadnought.global" style="width:220px">
+        <input id="bc-message" placeholder="Message to everyone …" style="flex:1;min-width:240px">
+        <button id="bc-send" class="btn primary">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEWS -->
+  <section id="tab-news" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Launcher news <span id="tiles-count" class="pill"></span></h2>
+      <button id="tiles-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="tiles-table">
+        <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Size</th><th>Active</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+    <div class="card glass">
+      <h2>Create / edit tile</h2>
+      <p class="muted">Shows on the launcher home page (no restart needed).</p>
+      <div class="row">
+        <label>ID<input id="tile-id" placeholder="event-1"></label>
+        <label>Type<select id="tile-type"><option>announcement</option><option>event</option><option>maintenance</option></select></label>
+        <label>Size<select id="tile-size"><option>full</option><option>half</option></select></label>
+        <label class="chk"><input type="checkbox" id="tile-active" checked> Active</label>
+      </div>
+      <label>Title<input id="tile-title" placeholder="…"></label>
+      <label>Text<input id="tile-body" placeholder="…"></label>
+      <button id="tile-save" class="btn primary">Save</button>
+    </div>
+  </section>
+
+  <!-- LOGS -->
+  <section id="tab-logs" class="tab">
+    <div class="card glass">
+      <div class="row-between">
+        <h2>Logs</h2>
+        <div class="row">
+          <select id="log-source"></select>
+          <select id="log-file" class="hidden"></select>
+          <select id="log-lines"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+          <input id="log-filter" placeholder="Filter …">
+          <button id="log-reload" class="btn">↻</button>
+          <label class="chk"><input type="checkbox" id="log-follow" checked> Follow</label>
+        </div>
+      </div>
+      <p class="hint" id="log-path"></p>
+      <pre id="log-view" class="logview">Nothing loaded yet.</pre>
+    </div>
+  </section>
+
+  <!-- METRICS -->
+  <section id="tab-metrics" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Metrics <span class="muted-sm">from all /metrics endpoints</span></h2>
+      <button id="metrics-reload" class="btn">↻ Reload</button></div>
+      <div id="metrics-grid" class="metrics-grid"></div>
+    </div>
+  </section>
+
+  <!-- BACKUPS -->
+  <section id="tab-backups" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Backups <span id="backups-count" class="pill"></span></h2>
+      <button id="backups-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="backups-table">
+        <thead><tr><th>Archive</th><th>Size</th><th>Created</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">From <code>scripts/backup.sh</code> (all DBs + certs + secrets, mode 600). Create via cron (<code>backup.sh --install-cron</code>, daily 04:30) — overview only, no triggering here.</p>
+    </div>
+  </section>
+
+  <!-- CONFIG -->
+  <section id="tab-config" class="tab">
+    <div class="grid-2">
+      <div class="card glass"><h2>Configuration</h2><div id="config-box" class="kv"></div></div>
+      <div class="card glass"><h2>TLS certificate</h2><div id="cert-box" class="kv"></div>
+        <h2 style="margin-top:1.2rem">Debug switches</h2><div id="switches-box" class="kv"></div></div>
+    </div>
+  </section>
+</main>
+
+<!-- Confirm modal -->
+<div id="modal" class="overlay hidden">
+  <div class="modal-card glass">
+    <h3 id="modal-title">Confirm</h3>
+    <p id="modal-text"></p>
+    <div class="row-end"><button id="modal-cancel" class="btn">Cancel</button><button id="modal-ok" class="btn danger">Run</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

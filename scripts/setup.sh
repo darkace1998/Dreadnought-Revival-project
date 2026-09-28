@@ -60,7 +60,15 @@ echo
 echo "[*] Building services..."
 mkdir -p "$RUN_DIR"
 
-SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli)
+# web-dashboard is the newest module: make sure its sums are recorded
+# (needs network once) BEFORE the build loop below. Non-fatal -- the build
+# reports the real error if this was skipped while offline.
+if [ -d "$PROJECT_DIR/web-dashboard" ]; then
+  printf '    %-16s ' "go.sum sync"
+  (cd "$PROJECT_DIR/web-dashboard" && go mod tidy) 2>/dev/null && echo "OK" || echo "skipped (offline?)"
+fi
+
+SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli web-dashboard)
 for svc in "${SERVICES[@]}"; do
   printf '    %-16s ' "$svc"
   (cd "$PROJECT_DIR" && go build -o "$RUN_DIR/$svc" "./$svc")

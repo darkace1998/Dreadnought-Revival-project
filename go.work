@@ -10,4 +10,5 @@ use (
 	./master-server
 	./mmogbrain
 	./shared
+	./web-dashboard
 )

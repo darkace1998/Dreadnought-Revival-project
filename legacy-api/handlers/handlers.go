@@ -105,29 +105,197 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // Tiles handles GET /v2/dreadnought/launcher/dn/tiles/
 // Returns launcher news tiles to the Dreadnought launcher.
 // legacy.js postApiCall() requires response.data.result to be non-null.
+//
+// Tiles live in launcher_tiles (edited via /admin/tiles), seeded with the
+// two defaults below on a fresh database so an upgrade serves exactly what
+// the hardcoded version served.
 func (h *Handler) Tiles(w http.ResponseWriter, r *http.Request) {
+	h.ensureDefaultTiles()
+	rows, err := h.DB.Query(`SELECT id,title,body,type,active,section_size FROM launcher_tiles ORDER BY rowid`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	tiles := []map[string]interface{}{}
+	for rows.Next() {
+		var id, title, body, tileType, sectionSize string
+		var active int
+		if err := rows.Scan(&id, &title, &body, &tileType, &active, &sectionSize); err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		tiles = append(tiles, map[string]interface{}{
+			"id": id, "title": title, "body": body, "type": tileType,
+			"active": active != 0, "section_size": sectionSize,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"result": map[string]interface{}{
-			"tiles": []map[string]interface{}{
-				{
-					"id":           "welcome",
-					"title":        "Welcome to the Private Server",
-					"body":         "Community-operated private server. Have fun!",
-					"type":         "announcement",
-					"active":       true,
-					"section_size": "full",
-				},
-				{
-					"id":           fieldStatus,
-					"title":        "Server Status",
-					"body":         "Server is online. Connect and play!",
-					"type":         "announcement",
-					"active":       true,
-					"section_size": "half",
-				},
-			},
-		},
+		"result": map[string]interface{}{"tiles": tiles},
 	})
+}
+
+// defaultLauncherTiles is the seed content: what the hardcoded handler
+// served before tiles became editable.
+var defaultLauncherTiles = []map[string]string{
+	{
+		"id": "welcome", "title": "Welcome to the Private Server",
+		"body": "Community-operated private server. Have fun!",
+		"type": "announcement", "section_size": "full",
+	},
+	{
+		"id": "status", "title": "Server Status",
+		"body": "Server is online. Connect and play!",
+		"type": "announcement", "section_size": "half",
+	},
+}
+
+func (h *Handler) ensureDefaultTiles() {
+	for _, t := range defaultLauncherTiles {
+		_, _ = h.DB.Exec(`INSERT OR IGNORE INTO launcher_tiles(id,title,body,type,active,section_size)
+			VALUES(?,?,?,?,1,?)`, t["id"], t["title"], t["body"], t["type"], t["section_size"])
+	}
+}
+
+// validTileID keeps ids URL-safe: they appear in no URL today, but the
+// launcher keys tiles by id and a slash or quote would corrupt its lookup.
+func validTileID(id string) bool {
+	if len(id) < 1 || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// AdminTiles handles GET /admin/tiles — every tile including inactive ones,
+// for the operator editor (the public Tiles endpoint serves the same rows).
+func (h *Handler) AdminTiles(w http.ResponseWriter, r *http.Request) {
+	h.ensureDefaultTiles()
+	rows, err := h.DB.Query(`SELECT id,title,body,type,active,section_size,updated_at
+		FROM launcher_tiles ORDER BY rowid`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	type tile struct {
+		ID          string `json:"id"`
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		Type        string `json:"type"`
+		Active      bool   `json:"active"`
+		SectionSize string `json:"section_size"`
+		UpdatedAt   string `json:"updated_at"`
+	}
+	out := []tile{}
+	for rows.Next() {
+		var t tile
+		var active int
+		if err := rows.Scan(&t.ID, &t.Title, &t.Body, &t.Type, &active, &t.SectionSize, &t.UpdatedAt); err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		t.Active = active != 0
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"tiles": out, "count": len(out)})
+}
+
+// AdminUpsertTile handles POST /admin/tiles — creates or replaces one tile.
+// Missing optional fields keep their defaults; the launcher reads the result
+// on its next home-screen load, no restart needed anywhere.
+func (h *Handler) AdminUpsertTile(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID          string `json:"id"`
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		Type        string `json:"type"`
+		Active      *bool  `json:"active"`
+		SectionSize string `json:"section_size"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if !validTileID(req.ID) {
+		writeError(w, http.StatusBadRequest, "id must be 1-64 chars of letters, digits, _ or -")
+		return
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" || len([]rune(title)) > 120 {
+		writeError(w, http.StatusBadRequest, "title required (max 120 chars)")
+		return
+	}
+	if len([]rune(req.Body)) > 2000 {
+		writeError(w, http.StatusBadRequest, "body too long (max 2000 chars)")
+		return
+	}
+	tileType := strings.TrimSpace(req.Type)
+	if tileType == "" {
+		tileType = "announcement"
+	}
+	if tileType != "announcement" && tileType != "event" && tileType != "maintenance" {
+		writeError(w, http.StatusBadRequest, "type must be announcement, event or maintenance")
+		return
+	}
+	sectionSize := strings.TrimSpace(req.SectionSize)
+	if sectionSize == "" {
+		sectionSize = "full"
+	}
+	if sectionSize != "full" && sectionSize != "half" {
+		writeError(w, http.StatusBadRequest, "section_size must be full or half")
+		return
+	}
+	active := 1
+	if req.Active != nil && !*req.Active {
+		active = 0
+	}
+	if _, err := h.DB.Exec(`INSERT INTO launcher_tiles(id,title,body,type,active,section_size,updated_at)
+		VALUES(?,?,?,?,?,?,datetime('now'))
+		ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, type=excluded.type,
+			active=excluded.active, section_size=excluded.section_size, updated_at=datetime('now')`,
+		req.ID, title, req.Body, tileType, active, sectionSize); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	h.Log.WithField("tile", req.ID).Info("launcher tile saved")
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok", "id": req.ID})
+}
+
+// AdminDeleteTile handles DELETE /admin/tiles/{id}.
+func (h *Handler) AdminDeleteTile(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if !validTileID(id) {
+		writeError(w, http.StatusBadRequest, "invalid tile id")
+		return
+	}
+	res, err := h.DB.Exec(`DELETE FROM launcher_tiles WHERE id=?`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeError(w, http.StatusNotFound, "no such tile")
+		return
+	}
+	h.Log.WithField("tile", id).Info("launcher tile deleted")
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "deleted", "id": id})
 }
 
 // AgeConsent handles GET/POST /v2/dreadnought/ageconsent/

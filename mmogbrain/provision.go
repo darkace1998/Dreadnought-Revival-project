@@ -1,13 +1,18 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/db"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/handlers"
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	"github.com/sirupsen/logrus"
 )
 
 // provision-test-account: give an existing account everything, for testing.
@@ -69,20 +74,82 @@ func runProvisionTestAccount(args []string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() { _ = database.Close() }()
+
+	summary, err := provisionAccount(database, pid, provisionOptions{
+		Rank: *rank, Credits: *credits, Premium: *premium, FreeXP: *freeXP,
+		MaxTier: *maxTier, WithHeroes: *withHeroes, ShipXP: *shipXP,
+		WithItems: *withItems, SaveFrom: *saveFrom,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("provisioned %s: rank %d (%d XP), credits %d, premium %d, free XP %d\n",
+		pid, summary.Rank, summary.TotalXP, summary.Credits, summary.Premium, summary.FreeXP)
+	fmt.Printf("  %d ships unlocked, %d modules/weapons/officers owned\n", summary.Ships, summary.Items)
+	fmt.Printf("  player now has %d ship loadouts and %d purchase rows\n", summary.Loadouts, summary.Purchases)
+	return nil
+}
+
+// provisionOptions mirrors the provision-test-account flags. Defaults come
+// from defaultProvisionOptions (the CLI flag defaults).
+type provisionOptions struct {
+	Rank       int
+	Credits    int64
+	Premium    int64
+	FreeXP     int64
+	MaxTier    int
+	WithHeroes bool
+	ShipXP     int
+	WithItems  bool
+	SaveFrom   string
+}
+
+func defaultProvisionOptions() provisionOptions {
+	return provisionOptions{
+		Rank: 20, Credits: 200000, Premium: 200000, FreeXP: 200000,
+		WithHeroes: true, WithItems: true,
+	}
+}
+
+type provisionSummary struct {
+	Rank                int   `json:"rank"`
+	TotalXP             int64 `json:"total_xp"`
+	Credits             int64 `json:"credits"`
+	Premium             int64 `json:"premium"`
+	FreeXP              int64 `json:"free_xp"`
+	Ships               int   `json:"ships"`
+	Items               int   `json:"items"`
+	Loadouts            int   `json:"loadouts"`
+	Purchases           int   `json:"purchases"`
+}
+
+// provisionAccount is the core of provision-test-account, extracted so the
+// HTTP variant serves it live: it works on the passed DB handle — the
+// server's own when called over HTTP — where the CLI opens a second handle
+// and therefore needs a stopped stack.
+func provisionAccount(database *sql.DB, pid string, opts provisionOptions) (provisionSummary, error) {
+	var out provisionSummary
+	if protocol.NormalizePlayerPID(pid) == "" {
+		return out, fmt.Errorf("user must be a 32-hex player id")
+	}
+	pid = protocol.NormalizePlayerPID(pid)
+	if opts.Rank < 1 || opts.Rank > 50 {
+		return out, fmt.Errorf("rank must be 1..50, got %d", opts.Rank)
+	}
 	setMmogPlayerStateDB(database)
 
 	if err := seedMmogPlayerState(database, pid); err != nil {
-		return fmt.Errorf("seed player: %w", err)
+		return out, fmt.Errorf("seed player: %w", err)
 	}
 
 	var totalXP int64
-	for r := int32(2); r <= int32(*rank); r++ {
+	for r := int32(2); r <= int32(opts.Rank); r++ {
 		totalXP += int64(handlers.RankXPThreshold(r))
 	}
 	if _, err := database.Exec(`UPDATE player_state SET soft_currency=?, premium_currency=?, free_xp=?,
 		current_rank=?, rank_xp=0, current_xp=?, updated_at=datetime('now') WHERE user_id=?`,
-		*credits, *premium, *freeXP, *rank, totalXP, pid); err != nil {
-		return fmt.Errorf("set currencies and rank: %w", err)
+		opts.Credits, opts.Premium, opts.FreeXP, opts.Rank, totalXP, pid); err != nil {
+		return out, fmt.Errorf("set currencies and rank: %w", err)
 	}
 
 	// A brand-new account is sent straight into the onboarding tutorial
@@ -92,15 +159,18 @@ func runProvisionTestAccount(args []string) error {
 	// m_bTutorialFinished and the onboarding rule states (Ob_TutorialFinished,
 	// Ob_CharacterFinished, ...). It holds no player id, so copying one from a
 	// player who has finished onboarding is the client's own data, not ours.
-	if *saveFrom != "" {
-		src := normalizedPlayerStatePID(*saveFrom)
+	if opts.SaveFrom != "" {
+		src := protocol.NormalizePlayerPID(opts.SaveFrom)
+		if src == "" {
+			return out, fmt.Errorf("save-blobs-from must be a 32-hex player id")
+		}
 		res, err := database.Exec(`INSERT OR REPLACE INTO player_save_blobs(user_id,slot,data,updated_at)
 			SELECT ?,slot,data,datetime('now') FROM player_save_blobs WHERE user_id=?`, pid, src)
 		if err != nil {
-			return fmt.Errorf("copy save blobs: %w", err)
+			return out, fmt.Errorf("copy save blobs: %w", err)
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return fmt.Errorf("player %s has no save blobs to copy", src)
+			return out, fmt.Errorf("player %s has no save blobs to copy", src)
 		}
 	}
 
@@ -108,7 +178,7 @@ func runProvisionTestAccount(args []string) error {
 	// Narrow the ship set on request. A test account that owns everything has
 	// nothing left to unlock, so the unlock and research flows cannot be
 	// validated on it; "tier 1-2, defaults only" leaves the rest to earn.
-	if *maxTier > 0 || !*withHeroes {
+	if opts.MaxTier > 0 || !opts.WithHeroes {
 		tierOf := map[int32]int32{}
 		hero := map[int32]bool{}
 		for _, h := range baseShipLoadouts {
@@ -119,7 +189,7 @@ func runProvisionTestAccount(args []string) error {
 		}
 		kept := ships[:0]
 		for _, id := range ships {
-			if (*maxTier > 0 && tierOf[id] > int32(*maxTier)) || (!*withHeroes && hero[id]) {
+			if (opts.MaxTier > 0 && tierOf[id] > int32(opts.MaxTier)) || (!opts.WithHeroes && hero[id]) {
 				continue
 			}
 			kept = append(kept, id)
@@ -128,7 +198,7 @@ func runProvisionTestAccount(args []string) error {
 	}
 	tx, err := database.Begin()
 	if err != nil {
-		return err
+		return out, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	record := func(id int32, kind string) error {
@@ -139,43 +209,125 @@ func runProvisionTestAccount(args []string) error {
 	}
 	for _, id := range ships {
 		if err := record(id, "loadout"); err != nil {
-			return fmt.Errorf("record ship %d: %w", id, err)
+			return out, fmt.Errorf("record ship %d: %w", id, err)
 		}
 		if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
-			return err
+			return out, err
 		}
 	}
-	if !*withItems {
+	if !opts.WithItems {
 		items = nil
 	}
 	for _, id := range items {
 		kind := map[int32]string{4: "ability", 5: "weapon", 6: "perk"}[(id>>24)&0xff]
 		if err := record(id, kind); err != nil {
-			return fmt.Errorf("record item %d: %w", id, err)
+			return out, fmt.Errorf("record item %d: %w", id, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return out, err
 	}
 
 	// Ship XP, so research can be paid with it (YA_PlayerGet ShipXps). Keyed
 	// by pawn id, as match rewards record it (awardFleetShipXP).
-	if *shipXP > 0 {
+	if opts.ShipXP > 0 {
 		if _, err := database.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp)
 			SELECT DISTINCT user_id, ship_id, ? FROM player_ship_loadouts WHERE user_id=? AND ship_id>0
-			ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=excluded.xp, updated_at=datetime('now')`, *shipXP, pid); err != nil {
-			return fmt.Errorf("set ship xp: %w", err)
+			ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=excluded.xp, updated_at=datetime('now')`, opts.ShipXP, pid); err != nil {
+			return out, fmt.Errorf("set ship xp: %w", err)
 		}
 	}
 
-	var loadouts, purchases int
-	_ = database.QueryRow(`SELECT COUNT(*) FROM player_ship_loadouts WHERE user_id=?`, pid).Scan(&loadouts)
-	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=?`, pid).Scan(&purchases)
-	fmt.Printf("provisioned %s: rank %d (%d XP), credits %d, premium %d, free XP %d\n",
-		pid, *rank, totalXP, *credits, *premium, *freeXP)
-	fmt.Printf("  %d ships unlocked, %d modules/weapons/officers owned\n", len(ships), len(items))
-	fmt.Printf("  player now has %d ship loadouts and %d purchase rows\n", loadouts, purchases)
-	return nil
+	out = provisionSummary{
+		Rank: opts.Rank, TotalXP: totalXP,
+		Credits: opts.Credits, Premium: opts.Premium, FreeXP: opts.FreeXP,
+		Ships: len(ships), Items: len(items),
+	}
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_ship_loadouts WHERE user_id=?`, pid).Scan(&out.Loadouts)
+	_ = database.QueryRow(`SELECT COUNT(*) FROM player_purchases WHERE user_id=?`, pid).Scan(&out.Purchases)
+	return out, nil
+}
+
+// adminProvision handles POST /admin/provision — provision-test-account over
+// HTTP, against the LIVE server (no stopped stack: it uses the server's own
+// DB handle, where the CLI opens a second one and therefore needs exclusivity).
+// Values are SET, not added, exactly like the CLI.
+func adminProvision(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID   string `json:"user_id"`
+		Rank     *int   `json:"rank"`
+		Credits  *int64 `json:"credits"`
+		Premium  *int64 `json:"premium"`
+		FreeXP   *int64 `json:"free_xp"`
+		MaxTier  *int   `json:"max_tier"`
+		Heroes   *bool  `json:"heroes"`
+		ShipXP   *int   `json:"ship_xp"`
+		Items    *bool  `json:"items"`
+		SaveFrom string `json:"save_blobs_from"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeAdminLiveError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	pid := protocol.NormalizePlayerPID(req.UserID)
+	if pid == "" {
+		writeAdminLiveError(w, http.StatusBadRequest, "user_id must be a 32-hex player id")
+		return
+	}
+	opts := defaultProvisionOptions()
+	if req.Rank != nil {
+		opts.Rank = *req.Rank
+	}
+	if req.Credits != nil {
+		opts.Credits = *req.Credits
+	}
+	if req.Premium != nil {
+		opts.Premium = *req.Premium
+	}
+	if req.FreeXP != nil {
+		opts.FreeXP = *req.FreeXP
+	}
+	if req.MaxTier != nil {
+		opts.MaxTier = *req.MaxTier
+	}
+	if req.Heroes != nil {
+		opts.WithHeroes = *req.Heroes
+	}
+	if req.ShipXP != nil {
+		opts.ShipXP = *req.ShipXP
+	}
+	if req.Items != nil {
+		opts.WithItems = *req.Items
+	}
+	opts.SaveFrom = req.SaveFrom
+	if opts.Rank < 1 || opts.Rank > 50 {
+		writeAdminLiveError(w, http.StatusBadRequest, "rank must be 1..50")
+		return
+	}
+	for name, v := range map[string]int64{"credits": opts.Credits, "premium": opts.Premium, "free_xp": opts.FreeXP} {
+		if v < 0 || v > 100_000_000 {
+			writeAdminLiveError(w, http.StatusBadRequest, name+" out of range")
+			return
+		}
+	}
+	if opts.MaxTier < 0 || opts.MaxTier > 5 || opts.ShipXP < 0 || opts.ShipXP > 10_000_000 {
+		writeAdminLiveError(w, http.StatusBadRequest, "max_tier or ship_xp out of range")
+		return
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		writeAdminLiveError(w, http.StatusInternalServerError, "database unavailable")
+		return
+	}
+	summary, err := provisionAccount(database, pid, opts)
+	if err != nil {
+		writeAdminLiveError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	logrus.WithFields(logrus.Fields{"user_id": pid, "rank": summary.Rank}).Warn("dashboard provisioned test account")
+	writeAdminLiveJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "provisioned", "user_id": pid, "summary": summary,
+	})
 }
 
 // provisionUnlockSet is every ship, and every weapon/ability/officer perk the

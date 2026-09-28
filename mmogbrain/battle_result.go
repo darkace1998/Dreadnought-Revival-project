@@ -241,7 +241,13 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	if err := grantBattleRewards(tx, res.pid, credits, xp, ships); err != nil {
 		return 0, 0, false, err
 	}
-	return credits, xp, true, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, 0, false, err
+	}
+	// The connected client still shows its login-time balance; the frame loop
+	// picks this up as a fresh YA_RewardCurrencies push (currency_dirty.go).
+	markCurrencyDirty(res.pid)
+	return credits, xp, true, nil
 }
 
 // matchFleetType is the EYFleetType of the match a result was reported for,

@@ -6084,6 +6084,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("failed", "purchase commit failed", 0, softCurrency)
 	}
 	committed = true
+	markCurrencyDirty(pid)
 	return reply("bought", "ok", price, creditsLeft)
 }
 
@@ -6198,6 +6199,7 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 		return buildMmogErrorPayload(requestName, "commit failed")
 	}
 
+	markCurrencyDirty(pid)
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", requestName)
@@ -6241,6 +6243,7 @@ func buildMmogXPConversionPayload(requestName string, playerPID string, payload 
 			return buildMmogErrorPayload(requestName, "XP conversion failed")
 		}
 	}
+	markCurrencyDirty(pid)
 
 	var b []byte
 	var stack []int
@@ -6270,6 +6273,7 @@ func buildMmogContractCompletionPayload(requestName string, playerPID string, pa
 	if !success {
 		return buildMmogErrorPayload(requestName, "contract completion failed")
 	}
+	markCurrencyDirty(pid)
 
 	var b []byte
 	var stack []int
@@ -6308,6 +6312,7 @@ func buildMmogContractRerollPayload(requestName string, playerPID string, payloa
 	if rows, _ := result.RowsAffected(); rows == 0 {
 		return buildMmogErrorPayload(requestName, "insufficient credits for reroll")
 	}
+	markCurrencyDirty(pid)
 
 	// Mark old contract as rerolled
 	_, _ = database.Exec(`UPDATE player_contracts SET state='rerolled', updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
@@ -6979,6 +6984,7 @@ func claimResearchedItem(playerPID string, itemID int32) (status, reason string,
 	if err := tx.Commit(); err != nil {
 		return "failed", "database unavailable", 0
 	}
+	markCurrencyDirty(pid)
 	return "succeeded", "", price
 }
 

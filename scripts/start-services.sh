@@ -281,16 +281,20 @@ TLS_CERT="$ROOT/certs/server.crt" TLS_KEY="$ROOT/certs/server.key" \
     CRASH_REPORT_DIR="$RUN_DIR/crash-reports" start gateway "$RUN_DIR/gateway"
 start mmogbrain "$RUN_DIR/mmogbrain"
 start legacy-api "$RUN_DIR/legacy-api"
+# Operator web dashboard (BFF, embedded UI, no Node). Serves :8090 by default
+# (DASHBOARD_ADDR); needs ADMIN_KEY from secrets.env, talks to 8081-8085 over
+# loopback like admin-cli does.
+RUN_DIR="$RUN_DIR" DASHBOARD_ADDR="${DASHBOARD_ADDR:-:8090}" start web-dashboard "$RUN_DIR/web-dashboard"
 
 sleep 3
 echo "=== Health checks ==="
-for p in 8081 8082 8083 8084 8085; do
+for p in 8081 8082 8083 8084 8085 8090; do
     printf ':%s ' "$p"
     curl -s -m 2 "http://127.0.0.1:$p/health" || printf 'no response'
     echo
 done
 echo "=== Listening sockets ==="
-ss -lntp 2>/dev/null | grep -E ':(80|443|8081|8082|8083|8084|8085|48843|65443)\b' || true
+ss -lntp 2>/dev/null | grep -E ':(80|443|8081|8082|8083|8084|8085|8090|48843|65443)\b' || true
 echo "=== Done (PLAYERS_PER_MATCH=$PLAYERS_PER_MATCH SERVER_IP=$SERVER_IP) ==="
 if [ "$PLAYERS_PER_MATCH" = "1" ]; then
     echo "    NOTE: PLAYERS_PER_MATCH=1 gives every player a PRIVATE match."

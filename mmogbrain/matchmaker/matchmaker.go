@@ -891,6 +891,49 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	return nil
 }
 
+// ForceMatch starts a match immediately from whoever is waiting instead of
+// waiting for the bucket to fill: the largest waiting
+// (game_mode,tier_min,fleet_type) group plays now, capped at PlayersPerMatch.
+// An operator action for a stuck queue or a planned event, not the normal
+// path — the tick keeps running and will keep forming matches its own way.
+func (m *Matchmaker) ForceMatch() (map[string]interface{}, error) {
+	var gameMode string
+	var tierMin, fleetType, count int
+	if err := m.DB.QueryRow(`
+		SELECT game_mode,tier_min,fleet_type,COUNT(*) FROM queue_entries
+		WHERE status='waiting' GROUP BY game_mode,tier_min,fleet_type
+		ORDER BY COUNT(*) DESC LIMIT 1`).Scan(&gameMode, &tierMin, &fleetType, &count); err != nil {
+		return nil, fmt.Errorf("queue is empty")
+	}
+	size := count
+	if m.PlayersPerMatch > 0 && size > m.PlayersPerMatch {
+		size = m.PlayersPerMatch
+	}
+	if size < 1 {
+		size = 1
+	}
+	var before int
+	_ = m.DB.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&before)
+	if err := m.formMatchOfSize(gameMode, tierMin, fleetType, size); err != nil {
+		return nil, err
+	}
+	var after int
+	_ = m.DB.QueryRow(`SELECT COUNT(*) FROM matches`).Scan(&after)
+	if after <= before {
+		// formMatchOfSize silently forms nothing when its rows vanished
+		// between the count and the take (the tick raced us). Report it
+		// instead of claiming a match that does not exist.
+		return nil, fmt.Errorf("queue changed under us; try again")
+	}
+	m.Log.WithFields(logrus.Fields{
+		"game_mode": gameMode, "tier_min": tierMin, "fleet_type": fleetType, "players": size,
+	}).Warn("operator forced a match")
+	return map[string]interface{}{
+		"status": "formed", "game_mode": gameMode,
+		"tier_min": tierMin, "fleet_type": fleetType, "players": size,
+	}, nil
+}
+
 // gameManagerHTTPClient replaces http.DefaultClient, which has NO timeout.
 //
 // The matchmaker runs every tick on one goroutine, so a game-manager that

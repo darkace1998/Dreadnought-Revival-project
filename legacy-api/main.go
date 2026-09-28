@@ -75,6 +75,13 @@ func main() {
 	internalRoutes.Use(internalKeyMiddleware(internalKey))
 	internalRoutes.HandleFunc("/match/result", h.PostMatchResult).Methods(http.MethodPost)
 
+	// Operator endpoints (X-Admin-Key, like every other service's /admin).
+	admin := r.PathPrefix("/admin").Subrouter()
+	admin.Use(adminKeyMiddleware(requireAdminKey(log)))
+	admin.HandleFunc("/tiles", h.AdminTiles).Methods(http.MethodGet)
+	admin.HandleFunc("/tiles", h.AdminUpsertTile).Methods(http.MethodPost)
+	admin.HandleFunc("/tiles/{id}", h.AdminDeleteTile).Methods(http.MethodDelete)
+
 	// Phase 7 — completeness endpoints
 	r.HandleFunc("/v2/dreadnought/server/status", h.ServerStatus).Methods(http.MethodGet)
 	r.HandleFunc("/v2/dreadnought/techtree", h.TechTree).Methods(http.MethodGet)
@@ -146,6 +153,28 @@ func requireInternalKey(log *logrus.Logger) string {
 		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
+}
+
+// requireAdminKey refuses to start with the well-known placeholder admin
+// key — it would let anyone who has read the source use every /admin endpoint.
+func requireAdminKey(log *logrus.Logger) string {
+	key := os.Getenv("ADMIN_KEY")
+	if key == "" || key == "changeme-admin-key" {
+		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
+	}
+	return key
+}
+
+func adminKeyMiddleware(key string) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Admin-Key") != key {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func internalKeyMiddleware(key string) mux.MiddlewareFunc {

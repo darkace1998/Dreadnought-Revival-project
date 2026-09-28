@@ -503,3 +503,87 @@ func (h *Handler) AdminUnban(w http.ResponseWriter, r *http.Request) {
 	h.Log.WithField(fieldUsername, req.Username).Info("player unbanned")
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "unbanned", fieldUsername: req.Username})
 }
+
+// AdminBans handles GET /admin/bans — lists active bans with who, why and
+// since. Banning and unbanning already exist; this is the overview that shows
+// what is currently in force.
+func (h *Handler) AdminBans(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query(`SELECT u.username, b.reason, b.banned_by, b.created_at, u.banned_at
+		FROM bans b JOIN users u ON u.id=b.user_id ORDER BY b.created_at DESC`)
+	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	type ban struct {
+		Username string `json:"username"`
+		Reason   string `json:"reason"`
+		BannedBy string `json:"banned_by"`
+		Since    string `json:"since"`
+	}
+	out := []ban{}
+	for rows.Next() {
+		var b ban
+		var bannedAt sql.NullString
+		if err := rows.Scan(&b.Username, &b.Reason, &b.BannedBy, &b.Since, &bannedAt); err != nil {
+			writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+			return
+		}
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"bans": out, "count": len(out)})
+}
+
+// AdminUsers handles GET /admin/users — lists every registered account with
+// its ban state.
+//
+// This is the account side of what mmogbrain's GET /admin/players reports:
+// that endpoint only lists accounts that already have player_state (i.e. have
+// logged into the game at least once). A freshly registered account that never
+// got past the launcher is invisible there, so the operator dashboard joins
+// both lists to show every registration.
+func (h *Handler) AdminUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query(`SELECT u.id,u.username,u.email,u.created_at,u.banned_at,
+		(SELECT b.reason FROM bans b WHERE b.user_id=u.id ORDER BY b.created_at DESC LIMIT 1)
+		FROM users u ORDER BY u.created_at DESC`)
+	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	type account struct {
+		ID        string `json:"id"`
+		Username  string `json:"username"`
+		Email     string `json:"email"`
+		CreatedAt string `json:"created_at"`
+		BannedAt  string `json:"banned_at"`
+		BanReason string `json:"ban_reason"`
+		Banned    bool   `json:"banned"`
+	}
+	out := []account{}
+	for rows.Next() {
+		var a account
+		var bannedAt, banReason sql.NullString
+		if err := rows.Scan(&a.ID, &a.Username, &a.Email, &a.CreatedAt, &bannedAt, &banReason); err != nil {
+			writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+			return
+		}
+		a.BannedAt = bannedAt.String
+		a.BanReason = banReason.String
+		a.Banned = bannedAt.Valid && bannedAt.String != ""
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"users": out, "count": len(out)})
+}

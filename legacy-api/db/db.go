@@ -64,6 +64,17 @@ var migrations = []string{
 	`ALTER TABLE player_stats ADD COLUMN energy_spent INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE player_stats ADD COLUMN distance_traveled INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE player_stats ADD COLUMN time_played INTEGER NOT NULL DEFAULT 0`,
+	// Launcher news tiles, edited by the operator through /admin/tiles instead
+	// of being hardcoded in the Tiles handler.
+	`CREATE TABLE IF NOT EXISTS launcher_tiles (
+		id           TEXT PRIMARY KEY,
+		title        TEXT NOT NULL,
+		body         TEXT NOT NULL DEFAULT '',
+		type         TEXT NOT NULL DEFAULT 'announcement',
+		active       INTEGER NOT NULL DEFAULT 1,
+		section_size TEXT NOT NULL DEFAULT 'full',
+		updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

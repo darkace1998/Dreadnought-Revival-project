@@ -103,6 +103,7 @@ func (h *Handler) AdminGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Log.WithField("user_id", req.UserID).WithField("credits", req.Credits).
 		WithField("premium", req.Premium).WithField("free_xp", req.FreeXP).Warn("admin grant")
+	OnBalanceChanged(req.UserID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "ok", "user_id": req.UserID,
 		"credits": credits, "premium": premium, "free_xp": freeXP,

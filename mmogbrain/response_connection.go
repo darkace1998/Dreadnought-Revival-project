@@ -860,6 +860,26 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 // the timeout path just continued. Driving it from the timeout as well bounds
 // the wait by the read deadline instead of by the client's whim.
 func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType uint16, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {
+	// Fresh balances. Anything that moved money since YA_PlayerGet (battle
+	// rewards, purchases, claims, conversions, contracts, admin grants) marks
+	// the account dirty; the client would otherwise keep showing the
+	// login-time figures until it restarts (verified 2026-09-28). The
+	// handler assigns rather than adds, so this is idempotent.
+	if consumeCurrencyDirty(state.playerPID) {
+		pushID, err := uuid.NewRandom()
+		if err != nil {
+			log.WithError(err).Warn("mmog: failed to generate currency refresh push id")
+		} else {
+			payload := buildMmogRewardCurrenciesPayload(state.playerPID)
+			pushFrame := protocol.BuildResponseFrame(pushID, msgType, payload)
+			if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_RewardCurrencies", pushFrame, appEncoder, encryptResponses, "currency refresh failed", "sent YA_RewardCurrencies refresh"); err != nil {
+				return err
+			}
+			log.WithFields(logrus.Fields{
+				"remote": remote, "pid": state.playerPID,
+			}).Info("mmog: pushed fresh balances after a mid-session grant")
+		}
+	}
 	// Match-ready push. The queuedForMatch gate keeps the DB query out of the
 	// hot path for everyone who is not in a queue.
 	//
