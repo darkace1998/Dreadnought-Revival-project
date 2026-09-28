@@ -88,12 +88,54 @@ func TestBattleResultAwardsOnce(t *testing.T) {
 		}
 	}
 	c1, f1, x1, s1 := read()
-	if c1-c0 != 1800 || f1-f0 != 1150 || x1-x0 != 1150 || s1-s0 != 1150 {
-		t.Fatalf("deltas credits=%d freeXP=%d rankXP=%d shipXP=%d; want 1800/1150/1150/1150", c1-c0, f1-f0, x1-x0, s1-s0)
+	// Win + 3 kills: intermediate credits 1500+3*100 = 1800 x (1+0.75+0.25+1.00)
+	// = 5400; intermediate XP 1000+3*50 = 1150 x (1+1.25+0.25+1.00) = 4025.
+	if c1-c0 != 5400 || f1-f0 != 4025 || x1-x0 != 4025 || s1-s0 != 4025 {
+		t.Fatalf("deltas credits=%d freeXP=%d rankXP=%d shipXP=%d; want 5400/4025/4025/4025", c1-c0, f1-f0, x1-x0, s1-s0)
 	}
 	for counter, want := range map[string]int32{"MatchesPlayed": 1, "MatchesWon": 1, "ShipsDestroyed": 3} {
 		if got := battleResultCounter(pid, counter); got != want {
 			t.Errorf("%s = %d, want %d", counter, got, want)
+		}
+	}
+}
+
+func TestBattleRewardFormula(t *testing.T) {
+	r := battleRewards{winCredits: 1500, lossCredits: 750, killCredits: 100, winXP: 1000, lossXP: 500, killXP: 50,
+		xpBonuses: []float64{1.25, 0.25}, creditBonuses: []float64{0.75, 0.25}, fleetBonuses: []float64{1.00, 1.25, 1.50}}
+	for _, c := range []struct {
+		name        string
+		outcome     string
+		kills       int32
+		fleet       int
+		credits, xp int32
+	}{
+		// Recruit: x3.0 credits, x3.5 XP -- the operator's formula as written.
+		{"recruit loss", "loss", 0, 1, 2250, 1750},
+		{"unknown match pays recruit", "loss", 0, 0, 2250, 1750},
+		// Veteran +0.25: x3.25 / x3.75.
+		{"veteran win 2 kills", "win", 2, 2, 5525, 4125},
+		// Legendary +0.50: x3.5 / x4.0.
+		{"legendary win 2 kills", "win", 2, 3, 5950, 4400},
+	} {
+		if cr, xp := r.forOutcome(c.outcome, c.kills, c.fleet); cr != c.credits || xp != c.xp {
+			t.Errorf("%s: %d credits %d xp, want %d / %d", c.name, cr, xp, c.credits, c.xp)
+		}
+	}
+	r.eliteTeamPct = 50
+	if cr, xp := r.forOutcome("win", 2, 1); cr != 5950 || xp != 4400 {
+		t.Errorf("recruit win, 2 kills, elite 50%%: %d credits %d xp, want 1700x3.5=5950, 1100x4.0=4400", cr, xp)
+	}
+}
+
+func TestMatchFleetTypeFromBattleMatchID(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	if _, err := database.Exec(`INSERT INTO matches(id,game_mode,map,battle_match_id,fleet_type) VALUES('m1','TDM','x','dn-1',3)`); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]int{"dn-1": 3, "dn-1-r2": 3, "dn-2": 0, "": 0} {
+		if got := matchFleetType(database, id); got != want {
+			t.Errorf("matchFleetType(%q) = %d, want %d", id, got, want)
 		}
 	}
 }

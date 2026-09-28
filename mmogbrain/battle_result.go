@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -36,9 +37,67 @@ import (
 // tables are lost -- GitHub issue #71): credits 1500 for a
 // win / 750 otherwise, +100 per kill; XP 1000 / 500, +50 per kill, granted as
 // free XP, as rank XP and split over the ships flown. Each is overridable.
+//
+// Formula (operator, 2026-09-28):
+//
+//	Intermediate  = Base Reward (win/loss) + Performance Reward (per kill)
+//	Total XP      = Intermediate_xp      x (1 + 1.25 + 0.25 + Fleet + EliteTeam%)
+//	Total Credits = Intermediate_credits x (1 + 0.75 + 0.25 + Fleet + EliteTeam%)
+//
+// Same formula in every game mode. Fleet is the fleet battle bonus of the
+// match's fleet tier: Recruit 100%, Veteran 125%, Legendary 150% (operator,
+// 2026-09-28) -- the formula's "1.00" term, which is the Recruit value. The
+// tier comes from the match record (matches.fleet_type, keyed by the battle
+// server's match id); a result whose match is unknown pays Recruit.
+//
+// Configurable: DN_REWARD_XP_BONUSES / DN_REWARD_CREDIT_BONUSES (the fixed
+// terms, comma-separated fractions), DN_REWARD_FLEET_BONUSES (Recruit,
+// Veteran, Legendary) and DN_REWARD_ELITE_TEAM_PCT (a percentage, 0 by
+// default: nothing grants it yet). The fixed terms apply to every result.
 type battleRewards struct {
 	winCredits, lossCredits, killCredits int32
 	winXP, lossXP, killXP                int32
+	xpBonuses, creditBonuses             []float64
+	fleetBonuses                         []float64 // by EYFleetType-1: Recruit, Veteran, Legendary
+	eliteTeamPct                         float64
+}
+
+// fleetBonus is the fleet battle bonus of an EYFleetType (1 Recruit,
+// 2 Veteran, 3 Legendary); anything else pays Recruit.
+func (r battleRewards) fleetBonus(fleetType int) float64 {
+	if fleetType < 1 || fleetType > len(r.fleetBonuses) {
+		fleetType = 1
+	}
+	if len(r.fleetBonuses) == 0 {
+		return 0
+	}
+	return r.fleetBonuses[fleetType-1]
+}
+
+// multiplier is 1 + every fixed bonus term + the fleet bonus + EliteTeam%.
+func (r battleRewards) multiplier(bonuses []float64, fleetType int) float64 {
+	m := 1 + r.fleetBonus(fleetType) + r.eliteTeamPct/100
+	for _, b := range bonuses {
+		m += b
+	}
+	return m
+}
+
+func parseRewardBonuses(env string, def []float64) []float64 {
+	v := strings.TrimSpace(os.Getenv(env))
+	if v == "" {
+		return def
+	}
+	var out []float64
+	for _, f := range strings.Split(v, ",") {
+		b, err := strconv.ParseFloat(strings.TrimSpace(f), 64)
+		if err != nil || b < 0 {
+			logrus.WithField("value", v).Warn(env + ": not a list of non-negative numbers; using the default")
+			return def
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 func currentBattleRewards() battleRewards {
@@ -51,6 +110,10 @@ func currentBattleRewards() battleRewards {
 	return battleRewards{
 		winCredits: n("DN_REWARD_WIN_CREDITS", 1500), lossCredits: n("DN_REWARD_LOSS_CREDITS", 750), killCredits: n("DN_REWARD_KILL_CREDITS", 100),
 		winXP: n("DN_REWARD_WIN_XP", 1000), lossXP: n("DN_REWARD_LOSS_XP", 500), killXP: n("DN_REWARD_KILL_XP", 50),
+		xpBonuses:     parseRewardBonuses("DN_REWARD_XP_BONUSES", []float64{1.25, 0.25}),
+		creditBonuses: parseRewardBonuses("DN_REWARD_CREDIT_BONUSES", []float64{0.75, 0.25}),
+		fleetBonuses:  parseRewardBonuses("DN_REWARD_FLEET_BONUSES", []float64{1.00, 1.25, 1.50}),
+		eliteTeamPct:  float64(n("DN_REWARD_ELITE_TEAM_PCT", 0)),
 	}
 }
 
@@ -74,17 +137,21 @@ func battleOutcome(team, final int) string {
 	}
 }
 
-func (r battleRewards) forOutcome(outcome string, kills int32) (credits, xp int32) {
+func (r battleRewards) forOutcome(outcome string, kills int32, fleetType int) (credits, xp int32) {
 	if kills < 0 {
 		kills = 0
 	}
 	if kills > 500 { // no match has that many; caps a malformed report
 		kills = 500
 	}
+	baseCredits, baseXP := r.lossCredits, r.lossXP
 	if outcome == "win" {
-		return r.winCredits + r.killCredits*kills, r.winXP + r.killXP*kills
+		baseCredits, baseXP = r.winCredits, r.winXP
 	}
-	return r.lossCredits + r.killCredits*kills, r.lossXP + r.killXP*kills
+	intermediateCredits := baseCredits + r.killCredits*kills
+	intermediateXP := baseXP + r.killXP*kills
+	return int32(math.Round(float64(intermediateCredits) * r.multiplier(r.creditBonuses, fleetType))),
+		int32(math.Round(float64(intermediateXP) * r.multiplier(r.xpBonuses, fleetType)))
 }
 
 func battleResultHandler(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +186,7 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not recorded", http.StatusInternalServerError)
 		return
 	}
-	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "kills": res.kills,
+	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)
@@ -128,6 +195,7 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 type battleResult struct {
 	match, pid, outcome            string
 	team                           int
+	fleetType                      int // EYFleetType of the match; 0 = match not found (pays Recruit)
 	kills, deaths, assists, damage int32
 	ships                          []string // loadout ids picked this match
 }
@@ -142,7 +210,8 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	if err := seedMmogPlayerState(database, res.pid); err != nil {
 		return 0, 0, false, err
 	}
-	credits, xp = rewards.forOutcome(res.outcome, res.kills)
+	res.fleetType = matchFleetType(database, res.match)
+	credits, xp = rewards.forOutcome(res.outcome, res.kills, res.fleetType)
 
 	// Ship XP goes to the hulls actually flown, resolved to pawn ids the way
 	// player_ship_xp keys them. Resolved BEFORE the transaction: the store has
@@ -161,8 +230,8 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 		return 0, 0, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	ins, err := tx.Exec(`INSERT OR IGNORE INTO battle_results(match_id,user_id,team,outcome,kills,deaths,assists,damage,credits,xp)
-		VALUES(?,?,?,?,?,?,?,?,?,?)`, res.match, res.pid, res.team, res.outcome, res.kills, res.deaths, res.assists, res.damage, credits, xp)
+	ins, err := tx.Exec(`INSERT OR IGNORE INTO battle_results(match_id,user_id,team,outcome,kills,deaths,assists,damage,credits,xp,fleet_type)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)`, res.match, res.pid, res.team, res.outcome, res.kills, res.deaths, res.assists, res.damage, credits, xp, res.fleetType)
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -173,6 +242,23 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 		return 0, 0, false, err
 	}
 	return credits, xp, true, tx.Commit()
+}
+
+// matchFleetType is the EYFleetType of the match a result was reported for,
+// or 0 when no match record has that battle-server match id (a match formed
+// before battle_match_id was recorded, or a host started by hand). The mod
+// appends "-r<n>" to the id for a second round on the same host.
+func matchFleetType(database *sql.DB, battleMatchID string) int {
+	if i := strings.LastIndex(battleMatchID, "-r"); i > 0 {
+		if _, err := strconv.Atoi(battleMatchID[i+2:]); err == nil {
+			battleMatchID = battleMatchID[:i]
+		}
+	}
+	var fleetType int
+	if err := database.QueryRow(`SELECT fleet_type FROM matches WHERE battle_match_id=? AND battle_match_id!=''`, battleMatchID).Scan(&fleetType); err != nil {
+		return 0
+	}
+	return fleetType
 }
 
 func grantBattleRewards(tx *sql.Tx, pid string, credits, xp int32, ships []int32) error {

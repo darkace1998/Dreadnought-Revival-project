@@ -36,7 +36,7 @@ func fleetTierMatchmaker(t *testing.T, database *sql.DB, playersPerMatch int) (*
 		requests = append(requests, body)
 		mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"ip":"10.0.0.73","port":7777,"instance_id":"inst-1"}`))
+		_, _ = w.Write([]byte(`{"ip":"10.0.0.73","port":7777,"instance_id":"inst-1","match_id":"dn-match-1"}`))
 	}))
 	t.Cleanup(srv.Close)
 	log := logrus.New()
@@ -73,6 +73,14 @@ func TestFleetTypesNeverShareAMatch(t *testing.T) {
 	// Veteran decodes from FleetTier=4 on the battle server.
 	if got := (*requests)[0]["fleet_tier"]; got != float64(4) {
 		t.Errorf("Veteran match sent fleet_tier %v, want 4", got)
+	}
+	// The match record keeps the battle server's match id and the fleet type,
+	// which the reward for a reported result looks up (fleet battle bonus).
+	var battleMatchID string
+	var fleetType int
+	if err := database.QueryRow(`SELECT battle_match_id, fleet_type FROM matches`).Scan(&battleMatchID, &fleetType); err != nil ||
+		battleMatchID != "dn-match-1" || fleetType != 2 {
+		t.Errorf("match recorded battle_match_id=%q fleet_type=%d (%v), want dn-match-1 / 2", battleMatchID, fleetType, err)
 	}
 }
 

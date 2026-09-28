@@ -839,7 +839,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	for i, e := range entries {
 		playerIDs[i] = e.UserID
 	}
-	serverIP, serverPort, instanceID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs, fleetTierURLValue(fleetType))
+	serverIP, serverPort, instanceID, battleMatchID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs, fleetTierURLValue(fleetType))
 	if err != nil {
 		// Rollback queue entries on failure
 		for _, e := range entries {
@@ -855,8 +855,8 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	matchID := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := m.DB.Exec(
-		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,instance_id) VALUES(?,?,?,?,?,?,?,?,?)`,
-		matchID, gameMode, mapName, serverIP, serverPort, "active", now, now, instanceID,
+		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,instance_id,battle_match_id,fleet_type) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		matchID, gameMode, mapName, serverIP, serverPort, "active", now, now, instanceID, battleMatchID, fleetType,
 	); err != nil {
 		return fmt.Errorf("insert match %s: %w", matchID, err)
 	}
@@ -935,7 +935,10 @@ func fleetTierURLValue(fleetType int) int {
 	}
 }
 
-func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string, fleetTier int) (string, int, string, error) {
+// battleMatchID is the control plane's own match id (dn-dedicated's
+// "match_id", passed to the battle server as -MatchID=); battle-server-mod
+// reports results under it. Empty from game-manager, which has none.
+func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, players []string, fleetTier int) (ip string, port int, instanceID, battleMatchID string, err error) {
 	spawn := map[string]interface{}{
 		"game_mode": gameMode,
 		"map":       mapName,
@@ -949,44 +952,45 @@ func (m *Matchmaker) requestGameInstance(gameMode, mapName, mapPath string, play
 	}
 	body, err := json.Marshal(spawn)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("marshal game manager request: %w", err)
+		return "", 0, "", "", fmt.Errorf("marshal game manager request: %w", err)
 	}
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/instances", m.GameMgrURL), bytes.NewReader(body))
 	if err != nil {
-		return "", 0, "", fmt.Errorf("build game manager request: %w", err)
+		return "", 0, "", "", fmt.Errorf("build game manager request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Key", m.InternalKey)
 	resp, err := gameManagerHTTPClient.Do(req)
 	if err != nil {
-		return "", 0, "", err
+		return "", 0, "", "", err
 	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusCreated {
 		if resp.StatusCode == http.StatusForbidden {
-			return "", 0, "", fmt.Errorf("game manager returned 403: INTERNAL_API_KEY (or ADMIN_KEY) must match game-manager's")
+			return "", 0, "", "", fmt.Errorf("game manager returned 403: INTERNAL_API_KEY (or ADMIN_KEY) must match game-manager's")
 		}
-		return "", 0, "", fmt.Errorf("game manager returned %d", resp.StatusCode)
+		return "", 0, "", "", fmt.Errorf("game manager returned %d", resp.StatusCode)
 	}
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", 0, "", fmt.Errorf("decode game manager response: %w", err)
+		return "", 0, "", "", fmt.Errorf("decode game manager response: %w", err)
 	}
 
-	ip, _ := result["ip"].(string)
+	ip, _ = result["ip"].(string)
 	portF, _ := result["port"].(float64)
 	instID, _ := result["instance_id"].(string)
+	battleMatchID, _ = result["match_id"].(string)
 	// A 201 with no usable address is worse than an error: the match is
 	// recorded as active, the player is pushed at ":0" or at nothing, and they
 	// wait on "Battle server starting" with everything server-side looking
 	// healthy. Refuse it here so formMatch rolls the queue entries back and the
 	// player can simply try again.
 	if ip == "" || int(portF) <= 0 {
-		return "", 0, "", fmt.Errorf("game manager returned no usable address (ip=%q port=%v)", ip, result["port"])
+		return "", 0, "", "", fmt.Errorf("game manager returned no usable address (ip=%q port=%v)", ip, result["port"])
 	}
-	return ip, int(portF), instID, nil
+	return ip, int(portF), instID, battleMatchID, nil
 }
 
 // battleServerIPv4 turns the control plane's server address into an IPv4

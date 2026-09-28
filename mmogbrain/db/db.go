@@ -318,6 +318,12 @@ var migrations = []string{
 		created_at TEXT NOT NULL DEFAULT (datetime('now')),
 		PRIMARY KEY (match_id, user_id)
 	)`,
+	// The battle server's own match id (dn-dedicated's -MatchID=, which
+	// battle-server-mod reports results under) and the match's EYFleetType, so
+	// a reported result can be paid with its fleet battle bonus.
+	`ALTER TABLE matches ADD COLUMN battle_match_id TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE matches ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 1`,
+	`ALTER TABLE battle_results ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 0`,
 }
 
 func Open(path string) (*sql.DB, error) {
