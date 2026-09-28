@@ -134,10 +134,27 @@ func gatewayRequestedCatalogCollection(playerID string, requestedCatalog string,
 	}
 }
 
+// gatewayWireCurrencyID is the currency name the client understands for one of
+// our internal price currencies. The store builds each offer from the price
+// entry's currency_id (0x2A7D110, through the name mapper 0x2A618C0):
+// "CR"/"CR_PS4" -> CRPrice, "SP_regular"/"GP_PS4" -> SPPrice, and ANY other
+// name -> RCPrice, the real-money price. Sent as "GP" (our old internal id),
+// every cosmetic became a 100 real-money offer with a premium price of 0, and
+// the store showed 0 (operator, 2026-09-28). Internally the premium currency
+// is "SP", after the client's SPPrice/SPCurrency; on the wire it must be the
+// full "SP_regular" -- the mapper compares whole names, so "SP" alone would be
+// real money again.
+func gatewayWireCurrencyID(currencyID string) string {
+	if currencyID == "SP" {
+		return mmogCurrencyPremium
+	}
+	return currencyID
+}
+
 // gatewayVirtualCurrencyIDs / gatewayRealMoneyCurrencyIDs partition the catalog.
-// CR is credits (soft), GP is the hard currency, RMT is real money.
+// CR is credits (soft), SP is the hard (premium) currency, RMT is real money.
 var (
-	gatewayVirtualCurrencyIDs   = map[string]bool{"CR": true, "GP": true}
+	gatewayVirtualCurrencyIDs   = map[string]bool{"CR": true, "SP": true}
 	gatewayRealMoneyCurrencyIDs = map[string]bool{"RMT": true}
 )
 
@@ -899,7 +916,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	// computed and that comparison can never fire.
 	creditsPrice, hardPrice := 0, 0
 	switch seed.priceCurrencyID {
-	case "GP":
+	case "SP":
 		hardPrice = int(seed.priceAmount)
 	default:
 		creditsPrice = int(seed.priceAmount)
@@ -914,6 +931,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	}
 	priceID := gatewayMarketPriceID(seed)
 	priceValue := strconv.Itoa(int(seed.priceAmount))
+	wireCurrency := gatewayWireCurrencyID(seed.priceCurrencyID)
 	owned := playerDataReady && seed.owned
 	itemID, shipID, loadoutID, entityID := gatewayMarketIdentity(seed, playerDataReady)
 	price := map[string]any{
@@ -922,9 +940,9 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"price_id":      priceID,
 		"region_id":     "US",
 		"amount":        priceValue,
-		"currency_id":   seed.priceCurrencyID,
-		"currency":      seed.priceCurrencyID,
-		"currency_code": seed.priceCurrencyID,
+		"currency_id":   wireCurrency,
+		"currency":      wireCurrency,
+		"currency_code": wireCurrency,
 	}
 	bundleItems := make([]any, 0, len(seed.bundleItems))
 	for _, item := range seed.bundleItems {
@@ -973,7 +991,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"Description":         seed.description,
 		"full_image_url":      "",
 		"ImageURL":            "",
-		"currency_id":         seed.priceCurrencyID,
+		"currency_id":         wireCurrency,
 		"quantity":            seed.quantity,
 		"CategoryIcon":        categoryIcon,
 		"CategoryName":        categoryName,
@@ -984,8 +1002,8 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 			"Amount":   seed.grantedAmount,
 		},
 		"ItemID":                  itemID,
-		"CurrencyCode":            seed.priceCurrencyID,
-		"CurrencySymbol":          seed.priceCurrencyID,
+		"CurrencyCode":            wireCurrency,
+		"CurrencySymbol":          wireCurrency,
 		"CurrencyAmount":          priceValue,
 		"Price":                   priceValue,
 		"IsNew":                   seed.isNew,
@@ -1030,7 +1048,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"CRPrice":         creditsPrice,
 		"CRCurrency":      "CR",
 		"SPPrice":         hardPrice,
-		"SPCurrency":      "GP",
+		"SPCurrency":      mmogCurrencyPremium,
 		"RCPrice":         0,
 		"RCCurrency":      "USD",
 		"RCSymbol":        "$",

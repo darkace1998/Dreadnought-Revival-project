@@ -5934,10 +5934,16 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	if quantity <= 0 {
 		quantity = 1
 	}
-	currency := protocol.FirstNonEmptyString(payload, "currency", "Currency")
-	if currency == "" {
-		currency = "gp"
-	}
+	// The reply's currency names the wallet the server charged. The client
+	// (response dispatcher, 0x2A2D3F9-0x2A2D552) accepts exactly two names:
+	// "SP_regular" (wallet slot 0, premium) and "CR" (slot 1, credits); it
+	// then deducts the offer's price from its own copy of that wallet and runs
+	// the purchase-complete path (0x2A15A80). Anything else -- we used to echo
+	// "gp" -- logs "Invalid currency name (gp)" and skips both: the purchase
+	// went through server-side but the client sat on its processing screen
+	// (operator log, 2026-09-28). So the server sets it; the request's value
+	// is not used.
+	currency := mmogCurrencyCredits
 	if offer == "" && itemID != 0 {
 		offer = "999" + strconv.Itoa(int(itemID))
 	}
@@ -6045,7 +6051,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		creditsLeft = softCurrency
 		deductSQL = `UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`
 		insufficient = "insufficient premium currency"
-		currency = strings.ToLower(vanityCurrency)
+		currency = mmogCurrencyPremium
 	}
 	deductResult, err := tx.Exec(deductSQL, price, pid, price)
 	if err != nil {

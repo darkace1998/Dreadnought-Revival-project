@@ -30,11 +30,18 @@ import (
 const vanityPrice = 100
 
 // vanityCurrency is what cosmetics are priced and charged in: premium currency
-// (GP), the operator's choice (2026-09-28: every cosmetic 100 premium). The
-// client shows a cosmetic's premium price (SPPrice, from a GP offer): with the
+// (SP), the operator's choice (2026-09-28: every cosmetic 100 premium). The
+// client shows a cosmetic's premium price (SPPrice, from an SP offer): with the
 // credit price (CRPrice) it displayed 0 and refused the purchase as
 // "insufficient funds" without ever sending it.
-const vanityCurrency = "GP"
+const vanityCurrency = "SP"
+
+// Wallet names the client accepts in a YA_PurchaseItem reply's currency field
+// (see buildMmogPurchasePayload). The catalog uses CR/SP internally (gatewayWireCurrencyID).
+const (
+	mmogCurrencyCredits = "CR"
+	mmogCurrencyPremium = "SP_regular"
+)
 
 // vanityOffer reports whether itemID is a cosmetic, and if so whether it is
 // sold and at what price.

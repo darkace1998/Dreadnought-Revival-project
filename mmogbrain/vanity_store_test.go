@@ -66,16 +66,16 @@ func TestVanityStoreListsEveryPublicCosmeticAtItsPrice(t *testing.T) {
 			t.Errorf("%d (%s) has no name key; the client would show <DNT>[[NotFound]]", s.itemID, s.displayName)
 		}
 	}
-	if s := byID[vanityPaidEmblem]; s.priceAmount != vanityPrice || s.priceCurrencyID != "GP" || !s.owned || s.itemType != "vanity" {
-		t.Errorf("emblem: price=%d %s owned=%v type=%q, want %d GP, owned, vanity", s.priceAmount, s.priceCurrencyID, s.owned, s.itemType, vanityPrice)
+	if s := byID[vanityPaidEmblem]; s.priceAmount != vanityPrice || s.priceCurrencyID != "SP" || !s.owned || s.itemType != "vanity" {
+		t.Errorf("emblem: price=%d %s owned=%v type=%q, want %d SP, owned, vanity", s.priceAmount, s.priceCurrencyID, s.owned, s.itemType, vanityPrice)
 	}
 	if _, section, _, _ := gatewayMarketCategoryMetadata(byID[vanityPaidEmblem]); section != "Emblems Collection" {
 		t.Errorf("emblem store section %q, want Emblems Collection", section)
 	}
 	// CHANGED 2026-09-28: the "free" defaults cost the same as everything else
 	// (at 0 the client never built a purchase for them).
-	if s, ok := byID[vanityFreeEyes]; !ok || s.priceAmount != vanityPrice || s.priceCurrencyID != "GP" || s.owned {
-		t.Errorf("default eyes: listed=%v price=%d %s owned=%v, want listed at %d GP, not yet owned", ok, s.priceAmount, s.priceCurrencyID, s.owned, vanityPrice)
+	if s, ok := byID[vanityFreeEyes]; !ok || s.priceAmount != vanityPrice || s.priceCurrencyID != "SP" || s.owned {
+		t.Errorf("default eyes: listed=%v price=%d %s owned=%v, want listed at %d SP, not yet owned", ok, s.priceAmount, s.priceCurrencyID, s.owned, vanityPrice)
 	}
 	if _, ok := byID[vanityTestBody]; ok {
 		t.Error("a Test-folder item is listed")
@@ -92,6 +92,11 @@ func TestBuyingCosmetics(t *testing.T) {
 	reply := string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityPaidEmblem)))
 	if countWireStringField(reply, "result", "bought") != 1 || premium(t, pid) != 150-vanityPrice || credits(t, pid) != 25000 {
 		t.Fatalf("paid emblem: reply %q, premium %d, credits %d, want bought for %d premium", reply, premium(t, pid), credits(t, pid), vanityPrice)
+	}
+	// The reply must name the premium wallet as the client spells it, or the
+	// client rejects it and hangs on its processing screen.
+	if countWireStringField(reply, "currency", "SP_regular") != 1 {
+		t.Errorf("paid emblem reply does not name the SP_regular wallet: %q", reply)
 	}
 	var itemType string
 	_ = currentMmogPlayerStateDB().QueryRow(`SELECT item_type FROM player_purchases WHERE user_id=? AND item_id=?`, pid, vanityPaidEmblem).Scan(&itemType)
@@ -181,5 +186,29 @@ func TestPurchaseQuantityCannotOverflowThePrice(t *testing.T) {
 	_ = currentMmogPlayerStateDB().QueryRow(`SELECT price_paid FROM player_purchases WHERE user_id=? AND item_id=?`, pid, hull).Scan(&paid)
 	if paid != int(price) {
 		t.Errorf("recorded price %d, want %d", paid, price)
+	}
+}
+
+// The store reads a price's currency_id through the client's name mapper
+// (0x2A618C0): only "SP_regular" lands in SPPrice. "GP" made every cosmetic a
+// real-money offer and the store showed 0.
+func TestCosmeticOfferIsPricedInTheClientsPremiumCurrency(t *testing.T) {
+	var seed gatewayCatalogEntitySeed
+	for _, s := range vanityCatalogSeeds(nil) {
+		if s.itemID == vanityPaidEmblem {
+			seed = s
+		}
+	}
+	entity := gatewayMarketEntity(seed, true)
+	prices, _ := entity["prices"].([]any)
+	if len(prices) != 1 {
+		t.Fatalf("%d price entries, want 1", len(prices))
+	}
+	price := prices[0].(map[string]any)
+	if price["currency_id"] != "SP_regular" || price["amount"] != strconv.Itoa(vanityPrice) {
+		t.Errorf("price entry currency_id=%v amount=%v, want SP_regular %d", price["currency_id"], price["amount"], vanityPrice)
+	}
+	if entity["SPCurrency"] != "SP_regular" || entity["SPPrice"] != vanityPrice || entity["CRPrice"] != 0 {
+		t.Errorf("offer SPCurrency=%v SPPrice=%v CRPrice=%v, want SP_regular %d 0", entity["SPCurrency"], entity["SPPrice"], entity["CRPrice"], vanityPrice)
 	}
 }
