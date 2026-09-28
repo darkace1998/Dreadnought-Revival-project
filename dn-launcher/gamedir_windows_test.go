@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Players pick whichever folder looks right: the install root, or a folder on
@@ -67,5 +68,33 @@ func TestSettingsKeepEveryField(t *testing.T) {
 	}
 	if got := loadSettings(); !got.LogWindow || !got.VerboseLog || got.GameDir != `D:\Dreadnought` {
 		t.Fatalf("settings after update = %+v", got)
+	}
+}
+
+// "Open game log folder" picks the folder with the newest DreadGame.log.
+func TestNewestLogFolder(t *testing.T) {
+	la := t.TempDir()
+	t.Setenv("LOCALAPPDATA", la)
+	root := t.TempDir()
+	win64 := filepath.Join(root, "DreadGame", "DreadGame", "Binaries", "Win64")
+	_ = os.MkdirAll(win64, 0o755)
+	_ = os.WriteFile(filepath.Join(win64, "DreadGame-Win64-Shipping.exe"), nil, 0o644)
+	if err := saveSettings(launcherSettings{GameDir: root}); err != nil {
+		t.Fatal(err)
+	}
+	api := &launcherAPI{exeDir: t.TempDir(), cfg: defaultConfig()}
+	if got := api.newestLogFolder(); got != "" {
+		t.Fatalf("no logs yet, got %q", got)
+	}
+	userLogs := filepath.Join(la, "DreadGame", "Saved", "Logs")
+	gameLogs := filepath.Join(root, "DreadGame", "Saved", "Logs")
+	_ = os.MkdirAll(userLogs, 0o755)
+	_ = os.MkdirAll(gameLogs, 0o755)
+	_ = os.WriteFile(filepath.Join(userLogs, "DreadGame.log"), []byte("old"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(filepath.Join(userLogs, "DreadGame.log"), old, old)
+	_ = os.WriteFile(filepath.Join(gameLogs, "DreadGame.log"), []byte("new"), 0o644)
+	if got := api.newestLogFolder(); got != gameLogs {
+		t.Fatalf("newestLogFolder = %q, want %q", got, gameLogs)
 	}
 }

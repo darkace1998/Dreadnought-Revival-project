@@ -46,6 +46,7 @@ const browserBridgeJS = `<script>
   window.dnSetOption = (name, on) => dnCall('setOption', [name, on]);
   window.dnInstallCert = () => dnCall('installCert');
   window.dnSignOut = () => dnCall('signOut');
+  window.dnOpenLogs = () => dnCall('openLogs');
   window.dnSubmit = (m, u, i, p) => { dnCall('submit', [m, u, i, p]).then(dnAuthResult, e => dnAuthResult({ ok: false, error: String(e) })); };
   window.dnNews = () => { dnCall('news').then(dnNewsResult, e => dnNewsResult({ online: false, error: String(e) })); };
   window.dnPlay = () => {
@@ -145,6 +146,8 @@ func runBrowserLauncher(exeDir string, cfg Config) error {
 			out = api.Submit(str(0), str(1), str(2), str(3))
 		case "news":
 			out = api.News()
+		case "openLogs":
+			out = api.OpenLogs()
 		case "play":
 			res := api.Play()
 			if res["ok"] == true {

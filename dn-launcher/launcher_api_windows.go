@@ -11,8 +11,13 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 type launcherAPI struct {
@@ -190,4 +195,49 @@ func (a *launcherAPI) Play() map[string]any {
 		return map[string]any{"ok": false, "error": capitalise(err.Error())}
 	}
 	return map[string]any{"ok": true}
+}
+
+// gameLogFolders are where the game may write DreadGame.log: the per-user
+// Saved folder of a shipping build, then the Saved folder inside the install.
+func (a *launcherAPI) gameLogFolders() []string {
+	var dirs []string
+	if la := os.Getenv("LOCALAPPDATA"); la != "" {
+		dirs = append(dirs, filepath.Join(la, "DreadGame", "Saved", "Logs"))
+	}
+	if exe := findGameBinary(a.exeDir, a.cfg); exe != "" {
+		dirs = append(dirs, filepath.Join(gameInstallRoot(exe), "DreadGame", "Saved", "Logs"))
+	}
+	return dirs
+}
+
+// OpenLogs opens the folder holding the game's newest log in Explorer, so a
+// player can send it with a bug report.
+func (a *launcherAPI) OpenLogs() map[string]any {
+	best := a.newestLogFolder()
+	if best == "" {
+		return map[string]any{"ok": false, "error": "No game logs yet. Start the game once, then try again."}
+	}
+	verb, _ := windows.UTF16PtrFromString("open")
+	target, _ := windows.UTF16PtrFromString(best)
+	if err := windows.ShellExecute(0, verb, target, nil, nil, windows.SW_SHOWNORMAL); err != nil {
+		return map[string]any{"ok": false, "error": "Could not open " + best + ": " + err.Error()}
+	}
+	return map[string]any{"ok": true, "path": best}
+}
+
+// newestLogFolder is the log folder whose DreadGame.log is newest, else the
+// first log folder that exists, else "".
+func (a *launcherAPI) newestLogFolder() string {
+	best, bestTime := "", time.Time{}
+	for _, dir := range a.gameLogFolders() {
+		info, err := os.Stat(filepath.Join(dir, "DreadGame.log"))
+		if err == nil && info.ModTime().After(bestTime) {
+			best, bestTime = dir, info.ModTime()
+		} else if best == "" {
+			if st, err := os.Stat(dir); err == nil && st.IsDir() {
+				best = dir
+			}
+		}
+	}
+	return best
 }

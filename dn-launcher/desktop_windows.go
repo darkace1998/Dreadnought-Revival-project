@@ -74,6 +74,7 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	_ = w.Bind("dnSetOption", api.SetOption)
 	_ = w.Bind("dnInstallCert", api.InstallCert)
 	_ = w.Bind("dnSignOut", api.SignOut)
+	_ = w.Bind("dnOpenLogs", api.OpenLogs)
 	// Network calls run off the UI thread and report back through a callback.
 	_ = w.Bind("dnSubmit", func(mode, username, identifier, password string) {
 		go func() { reply("dnAuthResult", api.Submit(mode, username, identifier, password)) }()
@@ -280,6 +281,7 @@ const desktopPageHTML = `<!doctype html>
         <span>Show the game's log window</span></label>
       <label class="opt"><input type="checkbox" id="opt-verboseLog" onchange="setOpt('verboseLog', this)">
         <span>Detailed log<small>For bug reports. Makes the log file much larger.</small></span></label>
+      <button class="link" onclick="openLogs()">Open game log folder</button>
       <span class="spacer"></span>
       <div class="msg" id="playmsg"></div>
       <button class="go play" id="play" onclick="play()">Play</button>
@@ -361,6 +363,10 @@ const desktopPageHTML = `<!doctype html>
     const r = await dnAutoGame();
     if (r.ok) { showGame(r.game); say('gamemsg', r.game.path ? 'Using automatic detection.' : 'Not found automatically; choose the folder.', r.game.path ? 'good' : 'bad'); }
     else say('gamemsg', r.error, 'bad');
+  }
+  async function openLogs() {
+    const r = await dnOpenLogs();
+    say('gamemsg', r.ok ? 'Opened ' + r.path : r.error, r.ok ? 'good' : 'bad');
   }
   async function setOpt(name, box) {
     if (!(await dnSetOption(name, box.checked))) { box.checked = !box.checked; say('gamemsg', 'Could not save the option.', 'bad'); }
