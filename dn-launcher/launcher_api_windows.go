@@ -178,7 +178,7 @@ func (a *launcherAPI) News() map[string]any {
 // should close.
 func (a *launcherAPI) Play() map[string]any {
 	a.mu.Lock()
-	token := a.token
+	token, username := a.token, a.username
 	a.mu.Unlock()
 	if pendingCA != nil && !caTrusted(pendingCA) {
 		return map[string]any{"ok": false, "cert": true,
@@ -191,7 +191,7 @@ func (a *launcherAPI) Play() map[string]any {
 	if token == "" || launcherTokenExpired(token) {
 		return map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true}
 	}
-	if _, err := startGame(a.exeDir, a.cfg, token); err != nil {
+	if _, err := startGame(a.exeDir, a.cfg, token, username); err != nil {
 		return map[string]any{"ok": false, "error": capitalise(err.Error())}
 	}
 	return map[string]any{"ok": true}
