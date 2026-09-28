@@ -3,58 +3,59 @@ package dreadgameconfig
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
 func TestWeaponStatsStructFields(t *testing.T) {
 	w := WeaponStats{
-		SlotType:                          "YST_Primary",
-		Class:                             "ASSAULT",
-		DamageHigh:                        160,
-		DamageHighRange:                   6000,
-		DamageMedium:                      160,
-		DamageMediumRange:                 12000,
-		DamageLow:                         145,
-		AmplifiedDamageHigh:               16,
-		AmplifiedDamageMedium:             16,
-		AmplifiedDamageLow:                14,
-		MaxRange:                          35000,
-		DamageRadius:                      0,
-		IgnoreShields:                     false,
-		FriendlyFire:                      false,
-		ExactHitDetection:                 false,
-		InstigatorIgnoreTime:              -1.0,
-		WeaponChargeUpTime:                0.0,
-		WeaponCooldownTime:                0.7,
-		AmplifiedCoolDownMultiplierTime:   1.333,
-		AbilityDamage:                     0.0,
-		InitialSpeed:                      18500,
-		MaxFlightSpeed:                    100000,
-		GravityScale:                      0.0,
-		AmmoMagazinSize:                   25,
-		AmmoMagazinReloadTime:             1.8,
-		AmplifiedAmmoMagazinReloadTime:    1.8,
-		SpreadBaseValue:                   0.8,
-		SpreadMaxValue:                    1.3,
-		SpreadEase:                        1.3,
-		SpreadBonusAim:                    0.6,
-		SpreadPenaltyMovement:             0.01,
-		SpreadPenaltyShooting:             0.15,
-		SpreadPenaltyDamageMultiplier:     0.01,
-		ProximityDistance:                 0,
-		ProximityAgainstCreeps:            false,
-		HighHealing:                       0,
-		HighHealingRange:                  0,
-		MediumHealing:                     0,
-		MediumHealingRange:                0,
-		LowHealing:                        0,
-		MaxHealingRange:                   0,
-		HitImpactForce:                    5000,
-		FireRecoilForce:                   15000,
-		AmplifiedEnergyCost:               0.2,
-		HitzoneDamageMultiplier:           0.0,
-		HitzoneHitPenetrationDistance:     100.0,
-		PreciseAimingRange:                0,
+		SlotType:                        "YST_Primary",
+		Class:                           "ASSAULT",
+		DamageHigh:                      160,
+		DamageHighRange:                 6000,
+		DamageMedium:                    160,
+		DamageMediumRange:               12000,
+		DamageLow:                       145,
+		AmplifiedDamageHigh:             16,
+		AmplifiedDamageMedium:           16,
+		AmplifiedDamageLow:              14,
+		MaxRange:                        35000,
+		DamageRadius:                    0,
+		IgnoreShields:                   false,
+		FriendlyFire:                    false,
+		ExactHitDetection:               false,
+		InstigatorIgnoreTime:            -1.0,
+		WeaponChargeUpTime:              0.0,
+		WeaponCooldownTime:              0.7,
+		AmplifiedCoolDownMultiplierTime: 1.333,
+		AbilityDamage:                   0.0,
+		InitialSpeed:                    18500,
+		MaxFlightSpeed:                  100000,
+		GravityScale:                    0.0,
+		AmmoMagazinSize:                 25,
+		AmmoMagazinReloadTime:           1.8,
+		AmplifiedAmmoMagazinReloadTime:  1.8,
+		SpreadBaseValue:                 0.8,
+		SpreadMaxValue:                  1.3,
+		SpreadEase:                      1.3,
+		SpreadBonusAim:                  0.6,
+		SpreadPenaltyMovement:           0.01,
+		SpreadPenaltyShooting:           0.15,
+		SpreadPenaltyDamageMultiplier:   0.01,
+		ProximityDistance:               0,
+		ProximityAgainstCreeps:          false,
+		HighHealing:                     0,
+		HighHealingRange:                0,
+		MediumHealing:                   0,
+		MediumHealingRange:              0,
+		LowHealing:                      0,
+		MaxHealingRange:                 0,
+		HitImpactForce:                  5000,
+		FireRecoilForce:                 15000,
+		AmplifiedEnergyCost:             0.2,
+		HitzoneDamageMultiplier:         0.0,
+		HitzoneHitPenetrationDistance:   100.0,
+		PreciseAimingRange:              0,
 	}
 
 	if w.SlotType != "YST_Primary" {
@@ -129,53 +130,53 @@ func TestWeaponStatsFromRow(t *testing.T) {
 	}
 
 	w := WeaponStats{
-		SlotType:                          row.GetString("m_slotType"),
-		Class:                             row.GetString("m_class"),
-		DamageHigh:                        row.GetInt32("m_damageHigh"),
-		DamageHighRange:                   row.GetInt32("m_damageHighRange"),
-		DamageMedium:                      row.GetInt32("m_damageMedium"),
-		DamageMediumRange:                 row.GetInt32("m_damageMediumRange"),
-		DamageLow:                         row.GetInt32("m_damageLow"),
-		AmplifiedDamageHigh:               row.GetInt32("m_amplifiedDamageHigh"),
-		AmplifiedDamageMedium:             row.GetInt32("m_amplifiedDamageMedium"),
-		AmplifiedDamageLow:                row.GetInt32("m_amplifiedDamageLow"),
-		MaxRange:                          row.GetInt32("m_maxRange"),
-		DamageRadius:                      row.GetInt32("m_damageRadius"),
-		IgnoreShields:                     row.GetBool("m_ignoreShields"),
-		FriendlyFire:                      row.GetBool("m_friendlyFire"),
-		ExactHitDetection:                 row.GetBool("m_exactHitDetection"),
-		InstigatorIgnoreTime:              row.GetFloat64("m_instigatorIgnoreTime"),
-		WeaponChargeUpTime:                row.GetFloat64("m_weaponChargeUpTime"),
-		WeaponCooldownTime:                row.GetFloat64("m_weaponCooldownTime"),
-		AmplifiedCoolDownMultiplierTime:   row.GetFloat64("m_amplifiedCoolDownMultiplierTime"),
-		AbilityDamage:                     row.GetFloat64("m_abilityDamage"),
-		InitialSpeed:                      row.GetInt32("m_initialSpeed"),
-		MaxFlightSpeed:                    row.GetInt32("m_maxFlightSpeed"),
-		GravityScale:                      row.GetFloat64("m_gravityScale"),
-		AmmoMagazinSize:                   row.GetInt32("m_ammoMagazinSize"),
-		AmmoMagazinReloadTime:             row.GetFloat64("m_ammoMagazinReloadTime"),
-		AmplifiedAmmoMagazinReloadTime:    row.GetFloat64("m_amplifiedAmmoMagazinReloadTime"),
-		SpreadBaseValue:                   row.GetFloat64("m_spreadBaseValue"),
-		SpreadMaxValue:                    row.GetFloat64("m_spreadMaxValue"),
-		SpreadEase:                        row.GetFloat64("m_spreadEase"),
-		SpreadBonusAim:                    row.GetFloat64("m_spreadBonusAim"),
-		SpreadPenaltyMovement:             row.GetFloat64("m_spreadPenaltyMovement"),
-		SpreadPenaltyShooting:             row.GetFloat64("m_spreadPenaltyShooting"),
-		SpreadPenaltyDamageMultiplier:     row.GetFloat64("m_spreadPenaltyDamageMultiplier"),
-		ProximityDistance:                 row.GetInt32("m_proximityDistance"),
-		ProximityAgainstCreeps:            row.GetBool("m_proximityAgainstCreeps"),
-		HighHealing:                       row.GetInt32("m_highHealing"),
-		HighHealingRange:                  row.GetInt32("m_highHealingRange"),
-		MediumHealing:                     row.GetInt32("m_mediumHealing"),
-		MediumHealingRange:                row.GetInt32("m_mediumHealingRange"),
-		LowHealing:                        row.GetInt32("m_lowHealing"),
-		MaxHealingRange:                   row.GetInt32("m_maxHealingRange"),
-		HitImpactForce:                    row.GetInt32("m_hitImpactForce"),
-		FireRecoilForce:                   row.GetInt32("m_fireRecoilForce"),
-		AmplifiedEnergyCost:               row.GetFloat64("m_amplifiedEnergyCost"),
-		HitzoneDamageMultiplier:           row.GetFloat64("m_hitzoneDamageMultiplier"),
-		HitzoneHitPenetrationDistance:     row.GetFloat64("m_hitzoneHitPenetrationDistance"),
-		PreciseAimingRange:                row.GetInt32("m_preciseAimingRange"),
+		SlotType:                        row.GetString("m_slotType"),
+		Class:                           row.GetString("m_class"),
+		DamageHigh:                      row.GetInt32("m_damageHigh"),
+		DamageHighRange:                 row.GetInt32("m_damageHighRange"),
+		DamageMedium:                    row.GetInt32("m_damageMedium"),
+		DamageMediumRange:               row.GetInt32("m_damageMediumRange"),
+		DamageLow:                       row.GetInt32("m_damageLow"),
+		AmplifiedDamageHigh:             row.GetInt32("m_amplifiedDamageHigh"),
+		AmplifiedDamageMedium:           row.GetInt32("m_amplifiedDamageMedium"),
+		AmplifiedDamageLow:              row.GetInt32("m_amplifiedDamageLow"),
+		MaxRange:                        row.GetInt32("m_maxRange"),
+		DamageRadius:                    row.GetInt32("m_damageRadius"),
+		IgnoreShields:                   row.GetBool("m_ignoreShields"),
+		FriendlyFire:                    row.GetBool("m_friendlyFire"),
+		ExactHitDetection:               row.GetBool("m_exactHitDetection"),
+		InstigatorIgnoreTime:            row.GetFloat64("m_instigatorIgnoreTime"),
+		WeaponChargeUpTime:              row.GetFloat64("m_weaponChargeUpTime"),
+		WeaponCooldownTime:              row.GetFloat64("m_weaponCooldownTime"),
+		AmplifiedCoolDownMultiplierTime: row.GetFloat64("m_amplifiedCoolDownMultiplierTime"),
+		AbilityDamage:                   row.GetFloat64("m_abilityDamage"),
+		InitialSpeed:                    row.GetInt32("m_initialSpeed"),
+		MaxFlightSpeed:                  row.GetInt32("m_maxFlightSpeed"),
+		GravityScale:                    row.GetFloat64("m_gravityScale"),
+		AmmoMagazinSize:                 row.GetInt32("m_ammoMagazinSize"),
+		AmmoMagazinReloadTime:           row.GetFloat64("m_ammoMagazinReloadTime"),
+		AmplifiedAmmoMagazinReloadTime:  row.GetFloat64("m_amplifiedAmmoMagazinReloadTime"),
+		SpreadBaseValue:                 row.GetFloat64("m_spreadBaseValue"),
+		SpreadMaxValue:                  row.GetFloat64("m_spreadMaxValue"),
+		SpreadEase:                      row.GetFloat64("m_spreadEase"),
+		SpreadBonusAim:                  row.GetFloat64("m_spreadBonusAim"),
+		SpreadPenaltyMovement:           row.GetFloat64("m_spreadPenaltyMovement"),
+		SpreadPenaltyShooting:           row.GetFloat64("m_spreadPenaltyShooting"),
+		SpreadPenaltyDamageMultiplier:   row.GetFloat64("m_spreadPenaltyDamageMultiplier"),
+		ProximityDistance:               row.GetInt32("m_proximityDistance"),
+		ProximityAgainstCreeps:          row.GetBool("m_proximityAgainstCreeps"),
+		HighHealing:                     row.GetInt32("m_highHealing"),
+		HighHealingRange:                row.GetInt32("m_highHealingRange"),
+		MediumHealing:                   row.GetInt32("m_mediumHealing"),
+		MediumHealingRange:              row.GetInt32("m_mediumHealingRange"),
+		LowHealing:                      row.GetInt32("m_lowHealing"),
+		MaxHealingRange:                 row.GetInt32("m_maxHealingRange"),
+		HitImpactForce:                  row.GetInt32("m_hitImpactForce"),
+		FireRecoilForce:                 row.GetInt32("m_fireRecoilForce"),
+		AmplifiedEnergyCost:             row.GetFloat64("m_amplifiedEnergyCost"),
+		HitzoneDamageMultiplier:         row.GetFloat64("m_hitzoneDamageMultiplier"),
+		HitzoneHitPenetrationDistance:   row.GetFloat64("m_hitzoneHitPenetrationDistance"),
+		PreciseAimingRange:              row.GetInt32("m_preciseAimingRange"),
 	}
 
 	if w.SlotType != "YST_Primary" {
@@ -358,7 +359,7 @@ func TestWeaponCountAndSpotCheck(t *testing.T) {
 	// Count weapons with valid values (non-zero damage, cooldown, ammo, range)
 	validWeaponCount := 0
 	for _, weapon := range weaponsByItemID {
-		if weapon.DamageHigh > 0 && weapon.WeaponCooldownTime > 0 && 
+		if weapon.DamageHigh > 0 && weapon.WeaponCooldownTime > 0 &&
 			weapon.AmmoMagazinSize > 0 && weapon.MaxRange > 0 {
 			validWeaponCount++
 		}
@@ -369,8 +370,7 @@ func TestWeaponCountAndSpotCheck(t *testing.T) {
 	}
 
 	t.Logf("Found %d weapons with valid values (positive damage, cooldown, ammo, range)", validWeaponCount)
-	}
-
+}
 
 func TestLoadWeaponsIdempotent(t *testing.T) {
 	original := os.Getenv("DATA_DIR")
@@ -398,5 +398,31 @@ func TestLoadWeaponsIdempotent(t *testing.T) {
 
 	if firstCount != secondCount {
 		t.Errorf("LoadWeapons() not idempotent: first=%d, second=%d", firstCount, secondCount)
+	}
+}
+
+// Several clients building the market catalog at once, right after a restart,
+// crashed mmogbrain with "fatal error: concurrent map writes" in LoadWeapons
+// (2026-09-28). Run with -race to catch a regression.
+func TestWeaponAndProjectileLoadIsConcurrencySafe(t *testing.T) {
+	weaponsLoaded = false
+	weaponsByItemID = nil
+	projectilesLoaded = false
+	projectilesByRowName = nil
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for id := range AllWeapons() {
+				WeaponByID(id)
+			}
+			AllProjectiles()
+		}()
+	}
+	wg.Wait()
+	if n := len(AllWeapons()); n != 159 {
+		t.Errorf("loaded %d weapons, want 159", n)
 	}
 }
