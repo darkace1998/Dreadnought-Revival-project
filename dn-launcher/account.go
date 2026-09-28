@@ -263,24 +263,3 @@ func launcherTokenExpired(token string) bool {
 	}
 	return time.Now().Add(skew).After(time.Unix(claims.Exp, 0))
 }
-
-// tokenUsername is the "username" claim of a launcher token, or "". Read
-// without verification: it only names the player to the game, and the server
-// verifies the same token on every request anyway.
-func tokenUsername(token string) string {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
-	if err != nil {
-		return ""
-	}
-	var claims struct {
-		Username string `json:"username"`
-	}
-	if json.Unmarshal(payload, &claims) != nil {
-		return ""
-	}
-	return strings.TrimSpace(claims.Username)
-}

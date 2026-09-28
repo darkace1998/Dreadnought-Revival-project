@@ -581,24 +581,17 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 
 	// The launcher window's toggles (settings.json) add to dn-launcher.json.
 	settings := loadSettings()
-	// The player's name, as the URL-style argument "?PlayerName=<name>".
-	// UYGameEngine::Browse (0x140535840) takes the first command-line TOKEN
-	// that contains '?' (0x14052BD30) and hands it to FYMmogClient::Init
-	// (0x142A33C70), which reads its PlayerName option into the client's
-	// nickname (+0x3540) -- what FYOnlineIdentityMmog::GetPlayerNickname
-	// returns and what Browse puts in the battle server's join URL: it REMOVES
-	// any Name= option and adds Name=<nickname>. Without it the host named
-	// players by number ("Join succeeded: 257").
-	//
-	// CORRECTED 2026-09-28: first passed as a -PlayerName= switch, which Init
-	// never sees (switches are not tokens); the next host log still showed an
-	// empty "?Name=". A token with only options leaves the startup map at the
-	// engine default.
-	playerName := tokenUsername(jwtToken)
+	// No start-URL argument. REMOVED 2026-09-28: the launcher passed
+	// "?PlayerName=<account>" so FYMmogClient::Init (0x142A33C70) would read it
+	// into the client's nickname. It did not work (battle-server joins still
+	// had an empty "?Name=") and it broke new players: a positional argument is
+	// also the engine's START URL, and a new player's game loaded the offline
+	// tutorial map (S01E00_00_Tutorial_P?PlayerName=...) instead of the login
+	// map /Game/Maps/Launch_P (DefaultEngine.ini GameDefaultMap) -- it never
+	// contacted the server and looped in the tutorial (a tester's log,
+	// 2026-09-28). Names now come from battle-server-mod via mmogbrain's
+	// /battle/player.
 	var args []string
-	if playerName != "" {
-		args = append(args, "?PlayerName="+playerName)
-	}
 	args = append(args,
 		"-GatewayAddress="+cfg.GatewayIP,
 		"-GatewayPort="+cfg.GatewayPort,
