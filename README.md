@@ -45,6 +45,7 @@ Two different things are called "gateway", which is worth knowing before reading
 | **mmogbrain** | 8083, 48843, 65443 | The bulk of the backend: mmog binary protocol, catalog, fleets, tech tree, matchmaking |
 | **master-server** | 8084 | Server registry, heartbeat, server browser |
 | **game-manager** | 8085 | Spawns and monitors battle-server processes |
+| **web-dashboard** | 8090 | Operator web UI: health, players, queue, matches, chat, logs, metrics (see [Web dashboard](#web-dashboard)) |
 | **DreadGame (Wine)** | 7777-7877/UDP | One battle server per active match |
 | **admin-cli** | — | Operator CLI (`servers`, `instances`, `stop-instance`, `ban`, `unban`, `queue`, `chat`, `players`, `grant`) |
 | **dn-launcher** | — | Windows launcher replacement (register / sign in / start the game) |
@@ -105,7 +106,7 @@ bash scripts/stop-services.sh
 
 `start-services.sh` refuses to double-start anything already running, pins each service's `DB_PATH` so the working directory cannot decide which database is opened, and prints the listening sockets when it finishes. Logs land in `run/<service>.log`.
 
-A healthy start ends with sockets on 80, 443, 8081-8085, 48843 and 65443.
+A healthy start ends with sockets on 80, 443, 8081-8085, 8090, 48843 and 65443.
 
 ### 5. Point clients at the server
 
@@ -376,6 +377,45 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: this is a server for 
 - [Contributing guide](CONTRIBUTING.md) — working rules, protocol invariants, testing
 - [Client data reference](docs/client-data-reference.md) — extracted item and ship id maps, naming rules
 - [Client data validation](docs/client-data-validation.md) — audit of every id the server emits
+- [Web dashboard](docs/dashboard.md) — operator UI: setup, routes, security
+
+## Web dashboard
+
+`web-dashboard/` (port **8090**) is the operator web UI for the stack — a Go
+backend-for-frontend with an embedded static frontend, so it ships as a single
+binary with no Node toolchain. The browser never sees `ADMIN_KEY`: you log in
+once with the key from `run/secrets.env` and get a session cookie, while all
+calls to the other services go over loopback. Do not expose it to the internet
+directly — reach it through an SSH tunnel (`ssh -L 8090:127.0.0.1:8090
+user@server`, then `http://localhost:8090`).
+
+What it currently does:
+
+- **Overview** — health of every service, hero cards (queue, matches,
+  instances, servers, online players), live history graphs, status-change feed
+- **Online** — connected Firmament peers with queue and live-match state
+- **Players** — every registered account with live balances, player drill-down
+  (fleets, ships + ship XP, purchases, queue, match, results), grant (single
+  and bulk to all), ban/unban with active-ban list, live test-account
+  provisioning, and account reset (currencies and/or research back to fresh)
+- **Queue** — waiting entries with per-player kick, clear-all and force-match
+- **Matches** — battle instances (stop) plus reported match results and payouts
+- **Servers** — server-browser listing from master-server
+- **Chat** — channel history plus operator broadcast to all connected players
+- **News** — launcher home-page tiles editor (no restart needed)
+- **Logs** — tail viewer for every service log, mmogbrain's frame log and
+  per-instance battle logs, with filter and follow mode
+- **Metrics** — gauges scraped from every service's `/metrics` endpoint
+- **Backups** — overview of the `scripts/backup.sh` archives
+- **Config** — non-secret configuration, TLS certificate expiry and debug
+  switches
+
+It also required small new read-only admin endpoints on the existing services
+(`GET /admin/users` and `/admin/bans` on auth-server, `/admin/results`,
+`/admin/online`, `/admin/player/{id}` on mmogbrain, `/admin/tiles` on
+legacy-api) plus the action endpoints above. After match end, purchases and
+grants the server pushes fresh balances to connected clients, so no client
+restart is needed to see them.
 
 ## Licence
 
