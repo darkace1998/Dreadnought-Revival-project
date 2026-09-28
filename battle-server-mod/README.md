@@ -174,8 +174,14 @@ every human (a player controller with a network connection):
   The mod asks mmogbrain for the display name by `DNPID`
   (`GET /battle/player`), else takes the join URL's `PlayerName=`, and calls
   the game mode's `AGameMode::ChangeName`.
-- **Bot balance** (proving ground; `dn_host_no_bot_balance.txt` turns just this
-  off). The bot targets are the mode's fixed team size (`gm+0x97C`); nothing
+- **Bots in every mode** (`dn_host_bots_bc_only.txt` limits them to the proving
+  ground). The mod sets `m_enableSpawnAI` in every multiplayer mode, not only
+  Bootcamp. The spawner fills teams only from the mode's own bot list
+  (`gm+0x968`, count `gm+0x970`) up to its team size (`gm+0x97C`); the log line
+  `bots: game mode … type N: bot list X entries, team size Y` shows per mode
+  whether a PvP map has one. Not verified live yet.
+- **Bot balance** (any mode with bots; `dn_host_no_bot_balance.txt` turns just
+  this off). Per team: bots = team size − humans on that team. The bot targets are the mode's fixed team size (`gm+0x97C`); nothing
   subtracted the humans, so three players still got 8 bots on their side. Once
   the bots are set up, the mod calls the game's `SetTeamSizeAI` (`0x381550`)
   with `teamSize - humans`, which trims the surplus.

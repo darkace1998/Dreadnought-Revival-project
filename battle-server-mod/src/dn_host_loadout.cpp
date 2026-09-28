@@ -1578,18 +1578,37 @@ static tGameModeTimer g_origGameModeTimer = nullptr;
 static bool g_bcAIArmed = false;
 static void PlayersTick(uint8_t *gm);
 
+// Bots in every multiplayer mode (on; dn_host_bots_bc_only.txt /
+// DN_HOST_BOTS_BC_ONLY=1 limits them to the proving ground again). Added
+// 2026-09-28 at the operator's request. The spawner only fills a team from the
+// mode's own bot list (gm+0x968, count gm+0x970) up to its team size
+// (gm+0x97C); whether a PvP map loads such a list is NOT known yet -- the
+// once-per-game-mode log line below answers it for each mode.
+#define OFF_GM_NPC_COUNT 0x970
+#define OFF_GM_TEAM_SIZE 0x97C
+static bool g_botsBCOnly = false;
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
   if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
-      gm[OFF_GM_ENABLE_SPAWN_AI] == 0 &&
       IsReadable(gm + OFF_GM_GAMESTATE, sizeof(void *))) {
     uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
-    if (gs && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) &&
-        gs[OFF_GS_GAME_MODE_TYPE] == YGMT_BOOTCAMP) {
-      gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
-      Logf("bc ai: game mode %p is Bootcamp; m_enableSpawnAI 0 -> 1. The game "
-           "fills both teams when the pre-match countdown reaches 50 s.",
-           gameMode);
+    if (gs && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1)) {
+      int type = gs[OFF_GS_GAME_MODE_TYPE];
+      static void *s_reported = nullptr;
+      if (s_reported != gameMode && IsReadable(gm + OFF_GM_TEAM_SIZE, 4)) {
+        s_reported = gameMode;
+        Logf("bots: game mode %p type %d: bot list %d entries, team size %d%s",
+             gameMode, type, *(int32_t *)(gm + OFF_GM_NPC_COUNT),
+             *(int32_t *)(gm + OFF_GM_TEAM_SIZE),
+             (type == YGMT_BOOTCAMP || !g_botsBCOnly) ? "" : " (bots limited to the proving ground)");
+      }
+      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && (type == YGMT_BOOTCAMP || !g_botsBCOnly)) {
+        gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
+        Logf("bots: game mode %p (type %d) m_enableSpawnAI 0 -> 1. The game fills "
+             "both teams when the pre-match countdown reaches 50 s.",
+             gameMode, type);
+      }
     }
   }
   g_origGameModeTimer(gameMode);
@@ -1923,7 +1942,7 @@ static void ReportMatchResult(void *orbitComp) {
 // ground), and calls no SetTeam. NOT verified live yet.
 #define OFF_GS_PLAYER_ARRAY 0x470 // AGameState::PlayerArray (SDK)
 #define OFF_ACTOR_OWNER 0xC8      // AActor::Owner (SDK)
-#define OFF_GM_TEAM_SIZE 0x97C    // per-team size from the mode's data
+#define OFF_GM_TEAM_SIZE 0x97C
 #define OFF_GM_AI_TARGET_T1 0x980
 #define RVA_SET_TEAM_SIZE_AI 0x381550
 
@@ -2036,6 +2055,7 @@ static void PlayersTick(uint8_t *gm) {
     if (count <= 0 || count > 256 || !IsReadable(arr, (size_t)count * 8))
       return;
     int humans = 0;
+    int humansOnTeam[3] = {0, 0, 0};
     for (int i = 0; i < count; ++i) {
       uint8_t *pri = arr[i];
       if (!IsReadable(pri, OFF_PRI_TEAM + 1))
@@ -2052,27 +2072,32 @@ static void PlayersTick(uint8_t *gm) {
       if (!seen)
         continue;
       FixTeam(pc, pri, seen);
+      int t = pri[OFF_PRI_TEAM];
+      if (t == 1 || t == 2)
+        ++humansOnTeam[t];
       if (!seen->named)
         NamePlayer(gm, pc, seen);
     }
 
-    // Proving ground: the humans take bot slots on team 1.
+    // Humans take bot slots on their own team, in any mode with bots
+    // (m_enableSpawnAI set): proving ground (all humans on team 1) and PvP.
     static int s_botBalance = -1;
     if (s_botBalance < 0)
       s_botBalance = SwitchOn("DN_HOST_NO_BOT_BALANCE", "dn_host_no_bot_balance.txt") ? 0 : 1;
-    if (s_botBalance && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) &&
-        gs[OFF_GS_GAME_MODE_TYPE] == YGMT_BOOTCAMP) {
+    if (s_botBalance && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) && gm[OFF_GM_ENABLE_SPAWN_AI]) {
       int size = *(int32_t *)(gm + OFF_GM_TEAM_SIZE);
-      int target = *(int32_t *)(gm + OFF_GM_AI_TARGET_T1);
-      int want = size - humans;
-      if (want < 0)
-        want = 0;
-      // target > 0: the bots have been set up (0x3678F0 ran); before that a
-      // call would fill early.
-      if (size > 0 && target > 0 && humans > 0 && target != want) {
-        ((tSetTeamSizeAI)(g_base + RVA_SET_TEAM_SIZE_AI))(gm, 1, want);
-        Logf("bot balance: %d human(s) on team 1; team size %d -> team 1 bots %d -> %d",
-             humans, size, target, want);
+      for (int team = 1; team <= 2; ++team) {
+        int target = *(int32_t *)(gm + OFF_GM_AI_TARGET_T1 + (team - 1) * 4); // +0x980, +0x984
+        int want = size - humansOnTeam[team];
+        if (want < 0)
+          want = 0;
+        // target > 0: the bots have been set up (0x3678F0 ran); before that a
+        // call would fill early.
+        if (size > 0 && target > 0 && humansOnTeam[team] > 0 && target != want) {
+          ((tSetTeamSizeAI)(g_base + RVA_SET_TEAM_SIZE_AI))(gm, team, want);
+          Logf("bot balance: %d human(s) on team %d; team size %d -> team %d bots %d -> %d",
+               humansOnTeam[team], team, size, team, target, want);
+        }
       }
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -2424,6 +2449,7 @@ static DWORD WINAPI Startup(LPVOID) {
   // The game-mode timer carries the proving-ground bots AND the per-second
   // team/name/bot-balance pass (PlayersTick), so it installs if either is on.
   g_bcAIArmed = BootcampAIEnabled();
+  g_botsBCOnly = SwitchOn("DN_HOST_BOTS_BC_ONLY", "dn_host_bots_bc_only.txt");
   g_teamSyncArmed = !SwitchOn("DN_HOST_NO_TEAM_SYNC", "dn_host_no_team_sync.txt");
   if (!g_bcAIArmed)
     Logf("bc ai: OFF (create dn_host_bc_ai.txt beside the executable, or set "
