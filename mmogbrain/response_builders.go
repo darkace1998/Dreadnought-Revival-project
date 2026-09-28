@@ -1595,7 +1595,18 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// YMmogClient field-name block at 0x1438bf870 / 0x1438bf8a8.
 	b = protocol.AppendStringField(b, "Credits", strconv.Itoa(int(state.softCurrency)))
 	b = protocol.AppendStringField(b, "Points", strconv.Itoa(int(state.premiumCurrency)))
-	b = protocol.AppendStringField(b, "rep", "0")
+	// "rep" is EYReputationType::REP_GENERAL, the player's reputation. The
+	// client derives the player RANK from it (UYProgressionManagerBase
+	// m_rankUpReputationThresholds -> ReputationStateInfo m_rank/m_start/
+	// m_end), and ships and items unlock at a rank (GetUnlockRankForItem,
+	// 0x3FC680). It was always "0", so every client stayed at the first rank
+	// while the server's own rank (current_rank) climbed (operator,
+	// 2026-09-28). Sent as the player's accumulated XP -- what the server
+	// ranks by. GUESS: the client's thresholds are not traced (not in the
+	// rank DT, which has names only, nor in the ini files); if the client rank
+	// still does not move with this, the thresholds are missing too.
+	// The repXX_X per-class reputations stay 0 (not modelled).
+	b = protocol.AppendStringField(b, "rep", strconv.Itoa(int(state.currentXP)))
 	b = protocol.AppendStringField(b, "repDN_L", "0")
 	b = protocol.AppendStringField(b, "repDN_M", "0")
 	b = protocol.AppendStringField(b, "repDN_H", "0")

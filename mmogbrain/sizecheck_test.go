@@ -301,7 +301,11 @@ var targetSizes = map[string]int{
 	// 7297 -> 7300 (+3): ship class goes out as EYShipClass (class x size,
 	// e.g. 14 = YSC_ASSAULT_MEDIUM) instead of baseClass+1, which always named a
 	// LIGHT hull. Two-digit values for the medium starters. See loadoutEYShipClass.
-	"YA_PlayerGet": 7300,
+	// 7300 -> 7302 (+2): "rep" (the player's reputation, from which the client
+	// derives the player rank) carries the accumulated XP instead of a fixed
+	// "0" -- "100" for the test account. Every client was stuck at the first
+	// rank, so rank-gated ships never unlocked (2026-09-28).
+	"YA_PlayerGet": 7302,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which
