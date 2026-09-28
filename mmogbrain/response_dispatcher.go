@@ -213,6 +213,14 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_OnFleetCharged", "YA_AchievementsUpdated":
 		return buildMmogRequestSuccessPayload(requestName)
 
+	case "YA_ClaimCareerGoal":
+		return buildMmogClaimCareerGoalPayload(playerPID, payload)
+
+	// The client's own bug reports (see client_reports.go).
+	case "YA_LogSpecial":
+		recordClientReport(playerPID, payload)
+		return buildMmogRequestSuccessPayload(requestName)
+
 	// --- Default ---
 	default:
 		// Previously any unrecognized request whose name didn't start with

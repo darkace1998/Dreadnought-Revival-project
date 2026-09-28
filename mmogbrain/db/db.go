@@ -324,6 +324,24 @@ var migrations = []string{
 	`ALTER TABLE matches ADD COLUMN battle_match_id TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE matches ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 1`,
 	`ALTER TABLE battle_results ADD COLUMN fleet_type INTEGER NOT NULL DEFAULT 0`,
+	// The client's own bug reports (YA_LogSpecial, client_reports.go).
+	`CREATE TABLE IF NOT EXISTS client_reports (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id    TEXT NOT NULL,
+		type       TEXT NOT NULL DEFAULT '',
+		name       TEXT NOT NULL DEFAULT '',
+		desc       TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT (datetime('now'))
+	)`,
+	// Career goal stages a player has claimed (YA_ClaimCareerGoal,
+	// career_claims.go): claimed_stages is a count, reported as claimed_stage.
+	`CREATE TABLE IF NOT EXISTS player_career_claims (
+		user_id        TEXT NOT NULL,
+		goal_id        TEXT NOT NULL,
+		claimed_stages INTEGER NOT NULL DEFAULT 0,
+		updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, goal_id)
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {
