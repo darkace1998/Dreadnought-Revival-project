@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
 
 // Every EYScoringEventID in the client exe, from its UTF-16 enum strings
 // (YSEID_*, minus Invalid and Max): 75 events.
@@ -40,6 +45,63 @@ func TestPvPScoringTableNamesRealEvents(t *testing.T) {
 		seen[e.Event] = true
 		if e.Points < 0 {
 			t.Errorf("%q has negative points", e.Event)
+		}
+	}
+}
+
+func TestScoringEventOrdinalsCoverTheEnum(t *testing.T) {
+	if len(scoringEventIDs) != 75 {
+		t.Fatalf("%d ordinals, want 75 (Invalid is 75)", len(scoringEventIDs))
+	}
+	seen := map[string]bool{}
+	for _, e := range scoringEventIDs {
+		seen[e] = true
+	}
+	for _, e := range knownScoringEvents {
+		if !seen[e] {
+			t.Errorf("%s has no ordinal", e)
+		}
+	}
+	for name, want := range map[string]int{"CaptainKill_SameTier": 0, "Assist": 10, "Winner": 28, "MVP": 42, "FinalBlow": 51, "PODTDMPickup": 74} {
+		if got, _ := scoringEventOrdinal(name); got != want {
+			t.Errorf("%s = %d, want %d (registration order 0x2A9DE0E)", name, got, want)
+		}
+	}
+}
+
+func TestScoringDocumentCarriesThePoints(t *testing.T) {
+	doc := string(scoringDocument())
+	rows := 0
+	for _, e := range pvpScoringTable {
+		if e.Points > 0 && !scoringEndOfMatchEvents[e.Event] {
+			rows++
+		}
+	}
+	if n := strings.Count(doc, "EventScore"); n != rows {
+		t.Errorf("%d EventScore fields, want %d (one per scoring event)", n, rows)
+	}
+	if countWireStringField(doc, "EventScore", "200") != 1 || countWireStringField(doc, "EventName", "CaptainKill_HigherTier1") != 1 {
+		t.Error("higher-tier kill is not in the document at 200")
+	}
+	if countWireStringField(doc, "EventName", "Winner") != 0 {
+		t.Error("Winner is served; end-of-match events overflowed the host's stack")
+	}
+	if !strings.Contains(doc, "ScoringTable") || !strings.Contains(doc, "ScoringParamsTable") {
+		t.Error("document lacks ScoringTable or ScoringParamsTable")
+	}
+	if !strings.HasSuffix(doc, "\x00\x0e\x00\x00\x00\x00") {
+		t.Error("document does not end with the root terminator; the parser would resolve nothing inside it")
+	}
+}
+
+func TestBattleScoringIsLoopbackOnly(t *testing.T) {
+	for addr, want := range map[string]int{"127.0.0.1:5000": http.StatusOK, "10.0.0.5:5000": http.StatusForbidden} {
+		req := httptest.NewRequest(http.MethodGet, "/battle/scoring", nil)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		battleScoringHandler(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s: %d, want %d", addr, rec.Code, want)
 		}
 	}
 }
