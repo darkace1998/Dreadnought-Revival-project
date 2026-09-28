@@ -517,15 +517,23 @@ func (h *socialHub) removeIgnore(playerID, otherID string) error {
 func (h *socialHub) presenceEntry(playerID string) map[string]any {
 	peer := h.peerFor(playerID)
 	guid := dashedPlayerGUID(playerID)
+	storedName := mmogPlayerStateForPID(playerID).displayName
+	if storedName == "Local" {
+		storedName = ""
+	}
 	entry := map[string]any{
 		"pid":     guid,
 		"PID":     guid,
 		"guid":    guid,
 		"peer_id": "",
-		"name":    "",
-		"status":  "offline",
-		"message": "",
-		"online":  false,
+		// The account's display name, online or not: user.search lists
+		// offline players too, and the client reads display_name.
+		"name":              storedName,
+		"display_name":      storedName,
+		"full_display_name": storedName,
+		"status":            "offline",
+		"message":           "",
+		"online":            false,
 	}
 	if peer != nil {
 		peer.mu.Lock()
@@ -535,7 +543,11 @@ func (h *socialHub) presenceEntry(playerID string) map[string]any {
 			status = "online"
 		}
 		entry["peer_id"] = peer.peerID
-		entry["name"] = peer.name
+		if peer.name != "" {
+			entry["name"] = peer.name
+			entry["display_name"] = peer.name
+			entry["full_display_name"] = peer.name
+		}
 		entry["status"] = status
 		entry["message"] = message
 		entry["online"] = true
@@ -808,26 +820,32 @@ func selfUserProfileEvent(playerID, peerID string) map[string]any {
 // itself, so excluding the requester (the usual instinct for a people search)
 // would answer the one question it is actually asking with nothing.
 func (h *socialHub) searchUsers(terms, requesterID string) []any {
-	terms = strings.ToLower(strings.TrimSpace(terms))
-	if terms == "" {
+	want := normalizeSearchName(terms)
+	if want == "" {
 		return []any{}
 	}
 
 	seen := map[string]bool{}
 	out := []any{}
 	add := func(playerID string) {
-		if playerID == "" || seen[playerID] {
+		if playerID == "" || seen[playerID] || len(out) >= 100 {
 			return
 		}
 		name := mmogPlayerStateForPID(playerID).displayName
-		if name == "" || !strings.Contains(strings.ToLower(name), terms) {
+		if name == "" || name == "Local" || !strings.Contains(normalizeSearchName(name), want) {
 			return
 		}
 		seen[playerID] = true
 		out = append(out, h.presenceEntry(playerID))
 	}
 
+	// The searcher first (the client's automatic search at login looks for
+	// itself), then everyone else -- FIXED 2026-09-28: only ONLINE players
+	// were searched, so an offline friend could never be found.
 	add(requesterID)
+	for _, id := range allPlayerIDs() {
+		add(id)
+	}
 	h.mu.Lock()
 	ids := make([]string, 0, len(h.peers))
 	for id := range h.peers {
@@ -840,8 +858,35 @@ func (h *socialHub) searchUsers(terms, requesterID string) []any {
 	return out
 }
 
-// onlinePlayerIDs lists every player with a live Firmament connection -- the
-// matchmaker's notion of "logged in".
+// normalizeSearchName folds case and drops spaces, underscores and hyphens, so
+// "some tester" finds "Some_Tester".
+func normalizeSearchName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return strings.NewReplacer(" ", "", "_", "", "-", "").Replace(s)
+}
+
+// allPlayerIDs lists every player with a record (the default dev player is
+// excluded by its placeholder name in searchUsers).
+func allPlayerIDs() []string {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(`SELECT user_id FROM player_state ORDER BY updated_at DESC LIMIT 1000`)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func (h *socialHub) onlinePlayerIDs() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

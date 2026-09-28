@@ -567,12 +567,29 @@ func writeFirmamentTypedMessage(conn firmamentWriter, id interface{}, msgType st
 	return err
 }
 
+// firmamentRootData is a key a result map may carry to put a value at the
+// reply's TOP level as "data" (not inside "result"). user.search needs it: the
+// client's search callback (0x142AA9FE0) parses the whole raw reply and the
+// UE-side handler (0x142A3AB80) reads root.data.users[].guid/display_name.
+const firmamentRootData = "$data"
+
 func writeFirmamentResult(conn firmamentWriter, id interface{}, result map[string]interface{}) error {
-	response, _ := json.Marshal(map[string]interface{}{
+	msg := map[string]interface{}{
 		"id":      id,
 		"jsonrpc": "2.0",
 		"result":  result,
-	})
+	}
+	if data, ok := result[firmamentRootData]; ok {
+		inner := make(map[string]interface{}, len(result))
+		for k, v := range result {
+			if k != firmamentRootData {
+				inner[k] = v
+			}
+		}
+		msg["result"] = inner
+		msg["data"] = data
+	}
+	response, _ := json.Marshal(msg)
 	response = append(response, '\r', '\n')
 	_, err := conn.Write(response)
 	return err

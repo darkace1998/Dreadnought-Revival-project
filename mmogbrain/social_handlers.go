@@ -16,6 +16,8 @@ package main
 import (
 	"os"
 	"strings"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // socialRequest is one decoded JSON-RPC call from a connected player.
@@ -94,6 +96,30 @@ func handleSocialMethod(r socialRequest) (map[string]any, bool) {
 // left the client with no profile for itself, and the player's name blank.
 func handleUserMethod(r socialRequest) map[string]any {
 	switch r.method {
+	case "user.whois":
+		// Resolve player ids to names. FIXED 2026-09-28: answered with a bare
+		// {"status":"success"}, so the client got no users and asked again
+		// every ~60 ms forever ("Successfully sent request to resolve 1
+		// usernames"), and names showed "//0". The message parser
+		// (0x142A52390) reads the reply's TOP-LEVEL data.users[] (guid,
+		// display_name, full_display_name, public_id, number, status_message,
+		// is_*) into the list the whois callback (0x142AAA090) consumes.
+		found := []any{}
+		notFound := []any{}
+		for _, id := range stringListParam(r.params, "users", "user", "ids") {
+			pid := protocol.NormalizePlayerPID(id)
+			if pid == "" || !playerExists(pid) {
+				notFound = append(notFound, id)
+				continue
+			}
+			found = append(found, r.hub.presenceEntry(pid))
+		}
+		return socialOK(map[string]any{
+			"users":           found,
+			"users_not_found": notFound,
+			firmamentRootData: map[string]any{"users": found, "users_not_found": notFound},
+		})
+
 	case "user.search":
 		terms := strings.TrimSpace(stringParam(r.params, "terms", "term", "query"))
 		adoptSteamPersona(r, terms)
@@ -104,11 +130,16 @@ func handleUserMethod(r socialRequest) map[string]any {
 		// binary (user.search appears only as a literal, with no result parser
 		// near it), and an extra key it ignores costs nothing while a missing
 		// one costs the whole feature.
+		// FIXED 2026-09-28: the client reads the results from the reply's
+		// TOP-LEVEL data.users (UE handler 0x142A3AB80: root "data" ->
+		// "users" array -> each "guid", "display_name"); everything below was
+		// inside "result", so every search showed nothing.
 		return socialOK(map[string]any{
-			"users":   users,
-			"results": users,
-			"listing": users,
-			"total":   len(users),
+			"users":           users,
+			"results":         users,
+			"listing":         users,
+			"total":           len(users),
+			firmamentRootData: map[string]any{"users": users},
 		})
 	}
 	// Everything else in the family keeps the old behaviour rather than
@@ -273,6 +304,15 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 		if target == "" || target == r.peer.playerID {
 			return socialError("a friend request needs another player")
 		}
+		// Only real players. FIXED 2026-09-28: requests to a player that does
+		// not exist were stored -- every "add friend" from the in-match
+		// scoreboard targeted "ad000000-0000-..." (the client parsed the text
+		// "INVALID" of an unset UniqueNetId; see result.pid in
+		// buildMmogLoginSuccessPayload) and left a pending row nobody could
+		// ever answer.
+		if !playerExists(target) {
+			return socialError("no such player")
+		}
 		if err := r.hub.addFriend(r.peer.playerID, target); err != nil {
 			return socialError(err.Error())
 		}
@@ -353,4 +393,39 @@ func (h *socialHub) notifyFriendEvent(targetPlayerID, method, actorPlayerID stri
 			"pending_friends": pending,
 		},
 	})
+}
+
+// playerExists reports whether pid has a player record.
+func playerExists(pid string) bool {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return true // no database (tests without one): do not block
+	}
+	var n int
+	if err := database.QueryRow(`SELECT count(*) FROM player_state WHERE user_id=?`, normalizedPlayerStatePID(pid)).Scan(&n); err != nil {
+		return true
+	}
+	return n > 0
+}
+
+// stringListParam reads the first present key as a list of strings (a single
+// string is accepted as a one-element list).
+func stringListParam(params map[string]any, keys ...string) []string {
+	for _, k := range keys {
+		switch v := params[k].(type) {
+		case []any:
+			out := make([]string, 0, len(v))
+			for _, e := range v {
+				if s, ok := e.(string); ok && s != "" {
+					out = append(out, s)
+				}
+			}
+			return out
+		case string:
+			if v != "" {
+				return []string{v}
+			}
+		}
+	}
+	return nil
 }

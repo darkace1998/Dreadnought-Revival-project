@@ -106,6 +106,16 @@ func buildMmogLoginSuccessPayload(playerPID ...string) []byte {
 	b = protocol.AppendStringField(b, "RT", "YA_UserLogin")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	// The player's own id. FIXED 2026-09-28: missing. On "User Connected" the
+	// login handler (0x142A3AF90) parses result.pid (hex digits only,
+	// 0x142A61430) into the mmog client's player GUID (+0x3518), which
+	// FYOnlineIdentityMmog::AutoLogin/Login (0x142AAAB70 / 0x142AAB7F0) wrap
+	// into the player's UniqueNetId (identity+0x2B8, returned by
+	// GetUniquePlayerId 0x142AAB730). Without it that id was all zeros:
+	// every battle-server join logged "userId: Invalid", and "add friend" from
+	// the in-match scoreboard sent the PlayerState's UniqueId text "INVALID"
+	// through the same hex parser -> user "ad000000-0000-0000-0000-000000000000".
+	b = protocol.AppendStringField(b, "pid", dashedPlayerGUID(normalizedPlayerStatePID(pid)))
 	// issue #50: the client's YA_UserLogin "ok" handler (FUN_142a3af90) reads
 	// result.LoginStreak.loginstreak, and only when loginstreak > 0 also
 	// LoginStreak.credits/freexp/gp (that day's streak-bonus reward) — it

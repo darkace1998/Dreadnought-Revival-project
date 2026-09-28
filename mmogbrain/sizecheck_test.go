@@ -12,7 +12,11 @@ var targetSizes = map[string]int{
 	// Was 174 — issue #50 fix: removed dead flat credits/premiumCurrency/
 	// freexp/xp fields (the client's YA_UserLogin handler never reads them),
 	// added real credits/freexp/gp fields nested under LoginStreak instead.
-	"YA_UserLogin":  153,
+	// 153 -> 198 (2026-09-28): +45 for result.pid, the player's own dashed
+	// GUID. The login handler (0x142A3AF90) builds the player's UniqueNetId
+	// from it; without it every battle-server join was "userId: Invalid" and
+	// scoreboard friend requests targeted "ad000000-..." (from "INVALID").
+	"YA_UserLogin":  198,
 	"YA_UserOnline": 81,
 	// Was 5250, +6 after fixing int32-blindness in the FleetTypes Tiers
 	// sub-array (appendMmogStaticFleetTypeEntry) — see buildMmogStaticFleetDataPayload.
