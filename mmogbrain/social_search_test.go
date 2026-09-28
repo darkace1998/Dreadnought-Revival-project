@@ -71,3 +71,15 @@ func TestUserWhoisResolvesNames(t *testing.T) {
 		t.Fatalf("users_not_found = %v", nf)
 	}
 }
+
+// Every user record carries a stable 4-digit number (the client showed 0).
+func TestPlayerNumberIsStableAndFourDigits(t *testing.T) {
+	const pid = "0123456789abcdef0123456789abcdef"
+	n := playerNumber(pid)
+	if len(n) != 4 || n != playerNumber(dashedPlayerGUID(pid)) {
+		t.Fatalf("playerNumber = %q (dashed form %q)", n, playerNumber(dashedPlayerGUID(pid)))
+	}
+	if socialHubInstance.presenceEntry(pid)["number"] != n {
+		t.Fatalf("presence entry number = %v", socialHubInstance.presenceEntry(pid)["number"])
+	}
+}

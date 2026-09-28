@@ -34,8 +34,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"hash/crc32"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -531,6 +533,7 @@ func (h *socialHub) presenceEntry(playerID string) map[string]any {
 		"name":              storedName,
 		"display_name":      storedName,
 		"full_display_name": storedName,
+		"number":            playerNumber(playerID),
 		"status":            "offline",
 		"message":           "",
 		"online":            false,
@@ -798,6 +801,7 @@ func selfUserProfileEvent(playerID, peerID string) map[string]any {
 		"guid":              guid,
 		"profile":           guid,
 		"public_id":         guid,
+		"number":            playerNumber(playerID),
 		"display_name":      name,
 		"full_display_name": name,
 		"status_message":    "",
@@ -895,4 +899,15 @@ func (h *socialHub) onlinePlayerIDs() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// playerNumber is the player's name discriminator (shown with the name, like
+// Name#1234), as the text the client parses with sscanf("%d") -- both parsers
+// (0x142A52390 users lists, 0x142A8CE00 profile records) read "number" as a
+// string, so a missing one showed every player as 0. Derived from the account
+// id: stable across logins and needs no stored column. 1000-9999; collisions
+// only matter for display.
+func playerNumber(playerID string) string {
+	pid := normalizedPlayerStatePID(playerID)
+	return strconv.Itoa(int(crc32.ChecksumIEEE([]byte(pid))%9000) + 1000)
 }
