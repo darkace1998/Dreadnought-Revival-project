@@ -1,6 +1,9 @@
 package dreadgameconfig
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestVanityCatalogFromTheClientsAssets(t *testing.T) {
 	items := VanityItems()
@@ -17,6 +20,30 @@ func TestVanityCatalogFromTheClientsAssets(t *testing.T) {
 		}
 	}
 	t.Logf("%d cosmetics, %d sold, %d of them free", len(items), sold, free)
+	// Every named, non-test item is sold (2026-09-28): 1,465 of the 1,494.
+	if sold < 1450 {
+		t.Errorf("%d sold, want every named non-test item (~1465)", sold)
+	}
+	// An unflagged set piece and an internal-only one are sold now.
+	for _, name := range []string{"Body_Female_ExplorerSet", "Body_Female_AutumnSet"} {
+		found := false
+		for _, v := range items {
+			if v.Name == name {
+				found = true
+				if !VanityItemIsSold(v) {
+					t.Errorf("%s is not sold", name)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s missing from the cooked dump", name)
+		}
+	}
+	for _, v := range items {
+		if VanityItemIsSold(v) && (v.HeadlineKey == "" || strings.HasSuffix(strings.ToUpper(v.Name), "_TEST")) {
+			t.Errorf("%s is sold but is a test item or has no name", v.Name)
+		}
+	}
 	// The pieces of the captain the client saved live (2026-09-24) are free.
 	for _, id := range []int32{855572482 /*Mat_Eyes_Default*/, 872349840 /*Head_Male_B03*/, 872349903 /*Body_Male_Base_MC01*/} {
 		v, ok := VanityItemByID(id)

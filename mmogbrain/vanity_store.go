@@ -15,11 +15,11 @@ import (
 // "Captain Vanity"/"Coatings"/... offers, whose ids are storefront offer ids
 // with no mapping to items (see asset_tables_validation.go).
 //
-// Pricing is the operator's decision: free body features and each hull's
-// default look (dreadconfig.VanityItemIsFree), everything else vanityPrice
-// credits. The assets carry no price.
+// Pricing is the operator's decision: every sold cosmetic costs vanityPrice in
+// vanityCurrency (premium), the "free" defaults (dreadconfig.VanityItemIsFree)
+// included. The assets carry no price.
 //
-// Why a cosmetic is only OWNED once bought (free ones for 0): ownership reaches
+// Why a cosmetic is only OWNED once bought: ownership reaches
 // the client only through the Items list in player data, and that list is
 // capped by the client's 32768-byte receive ring (playerDataFrameBudget; an
 // account owning every ship and module already overflows it). The parser
@@ -27,7 +27,14 @@ import (
 // pieces, and nothing the client sends says which menu it is in. Owning all
 // 1027 listed cosmetics up front would push modules out of that list; owning
 // what a player actually chose grows it by one entry per choice.
-const vanityPrice = 10000
+const vanityPrice = 100
+
+// vanityCurrency is what cosmetics are priced and charged in: premium currency
+// (GP), the operator's choice (2026-09-28: every cosmetic 100 premium). The
+// client shows a cosmetic's premium price (SPPrice, from a GP offer): with the
+// credit price (CRPrice) it displayed 0 and refused the purchase as
+// "insufficient funds" without ever sending it.
+const vanityCurrency = "GP"
 
 // vanityOffer reports whether itemID is a cosmetic, and if so whether it is
 // sold and at what price.
@@ -39,9 +46,8 @@ func vanityOffer(itemID int32) (isVanity, sold bool, price int32) {
 	if !dreadconfig.VanityItemIsSold(v) {
 		return true, false, 0
 	}
-	if dreadconfig.VanityItemIsFree(v) {
-		return true, true, 0
-	}
+	// Every sold cosmetic, the former free defaults included, costs the same
+	// (operator, 2026-09-28).
 	return true, true, vanityPrice
 }
 
@@ -94,7 +100,7 @@ func vanityCatalogSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
 			// The same type the purchase is recorded under (purchasedItemType);
 			// the store section comes from vanityCategoryName.
 			itemType:        "vanity",
-			priceCurrencyID: "CR",
+			priceCurrencyID: vanityCurrency,
 			priceAmount:     price,
 			quantity:        1,
 			owned:           have,

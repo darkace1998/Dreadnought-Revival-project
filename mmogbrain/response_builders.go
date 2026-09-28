@@ -6036,12 +6036,23 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("failed", "player state unavailable", 0, 0)
 	}
 
-	deductResult, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`, price, pid, price)
+	// Cosmetics are charged in premium currency (vanityCurrency), everything
+	// else in credits.
+	deductSQL := `UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`
+	insufficient := "insufficient credits"
+	creditsLeft := softCurrency - price
+	if isVanity, _, _ := vanityOffer(itemID); isVanity {
+		creditsLeft = softCurrency
+		deductSQL = `UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`
+		insufficient = "insufficient premium currency"
+		currency = strings.ToLower(vanityCurrency)
+	}
+	deductResult, err := tx.Exec(deductSQL, price, pid, price)
 	if err != nil {
 		return reply("failed", "currency deduction failed", 0, softCurrency)
 	}
 	if rows, _ := deductResult.RowsAffected(); rows == 0 {
-		return reply("failed", "insufficient credits", 0, softCurrency)
+		return reply("failed", insufficient, 0, softCurrency)
 	}
 
 	insertResult, err := tx.Exec(`INSERT OR IGNORE INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`, pid, itemID, itemType, price, currency)
@@ -6067,7 +6078,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("failed", "purchase commit failed", 0, softCurrency)
 	}
 	committed = true
-	return reply("bought", "ok", price, softCurrency-price)
+	return reply("bought", "ok", price, creditsLeft)
 }
 
 // itemIDFromPurchaseOffer resolves the SKU string a client may send instead of a

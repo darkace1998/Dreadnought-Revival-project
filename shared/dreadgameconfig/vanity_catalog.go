@@ -116,16 +116,23 @@ func VanityItemIsFree(v VanityItem) bool {
 	return AllDefaultShipVanityItemIDs()[v.ItemID]
 }
 
-// VanityItemIsSold reports whether the store lists the item: everything the
-// developers marked ready for players, plus the free items (materials carry no
-// flag at all) -- but only items with a player-facing name (m_headline). That
-// excludes their Test folder and Test_* assets, the NPC officers' heads
-// (Head_ChiefOfficer, ...) and the two gender items, none of which has one; the
-// captain's gender travels as text ("GENDER_MALE") in the display info, not as
-// an owned item.
+// VanityItemIsSold reports whether the store lists the item: every item with a
+// player-facing name (m_headline) that is not a test asset.
+//
+// CHANGED 2026-09-28 (the operator asked for all vanity items in the market):
+// this sold only the items the developers marked m_publicReady (850) plus the
+// free ones, i.e. 1,013 of 1,494. The 606 named items with no flags at all
+// (Explorer, Jovian, NanoDoc sets, ...) and the 9 marked internal-only are now
+// sold too: 1,465. Still excluded: items with no player-facing name -- the NPC
+// officers' and Bix/Trader bodies and heads (Head_ChiefOfficer, ...) and the two
+// gender items (the captain's gender travels as text, "GENDER_MALE", in the
+// display info, not as an owned item) -- and test assets (their Test folder,
+// Test_* and *_TEST names). Unreleased items may not have been finished by the
+// developers; they are the client's own cooked assets either way.
 func VanityItemIsSold(v VanityItem) bool {
-	if v.HeadlineKey == "" || strings.Contains(v.File, "/Test/") || strings.HasPrefix(v.Name, "Test") {
+	if v.HeadlineKey == "" || strings.Contains(v.File, "/Test/") ||
+		strings.HasPrefix(v.Name, "Test") || strings.HasSuffix(strings.ToUpper(v.Name), "_TEST") {
 		return false
 	}
-	return v.PublicReady || VanityItemIsFree(v)
+	return true
 }
