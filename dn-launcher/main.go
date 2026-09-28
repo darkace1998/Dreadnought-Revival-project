@@ -546,16 +546,16 @@ func main() {
 			fatalf("[!] %v", err)
 		}
 	}
-	jwtToken, _ := authenticateWithDerivedIdentity(cfg)
+	jwtToken, username := authenticateWithDerivedIdentity(cfg)
 
-	if _, err := startGame(exeDir, cfg, jwtToken); err != nil {
+	if _, err := startGame(exeDir, cfg, jwtToken, username); err != nil {
 		fatalf("[!] %v", err)
 	}
 }
 
 // startGame hands the token to the game (registry, DPAPI) and starts it with
 // the server's addresses. Shared by the console flow and the desktop window.
-func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
+func startGame(exeDir string, cfg Config, jwtToken, username string) (int, error) {
 	fmt.Println("[*] Writing auth token to registry...")
 	if err := writeAuthToken(jwtToken); err != nil {
 		return 0, fmt.Errorf("could not store the sign-in for the game: %w", err)
@@ -591,7 +591,21 @@ func startGame(exeDir string, cfg Config, jwtToken string) (int, error) {
 	// contacted the server and looped in the tutorial (a tester's log,
 	// 2026-09-28). Names now come from battle-server-mod via mmogbrain's
 	// /battle/player.
+	//
+	// RE-ADDED 2026-09-28 as an EXPLICIT start URL: the login map itself, with
+	// the option. The hangar's player card shows no name because the client's
+	// nickname is empty: FYOnlineIdentityMmog::GetPlayerNickname (0x2AAB5F0)
+	// returns the mmog client's +0x3540, and the only writer of that is
+	// FYMmogClient::Init (0x2A33C70), which UYGameEngine::Browse (0x535A9F)
+	// calls with the BROWSED URL's options -- "PlayerName". So the name has to
+	// ride on the start URL. Naming the map (GameDefaultMap, Launch_P) means
+	// the engine has no reason to fall back to another map, which is what the
+	// bare "?PlayerName=" token did. NOT verified with a new account yet:
+	// DN_NO_START_URL=1 turns it off if the tutorial loop comes back.
 	var args []string
+	if url := startURL(username); url != "" {
+		args = append(args, url)
+	}
 	args = append(args,
 		"-GatewayAddress="+cfg.GatewayIP,
 		"-GatewayPort="+cfg.GatewayPort,
@@ -770,4 +784,23 @@ func waitExit(code int) {
 	case <-time.After(5 * time.Second):
 	}
 	os.Exit(code)
+}
+
+// startURL is the game's start URL: the login map with the player's name, or
+// "" when there is no usable name or DN_NO_START_URL=1. Only characters that
+// cannot break a URL option are kept.
+func startURL(username string) string {
+	if os.Getenv("DN_NO_START_URL") == "1" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range username {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' {
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "/Game/Maps/Launch_P?PlayerName=" + b.String()
 }

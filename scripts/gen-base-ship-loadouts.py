@@ -142,6 +142,23 @@ def load_cooked_ids():
     return ids
 
 
+# The extracted game content. A loadout the cooked dumps lack can still ship:
+# Brutus (33489299, VH_AssaultLight_PrecastLoadout_T5_BP -- "PrecastLoadout_T5"
+# where every other hull is "T5_PrecastLoadout") is missing from
+# PrecastLoadouts_cooked.jsonl, yet its .uasset is in the Content tree, and so
+# are its pawn (Ships/Assault/Light/T5/VH_AssaultL_Pawn_T5_BP), AI pawn and tier
+# art. It is the T5 after Vindicta in the game's own Oberon tech tree (operator
+# screenshot, 2026-09-28). CORRECTED: it was rejected as "removed from the game".
+CONTENT = os.path.normpath(os.path.join(ROOT, "..", "DreadGame", "Content"))
+
+
+def blueprint_on_disk(path):
+    """True when /Game/<path> exists as a .uasset in the extracted Content."""
+    if not path.startswith("/Game/"):
+        return False
+    return os.path.exists(os.path.join(CONTENT, path[len("/Game/"):] + ".uasset"))
+
+
 def normalize(path):
     """Turn a reference slot value into a register path, or None if empty."""
     if not path:
@@ -213,7 +230,7 @@ def main():
         if hull is None or loadout_id is None:
             rejected.append((entry["name"], "loadout path not in ItemIDRegister"))
             continue
-        if cooked_ids is not None and loadout_id not in cooked_ids:
+        if cooked_ids is not None and loadout_id not in cooked_ids and not blueprint_on_disk(entry["path"]):
             rejected.append((entry["name"], f"{loadout_id} has no cooked blueprint -- removed from the game"))
             continue
 

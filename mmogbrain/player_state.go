@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -1148,6 +1149,16 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		shipXP = 0
 	}
 
+	// A hull needs its tech-tree prerequisite researched first. The client
+	// enforces it from the tree it is sent; this refuses a request that skips
+	// it, and charges nothing. Checked before the transaction: the store has
+	// one connection, and a query inside an open transaction waits for itself.
+	if missing, ok := missingHullPrerequisite(playerPID, itemID); ok {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID, "requires": missing}).
+			Info("mmog: YA_UnlockItem refused -- prerequisite hull not researched")
+		return nil
+	}
+
 	tx, err := database.Begin()
 	if err != nil {
 		return fmt.Errorf("unlock item %d: %w", itemID, err)
@@ -1486,6 +1497,59 @@ func purchasedInventoryItemIDs(playerPID string) []int32 {
 	}
 	if err := rows.Err(); err != nil {
 		return ids
+	}
+	return ids
+}
+
+// missingHullPrerequisite reports the prerequisite a hull still lacks, if the
+// item is a tech-tree hull with one. A prerequisite counts once the player has
+// researched or bought it (any player_purchases row) or holds it as an owned
+// ship (the starter fleet is never "purchased").
+func missingHullPrerequisite(playerPID string, itemID int32) (int32, bool) {
+	var prereq []int32
+	for _, item := range techTreeBaseItems() {
+		if !item.module && item.id == itemID {
+			prereq = item.prereq
+			break
+		}
+	}
+	if len(prereq) == 0 {
+		return 0, false
+	}
+	have := map[int32]bool{}
+	for _, id := range researchedOrOwnedItemIDs(playerPID) {
+		have[id] = true
+	}
+	state := mmogPlayerStateForPID(playerPID)
+	for _, l := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		have[l.precastLoadoutID] = true
+	}
+	for _, p := range prereq {
+		if !have[p] {
+			return p, true
+		}
+	}
+	return 0, false
+}
+
+// researchedOrOwnedItemIDs is every item the player has a purchases row for,
+// research-only rows included.
+func researchedOrOwnedItemIDs(playerPID string) []int32 {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return nil
+	}
+	rows, err := database.Query(`SELECT item_id FROM player_purchases WHERE user_id=?`, normalizedPlayerStatePID(playerPID))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []int32
+	for rows.Next() {
+		var id int32
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
 	}
 	return ids
 }

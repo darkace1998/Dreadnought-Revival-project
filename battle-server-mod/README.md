@@ -217,6 +217,65 @@ Log: `match result: <pid> team 1 final 1 kills 3 ... -> mmogbrain: outcome=win c
 `final 0` means the match result was not yet set when the transition started
 (mmogbrain logs `outcome=unknown` and pays it as a loss) -- not verified live yet.
 
+## End-of-match rewards screen (on; `dn_host_no_eom_rewards.txt` turns it off)
+
+The rewards page was empty although mmogbrain paid: the client reads its
+numbers from two structures only the missing server build filled, and both
+logs said "IsInEndOfMatchDataFinalized ... NOT finalized". Right after the
+match result (above), the mod writes mmogbrain's payout into them:
+
+- PRI `+0x800` `m_creditsInfo`: `m_credits` (13 ints, one per `EYXPPoolType`),
+  `m_finalized` `+0x810`, `m_battleID`.
+- PRI `+0x930` -> XP manager, `+0xF8` `m_matchXPInfo`: `m_freeXP` (13 ints),
+  `m_shipsXP` (one `YMatchShipXP` per fleet ship: id, ship XP pools, free XP
+  pools), `m_finalized` `+0x118`, `m_battleID`.
+
+`/battle/result` returns `credit_pools`, `xp_pools`, `ship_xp_pools`,
+`fleet_ships` and `flown_ships` for it. Log:
+`eom rewards: PRI ... written -- scoring pool credits N xp N, N fleet ships (N flown), both finalized`.
+Not verified live yet. If the client files `ShipXpError` reports
+(`client_reports` in mmogbrain), the ship ids do not match what it looks up.
+
+Personal stats are still sent empty (next step).
+
+## Match scores (on; `dn_host_no_scoring.txt` turns it off)
+
+Every score was 0 (issue #67) while kills, deaths and damage counted: the host
+scores events from a table it copies out of the YMmogbrain subsystem
+(`UYScoringEventManager::InitializeData` `0x423610` -> `0x423450`, block
+`+0x43F8`, present flag `+0x4470`), and only the scoring reply parser
+(`0x2A75740`) fills it -- on a logged-in game. The host never logs in.
+
+Before `InitializeData` runs, the mod fetches the table and feeds it through
+the client's own decoder and parser, exactly as a logged-in game would:
+
+```text
+GET http://127.0.0.1:8083/battle/scoring   -> the binary mmog document
+```
+
+It builds a one-slot response holder around those bytes (slot array `+0x27F0`,
+`0x88` each: state `+0x14` = 6, chunk list `+0x18`, length `+0x7C`), points a
+reader (`0x2A57080`) at it, decodes with `0x2A3E450`, and parses into subsystem
+`+0x43F8` with `0x2A75740`. Point values live in mmogbrain
+(`scoring_table.go`).
+
+Log, in order:
+
+```text
+scoring: decoded <n> bytes -> root has 2 fields
+scoring: table LOADED -- <rows> rows, present flag 1
+scoring: building the match table for mode "<mode>"
+```
+
+Team Elimination has an EMPTY mode name, and with the table it crashed the
+host twice (access violation reading `0xfffffff8`, a few minutes in); for an
+empty mode the mod builds no table, so TE scores 0 and runs as it did before.
+
+Rows count only for the modes their `GameModes` lists; mmogbrain lists every
+alias, and the last line shows which name the host really uses. Not verified
+live yet: `NOT loaded` or an `EXCEPTION` line means the decode path is wrong;
+`root has 0 fields` means the document did not decode.
+
 ## Researched ships: any precast on demand
 
 Part of the loadout fix, no switch of its own. The four T1 mediums are only the

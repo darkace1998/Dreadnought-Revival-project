@@ -379,6 +379,9 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	r.HandleFunc("/battle/result", battleResultHandler).Methods(http.MethodGet)
 	// Battle-server mod: a joining player's display name. Loopback only.
 	r.HandleFunc("/battle/player", battlePlayerHandler).Methods(http.MethodGet)
+	// Battle-server mod: the scoring table the host cannot get without a
+	// login. Loopback only; see scoring_table.go.
+	r.HandleFunc("/battle/scoring", battleScoringHandler).Methods(http.MethodGet)
 
 	// Admin endpoints
 	adminSub := r.PathPrefix("/admin").Subrouter()

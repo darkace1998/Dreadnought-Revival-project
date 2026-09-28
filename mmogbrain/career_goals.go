@@ -216,7 +216,7 @@ func appendCareerGoalProgress(b []byte, stack []int, playerPID string) ([]byte, 
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "goalId", goal.id)
 		b = protocol.AppendStringField(b, "progress", strconv.Itoa(int(careerGoalProgressForPlayer(playerPID, goal.id))))
-		b = protocol.AppendStringField(b, "claimed_stage", "0")
+		b = protocol.AppendStringField(b, "claimed_stage", strconv.Itoa(int(careerGoalClaimedStages(playerPID, goal.id))))
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
 	return protocol.AppendObjectEnd(b, stack)

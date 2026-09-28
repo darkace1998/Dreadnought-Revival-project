@@ -914,8 +914,11 @@ static const char *FlownShipsFor(const char *pid) {
 }
 
 // Minimal HTTP/1.0 GET on loopback. Returns the body, or "" on any failure.
-static bool HttpGetLoopback(const char *pathAndQuery, char *body, size_t bodyLen) {
-  body[0] = 0;
+// HttpGetLoopbackRaw fetches pathAndQuery into buf and returns where the body
+// starts and how long it is. Binary-safe: the body may contain NULs (the
+// scoring table is a binary mmog document).
+static bool HttpGetLoopbackRaw(const char *pathAndQuery, char *buf, int bufLen,
+                               const char **bodyOut, int *bodyLenOut) {
   static bool s_wsa = false;
   if (!s_wsa) {
     WSADATA wd;
@@ -957,19 +960,29 @@ static bool HttpGetLoopback(const char *pathAndQuery, char *body, size_t bodyLen
     closesocket(s);
     return false;
   }
-  static char buf[8192];
   int total = 0, got;
-  while (total < (int)sizeof(buf) - 1 &&
-         (got = recv(s, buf + total, (int)sizeof(buf) - 1 - total, 0)) > 0)
+  while (total < bufLen - 1 && (got = recv(s, buf + total, bufLen - 1 - total, 0)) > 0)
     total += got;
   closesocket(s);
   buf[total] = 0;
-  if (strncmp(buf, "HTTP/1.", 7) != 0 || strncmp(buf + 9, "200", 3) != 0)
+  if (total < 12 || strncmp(buf, "HTTP/1.", 7) != 0 || strncmp(buf + 9, "200", 3) != 0)
     return false;
   const char *b = strstr(buf, "\r\n\r\n");
   if (!b)
     return false;
-  strncpy_s(body, bodyLen, b + 4, _TRUNCATE);
+  *bodyOut = b + 4;
+  *bodyLenOut = total - (int)(b + 4 - buf);
+  return true;
+}
+
+static bool HttpGetLoopback(const char *pathAndQuery, char *body, size_t bodyLen) {
+  body[0] = 0;
+  static char buf[8192];
+  const char *b;
+  int n;
+  if (!HttpGetLoopbackRaw(pathAndQuery, buf, (int)sizeof(buf), &b, &n))
+    return false;
+  strncpy_s(body, bodyLen, b, _TRUNCATE);
   return true;
 }
 
@@ -1825,8 +1838,12 @@ static bool MatchIDFromCommandLine(char *out, size_t outLen) {
 
 static int s_round = 0;
 
+static void WriteEomRewards(uint8_t *pri, const char *body, const char *match);
+static bool RewardsScreenEnabled();
+
 static void ReportMatchResult(void *orbitComp) {
-  char pid[80], match[96], path[1536], body[512];
+  char pid[80], match[96], path[1536], body[2048];
+  uint8_t *priOut = nullptr;
   int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
   const char *teamSource = "none";
   float damage = 0;
@@ -1846,6 +1863,7 @@ static void ReportMatchResult(void *orbitComp) {
       Logf("match result: %s has no player state; not reported", pid);
       return;
     }
+    priOut = pri;
     kills = *(int32_t *)(pri + OFF_PRI_KILLS);
     deaths = *(int32_t *)(pri + OFF_PRI_DEATHS);
     assists = *(int32_t *)(pri + OFF_PRI_ASSISTS);
@@ -1899,6 +1917,8 @@ static void ReportMatchResult(void *orbitComp) {
               "&assists=%d&damage=%d&ships=%s",
               match, pid, team, result, kills, deaths, assists, (int)damage, ships);
   bool ok = HttpGetLoopback(path, body, sizeof(body));
+  if (ok && priOut && RewardsScreenEnabled())
+    WriteEomRewards(priOut, body, match);
   for (char *c = body; *c; ++c)
     if (*c == '\n') *c = ' ';
   Logf("match result: %s team %d (%s) final %d kills %d deaths %d assists %d damage %d "
@@ -1907,6 +1927,119 @@ static void ReportMatchResult(void *orbitComp) {
        ok ? "mmogbrain: " : "FAILED (mmogbrain unreachable or refused)", ok ? body : "");
   if (ok)
     ClearFlownShips(pid);
+}
+
+// ---------------------------------------------------------------------------
+// End-of-match rewards screen (on; dn_host_no_eom_rewards.txt turns it off)
+//
+// The screen was empty although mmogbrain pays: the client reads its rewards
+// from two structures that only the missing server build ever filled and
+// finalized. Its own log says "IsInEndOfMatchDataFinalized - Credits info /
+// Match XP is NOT finalized therefore the server closed before EOM was
+// finalized" (AYPlayerControllerBase 0x5BBD20), and the host's says the same.
+// Verified from the exe's reflection data (2026-09-28):
+//
+//   PRI +0x800  m_creditsInfo  FYCreditsInfo (0x28):  +0x00 m_credits
+//               TArray<int32> per EYXPPoolType, +0x10 m_finalized, +0x18
+//               m_battleID FString. Checked at PRI+0x810.
+//   PRI +0x930  -> the XP manager; +0xF8 m_matchXPInfo FYMatchXPInfo (0x38):
+//               +0x00 m_freeXP TArray<int32> per pool, +0x10 m_shipsXP
+//               TArray<YMatchShipXP>, +0x20 m_finalized (checked by 0x401DE0
+//               at +0x118), +0x28 m_battleID.
+//   YMatchShipXP (0x28): +0x00 ship id (int, what 0x3FB0D0 matches),
+//               +0x08 m_shipXp TArray<int32>, +0x18 m_freeXp TArray<int32>.
+//
+// mmogbrain answers /battle/result with the payout split into those pools
+// (credit_pools / xp_pools / ship_xp_pools, 13 each) and the fleet's ship ids,
+// and this writes them in with the engine's own array/string assignment, then
+// sets both finalized flags -- so the screen shows what was actually paid.
+// Replication to the client is the engine's (both are replicated properties).
+// Not verified live yet.
+// ---------------------------------------------------------------------------
+
+#define OFF_PRI_CREDITS_INFO 0x800
+#define OFF_PRI_XP_MANAGER 0x930
+#define OFF_XPM_MATCH_XP 0xF8
+#define REWARD_POOLS 13
+#define MAX_FLEET_SHIPS 16
+#define RVA_OPERATOR_NEW 0xE02DE0 // operator new(size) -> FMemory::Malloc
+
+typedef void *(__fastcall *tOperatorNew)(size_t size);
+
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+static bool RewardsScreenEnabled() {
+  return !SwitchOn("DN_HOST_NO_EOM_REWARDS", "dn_host_no_eom_rewards.txt");
+}
+
+static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
+  char v[512];
+  int32_t credits[REWARD_POOLS] = {}, xp[REWARD_POOLS] = {}, shipXp[REWARD_POOLS] = {};
+  int32_t zero[REWARD_POOLS] = {};
+  int32_t fleet[MAX_FLEET_SHIPS] = {}, flown[MAX_FLEET_SHIPS] = {};
+  if (ParseInts(FieldValue(body, "credit_pools", v, sizeof(v)), credits, REWARD_POOLS) != REWARD_POOLS ||
+      ParseInts(FieldValue(body, "xp_pools", v, sizeof(v)), xp, REWARD_POOLS) != REWARD_POOLS ||
+      ParseInts(FieldValue(body, "ship_xp_pools", v, sizeof(v)), shipXp, REWARD_POOLS) != REWARD_POOLS) {
+    Logf("eom rewards: mmogbrain sent no pools (older mmogbrain?); screen stays empty");
+    return;
+  }
+  int nFleet = ParseInts(FieldValue(body, "fleet_ships", v, sizeof(v)), fleet, MAX_FLEET_SHIPS);
+  int nFlown = ParseInts(FieldValue(body, "flown_ships", v, sizeof(v)), flown, MAX_FLEET_SHIPS);
+
+  wchar_t wmatch[96];
+  int ml = MultiByteToWideChar(CP_UTF8, 0, match, -1, wmatch, 96);
+  FStringMin battleID = {wmatch, ml > 0 ? ml : 1, ml > 0 ? ml : 1};
+  TArrayIntMin creditsArr = {credits, REWARD_POOLS, REWARD_POOLS};
+  TArrayIntMin xpArr = {xp, REWARD_POOLS, REWARD_POOLS};
+  TArrayIntMin shipArr = {shipXp, REWARD_POOLS, REWARD_POOLS};
+  TArrayIntMin zeroArr = {zero, REWARD_POOLS, REWARD_POOLS};
+  tAssign fstr = (tAssign)(g_base + RVA_FSTRING_ASSIGN);
+  tAssign tarr = (tAssign)(g_base + RVA_TARRAY_INT_ASSIGN);
+
+  __try {
+    uint8_t *ci = pri + OFF_PRI_CREDITS_INFO;
+    tarr(ci + 0x00, &creditsArr);
+    ci[0x10] = 1;
+    fstr(ci + 0x18, &battleID);
+
+    uint8_t *xpm = *(uint8_t **)(pri + OFF_PRI_XP_MANAGER);
+    if (!xpm || !IsReadable(xpm + OFF_XPM_MATCH_XP, 0x38)) {
+      Logf("eom rewards: credits written; PRI %p has no XP manager, match XP not written", pri);
+      return;
+    }
+    uint8_t *mx = xpm + OFF_XPM_MATCH_XP;
+    tarr(mx + 0x00, &xpArr);
+    uint8_t *ships = nullptr;
+    if (nFleet > 0) {
+      ships = (uint8_t *)((tOperatorNew)(g_base + RVA_OPERATOR_NEW))((size_t)nFleet * 0x28);
+      if (!ships) {
+        Logf("eom rewards: allocation failed; match XP not written");
+        return;
+      }
+      memset(ships, 0, (size_t)nFleet * 0x28);
+      for (int i = 0; i < nFleet; ++i) {
+        uint8_t *e = ships + i * 0x28;
+        *(int32_t *)e = fleet[i];
+        bool wasFlown = false;
+        for (int j = 0; j < nFlown; ++j)
+          wasFlown |= flown[j] == fleet[i];
+        tarr(e + 0x08, wasFlown ? &shipArr : &zeroArr); // m_shipXp
+        tarr(e + 0x18, &zeroArr);                        // m_freeXp
+      }
+    }
+    // The previous (empty) array is not freed: it has nothing to free.
+    TArrayIntMin *shipsXP = (TArrayIntMin *)(mx + 0x10);
+    shipsXP->data = (int32_t *)ships;
+    shipsXP->num = nFleet;
+    shipsXP->max = nFleet;
+    mx[0x20] = 1;
+    fstr(mx + 0x28, &battleID);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("eom rewards: EXCEPTION 0x%08X writing PRI %p", GetExceptionCode(), pri);
+    return;
+  }
+  Logf("eom rewards: PRI %p written -- scoring pool credits %d xp %d, %d fleet ships "
+       "(%d flown), both finalized", pri, credits[0], xp[0], nFleet, nFlown);
 }
 
 // ---------------------------------------------------------------------------
@@ -2148,6 +2281,181 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
 
 // Both of the switches below are opt-in separately from the loadout fix,
 // because both change what players see.
+// ---------------------------------------------------------------------------
+// Scoring table (issue #67): every score was 0.
+//
+// The host scores every event (kill, assist, ...) from a table it copies out of
+// the YMmogbrain subsystem: UYScoringEventManager::InitializeData (0x423610) ->
+// 0x423590 -> 0x423450 copies subsystem +0x43F8/+0x4408/+0x4460, but only when
+// the "present" flag at +0x4470 is set. The one writer of that block is the
+// reply parser 0x2A75740, which a logged-in game runs when mmogbrain answers
+// its scoring request (dispatcher 0x2A2574D, slot +0x3680). The host never logs
+// in, so the flag stayed 0 and every event was worth 0 -- kills, deaths and
+// damage were counted, the SCORE was not. (Verified from the exe 2026-09-28.)
+//
+// So, before InitializeData runs, this fetches the scoring document from
+// mmogbrain (GET /battle/scoring, loopback) and feeds it through the client's
+// OWN decoder and parser -- supplying the data a logged-in game would have had,
+// not writing a score:
+//
+//   1. A one-slot response holder, laid out like the client's (slot array at
+//      +0x27F0, 0x88 bytes each): key +0x00, state +0x14, chunk list +0x18
+//      (each chunk = next pointer + 0x7FF8 data bytes), length +0x7C. The
+//      reader's Read (0x2A7BE30 -> 0x2A7BFB0) only walks that chunk list.
+//   2. A reader initialised by 0x2A57080 and pointed at it the way 0x2A65850
+//      does after matching a request id: +0x38 holder, +0x40 slot, +0x08 = 0.
+//   3. 0x2A3E450(reader, root) decodes the document into the node tree, as
+//      the dispatcher does for every reply (0x2A23539).
+//   4. 0x2A75740(subsystem + 0x43F8, root) parses ScoringTable and
+//      ScoringParamsTable and sets the flag (+0x78 of that block = +0x4470).
+//
+// The subsystem is found exactly as 0x423450 finds it: FName("YMmogbrain")
+// (0xC9CF20) -> FindModule (0xCA9060) -> vtable +0x48.
+// ---------------------------------------------------------------------------
+
+#define RVA_SCORING_INIT_DATA 0x423610 // UYScoringEventManager::InitializeData
+#define RVA_SCORING_COPY 0x423450      // copies the subsystem block; arg 2 = mode name
+#define RVA_FNAME_FROM_ANSI 0xC9CF20
+#define RVA_FIND_MODULE 0xCA9060
+#define RVA_MMOG_READER_INIT 0x2A57080
+#define RVA_MMOG_DECODE 0x2A3E450
+#define RVA_SCORING_PARSE 0x2A75740
+#define OFF_MMOG_SCORING 0x43F8
+#define OFF_MMOG_SCORING_PRESENT 0x4470
+#define OFF_MMOG_SLOTS 0x27F0
+#define MMOG_SLOT_SIZE 0x88
+#define MMOG_CHUNK_DATA 0x7FF8
+
+typedef void *(__fastcall *tFNameFromAnsi)(void *out, const char *name, int findType);
+typedef void *(__fastcall *tFindModule)(uint64_t name);
+typedef void *(__fastcall *tModuleGetClient)(void *module);
+typedef void *(__fastcall *tMmogReaderInit)(void *reader);
+typedef void(__fastcall *tMmogDecode)(void *reader, void *root);
+typedef void(__fastcall *tScoringParse)(void *dest, void *root);
+typedef void(__fastcall *tScoringInitData)(void *mgr);
+typedef void(__fastcall *tScoringCopy)(void *table, void *modeName);
+
+static tScoringInitData g_origScoringInitData = nullptr;
+static tScoringCopy g_origScoringCopy = nullptr;
+
+static uint8_t *MmogClient() {
+  uint64_t name[2] = {};
+  void *fn = ((tFNameFromAnsi)(g_base + RVA_FNAME_FROM_ANSI))(name, "YMmogbrain", 1);
+  if (!fn)
+    return nullptr;
+  void *module = ((tFindModule)(g_base + RVA_FIND_MODULE))(*(uint64_t *)fn);
+  if (!module || !IsReadable(module, 8))
+    return nullptr;
+  void **vt = *(void ***)module;
+  if (!IsReadable(vt, 0x50))
+    return nullptr;
+  return (uint8_t *)((tModuleGetClient)vt[0x48 / 8])(module);
+}
+
+// Runs the document through the client's decoder and scoring parser. Returns
+// the number of rows the parser stored, or -1.
+static int ParseScoringDocument(uint8_t *client, const uint8_t *doc, int len) {
+  // Response holder with one slot. Deliberately never freed: the parser copies
+  // what it needs, and this runs once per host process.
+  uint8_t *holder = (uint8_t *)calloc(1, OFF_MMOG_SLOTS + MMOG_SLOT_SIZE);
+  if (!holder)
+    return -1;
+  uint8_t *slot = holder + OFF_MMOG_SLOTS;
+  *(int32_t *)(slot + 0x14) = 6; // complete
+  void **link = (void **)(slot + 0x18);
+  for (int off = 0; off < len; off += MMOG_CHUNK_DATA) {
+    int n = len - off < MMOG_CHUNK_DATA ? len - off : MMOG_CHUNK_DATA;
+    uint8_t *chunk = (uint8_t *)calloc(1, 8 + MMOG_CHUNK_DATA);
+    if (!chunk)
+      return -1;
+    memcpy(chunk + 8, doc + off, n);
+    *link = chunk;
+    link = (void **)chunk;
+  }
+  *(int32_t *)(slot + 0x7C) = len;
+
+  uint8_t *reader = (uint8_t *)calloc(1, 0x100);
+  uint8_t *root = (uint8_t *)calloc(1, 0x100);
+  if (!reader || !root)
+    return -1;
+  ((tMmogReaderInit)(g_base + RVA_MMOG_READER_INIT))(reader);
+  *(void **)(reader + 0x38) = holder;
+  *(int32_t *)(reader + 0x40) = 0;
+  *(int32_t *)(reader + 0x08) = 0;
+
+  __try {
+    ((tMmogDecode)(g_base + RVA_MMOG_DECODE))(reader, root);
+    Logf("scoring: decoded %d bytes -> root has %d fields", len, *(int32_t *)(root + 0x20));
+    ((tScoringParse)(g_base + RVA_SCORING_PARSE))(client + OFF_MMOG_SCORING, root);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("scoring: EXCEPTION 0x%08X while decoding/parsing the table", GetExceptionCode());
+    return -1;
+  }
+  return *(int32_t *)(client + OFF_MMOG_SCORING + 8);
+}
+
+static void FeedScoringTable() {
+  uint8_t *client = nullptr;
+  __try {
+    client = MmogClient();
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    client = nullptr;
+  }
+  if (!client || !IsReadable(client + OFF_MMOG_SCORING, 0x80)) {
+    Logf("scoring: YMmogbrain subsystem not found; scores stay 0");
+    return;
+  }
+  if (client[OFF_MMOG_SCORING_PRESENT]) {
+    Logf("scoring: table already present (%d rows)", *(int32_t *)(client + OFF_MMOG_SCORING + 8));
+    return;
+  }
+  static char buf[256 * 1024];
+  const char *body;
+  int n;
+  if (!HttpGetLoopbackRaw("/battle/scoring", buf, (int)sizeof(buf), &body, &n) || n <= 6) {
+    Logf("scoring: GET /battle/scoring failed; scores stay 0");
+    return;
+  }
+  int rows = ParseScoringDocument(client, (const uint8_t *)body, n);
+  Logf("scoring: table %s -- %d rows, present flag %d",
+       rows > 0 && client[OFF_MMOG_SCORING_PRESENT] ? "LOADED" : "NOT loaded", rows,
+       client[OFF_MMOG_SCORING_PRESENT]);
+}
+
+static void __fastcall HookScoringInitData(void *mgr) {
+  FeedScoringTable();
+  g_origScoringInitData(mgr);
+}
+
+// Logs the mode name the table is filtered by: a row counts only when its
+// GameModes lists it (0x424190). mmogbrain lists every alias; this line shows
+// which one the host actually uses.
+static void __fastcall HookScoringCopy(void *table, void *modeName) {
+  const wchar_t *mode = L"";
+  __try {
+    if (modeName && *(int32_t *)((uint8_t *)modeName + 8) > 0)
+      mode = *(const wchar_t **)modeName;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    mode = L"?";
+  }
+  // Team Elimination has NO mode name, and with the table loaded both TE
+  // matches crashed the host a few minutes in (11:40 and 16:02 on 2026-09-28:
+  // EXCEPTION_ACCESS_VIOLATION reading 0xfffffff8, the same in both); the two
+  // TE matches before the table existed ended cleanly. An empty mode name
+  // makes the filter (0x424190) take EVERY row, so TE ran the table with no
+  // mode context. GUESS: some reward/ribbon path looks the mode up and reads
+  // through a missing entry (null - 8). The crashing function is not
+  // identified (no minidump: this DLL stubs WER). So an empty mode builds no
+  // table -- TE scores 0, as before, and does not crash.
+  if (!mode[0]) {
+    Logf("scoring: mode name is EMPTY (Team Elimination) -- table not built, scores "
+         "stay 0 in this mode (it crashed the host with the table)");
+    return;
+  }
+  Logf("scoring: building the match table for mode \"%ls\"", mode);
+  g_origScoringCopy(table, modeName);
+}
+
 static DWORD WINAPI PostLoginInstallThread(LPVOID);
 
 // SwitchOn reports whether an env var is "1" or a marker file sits beside the
@@ -2436,6 +2744,17 @@ static DWORD WINAPI Startup(LPVOID) {
                       RVA_CLIENT_SET_PLAYER_RESTRICTIONS_IMPL,
                       (void *)&HookClientSetPlayerRestrictions,
                       (void **)&g_origClientSetPlayerRestrictions);
+
+  // On by default: without it every score is 0. Opt out to diagnose.
+  if (!SwitchOn("DN_HOST_NO_SCORING", "dn_host_no_scoring.txt")) {
+    InstallSwitchedHook("scoring table (UYScoringEventManager::InitializeData)",
+                        RVA_SCORING_INIT_DATA, (void *)&HookScoringInitData,
+                        (void **)&g_origScoringInitData);
+    InstallSwitchedHook("scoring mode log (scoring table copy)", RVA_SCORING_COPY,
+                        (void *)&HookScoringCopy, (void **)&g_origScoringCopy);
+  } else
+    Logf("scoring: OFF (dn_host_no_scoring.txt / DN_HOST_NO_SCORING=1). Every "
+         "score stays 0.");
 
   if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
     InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
