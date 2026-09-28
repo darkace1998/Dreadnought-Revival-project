@@ -2846,8 +2846,13 @@ func techTreeBaseItems() []techTreeItem {
 			logrus.WithField("hull_line", hull.hullLine).Warn("mmog: tech tree hull line has no manufacturer")
 			continue
 		}
+		// The game's own unlock tree (tech_tree_links.go). A hull it does
+		// not cover falls back to the previous tier of its own line.
 		var prereq []int32
-		if previous, ok := byLine[hull.hullLine][hull.tier-1]; ok {
+		if parent, ok := techTreeHullParents[hull.loadoutID]; ok {
+			prereq = []int32{parent}
+		} else if previous, ok := byLine[hull.hullLine][hull.tier-1]; ok && !techTreeRootHulls[hull.loadoutID] {
+			logrus.WithField("hull", hull.name).Warn("mmog: tech tree hull has no entry in techTreeHullParents; using its line's previous tier")
 			prereq = []int32{previous}
 		}
 		items = append(items, techTreeItem{

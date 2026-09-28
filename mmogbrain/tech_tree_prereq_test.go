@@ -424,3 +424,74 @@ func TestTechTreeNodesDoNotShareAGridCell(t *testing.T) {
 		columnOfLine[line] = item.position
 	}
 }
+
+// The unlock table covers every base hull: each is a root or has a parent one
+// tier below it, and no parent is missing from the roster.
+func TestTechTreeHullParentsCoverTheRoster(t *testing.T) {
+	tierOf := map[int32]int32{}
+	nameOf := map[int32]string{}
+	for _, h := range baseShipLoadouts {
+		tierOf[h.loadoutID], nameOf[h.loadoutID] = h.tier, h.name
+	}
+	for _, h := range baseShipLoadouts {
+		parent, ok := techTreeHullParents[h.loadoutID]
+		if techTreeRootHulls[h.loadoutID] {
+			if ok || h.tier != 1 {
+				t.Errorf("root %s (T%d) should be tier 1 with no parent", h.name, h.tier)
+			}
+			continue
+		}
+		if !ok {
+			t.Errorf("%s (T%d, %d) has no entry in techTreeHullParents", h.name, h.tier, h.loadoutID)
+			continue
+		}
+		if _, known := tierOf[parent]; !known {
+			t.Errorf("%s's parent %d is not in the roster", h.name, parent)
+		} else if tierOf[parent] != h.tier-1 {
+			t.Errorf("%s (T%d) <- %s (T%d): parent must be one tier below", h.name, h.tier, nameOf[parent], tierOf[parent])
+		}
+	}
+	// The items the tech tree sends carry exactly these parents.
+	for _, item := range techTreeBaseItems() {
+		if item.module || item.hero {
+			continue
+		}
+		want, ok := techTreeHullParents[item.id]
+		if ok && (len(item.prereq) != 1 || item.prereq[0] != want) {
+			t.Errorf("%s sent with prereq %v, want [%d]", nameOf[item.id], item.prereq, want)
+		}
+	}
+}
+
+// Research of a hull is refused until its parent is researched or owned.
+func TestResearchNeedsTheParentHull(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	owned := map[int32]bool{}
+	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(pid), pid) {
+		owned[l.precastLoadoutID] = true
+	}
+	// A hull whose parent the new player does not have.
+	var child, parent int32
+	for c, p := range techTreeHullParents {
+		if !owned[p] && !owned[c] {
+			child, parent = c, p
+			break
+		}
+	}
+	if child == 0 {
+		t.Skip("the starter fleet owns every parent")
+	}
+	if missing, ok := missingHullPrerequisite(pid, child); !ok || missing != parent {
+		t.Fatalf("hull %d without parent %d: missing=%d ok=%v", child, parent, missing, ok)
+	}
+	if _, err := database.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,'ship',0,'freexp')`, pid, parent); err != nil {
+		t.Fatal(err)
+	}
+	if missing, ok := missingHullPrerequisite(pid, child); ok {
+		t.Errorf("hull %d still blocked by %d after researching its parent", child, missing)
+	}
+}

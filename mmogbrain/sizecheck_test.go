@@ -176,7 +176,12 @@ var targetSizes = map[string]int{
 	// (Trafalgar 4 -> 9, the tier-1 starters 0 -> 5). Still well inside the
 	// ~26KB proven safe; TestTechTreeFitsTheRingWhenEverythingIsOwned covers
 	// the owned-everything case.
-	"YA_GetTechTree": 14051,
+	// 14051 -> 14296 (+245): Brutus (AssaultLight T5, 33489299) joins the roster
+	// -- its asset is named "PrecastLoadout_T5", the cooked dump missed it and the
+	// generator had dropped it as removed -- and every hull above tier 1 now carries
+	// its prerequisite from the game's own unlock tree (tech_tree_links.go), where
+	// 11 line roots had none (2026-09-28). ~26KB is proven safe.
+	"YA_GetTechTree": 14296,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
