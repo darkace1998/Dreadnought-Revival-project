@@ -100,3 +100,32 @@ func TestNormalizeFingerprint(t *testing.T) {
 		t.Errorf("display = %q", got)
 	}
 }
+
+func TestRegisterCheck(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/register-check" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		taken := r.URL.Query().Get("username") == "alice" || r.URL.Query().Get("email") == "a@x.org"
+		_ = json.NewEncoder(w).Encode(map[string]any{"taken": taken})
+	}))
+	defer srv.Close()
+	c := &DirectoryClient{BaseURL: srv.URL}
+
+	if taken, err := c.RegisterCheck("alice", "b@x.org"); err != nil || !taken {
+		t.Fatalf("taken name: %v %v", taken, err)
+	}
+	if taken, err := c.RegisterCheck("bob", "a@x.org"); err != nil || !taken {
+		t.Fatalf("taken address: %v %v", taken, err)
+	}
+	if taken, err := c.RegisterCheck("bob", "b@x.org"); err != nil || taken {
+		t.Fatalf("free name+address: %v %v", taken, err)
+	}
+	if _, err := c.RegisterCheck("", ""); err == nil {
+		t.Fatal("expected an error for empty input")
+	}
+	if _, err := (&DirectoryClient{}).RegisterCheck("alice", "a@x.org"); err == nil {
+		t.Fatal("expected an error with no directory configured")
+	}
+}

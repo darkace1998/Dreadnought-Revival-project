@@ -84,6 +84,12 @@ var migrations = []string{
 		updated_at TEXT NOT NULL DEFAULT (datetime('now')),
 		PRIMARY KEY (user_id, cluster_id)
 	)`,
+	// Operator settings (key/value): currently the main cluster for manual
+	// rollouts — the one whose state "Sync from main" copies everywhere.
+	`CREATE TABLE IF NOT EXISTS settings (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL DEFAULT ''
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

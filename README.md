@@ -516,6 +516,25 @@ How it works:
   newer state (local unsynced earnings are never clobbered by a stale
   master copy); friendships are pair rows that upsert with accepted-wins;
   career-claim counts merge with MAX. Unfriending does not propagate.
+- **Register once.** Create the account on any cluster; everywhere else just
+  sign in with the same email and password — identity roams with everything
+  else. The browser pre-checks the directory mirror (`GET /register-check`)
+  and every cluster rejects a taken callsign or address with "already
+  registered" (pulled accounts count: roamed identities land in the local
+  user table, so the local 409 covers them). Do not create a second account
+  with the same name or address: accounts are keyed by id, and two created
+  inside the sync window stay two accounts.
+- **Manual sync from the directory dashboard.** **Sync all now** triggers a
+  cycle on every cluster with an agent URL; **roll out** copies one
+  designated main cluster everywhere (forced apply, converge-not-wipe —
+  accounts that exist only elsewhere are kept). If it happens anyway, the agent
+  skips the duplicate on apply instead of failing the whole pull, and the
+  local row wins by staying.
+- **Bans are global.** A ban issued on one cluster lands on every synced
+  cluster: the ban rows roam with the identity, each cluster maintains
+  `banned_at` from them, and login is refused while it is set. Lifting a
+  ban propagates as an empty set — the account is playable everywhere again
+  after the next pull. No per-cluster re-banning, no appeal shopping.
 - **One account, one match.** Every push carries each user's live state
   (active match slot or not); the browser asks `GET /presence/{user_id}`
   before enabling Play — and again at launch — and blocks with the other

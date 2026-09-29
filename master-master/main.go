@@ -124,6 +124,8 @@ func newAPIRouter(h *handlers.Handler, log *logrus.Logger) http.Handler {
 	r.HandleFunc("/sync/pull", h.SyncPull).Methods(http.MethodGet)
 	// Launcher presence check: public (see SyncPresence for the reasoning).
 	r.HandleFunc("/presence/{user_id}", h.SyncPresence).Methods(http.MethodGet)
+	// Launcher registration pre-check: public (see SyncRegisterCheck).
+	r.HandleFunc("/register-check", h.SyncRegisterCheck).Methods(http.MethodGet)
 	return r
 }
 
@@ -146,9 +148,9 @@ func newAdminRouter(h *handlers.Handler, password string, log *logrus.Logger) ht
 	admin.HandleFunc("/api/clusters/{id}/secret", h.AdminSecret).Methods(http.MethodPost)
 	admin.HandleFunc("/api/synclog", h.AdminSyncLog).Methods(http.MethodGet)
 	admin.HandleFunc("/api/syncusers", h.AdminSyncUsers).Methods(http.MethodGet)
-	admin.HandleFunc("/api/clusters/{id}/secret", h.AdminSecret).Methods(http.MethodPost)
-	admin.HandleFunc("/api/synclog", h.AdminSyncLog).Methods(http.MethodGet)
-	admin.HandleFunc("/api/syncusers", h.AdminSyncUsers).Methods(http.MethodGet)
+	admin.HandleFunc("/api/sync-settings", h.AdminSyncSettings).Methods(http.MethodGet, http.MethodPost)
+	admin.HandleFunc("/api/sync-now", h.AdminSyncNow).Methods(http.MethodPost)
+	admin.HandleFunc("/api/rollout", h.AdminRollout).Methods(http.MethodPost)
 	return r
 }
 

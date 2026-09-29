@@ -181,6 +181,18 @@ player. Design notes:
 - **The cluster stores it** in `run/sync.env` (0600), either via the agent's
   `POST /sync/key` endpoint (https only, first write wins — a stored secret
   is never overwritten remotely) or by hand + agent restart.
+- **Register once, sign in everywhere.** The account is created on one
+  cluster; every other cluster takes the same email + password (identity
+  roams with the rest). The browser pre-checks the mirror
+  (`GET /register-check`) and each cluster answers 409 to a taken callsign
+  or address — pulled accounts count, so "already registered" fires across
+  clusters too. A name registered twice inside the sync window stays two
+  accounts (keyed by id, not email); the agent skips the duplicate on apply
+  instead of failing the whole pull.
+- **Bans are global.** Ban rows roam with the identity; every synced cluster
+  maintains `banned_at` from them and refuses login while it is set. An
+  unban propagates as an empty set — no re-banning per cluster, no appeal
+  shopping.
 - **`sync-agent` binary** (own module, in the normal start/stop scripts):
   every `SYNC_INTERVAL` (60 s) it pushes every local user and pulls remote
   changes; needs `SYNC_MASTER_URL` + `CLUSTER_NAME`, waits without a secret.
@@ -208,6 +220,17 @@ player. Design notes:
   never deletes the other's row. Career claims (`claimed_stages`, monotonic)
   merge per key with MAX, so claiming on two clusters between syncs adds up
   instead of reverting. Unfriending does not propagate (no delete tombstone).
+- **Manual sync from the directory dashboard.** **Sync all now** triggers a
+  normal push/pull cycle on every cluster with an agent URL
+  (`POST {agent_url}/sync/now`, throttled to one run per 10 s per agent, no
+  secret needed — a run is idempotent). **Roll out** copies one designated
+  main cluster everywhere: the main cluster pushes first, then every other
+  cluster applies everything forced (even older snapshots) and pushes —
+  afterwards every account the main cluster has reads identically on all of
+  them. Accounts that exist only elsewhere are kept, never deleted. If the
+  main cluster fails, nobody else is touched. The main cluster is picked in
+  the dashboard and stored in the directory DB. Every manual run lands in
+  the sync audit log like interval traffic.
 - **Not synced, on purpose:** sessions (login tokens stay local),
   queue/matches/slots (live matchmaking), battle results + match history
   (per-cluster audit), chat.

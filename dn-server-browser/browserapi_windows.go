@@ -361,6 +361,11 @@ func (a *browserAPI) ConfirmCert() map[string]any {
 	return map[string]any{"ok": true}
 }
 
+// accountTakenMessage is the one answer for every "already registered"
+// path: directory pre-check, same-cluster 409, or roamed-account 409.
+// Always names the way out (sign in), never which field collided.
+const accountTakenMessage = "That callsign or email is already registered — sign in instead of creating a new account."
+
 // Submit signs in (or registers then signs in) on the active cluster.
 // Credentials are stored per cluster, never shared between clusters.
 func (a *browserAPI) Submit(mode, username, identifier, password string) map[string]any {
@@ -382,7 +387,21 @@ func (a *browserAPI) Submit(mode, username, identifier, password string) map[str
 		if len(password) < 6 {
 			return fail("Use at least 6 characters for the password.")
 		}
+		// Global pre-check: is the name or address taken on ANY cluster?
+		// Fail-open — an unreachable directory just yields to the cluster's
+		// own 409 below, which also covers roamed accounts once pulled.
+		a.mu.Lock()
+		directory := strings.TrimSpace(a.cfg.Directory)
+		a.mu.Unlock()
+		if directory != "" {
+			if taken, err := (&DirectoryClient{BaseURL: directory}).RegisterCheck(username, identifier); err == nil && taken {
+				return fail(accountTakenMessage)
+			}
+		}
 		if err := registerAccount(profileAuthURL, username, identifier, password); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "already registered") {
+				return fail(accountTakenMessage)
+			}
 			return fail(capitalise(err.Error()))
 		}
 	}

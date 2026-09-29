@@ -39,12 +39,35 @@ const masterAdminPageHTML = `<!doctype html>
   dialog { background:#0c141d; color:#d8e2ea; border:1px solid #2f5a78; border-radius:8px; padding:20px; width:min(480px,92vw); }
   dialog input { width:100%; padding:9px 11px; font:inherit; color:#e6eef5; background:#0c1621;
     border:1px solid #24405a; border-radius:6px; box-sizing:border-box; }
+  dialog input { width:100%; padding:9px 11px; font:inherit; color:#e6eef5; background:#0c1621;
+    border:1px solid #24405a; border-radius:6px; box-sizing:border-box; }
   dialog menu { display:flex; justify-content:flex-end; gap:8px; padding:0; margin:14px 0 0; }
+  select { padding:7px 10px; font:inherit; font-size:13px; color:#e6eef5; background:#0c1621;
+    border:1px solid #24405a; border-radius:6px; max-width:260px; }
+  label.dim { color:#7f93a5; font-size:12.5px; }
 </style>
 <h1>Cluster directory</h1>
 <p class="note">Every registered cluster, including stale and blocked ones. Browsers only see fresh online rows.</p>
 <div class="row"><button onclick="load()">↻ Reload</button><span id="count"></span></div>
 <div class="msg" id="msg"></div>
+<h2>Manual sync</h2>
+<p class="note">Trigger a push/pull cycle on the clusters right now instead of waiting for the
+  next interval. <b>Roll out</b> copies the main cluster everywhere (forced): the main cluster
+  pushes first, then every other cluster applies everything — even older snapshots — and pushes.
+  Accounts that exist only elsewhere are kept, never deleted. Clusters without an agent URL are
+  skipped (sync still runs on its interval once they push). Blocked clusters sync like everyone
+  else; block only hides them from browsers.</p>
+<div class="row">
+  <button onclick="syncNow()">Sync all now</button>
+  <label class="dim" for="mainSel">Main cluster:</label>
+  <select id="mainSel" onchange="saveMain()"></select>
+  <button onclick="rollout()">Roll out main → all</button>
+</div>
+<div class="msg" id="syncmsg"></div>
+<table>
+  <thead><tr><th>Cluster</th><th>Pushed</th><th>Applied</th><th>Status</th><th>Detail</th></tr></thead>
+  <tbody id="syncrows"><tr><td colspan="5">No manual sync yet.</td></tr></tbody>
+</table>
 <h2>Clusters</h2>
 <table>
   <thead><tr><th>Name</th><th>Status</th><th>Players</th><th>Servers</th><th>Address</th><th>Contact</th><th>Sync secret</th><th>Last sync</th><th>Actions</th></tr></thead>
@@ -77,6 +100,7 @@ const masterAdminPageHTML = `<!doctype html>
   const $ = id => document.getElementById(id);
   const esc = v => String(v == null ? "" : v);
   let motdId = null;
+  let lastClusters = [];
   function say(t, bad) { $('msg').textContent = t; $('msg').className = 'msg ' + (bad ? 'bad' : 'good'); }
   async function call(method, path, body) {
     const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
@@ -145,9 +169,78 @@ const masterAdminPageHTML = `<!doctype html>
         tb.append(tr);
       }
       if (!tb.children.length) tb.innerHTML = '<tr><td colspan="10">No clusters registered yet.</td></tr>';
+      lastClusters = d.clusters || [];
     } catch (e) { say(String(e && e.message || e), true); }
+    loadMain(lastClusters);
     loadUsers();
     loadSyncLog();
+  }
+  function saySync(t, bad) { $('syncmsg').textContent = t; $('syncmsg').className = 'msg ' + (bad ? 'bad' : 'good'); }
+  function renderSyncRows(main, results) {
+    const tb = $('syncrows');
+    tb.textContent = '';
+    const row = (name, pushed, applied, ok, detail, star) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td>';
+      const t = tr.children;
+      t[0].textContent = (star ? '★ ' : '') + name;
+      t[1].textContent = pushed;
+      t[2].textContent = applied;
+      t[3].innerHTML = ok ? '<span class="badge ok">ok</span>' : '<span class="badge bad">failed</span>';
+      t[4].textContent = detail || '–';
+      tb.append(tr);
+    };
+    if (main) row(main.name + ' (main)', main.pushed, main.applied, main.ok, main.detail, true);
+    for (const r of (results || [])) row(r.name, r.pushed, r.applied, r.ok, r.detail, false);
+    if (!tb.children.length) tb.innerHTML = '<tr><td colspan="5">No cluster has an agent URL yet.</td></tr>';
+  }
+  async function loadMain(clusters) {
+    const s = $('mainSel');
+    s.textContent = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '— pick the main cluster —';
+    s.append(none);
+    for (const c of (clusters || [])) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.name + (c.agent_url ? '' : ' (no agent URL)');
+      s.append(o);
+    }
+    try {
+      const d = await call('GET', '/admin/api/sync-settings');
+      s.value = d.main_cluster_id || '';
+    } catch (e) { saySync(String(e && e.message || e), true); }
+  }
+  async function saveMain() {
+    try {
+      await call('POST', '/admin/api/sync-settings', { main_cluster_id: $('mainSel').value });
+      saySync('Main cluster saved.');
+    } catch (e) { saySync(String(e && e.message || e), true); }
+  }
+  async function syncNow() {
+    saySync('Triggering every cluster…');
+    try {
+      const d = await call('POST', '/admin/api/sync-now');
+      renderSyncRows(null, d.results);
+      const failed = (d.results || []).filter(r => !r.ok).length;
+      saySync(failed ? (d.count - failed) + ' of ' + d.count + ' clusters synced, ' + failed + ' failed.'
+        : 'All ' + d.count + ' clusters synced.', failed > 0);
+      loadSyncLog();
+    } catch (e) { saySync(String(e && e.message || e), true); }
+  }
+  async function rollout() {
+    const main = $('mainSel').value;
+    if (!main) { saySync('Pick the main cluster first.', true); return; }
+    if (!confirm('Copy the main cluster state to every other cluster (forced)? Accounts that exist only elsewhere are kept.')) return;
+    saySync('Main cluster pushes, then everyone else applies…');
+    try {
+      const d = await call('POST', '/admin/api/rollout');
+      renderSyncRows(d.main, d.results);
+      const failed = (d.results || []).filter(r => !r.ok).length;
+      saySync(failed ? 'Rolled out with ' + failed + ' failure(s).' : 'Rolled out to ' + d.count + ' cluster(s).', failed > 0);
+      loadSyncLog();
+    } catch (e) { saySync(String(e && e.message || e), true); }
   }
   async function loadUsers() {
     try {
@@ -191,9 +284,6 @@ const masterAdminPageHTML = `<!doctype html>
         tb.append(tr);
       }
       if (!tb.children.length) tb.innerHTML = '<tr><td colspan="7">No sync traffic yet.</td></tr>';
-    } catch (e) { say(String(e && e.message || e), true); }
-  }
-      if (!tb.children.length) tb.innerHTML = '<tr><td colspan="9">No clusters registered yet.</td></tr>';
     } catch (e) { say(String(e && e.message || e), true); }
   }
   $('motdCancel').onclick = () => $('motdDlg').close();

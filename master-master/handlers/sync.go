@@ -1,14 +1,19 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -388,6 +393,264 @@ func (h *Handler) SyncPresence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"in_match": inMatch, "cluster": cluster})
 }
 
+// SyncRegisterCheck handles GET /register-check?username=&email= — the
+// launcher's "is this name or address already taken anywhere?" pre-check
+// before creating an account on one cluster. It answers {taken} from the
+// account mirror (exact match, same semantics as each cluster's own 409).
+// Public like presence: registration itself is already a taken-oracle
+// (409 vs 201 per cluster), so this adds no new capability, only one query
+// instead of one per cluster. Unknown (empty mirror) means not taken — the
+// cluster's own registration stays authoritative and keeps its 409.
+func (h *Handler) SyncRegisterCheck(w http.ResponseWriter, r *http.Request) {
+	username := strings.TrimSpace(r.URL.Query().Get("username"))
+	email := strings.TrimSpace(r.URL.Query().Get("email"))
+	if username == "" && email == "" {
+		writeError(w, http.StatusBadRequest, "username or email required")
+		return
+	}
+	// Only the given fields participate: an empty parameter must never
+	// match (no stored row has an empty name or address, but do not rely
+	// on that).
+	query, args := `SELECT 1 FROM sync_users WHERE username=? LIMIT 1`, []any{username}
+	if username == "" {
+		query, args = `SELECT 1 FROM sync_users WHERE email=? LIMIT 1`, []any{email}
+	} else if email != "" {
+		query, args = `SELECT 1 FROM sync_users WHERE username=? OR email=? LIMIT 1`, []any{username, email}
+	}
+	var one int
+	err := h.DB.QueryRow(query, args...).Scan(&one)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"taken": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"taken": one == 1})
+}
+
+// getSetting reads one operator setting ("": unset). Currently only
+// main_cluster_id (the rollout source) lives here.
+func (h *Handler) getSetting(key string) string {
+	var v string
+	if err := h.DB.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&v); err != nil {
+		return ""
+	}
+	return v
+}
+
+func (h *Handler) setSetting(key, value string) error {
+	_, err := h.DB.Exec(`INSERT INTO settings(key,value) VALUES(?,?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
+}
+
+// agentHTTP is the client for talking to cluster agents (secret send,
+// manual sync triggers). It trusts the system roots plus the operator CA
+// (MASTER_TRUST_CA, default certs/ca.crt): self-hosted clusters present
+// self-signed agent certificates from that same CA, and without it both the
+// secret send and the manual sync fail closed on numeric IPs. A missing CA
+// file just means system roots, as before.
+func agentHTTP() *http.Client {
+	pool, _ := x509.SystemCertPool()
+	if pool == nil {
+		pool = x509.NewCertPool()
+	}
+	caPath := strings.TrimSpace(os.Getenv("MASTER_TRUST_CA"))
+	if caPath == "" {
+		caPath = "certs/ca.crt"
+	}
+	if pem, err := os.ReadFile(caPath); err == nil {
+		pool.AppendCertsFromPEM(pem)
+	}
+	return &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool},
+	}}
+}
+
+// triggerAgent runs one push/pull cycle on a cluster agent right now
+// (POST {agent_url}/sync/now). force also applies pulled snapshots older
+// than local state — the rollout path. http and https are both accepted:
+// the trigger carries no secrets either way (unlike the secret send, which
+// stays https-only), and insisting on https would lock out every numeric-IP
+// cluster whose agent certificate no public CA signs.
+func triggerAgent(agentURL string, force bool) (pushed, applied int, err error) {
+	target := strings.TrimRight(strings.TrimSpace(agentURL), "/") + "/sync/now"
+	parsed, perr := url.Parse(target)
+	if perr != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
+		return 0, 0, fmt.Errorf("not an http(s) agent URL")
+	}
+	body, _ := json.Marshal(map[string]bool{"force": force})
+	resp, derr := agentHTTP().Post(target, "application/json", bytes.NewReader(body))
+	if derr != nil {
+		return 0, 0, derr
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("agent answered HTTP %d: %s", resp.StatusCode,
+			strings.TrimSpace(string(raw)))
+	}
+	var doc struct {
+		Pushed  int `json:"pushed"`
+		Applied int `json:"applied"`
+	}
+	if jerr := json.Unmarshal(raw, &doc); jerr != nil {
+		return 0, 0, fmt.Errorf("parse agent response: %w", jerr)
+	}
+	return doc.Pushed, doc.Applied, nil
+}
+
+// syncClusterRow is one cluster with somewhere to trigger.
+type syncClusterRow struct {
+	ID       string
+	Name     string
+	AgentURL string
+}
+
+func (h *Handler) triggerableClusters(exceptID string) []syncClusterRow {
+	rows, err := h.DB.Query(`SELECT id,name,agent_url FROM clusters ORDER BY name`)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+	var out []syncClusterRow
+	for rows.Next() {
+		var c syncClusterRow
+		if err := rows.Scan(&c.ID, &c.Name, &c.AgentURL); err != nil {
+			continue
+		}
+		if c.ID == exceptID || strings.TrimSpace(c.AgentURL) == "" {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// triggerResult is one cluster's manual-sync outcome for the dashboard.
+type triggerResult struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OK      bool   `json:"ok"`
+	Pushed  int    `json:"pushed"`
+	Applied int    `json:"applied"`
+	Detail  string `json:"detail"`
+}
+
+// AdminSyncSettings handles GET/POST /admin/api/sync-settings — the manual
+// sync configuration. The only setting is the main cluster: the rollout
+// source whose state "roll out" copies everywhere. POST {"main_cluster_id":
+// "<id>"|"")}: empty clears it; anything else must be a known cluster.
+func (h *Handler) AdminSyncSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, map[string]any{"main_cluster_id": h.getSetting("main_cluster_id")})
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		MainClusterID string `json:"main_cluster_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	req.MainClusterID = strings.TrimSpace(req.MainClusterID)
+	if req.MainClusterID != "" {
+		var one int
+		if err := h.DB.QueryRow(`SELECT 1 FROM clusters WHERE id=?`, req.MainClusterID).Scan(&one); err != nil {
+			writeError(w, http.StatusNotFound, "cluster not found")
+			return
+		}
+	}
+	if err := h.setSetting("main_cluster_id", req.MainClusterID); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	h.syncLog(req.MainClusterID, "admin", "sync-settings", 0, "ok", "main cluster set")
+	writeJSON(w, http.StatusOK, map[string]any{"main_cluster_id": req.MainClusterID})
+}
+
+// AdminSyncNow handles POST /admin/api/sync-now — the dashboard's "sync
+// everything now" button. It triggers a normal cycle (no force) on every
+// cluster with an agent URL and reports per-cluster results. Slow or dead
+// clusters fail individually; the rest still run.
+func (h *Handler) AdminSyncNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	results := []triggerResult{}
+	for _, c := range h.triggerableClusters("") {
+		pushed, applied, err := triggerAgent(c.AgentURL, false)
+		res := triggerResult{ID: c.ID, Name: c.Name, Pushed: pushed, Applied: applied}
+		if err != nil {
+			res.Detail = err.Error()
+			h.syncLog(c.ID, "admin", "sync-now", 0, "error", err.Error())
+		} else {
+			res.OK = true
+			h.syncLog(c.ID, "admin", "sync-now", pushed+applied, "ok", "")
+		}
+		results = append(results, res)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results, "count": len(results)})
+}
+
+// AdminRollout handles POST /admin/api/rollout — "copy the main cluster
+// everywhere". Step 1 triggers a normal cycle on the main cluster (it pushes
+// its fresh state to the mirror). Step 2 triggers a FORCED cycle on every
+// other cluster: they apply everything the mirror holds, even snapshots
+// older than their local state, then push — so afterwards every account the
+// main cluster has reads identically everywhere. Accounts that exist only
+// elsewhere are kept, never deleted: this is a converge, not a wipe.
+// If step 1 fails, step 2 never runs (nothing is half-rolled-out).
+func (h *Handler) AdminRollout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	mainID := h.getSetting("main_cluster_id")
+	if mainID == "" {
+		writeError(w, http.StatusBadRequest, "no main cluster selected")
+		return
+	}
+	var main syncClusterRow
+	if err := h.DB.QueryRow(`SELECT id,name,agent_url FROM clusters WHERE id=?`,
+		mainID).Scan(&main.ID, &main.Name, &main.AgentURL); err != nil {
+		writeError(w, http.StatusNotFound, "main cluster not found")
+		return
+	}
+	if strings.TrimSpace(main.AgentURL) == "" {
+		writeError(w, http.StatusBadRequest, "main cluster has no agent URL")
+		return
+	}
+	mainPushed, mainApplied, mainErr := triggerAgent(main.AgentURL, false)
+	mainRes := triggerResult{ID: main.ID, Name: main.Name, Pushed: mainPushed, Applied: mainApplied}
+	if mainErr != nil {
+		mainRes.Detail = mainErr.Error()
+		h.syncLog(main.ID, "admin", "rollout", 0, "error", "main push failed: "+mainErr.Error())
+		writeJSON(w, http.StatusBadGateway,
+			map[string]any{"error": "main cluster did not sync — nobody else was touched", "main": mainRes})
+		return
+	}
+	mainRes.OK = true
+	h.syncLog(main.ID, "admin", "rollout", mainPushed+mainApplied, "ok", "main pushed")
+	results := []triggerResult{}
+	for _, c := range h.triggerableClusters(main.ID) {
+		pushed, applied, err := triggerAgent(c.AgentURL, true)
+		res := triggerResult{ID: c.ID, Name: c.Name, Pushed: pushed, Applied: applied}
+		if err != nil {
+			res.Detail = err.Error()
+			h.syncLog(c.ID, "admin", "rollout", 0, "error", err.Error())
+		} else {
+			res.OK = true
+			h.syncLog(c.ID, "admin", "rollout", pushed+applied, "ok", "forced from main")
+		}
+		results = append(results, res)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"main": mainRes, "results": results, "count": len(results)})
+}
+
 // AdminSyncLog handles GET /admin/api/synclog?limit= — the audit trail of
 // every sync communication, newest first.
 func (h *Handler) AdminSyncLog(w http.ResponseWriter, r *http.Request) {
@@ -578,8 +841,9 @@ func (h *Handler) pushSecretToAgent(agentURL, secret string) (bool, string) {
 		return false, err.Error()
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	// Same CA-trusting client as the sync triggers: self-hosted agents
+	// present certificates from the operator CA, not public ones.
+	resp, err := agentHTTP().Do(req)
 	if err != nil {
 		return false, err.Error()
 	}

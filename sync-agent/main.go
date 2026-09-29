@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -115,7 +116,15 @@ type agent struct {
 	log *logrus.Logger
 	dbs databases
 	http *http.Client
+
+	mu sync.Mutex
+	// lastTrigger throttles POST /sync/now: one manual run per window,
+	// so a stuck dashboard (or a curious stranger) cannot spin the loop.
+	lastTrigger time.Time
 }
+
+// syncTriggerWindow is the minimum gap between two manual /sync/now runs.
+const syncTriggerWindow = 10 * time.Second
 
 type syncState struct {
 	LastPull string            `json:"last_pull"`
@@ -175,6 +184,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sync/key", a.handleKeyReceive)
+	mux.HandleFunc("/sync/now", a.handleSyncNow)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","service":"sync-agent"}`))
@@ -196,7 +206,7 @@ func main() {
 	defer stop()
 	ticker := time.NewTicker(cfg.interval)
 	defer ticker.Stop()
-	a.loop(loadState(cfg.stateFile))
+	a.loop(loadState(cfg.stateFile), false)
 	for {
 		select {
 		case <-ctx.Done():
@@ -206,7 +216,7 @@ func main() {
 			log.Info("sync-agent stopped")
 			return
 		case <-ticker.C:
-			a.loop(loadState(cfg.stateFile))
+			a.loop(loadState(cfg.stateFile), false)
 		}
 	}
 }
@@ -281,22 +291,70 @@ func inLiveMatch(db *sql.DB, uid string) bool {
 	return err == nil && one == 1
 }
 
+// handleSyncNow runs one push/pull cycle immediately (the directory
+// dashboard's "sync now" button calls this on every cluster). HTTPS only,
+// like key receive. No secret needed: a run is idempotent (push latest,
+// pull latest) and carries no secrets either way — but it is throttled to
+// one run per window, so neither a stuck dashboard nor a stranger hammering
+// the public agent URL can spin the loop. {"force":true} also applies pulled
+// snapshots older than local state (the rollout path); without it only
+// strictly newer state applies.
+func (a *agent) handleSyncNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if r.TLS == nil {
+		http.Error(w, `{"error":"https only"}`, http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Force bool `json:"force"`
+	}
+	if raw, err := io.ReadAll(io.LimitReader(r.Body, 4096)); err != nil {
+		http.Error(w, `{"error":"cannot read body"}`, http.StatusBadRequest)
+		return
+	} else if len(bytes.TrimSpace(raw)) > 0 {
+		if err := json.Unmarshal(raw, &req); err != nil {
+			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	a.mu.Lock()
+	if wait := syncTriggerWindow - time.Since(a.lastTrigger); wait > 0 {
+		a.mu.Unlock()
+		http.Error(w, fmt.Sprintf(`{"error":"sync ran recently, retry in %d seconds"}`,
+			int(wait.Seconds())+1), http.StatusTooManyRequests)
+		return
+	}
+	a.lastTrigger = time.Now()
+	a.mu.Unlock()
+	pushed, applied := a.loop(loadState(a.cfg.stateFile), req.Force)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "ok", "pushed": pushed, "applied": applied, "forced": req.Force,
+	})
+}
+
 // loop pushes every local user, then pulls remote changes. Errors are
 // logged, never fatal: a down directory must not stop the game.
-func (a *agent) loop(st syncState) {
+// force applies every pulled snapshot even when it is older than local
+// state (manual rollout from the main cluster); without it only strictly
+// newer state applies, so local unsynced earnings are never clobbered.
+func (a *agent) loop(st syncState, force bool) (pushed, applied int) {
 	if a.optedOut() {
 		a.log.Info("sync skipped: opted out of the directory (no replication)")
-		return
+		return 0, 0
 	}
 	secret := loadSecret(a.cfg)
 	if secret == "" {
 		a.log.Warn("sync skipped: no secret (waiting for operator)")
-		return
+		return 0, 0
 	}
 	ids, err := userIDs(a.dbs.auth)
 	if err != nil {
 		a.log.WithError(err).Warn("sync: list users")
-		return
+		return 0, 0
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	var users []any
@@ -323,6 +381,7 @@ func (a *agent) loop(st syncState) {
 	if err := a.post("/sync/push", map[string]any{"users": users, "snapshots": snapshots}, secret, &map[string]any{}); err != nil {
 		a.log.WithError(err).Warn("sync: push failed")
 	} else {
+		pushed = len(users)
 		a.log.WithFields(logrus.Fields{"users": len(users)}).Info("sync: pushed")
 	}
 	var pulled struct {
@@ -334,16 +393,17 @@ func (a *agent) loop(st syncState) {
 	if err := a.get("/sync/pull?since="+urlQueryEscape(st.LastPull), secret, &pulled); err != nil {
 		a.log.WithError(err).Warn("sync: pull failed")
 		a.saveState(st)
-		return
+		return pushed, 0
 	}
-	applied := 0
 	for _, s := range pulled.Snapshots {
 		b := &bundle{UserID: normID(s.UserID), UpdatedAt: s.UpdatedAt, Tables: s.Tables}
 		// Never clobber local unsynced earnings with stale remote state:
 		// apply only what is strictly newer than what we last pushed or
 		// applied for this user. (Without this, earning locally between
 		// push and pull would be overwritten by the older master copy.)
-		if !syncTimeAfter(b.UpdatedAt, st.Users[b.UserID]) {
+		// force (manual rollout) skips this guard: the operator pointed at
+		// the main cluster and means it.
+		if !force && !syncTimeAfter(b.UpdatedAt, st.Users[b.UserID]) {
 			continue
 		}
 		if err := applyBundle(a.dbs, b); err != nil {
@@ -365,6 +425,7 @@ func (a *agent) loop(st syncState) {
 	}
 	a.saveState(st)
 	a.log.WithFields(logrus.Fields{"applied": applied}).Info("sync: pulled")
+	return pushed, applied
 }
 
 // syncTimeAfter reports whether RFC3339 a is strictly after b. Unparseable

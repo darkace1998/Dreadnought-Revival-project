@@ -195,6 +195,47 @@ func TestSyncPresenceBlocksOtherCluster(t *testing.T) {
 	}
 }
 
+func TestSyncRegisterCheck(t *testing.T) {
+	h := testHandler(t)
+	seedSyncCluster(t, h)
+	rec, req := authedSyncReq(t, "POST", "/sync/push", pushPayload("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "2026-09-29T10:00:00Z"), syncTestKey)
+	h.SyncPush(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("push status %d", rec.Code)
+	}
+	check := func(query string) map[string]any {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.SyncRegisterCheck(rec, httptest.NewRequest(http.MethodGet, "/register-check"+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("check %s: status %d", query, rec.Code)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return doc
+	}
+	// pushPayload uses username alice / email a@x.org.
+	if doc := check("?username=alice"); doc["taken"] != true {
+		t.Fatalf("username must be taken: %v", doc)
+	}
+	if doc := check("?email=a@x.org"); doc["taken"] != true {
+		t.Fatalf("email must be taken: %v", doc)
+	}
+	if doc := check("?username=bob&email=b@x.org"); doc["taken"] != false {
+		t.Fatalf("fresh name+address must be free: %v", doc)
+	}
+	if doc := check("?username=alice&email=b@x.org"); doc["taken"] != true {
+		t.Fatalf("taken name with free address must still block: %v", doc)
+	}
+	rec = httptest.NewRecorder()
+	h.SyncRegisterCheck(rec, httptest.NewRequest(http.MethodGet, "/register-check", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty query: got %d, want 400", rec.Code)
+	}
+}
+
 func TestSyncPushLogsEveryCall(t *testing.T) {
 	h := testHandler(t)
 	seedSyncCluster(t, h)
@@ -216,5 +257,183 @@ func TestSyncPushLogsEveryCall(t *testing.T) {
 	}
 	if denied != 1 {
 		t.Errorf("denied rows = %d, want 1", denied)
+	}
+}
+
+// fakeAgents serves any number of cluster agents: path /<tag>/sync/now
+// records the force flag in call order; tags in fail answer HTTP 500.
+func fakeAgents(t *testing.T, calls *[]string, fail map[string]bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tag := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/sync/now")
+		var req struct {
+			Force bool `json:"force"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		force := "false"
+		if req.Force {
+			force = "true"
+		}
+		*calls = append(*calls, tag+":"+force)
+		if fail[tag] {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","pushed":3,"applied":2}`))
+	}))
+}
+
+func seedSyncClusterWithAgent(t *testing.T, h *Handler, id, name, agentURL string) {
+	t.Helper()
+	if _, err := h.DB.Exec(`INSERT INTO clusters(id,name,web_url,battle_ip,agent_url,last_heartbeat,registered_at)
+		VALUES(?,?,?,?,?,datetime('now'),datetime('now'))`,
+		id, name, "https://x.example", "203.0.113.9", agentURL); err != nil {
+		t.Fatalf("seed cluster: %v", err)
+	}
+}
+
+func TestAdminSyncSettings(t *testing.T) {
+	h := testHandler(t)
+	id := seedSyncCluster(t, h)
+
+	get := func() string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.AdminSyncSettings(rec, httptest.NewRequest(http.MethodGet, "/admin/api/sync-settings", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("get: status %d", rec.Code)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		s, _ := doc["main_cluster_id"].(string)
+		return s
+	}
+	post := func(body string) int {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.AdminSyncSettings(rec, httptest.NewRequest(http.MethodPost, "/admin/api/sync-settings",
+			strings.NewReader(body)))
+		return rec.Code
+	}
+	if got := get(); got != "" {
+		t.Fatalf("fresh settings: %q, want empty", got)
+	}
+	if code := post(`{"main_cluster_id":"nope"}`); code != http.StatusNotFound {
+		t.Fatalf("unknown cluster: got %d, want 404", code)
+	}
+	if code := post(`{"main_cluster_id":"` + id + `"}`); code != http.StatusOK {
+		t.Fatalf("set main: got %d", code)
+	}
+	if got := get(); got != id {
+		t.Fatalf("main = %q, want %q", got, id)
+	}
+	if code := post(`{"main_cluster_id":""}`); code != http.StatusOK {
+		t.Fatalf("clear: got %d", code)
+	}
+	if got := get(); got != "" {
+		t.Fatalf("after clear: %q", got)
+	}
+}
+
+func TestAdminSyncNow(t *testing.T) {
+	h := testHandler(t)
+	var calls []string
+	srv := fakeAgents(t, &calls, map[string]bool{"b": true})
+	defer srv.Close()
+	seedSyncClusterWithAgent(t, h, "id-a", "Alpha", srv.URL+"/a")
+	seedSyncClusterWithAgent(t, h, "id-b", "Beta", srv.URL+"/b")
+	seedSyncCluster(t, h) // Sync Cluster: no agent URL, skipped silently.
+
+	rec := httptest.NewRecorder()
+	h.AdminSyncNow(rec, httptest.NewRequest(http.MethodPost, "/admin/api/sync-now", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc struct {
+		Results []triggerResult `json:"results"`
+		Count   int             `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if doc.Count != 2 {
+		t.Fatalf("count = %d, want 2 (agent-less cluster skipped)", doc.Count)
+	}
+	byName := map[string]triggerResult{}
+	for _, r := range doc.Results {
+		byName[r.Name] = r
+	}
+	if !byName["Alpha"].OK || byName["Alpha"].Pushed != 3 || byName["Alpha"].Applied != 2 {
+		t.Fatalf("alpha wrong: %+v", byName["Alpha"])
+	}
+	if byName["Beta"].OK || byName["Beta"].Detail == "" {
+		t.Fatalf("beta must fail with detail: %+v", byName["Beta"])
+	}
+	var logged int
+	if err := h.DB.QueryRow(`SELECT COUNT(*) FROM sync_log WHERE endpoint='sync-now'`).Scan(&logged); err != nil || logged != 2 {
+		t.Fatalf("sync-now log rows = %d (err %v), want 2", logged, err)
+	}
+}
+
+func TestAdminRollout(t *testing.T) {
+	h := testHandler(t)
+	var calls []string
+	srv := fakeAgents(t, &calls, map[string]bool{})
+	defer srv.Close()
+	seedSyncClusterWithAgent(t, h, "id-a", "Alpha", srv.URL+"/a")
+	seedSyncClusterWithAgent(t, h, "id-b", "Beta", srv.URL+"/b")
+	if err := h.setSetting("main_cluster_id", "id-a"); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.AdminRollout(rec, httptest.NewRequest(http.MethodPost, "/admin/api/rollout", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	// Main first without force, then everyone else forced.
+	if len(calls) != 2 || calls[0] != "a:false" || calls[1] != "b:true" {
+		t.Fatalf("call order = %v, want [a:false b:true]", calls)
+	}
+	var doc struct {
+		Main    triggerResult   `json:"main"`
+		Results []triggerResult `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !doc.Main.OK || doc.Main.Name != "Alpha" || len(doc.Results) != 1 || !doc.Results[0].OK {
+		t.Fatalf("unexpected rollout doc: %s", rec.Body.String())
+	}
+}
+
+func TestAdminRolloutAbortsWhenMainFails(t *testing.T) {
+	h := testHandler(t)
+	var calls []string
+	srv := fakeAgents(t, &calls, map[string]bool{"a": true})
+	defer srv.Close()
+	seedSyncClusterWithAgent(t, h, "id-a", "Alpha", srv.URL+"/a")
+	seedSyncClusterWithAgent(t, h, "id-b", "Beta", srv.URL+"/b")
+	if err := h.setSetting("main_cluster_id", "id-a"); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.AdminRollout(rec, httptest.NewRequest(http.MethodPost, "/admin/api/rollout", nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", rec.Code)
+	}
+	if len(calls) != 1 || calls[0] != "a:false" {
+		t.Fatalf("calls = %v, want only the failed main", calls)
+	}
+}
+
+func TestAdminRolloutNeedsMain(t *testing.T) {
+	h := testHandler(t)
+	rec := httptest.NewRecorder()
+	h.AdminRollout(rec, httptest.NewRequest(http.MethodPost, "/admin/api/rollout", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }

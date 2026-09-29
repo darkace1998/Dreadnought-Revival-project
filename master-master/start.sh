@@ -38,6 +38,11 @@ fi
 export ADDR="${ADDR:-:8091}"
 export ADMIN_ADDR="${ADMIN_ADDR:-:8092}"
 export DB_PATH="${DB_PATH:-$RUN_DIR/master-master.db}"
+# Operator CA the directory trusts when talking to cluster agents (secret
+# send + manual sync triggers): self-signed agent certificates from this CA
+# verify, so numeric-IP clusters work without a public CA. Unset falls back
+# to certs/ca.crt when present, else system roots.
+export MASTER_TRUST_CA="${MASTER_TRUST_CA:-}"
 
 "$RUN_DIR/master-master" >>"$RUN_DIR/master-master.log" 2>&1 &
 echo $! >"$RUN_DIR/master-master.pid"

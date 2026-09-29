@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -278,7 +279,7 @@ func TestLoopSkipsEverythingWhenOptedOut(t *testing.T) {
 		log: logrus.New(), dbs: testDBs(t),
 		http: srv.Client(),
 	}
-	a.loop(loadState(a.cfg.stateFile))
+	a.loop(loadState(a.cfg.stateFile), false)
 	if hit {
 		t.Error("opted-out cluster must send no sync traffic at all")
 	}
@@ -456,4 +457,108 @@ func testLogger(t *testing.T) *logrus.Logger {
 	log := logrus.New()
 	log.SetOutput(io.Discard)
 	return log
+}
+
+func TestApplyIdentitySkipsDuplicateName(t *testing.T) {
+	dbs := testDBs(t)
+	// Local account owns the address; a pulled account with a different id
+	// but the same email (registered twice in the sync window) must not
+	// abort the apply — it is skipped, the local row wins by staying.
+	if _, err := dbs.auth.Exec(`INSERT INTO users(id,username,email,password_hash,created_at)
+		VALUES('11111111-1111-1111-1111-111111111111','alice','a@x.org','local','2026-09-29T10:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	pulled := []map[string]any{
+		{"user_id": "22222222222222222222222222222222", "username": "alice2",
+			"email": "a@x.org", "password_hash": "remote", "created_at": "2026-09-29T11:00:00Z"},
+		{"user_id": "33333333333333333333333333333333", "username": "bob",
+			"email": "b@x.org", "password_hash": "remote", "created_at": "2026-09-29T11:00:00Z"},
+	}
+	if err := applyIdentity(dbs, pulled, nil); err != nil {
+		t.Fatalf("apply must not fail on a duplicate: %v", err)
+	}
+	var kept string
+	if err := dbs.auth.QueryRow(`SELECT password_hash FROM users
+		WHERE id='11111111-1111-1111-1111-111111111111'`).Scan(&kept); err != nil || kept != "local" {
+		t.Fatalf("local row changed (hash=%q, err=%v)", kept, err)
+	}
+	var n int
+	if err := dbs.auth.QueryRow(`SELECT COUNT(*) FROM users WHERE id='22222222-2222-2222-2222-222222222222'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("duplicate id applied (n=%d, err=%v)", n, err)
+	}
+	if err := dbs.auth.QueryRow(`SELECT COUNT(*) FROM users WHERE id='33333333-3333-3333-3333-333333333333'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("clean account missing (n=%d, err=%v)", n, err)
+	}
+}
+
+func TestHandleSyncNow(t *testing.T) {
+	uid := "ffffffffffffffffffffffffffffffff"
+	master := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/sync/push":
+			_, _ = w.Write([]byte(`{"status":"ok","accepted":0,"skipped":0}`))
+		case "/sync/pull":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"users": []any{}, "bans": []any{},
+				"snapshots": []any{map[string]any{
+					"user_id": uid, "updated_at": "2026-09-29T11:00:00Z",
+					"tables": map[string]any{},
+				}},
+				"now": "2026-09-29T13:00:00Z",
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer master.Close()
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "sync-state.json")
+	// The snapshot (11:00) is older than our last push (12:00): a normal
+	// run skips it, a forced run applies it.
+	prestate := `{"last_pull":"","pushed_at":"","users":{"` + uid + `":"2026-09-29T12:00:00Z"}}`
+	if err := os.WriteFile(stateFile, []byte(prestate), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := &agent{
+		cfg: config{masterURL: master.URL, cluster: "trig", secret: "s", stateFile: stateFile},
+		log: testLogger(t), dbs: testDBs(t), http: master.Client(),
+	}
+	call := func(tlsOn bool, body string) (int, map[string]any) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/sync/now", strings.NewReader(body))
+		if tlsOn {
+			req.TLS = &tls.ConnectionState{}
+		}
+		a.handleSyncNow(rec, req)
+		var doc map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &doc)
+		return rec.Code, doc
+	}
+	if code, _ := call(false, `{}`); code != http.StatusForbidden {
+		t.Fatalf("plaintext: got %d, want 403", code)
+	}
+	if code, _ := call(true, `{"force":`); code != http.StatusBadRequest {
+		t.Fatalf("garbage body: got %d, want 400", code)
+	}
+	code, doc := call(true, `{}`)
+	if code != http.StatusOK {
+		t.Fatalf("trigger: got %d (%v)", code, doc)
+	}
+	if doc["applied"] != float64(0) {
+		t.Fatalf("normal run must skip the older snapshot, got %v", doc)
+	}
+	// Immediate rerun is throttled.
+	if code, _ := call(true, `{}`); code != http.StatusTooManyRequests {
+		t.Fatalf("rerun: got %d, want 429", code)
+	}
+	// Forced rerun (throttle reset) applies the older snapshot.
+	a.mu.Lock()
+	a.lastTrigger = time.Time{}
+	a.mu.Unlock()
+	code, doc = call(true, `{"force":true}`)
+	if code != http.StatusOK || doc["applied"] != float64(1) || doc["forced"] != true {
+		t.Fatalf("forced run: got %d (%v), want applied=1 forced=true", code, doc)
+	}
 }

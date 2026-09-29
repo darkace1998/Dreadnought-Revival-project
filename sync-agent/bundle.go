@@ -134,6 +134,13 @@ func strField(m map[string]any, key string) string {
 	return v
 }
 
+// isUniqueConflict reports a SQLite UNIQUE violation (go-sqlite3 surfaces it
+// as "UNIQUE constraint failed: ..."). Used to skip a conflicting row rather
+// than abort a whole apply.
+func isUniqueConflict(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
 func nilIfEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -144,7 +151,14 @@ func nilIfEmpty(s string) any {
 // applyIdentity upserts pulled accounts and replaces their bans, maintaining
 // users.banned_at from the ban rows (a global ban lands even for accounts
 // this cluster never saw; an empty set lifts it).
+//
+// A pulled account whose name or address collides with a DIFFERENT local id
+// (same callsign/email registered twice in the sync window) is skipped, not
+// fatal: one duplicate must never block every other account's apply. The
+// local row wins by staying; the directory pre-check at registration keeps
+// this rare.
 func applyIdentity(dbs databases, users []map[string]any, bans []map[string]any) error {
+	skipped := map[string]bool{}
 	for _, u := range users {
 		id, _ := u["user_id"].(string)
 		if normID(id) == "" {
@@ -157,6 +171,10 @@ func applyIdentity(dbs databases, users []map[string]any, bans []map[string]any)
 			banned_at=excluded.banned_at, steam_id=excluded.steam_id`,
 			dashed, strField(u, "username"), strField(u, "email"), strField(u, "password_hash"),
 			strField(u, "created_at"), nilIfEmpty(strField(u, "banned_at")), nilIfEmpty(strField(u, "steam_id"))); err != nil {
+			if isUniqueConflict(err) {
+				skipped[dashed] = true
+				continue
+			}
 			return err
 		}
 	}
@@ -167,6 +185,9 @@ func applyIdentity(dbs databases, users []map[string]any, bans []map[string]any)
 			continue
 		}
 		uid := denormID(normID(id))
+		if skipped[uid] {
+			continue
+		}
 		byUser[uid] = append(byUser[uid], b)
 	}
 	// Replace per pulled user (not just per ban row): the pull carries the
@@ -177,7 +198,11 @@ func applyIdentity(dbs databases, users []map[string]any, bans []map[string]any)
 		if normID(id) == "" {
 			continue
 		}
-		touched[denormID(normID(id))] = true
+		uid := denormID(normID(id))
+		if skipped[uid] {
+			continue
+		}
+		touched[uid] = true
 	}
 	for uid := range touched {
 		if _, err := dbs.auth.Exec(`DELETE FROM bans WHERE user_id=?`, uid); err != nil {
