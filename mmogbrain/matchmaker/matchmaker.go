@@ -173,6 +173,10 @@ type Matchmaker struct {
 	// online and not in a battle (see requiredMatchSize). Nil keeps the fixed
 	// size. main wires it to the Firmament hub's connected peers.
 	OnlinePlayers func() []string
+	// OnHostLost is told the players of a match whose battle server went
+	// away (endMatchWithNoHost), with the match's battle id, before their
+	// slots are freed. main wires it to the YA_ServerShutdown push.
+	OnHostLost func(battleMatchID string, players []string)
 	// MaxWait bounds how long an auto-scaled match waits for idle players who
 	// have not queued: once the oldest queued player has waited this long, the
 	// match starts with whoever is queued.
@@ -391,6 +395,23 @@ func (m *Matchmaker) pollBattleServers() {
 // the travel push for a player who logs in mid-match, liable to be sent straight
 // back at an address with nothing behind it.
 func (m *Matchmaker) endMatchWithNoHost(matchID, instanceID string) {
+	if m.OnHostLost != nil {
+		var battleMatchID string
+		_ = m.DB.QueryRow(`SELECT COALESCE(battle_match_id,'') FROM matches WHERE id=?`, matchID).Scan(&battleMatchID)
+		var players []string
+		if rows, err := m.DB.Query(`SELECT user_id FROM match_slots WHERE match_id=?`, matchID); err == nil {
+			for rows.Next() {
+				var u string
+				if rows.Scan(&u) == nil {
+					players = append(players, u)
+				}
+			}
+			_ = rows.Close()
+		}
+		if len(players) > 0 {
+			m.OnHostLost(battleMatchID, players)
+		}
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := m.DB.Exec(`UPDATE matches SET status='ended', ended_at=? WHERE id=? AND status='active'`, now, matchID); err != nil {
 		m.Log.WithError(err).WithField("match_id", matchID).Warn("end match with no host")
