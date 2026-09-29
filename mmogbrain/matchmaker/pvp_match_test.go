@@ -35,7 +35,8 @@ func pvpTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE match_slots (match_id TEXT, user_id TEXT, team INTEGER,
 		 joined_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (match_id, user_id))`,
 		`CREATE TABLE queue_entries (id TEXT PRIMARY KEY, user_id TEXT, game_mode TEXT,
-		 tier_min INTEGER, status TEXT, queued_at TEXT, fleet_type INTEGER NOT NULL DEFAULT 1)`,
+		 tier_min INTEGER, status TEXT, queued_at TEXT, fleet_type INTEGER NOT NULL DEFAULT 1,
+		 party_id TEXT NOT NULL DEFAULT '')`,
 	} {
 		if _, err := database.Exec(ddl); err != nil {
 			t.Fatalf("create schema: %v", err)

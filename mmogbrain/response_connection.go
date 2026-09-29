@@ -101,6 +101,13 @@ func handleMmogConn(log *logrus.Logger, conn net.Conn) {
 	var appPlainBuf []byte
 	var handshakeBuf []byte
 	state := &mmogConnState{playerPID: defaultMmogPlayerPID}
+	// A logged-in connection is registered for squad pushes (squads.go) on its
+	// first push pass; dropping it leaves the squad.
+	defer func() {
+		if state.squadRegistered != "" {
+			squadHubInstance.disconnected(state.squadRegistered)
+		}
+	}()
 	lastActivity := time.Now()
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -267,6 +274,9 @@ func nextBufferedMmogPacket(data []byte) ([]byte, []byte, bool) {
 }
 
 type mmogConnState struct {
+	// squadRegistered is the player id this connection registered with the
+	// squad hub (squads.go), or "" before login.
+	squadRegistered          string
 	loginResponseSent        bool
 	playerGetResponded       bool
 	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
@@ -860,6 +870,35 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 // the timeout path just continued. Driving it from the timeout as well bounds
 // the wait by the read deadline instead of by the client's whim.
 func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType uint16, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {
+	// Squad pushes queued for this player by other players' requests
+	// (squads.go). Runs on every client ping (5 s) and idle tick.
+	if state.loginResponseSent && state.playerPID != "" && state.playerPID != defaultMmogPlayerPID {
+		if state.squadRegistered == "" {
+			state.squadRegistered = normalizedPlayerStatePID(state.playerPID)
+			squadHubInstance.connected(state.squadRegistered)
+		}
+		switch squadHubInstance.takeArm(state.squadRegistered) {
+		case 1: // queued by their squad's leader
+			state.queuedForMatch = true
+			state.serverStartingPushed = false
+			state.connectPushed = false
+		case -1: // their squad's search was cancelled
+			state.queuedForMatch = false
+			state.serverStartingPushed = false
+			state.connectPushed = false
+		}
+		for _, payload := range squadHubInstance.drainPushes(state.squadRegistered) {
+			pushID, err := uuid.NewRandom()
+			if err != nil {
+				continue
+			}
+			name := protocol.FirstStringField(payload, "RT")
+			frame := protocol.BuildResponseFrame(pushID, msgType, payload)
+			if err := writeMmogAppResponse(log, conn, remote, pushID, name, frame, appEncoder, encryptResponses, "squad push failed", "sent squad push"); err != nil {
+				return err
+			}
+		}
+	}
 	// Match-ready push. The queuedForMatch gate keeps the DB query out of the
 	// hot path for everyone who is not in a queue.
 	//
@@ -880,6 +919,7 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 					return err
 				}
 				state.serverStartingPushed = true
+				squadHubInstance.matchFound(state.playerPID) // squad State 2
 				log.WithFields(logrus.Fields{
 					"remote": remote, "pid": state.playerPID,
 					"server": fmt.Sprintf("%s:%d", status.serverIP, status.serverPort),

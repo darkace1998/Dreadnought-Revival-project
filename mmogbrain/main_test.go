@@ -1461,12 +1461,14 @@ func TestMmogSocialRoomAndChatPayloadsAreExplicit(t *testing.T) {
 		t.Fatal("YA_QueryRooms missing Rooms array")
 	}
 
+	// CHANGED 2026-09-29: this pinned the old stub's Squad/Members arrays,
+	// which no client handler reads. The invite is answered under
+	// YA_SquadCreateAndJoin, whose handler reads only result (squads.go); an
+	// invite naming nobody is refused, not faked as a success.
 	squad := buildMmogRequestResponsePayload("YA_SquadInvite", playerPID, nil)
-	if !bytes.Contains(squad, appendFieldMarker("Squad", 0x0d)) {
-		t.Fatal("YA_SquadInvite missing Squad array")
-	}
-	if !bytes.Contains(squad, appendFieldMarker("Members", 0x0d)) {
-		t.Fatal("YA_SquadInvite missing Members array")
+	if protocol.FirstStringField(squad, "RT") != "YA_SquadCreateAndJoin" ||
+		bytes.Contains(squad, protocol.AppendStringField(nil, "result", "success")) {
+		t.Fatalf("YA_SquadInvite with no target: %q, want a refused YA_SquadCreateAndJoin", squad)
 	}
 
 	chatRequest := protocol.AppendStringField(nil, "channelName", "global")

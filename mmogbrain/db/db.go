@@ -350,6 +350,9 @@ var migrations = []string{
 		pid_b = max(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))),
 		requester_id = lower(replace(requester_id,'-',''))`,
 	`UPDATE player_ignores SET pid = lower(replace(pid,'-','')), ignored_id = lower(replace(ignored_id,'-',''))`,
+	// A squad queues as one party (squads.go): the matchmaker places a party
+	// whole, on one team. '' = queued alone.
+	`ALTER TABLE queue_entries ADD COLUMN party_id TEXT NOT NULL DEFAULT ''`,
 }
 
 func Open(path string) (*sql.DB, error) {

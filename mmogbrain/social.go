@@ -1089,3 +1089,26 @@ func (h *socialHub) joinMatchChannels(playerID, matchID string, team int32) {
 		}
 	}
 }
+
+// joinSquadChannel puts a player in their squad's chat room, "<squad>.squad",
+// and names it for the client -- as for match rooms, only a join notice fills
+// the client's per-type channel slot ("Send chat to Squad failed: channel name
+// is empty" otherwise).
+func (h *socialHub) joinSquadChannel(playerID, squadID string) {
+	peer := h.peerFor(socialID(playerID))
+	if peer == nil || squadID == "" {
+		return
+	}
+	name := squadID + ".squad"
+	if h.joinChannel(peer, name) {
+		_ = peer.send(chatJoinNotice(name, h.presenceEntry(peer.playerID)))
+	}
+}
+
+func (h *socialHub) leaveSquadChannel(playerID, squadID string) {
+	peer := h.peerFor(socialID(playerID))
+	if peer == nil || squadID == "" {
+		return
+	}
+	h.leaveChannel(peer, squadID+".squad")
+}

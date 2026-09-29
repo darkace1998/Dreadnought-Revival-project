@@ -767,13 +767,14 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int, fleetType int) erro
 }
 
 func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int, size int) error {
-	// Pull the oldest waiting players for this mode, tier and fleet type
+	// The waiting players for this mode, tier and fleet type, oldest first,
+	// grouped by party: a squad (party_id, see squads.go) is placed whole or
+	// not at all, and on one team.
 	rows, err := m.DB.Query(`
-		SELECT id, user_id FROM queue_entries
+		SELECT id, user_id, party_id FROM queue_entries
 		WHERE status='waiting' AND game_mode=? AND tier_min=? AND fleet_type=?
-		ORDER BY queued_at ASC
-		LIMIT ?
-	`, gameMode, tierMin, fleetType, size)
+		ORDER BY queued_at ASC, id ASC
+	`, gameMode, tierMin, fleetType)
 	if err != nil {
 		return err
 	}
@@ -784,21 +785,66 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	type entry struct {
 		ID     string
 		UserID string
+		Party  string
 	}
-	var entries []entry
+	var groups [][]entry
+	partyAt := map[string]int{}
 	for rows.Next() {
 		var e entry
-		if err := rows.Scan(&e.ID, &e.UserID); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Party); err != nil {
 			return fmt.Errorf("scan queue entries: %w", err)
 		}
-		entries = append(entries, e)
+		if e.Party != "" {
+			if i, ok := partyAt[e.Party]; ok {
+				groups[i] = append(groups[i], e)
+				continue
+			}
+			partyAt[e.Party] = len(groups)
+		}
+		groups = append(groups, []entry{e})
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate queue entries: %w", err)
 	}
+	_ = rows.Close()
 
-	if len(entries) < size {
+	// Fill the match group by group, oldest first, skipping a group that no
+	// longer fits. A party bigger than the match size may still start alone
+	// when it is the oldest -- it cannot be split.
+	var picked [][]entry
+	total := 0
+	for i, g := range groups {
+		if i == 0 && len(g) > size {
+			picked, total = [][]entry{g}, len(g)
+			break
+		}
+		if total+len(g) <= size {
+			picked = append(picked, g)
+			total += len(g)
+		}
+		if total == size {
+			break
+		}
+	}
+	if total < size || total == 0 {
 		return nil
+	}
+	// Teams: PvP modes put each group on the smaller side (the old i%2+1
+	// alternation, for groups of one); co-op modes are all team 1.
+	pvp := matchTeam(gameMode, 1) == 2
+	var entries []entry
+	var teams []int
+	perTeam := map[int]int{}
+	for _, g := range picked {
+		team := 1
+		if pvp && perTeam[2] < perTeam[1] {
+			team = 2
+		}
+		for _, e := range g {
+			entries = append(entries, e)
+			teams = append(teams, team)
+		}
+		perTeam[team] += len(g)
 	}
 
 	// Mark them as matched
@@ -861,7 +907,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 		return fmt.Errorf("insert match %s: %w", matchID, err)
 	}
 	for i, e := range entries {
-		team := matchTeam(gameMode, i)
+		team := teams[i]
 		if _, err := m.DB.Exec(
 			`INSERT INTO match_slots(match_id,user_id,team) VALUES(?,?,?)`,
 			matchID, e.UserID, team,
