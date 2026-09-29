@@ -30,10 +30,13 @@ bash master-master/stop.sh
 ```
 
 Routes: `POST /clusters/register` (upsert by name, **open — no key to
-request**), `POST /clusters/{id}/heartbeat`, `DELETE /clusters/{id}`,
-`GET /clusters` (public, online only), plus the operator dashboard under
-`/admin` (HTTP Basic, `MASTER_ADMIN_PASSWORD`): full list incl. stale and
-blocked, MOTD editing, block/unblock, delete.
+request**, but `contact_email` is required), `POST /clusters/{id}/heartbeat`,
+`DELETE /clusters/{id}`, `GET /clusters` (public, online only), plus the
+operator dashboard under `/admin` (HTTP Basic, `MASTER_ADMIN_PASSWORD`):
+full list incl. stale and blocked, MOTD editing, **secret generate/revoke/
+send-to-cluster (https only)**, block/unblock, delete — plus user mirror
+(search, balances, ban state) and the sync audit log (every communication
+logged, both directions).
 
 Open registration means anyone can list a cluster — removal, not prevention,
 is the moderation model: blocking a name refuses its re-registration (403),
@@ -63,6 +66,8 @@ flags or env (all optional; unset means unlisted):
 | `--master-master-url` | `MASTER_MASTER_URL` | — | directory URL; empty disables |
 | `--cluster-name` | `CLUSTER_NAME` | — | browser display name |
 | `--cluster-web-url` | `CLUSTER_WEB_URL` | — | public https URL players authenticate against |
+| `--cluster-email` | `CLUSTER_EMAIL` | — | **required to list**: contact address; the operator mails the sync secret there by hand |
+| `--cluster-agent-url` | `CLUSTER_AGENT_URL` | — | public https URL of this host's sync agent (`:8093`); empty means no automatic secret delivery |
 | `--cluster-ca-file` | `CLUSTER_CA_FILE` | `certs/ca.crt` | CA cert uploaded for TOFU — must be the CA, not server.crt (a server cert is refused with a clear error). Re-read every beat, so rotation needs no restart. Missing file: registers without a CA (public-cert clusters). |
 | `--cluster-version` | `CLUSTER_VERSION` | `1.0` | shown in the browser |
 | `--cluster-motd` | `CLUSTER_MOTD` | — | shown in the browser (also editable from the dashboard) |
@@ -73,9 +78,13 @@ are handed). Player/server counts come from the live instances (mocks
 excluded). On shutdown the cluster deregisters best-effort.
 
 **Opt out:** create `run/dn-no-master-server.txt` (any content). Checked
-every beat: a listed cluster deregisters at once, an unlisted one stays
-silent; deleting the file re-lists. No restart either way. Unlisted clusters
-are joinable only by manual IP (browser button).
+every beat and every sync interval: a listed cluster deregisters at once, an
+unlisted one stays silent; deleting the file re-lists. No restart either way.
+Unlisted clusters are joinable only by manual IP (browser button). Opt-out is
+total: no listing AND no account replication — the sync agent sends nothing
+and applies nothing while the file exists (so no roaming in or out, and no
+presence either: double-play against an opted-out cluster is undetectable by
+design — the operator chose invisibility).
 
 ## Browser (`dn-dedicated-browser.exe`)
 
@@ -150,3 +159,59 @@ loopback).
 # 4. touch run/dn-no-master-server.txt → cluster vanishes within ~2 min,
 #    manual IP join still works
 ```
+
+## Account roaming (stage 3): one account everywhere
+
+Joining a new cluster used to start from zero (own `auth.db` per cluster).
+With roaming, accounts — identity, balances, rank, ships, loadouts,
+purchases, contracts, career claims, friends/ignores, bans — follow the
+player. Design notes:
+
+- **Hub, not mesh.** The directory (`master-master`) holds the mirror
+  (`sync_users`, `sync_bans`, `sync_snapshots`, `sync_log`); clusters never
+  talk to each other. No shared key exists anywhere.
+- **Per-cluster secret, human in the loop.** First registration must carry
+  `contact_email` (`CLUSTER_EMAIL`). In the admin dashboard you
+  **generate** a secret (shown once — mail it yourself), **revoke** it
+  (sync auth dies immediately), or **send** it straight to the cluster
+  (generates if none exists; refuses if one does — revoke first to rotate).
+  Only hashes are stored. Auto-send works **only over https** to the
+  cluster's agent URL (`CLUSTER_AGENT_URL`, e.g. `https://play.example.org:8093`);
+  anything else is refused, never downgraded.
+- **The cluster stores it** in `run/sync.env` (0600), either via the agent's
+  `POST /sync/key` endpoint (https only, first write wins — a stored secret
+  is never overwritten remotely) or by hand + agent restart.
+- **`sync-agent` binary** (own module, in the normal start/stop scripts):
+  every `SYNC_INTERVAL` (60 s) it pushes every local user and pulls remote
+  changes; needs `SYNC_MASTER_URL` + `CLUSTER_NAME`, waits without a secret.
+  Listens `:8093` https (cluster certs) for key receive + `/health`.
+- **Merge rule: last-write-wins per user** on `updated_at` (ties break toward
+  the lexicographically greater source, so all hosts agree). Resets
+  propagate naturally (emptied state replaces). Clock skew corrupts this —
+  run NTP. True simultaneous play is refused up front by the presence guard
+  above; the remaining edge (opt-out clusters, dead directory) can still lose
+  one side's additive grants — the common case (one cluster at a time) is
+  exact.
+- **One account, one match.** Every push carries each user's live state
+  (active match slot or not); the directory keeps it as presence
+  (`sync_presence`, fresh for 120 s — twice the push interval, so one missed
+  beat doesn't clear anyone). The browser asks `GET /presence/{user_id}`
+  (public, like the cluster list) before enabling Play — and again at launch
+  moment — and blocks with the other cluster's name when that account is
+  mid-match elsewhere: *"You're already connected to a match on 'X'. Finish
+  or leave it there first."* Unknown (no/unreachable directory) lets the
+  player through — a dead directory must not strand anyone; the guard is
+  best-effort, not a lock. Manual servers exclude by cluster name (no id).
+- **Two tables merge smarter than last-write-wins.** Friendships are pair
+  rows (two owners): they upsert with accepted-wins — accepted on either
+  side, or cross-requested, settles the pair everywhere; one side's sync
+  never deletes the other's row. Career claims (`claimed_stages`, monotonic)
+  merge per key with MAX, so claiming on two clusters between syncs adds up
+  instead of reverting. Unfriending does not propagate (no delete tombstone).
+- **Not synced, on purpose:** sessions (login tokens stay local),
+  queue/matches/slots (live matchmaking), battle results + match history
+  (per-cluster audit), chat.
+- **Visibility:** admin dashboard shows mirrored users (search, balances,
+  ban state) and the full sync audit log (every push/pull/denial, both
+  directions). Applied mid-session changes show after re-login at the
+  latest (connected clients learn balances at `YA_PlayerGet` / match end).

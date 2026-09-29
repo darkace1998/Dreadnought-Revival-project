@@ -83,9 +83,9 @@ func (a *browserAPI) SelectManual(url string) map[string]any {
 	a.active = &activeCluster{name: found.Name, webURL: found.WebURL, ip: ip,
 		webPort: port, caDER: der, key: key}
 	a.pending = nil
-	a.token, a.username = "", ""
+	a.token, a.username, a.userID = "", "", ""
 	if creds, ok := loadCredentials(key); ok && !browserTokenExpired(creds.Token) {
-		a.token, a.username = creds.Token, creds.Username
+		a.token, a.username, a.userID = creds.Token, creds.Username, creds.UserID
 	}
 	return a.activeView()
 }

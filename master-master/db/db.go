@@ -26,6 +26,64 @@ var migrations = []string{
 	// Operator blocklist: a blocked name is refused at register time, so a
 	// kicked cluster cannot simply re-list itself on the next heartbeat.
 	`ALTER TABLE clusters ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`,
+	// Stage 3 (account roaming): who to mail the secret, the secret's hash
+	// (plaintext is shown once at generation and never stored), and where to
+	// push it automatically (https only, enforced at send time).
+	`ALTER TABLE clusters ADD COLUMN contact_email TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE clusters ADD COLUMN secret_hash TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE clusters ADD COLUMN agent_url TEXT NOT NULL DEFAULT ''`,
+	// Central account mirror. users carry identity (password hashes included:
+	// the same login must work on every cluster); snapshots carry one full
+	// per-user bundle plus headline columns for the stats views.
+	`CREATE TABLE IF NOT EXISTS sync_users (
+		user_id        TEXT PRIMARY KEY,
+		username       TEXT NOT NULL,
+		email          TEXT NOT NULL DEFAULT '',
+		password_hash  TEXT NOT NULL DEFAULT '',
+		created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		source_cluster TEXT NOT NULL DEFAULT ''
+	)`,
+	`CREATE TABLE IF NOT EXISTS sync_bans (
+		id             TEXT PRIMARY KEY,
+		user_id        TEXT NOT NULL,
+		reason         TEXT NOT NULL DEFAULT '',
+		banned_by      TEXT NOT NULL DEFAULT '',
+		expires_at     TEXT,
+		created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+	)`,
+	`CREATE TABLE IF NOT EXISTS sync_snapshots (
+		user_id        TEXT PRIMARY KEY,
+		updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+		source_cluster TEXT NOT NULL DEFAULT '',
+		credits        INTEGER NOT NULL DEFAULT 0,
+		rank           INTEGER NOT NULL DEFAULT 1,
+		ships          INTEGER NOT NULL DEFAULT 0,
+		data           TEXT NOT NULL DEFAULT '{}'
+	)`,
+	// Every sync communication, in and out. This table is the audit trail:
+	// who sent what, when, and whether it was accepted.
+	`CREATE TABLE IF NOT EXISTS sync_log (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		time       TEXT NOT NULL DEFAULT (datetime('now')),
+		cluster_id TEXT NOT NULL DEFAULT '',
+		direction  TEXT NOT NULL DEFAULT '',
+		endpoint   TEXT NOT NULL DEFAULT '',
+		users      INTEGER NOT NULL DEFAULT 0,
+		status     TEXT NOT NULL DEFAULT '',
+		detail     TEXT NOT NULL DEFAULT ''
+	)`,
+	// Live presence per account per cluster: is this user right now in a
+	// match there? Refreshed by every push (freshness is the point, so it is
+	// keyed separately from snapshots). Rows older than the browser window
+	// below count as gone; no cleanup needed for correctness.
+	`CREATE TABLE IF NOT EXISTS sync_presence (
+		user_id    TEXT NOT NULL,
+		cluster_id TEXT NOT NULL,
+		in_match   INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, cluster_id)
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

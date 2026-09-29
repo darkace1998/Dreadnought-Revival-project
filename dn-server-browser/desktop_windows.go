@@ -84,6 +84,9 @@ func runBrowserWindow(exeDir string, api *browserAPI) bool {
 	_ = w.Bind("dnNews", func() {
 		go func() { reply("dnNewsResult", api.ClusterNews()) }()
 	})
+	_ = w.Bind("dnCheckPresence", func() {
+		go func() { reply("dnPresenceResult", api.CheckPresence()) }()
+	})
 	_ = w.Bind("dnPlay", func() {
 		go func() {
 			r := api.Play()

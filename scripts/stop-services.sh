@@ -39,6 +39,6 @@ stop_service() {
     rm -f "$RUN_DIR/$name.pid"
 }
 
-for name in legacy-api mmogbrain gateway dn-dedicated game-manager master-server auth-server web-dashboard; do
+for name in legacy-api mmogbrain gateway dn-dedicated game-manager master-server auth-server web-dashboard sync-agent; do
     stop_service "$name"
 done

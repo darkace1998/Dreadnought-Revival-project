@@ -99,6 +99,7 @@ type browserAPI struct {
 	pending  *pendingCert
 	token    string
 	username string
+	userID   string // auth account id (dashed); normalized for presence checks
 	trust    *TrustStore
 }
 
@@ -232,9 +233,9 @@ func (a *browserAPI) SelectCluster(id string) map[string]any {
 		ip: ip, webPort: port, caDER: der, dirFP: found.CAFingerprint, key: key,
 		motd: found.MOTD, version: found.Version, players: found.Players}
 	a.pending = nil
-	a.token, a.username = "", ""
+	a.token, a.username, a.userID = "", "", ""
 	if creds, ok := loadCredentials(key); ok && !browserTokenExpired(creds.Token) {
-		a.token, a.username = creds.Token, creds.Username
+		a.token, a.username, a.userID = creds.Token, creds.Username, creds.UserID
 	}
 	return a.activeView()
 }
@@ -282,9 +283,9 @@ func (a *browserAPI) AddManual(name, webURL, caPEM string) map[string]any {
 	a.active = &activeCluster{name: name, webURL: webURLNorm, ip: ip, webPort: port,
 		caDER: der, key: key}
 	a.pending = nil
-	a.token, a.username = "", ""
+	a.token, a.username, a.userID = "", "", ""
 	if creds, ok := loadCredentials(key); ok && !browserTokenExpired(creds.Token) {
-		a.token, a.username = creds.Token, creds.Username
+		a.token, a.username, a.userID = creds.Token, creds.Username, creds.UserID
 	}
 	return a.activeView()
 }
@@ -393,7 +394,7 @@ func (a *browserAPI) Submit(mode, username, identifier, password string) map[str
 		fmt.Printf("[!] Could not remember this sign-in (%v)\n", err)
 	}
 	a.mu.Lock()
-	a.token, a.username = creds.Token, creds.Username
+	a.token, a.username, a.userID = creds.Token, creds.Username, creds.UserID
 	a.mu.Unlock()
 	return map[string]any{"ok": true, "username": creds.Username}
 }
@@ -404,7 +405,7 @@ func (a *browserAPI) SignOut() {
 	if a.active != nil {
 		clearCredentials(a.active.key)
 	}
-	a.token, a.username = "", ""
+	a.token, a.username, a.userID = "", "", ""
 }
 
 // SignOutAll forgets every saved sign-in on this machine (all clusters).
@@ -425,7 +426,41 @@ func (a *browserAPI) SignOutAll() {
 			_ = os.Remove(filepath.Join(appData, "DreadnoughtPS", name))
 		}
 	}
-	a.token, a.username = "", ""
+	a.token, a.username, a.userID = "", "", ""
+}
+
+// CheckPresence asks the directory whether this account is already in a
+// match on another cluster. checked=false means "unknown" (no directory, not
+// signed in, directory unreachable) — the page then lets the player through,
+// because a dead directory must not strand anyone. Only checked + inMatch
+// blocks. Hand-added servers exclude by name (they have no directory id).
+func (a *browserAPI) CheckPresence() map[string]any {
+	a.mu.Lock()
+	active, token, userID := a.active, a.token, a.userID
+	directory := strings.TrimSpace(a.cfg.Directory)
+	a.mu.Unlock()
+	if active == nil || token == "" || browserTokenExpired(token) || userID == "" || directory == "" {
+		return map[string]any{"checked": false}
+	}
+	except := active.id
+	if except == "" {
+		except = active.name
+	}
+	inMatch, cluster, err := (&DirectoryClient{BaseURL: directory}).Presence(userID, except)
+	if err != nil {
+		return map[string]any{"checked": false, "error": err.Error()}
+	}
+	return map[string]any{"checked": true, "inMatch": inMatch, "cluster": cluster}
+}
+
+// presenceBlockMessage is the one-account-one-match rule, shown when the
+// directory reports this account mid-match elsewhere.
+func presenceBlockMessage(cluster string) string {
+	if strings.TrimSpace(cluster) == "" {
+		cluster = "another server"
+	}
+	return "You're already connected to a match on '" + cluster + "'. " +
+		"Finish or leave it there first — one account can only be in one match at a time."
 }
 
 // ClusterNews fetches the active cluster's launcher tiles through the
@@ -529,6 +564,13 @@ func (a *browserAPI) Play() map[string]any {
 	}
 	if token == "" || browserTokenExpired(token) {
 		return map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true}
+	}
+	// Fresh presence check at launch moment: the home screen polls, but the
+	// match could have started since. Blocked launches stay on the page with
+	// the reason (and a way to re-check), they never start the game.
+	if p := a.CheckPresence(); p["checked"] == true && p["inMatch"] == true {
+		cluster, _ := p["cluster"].(string)
+		return map[string]any{"ok": false, "blocked": true, "error": presenceBlockMessage(cluster)}
 	}
 	settings := loadSettings()
 	cfg := launchConfig{

@@ -13,4 +13,5 @@ use (
 	./web-dashboard
 	./master-master
 	./dn-server-browser
+	./sync-agent
 )

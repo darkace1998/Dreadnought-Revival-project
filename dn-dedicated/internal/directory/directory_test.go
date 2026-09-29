@@ -53,7 +53,7 @@ func testRegistrar(t *testing.T, stub *stubDirectory, extra func(*Config)) (*Reg
 	cfg := Config{
 		MasterURL: srv.URL, Name: "Test Cluster", WebURL: "https://play.example.org",
 		BattleIP: "203.0.113.7", Version: "1.0", MOTD: "hi",
-		CAFile: ca, Log: io.Discard,
+		CAFile: ca, Email: "owner@example.org", Log: io.Discard,
 	}
 	if extra != nil {
 		extra(&cfg)
@@ -67,6 +67,10 @@ func TestDisabledWithoutConfig(t *testing.T) {
 	r, _ := testRegistrar(t, stub, func(c *Config) { c.MasterURL = "" })
 	if r.Enabled() {
 		t.Fatal("empty MasterURL must disable registration")
+	}
+	r2, _ := testRegistrar(t, stub, func(c *Config) { c.Email = "" })
+	if r2.Enabled() {
+		t.Fatal("empty contact email must disable registration")
 	}
 	r.Start() // must not contact anything
 	time.Sleep(100 * time.Millisecond)

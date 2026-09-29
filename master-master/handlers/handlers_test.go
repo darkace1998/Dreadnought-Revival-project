@@ -65,6 +65,7 @@ func registerTestCluster(t *testing.T, h *Handler, name string) string {
 	body, _ := json.Marshal(map[string]any{
 		"name": name, "web_url": "https://play.example.org", "battle_ip": "203.0.113.7",
 		"version": "1.0", "motd": "welcome", "ca_cert": ca, "players": 3, "servers": 1,
+		"contact_email": "owner@example.org",
 	})
 	rec := httptest.NewRecorder()
 	h.Register(rec, httptest.NewRequest(http.MethodPost, "/clusters/register", strings.NewReader(string(body))))
@@ -154,6 +155,7 @@ func TestRegisterValidation(t *testing.T) {	h := testHandler(t)
 	ca := testCACert(t)
 	good := map[string]any{
 		"name": "ok", "web_url": "https://x.example", "battle_ip": "203.0.113.9", "ca_cert": ca,
+		"contact_email": "owner@example.org",
 	}
 	for _, tc := range []struct {
 		name  string
@@ -163,6 +165,7 @@ func TestRegisterValidation(t *testing.T) {	h := testHandler(t)
 		{"bad url", func(m map[string]any) { m["web_url"] = "ftp://x" }},
 		{"bad ip", func(m map[string]any) { m["battle_ip"] = "not a host!" }},
 		{"bad ca", func(m map[string]any) { m["ca_cert"] = "garbage" }},
+		{"missing email", func(m map[string]any) { m["contact_email"] = "not-an-address" }},
 		{"garbage body", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -254,6 +257,7 @@ func TestAdminMOTDBlockUnblockDelete(t *testing.T) {
 	ca := testCACert(t)
 	body, _ := json.Marshal(map[string]any{
 		"name": "Mod Cluster", "web_url": "https://x.example", "battle_ip": "203.0.113.9", "ca_cert": ca,
+		"contact_email": "owner@example.org",
 	})
 	rec = httptest.NewRecorder()
 	h.Register(rec, httptest.NewRequest(http.MethodPost, "/clusters/register", strings.NewReader(string(body))))
@@ -335,7 +339,7 @@ func TestRegisterRefusesNonCACert(t *testing.T) {
 	h := testHandler(t)
 	body, _ := json.Marshal(map[string]any{
 		"name": "Leaf Cluster", "web_url": "https://x.example", "battle_ip": "203.0.113.9",
-		"ca_cert": testLeafCert(t),
+		"ca_cert": testLeafCert(t), "contact_email": "owner@example.org",
 	})
 	rec := httptest.NewRecorder()
 	h.Register(rec, httptest.NewRequest(http.MethodPost, "/clusters/register", strings.NewReader(string(body))))
@@ -351,6 +355,7 @@ func TestRegisterWithoutCAListsEmptyFingerprint(t *testing.T) {
 	h := testHandler(t)
 	body, _ := json.Marshal(map[string]any{
 		"name": "Public Cluster", "web_url": "https://x.example", "battle_ip": "203.0.113.9",
+		"contact_email": "owner@example.org",
 	})
 	rec := httptest.NewRecorder()
 	h.Register(rec, httptest.NewRequest(http.MethodPost, "/clusters/register", strings.NewReader(string(body))))
@@ -370,5 +375,74 @@ func TestRegisterWithoutCAListsEmptyFingerprint(t *testing.T) {
 	}
 	if len(doc.Clusters) != 1 || doc.Clusters[0].CAFingerprint != "" {
 		t.Fatalf("unexpected list: %s", rec.Body.String())
+	}
+}
+
+func secretReq(t *testing.T, h *Handler, id, action string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/clusters/"+id+"/secret",
+		strings.NewReader(`{"action":"`+action+`"}`))
+	req = mux.SetURLVars(req, map[string]string{"id": id})
+	rec := httptest.NewRecorder()
+	h.AdminSecret(rec, req)
+	return rec
+}
+
+func TestAdminSecretGenerateSendRevoke(t *testing.T) {
+	h := testHandler(t)
+	id := registerTestCluster(t, h, "Secret Cluster")
+
+	// Generate: plaintext returned once.
+	rec := secretReq(t, h, id, "generate")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("generate status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var gen struct {
+		Secret string `json:"secret"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &gen); err != nil || len(gen.Secret) != 48 {
+		t.Fatalf("no usable secret back: %s", rec.Body.String())
+	}
+
+	// Send without an agent URL: refused, never downgraded to plaintext.
+	rec = secretReq(t, h, id, "send")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("send status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var sent struct {
+		Sent      bool   `json:"sent"`
+		SendError string `json:"send_error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil || sent.Sent {
+		t.Fatalf("send without agent URL must fail safe: %s", rec.Body.String())
+	}
+
+	// Revoke: sync auth with the old secret must die. The secret hash is
+	// gone, so even a well-formed push is refused.
+	if rec := secretReq(t, h, id, "revoke"); rec.Code != http.StatusOK {
+		t.Fatalf("revoke status %d", rec.Code)
+	}
+	pushed, _ := json.Marshal(map[string]any{"users": []any{}, "snapshots": []any{}})
+	req := httptest.NewRequest(http.MethodPost, "/sync/push", strings.NewReader(string(pushed)))
+	req.Header.Set("X-Sync-Key", gen.Secret)
+	rec = httptest.NewRecorder()
+	h.SyncPush(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("push with revoked secret: got %d, want 403", rec.Code)
+	}
+
+	if rec := secretReq(t, h, id, "generate"); rec.Code != http.StatusOK {
+		t.Errorf("re-generate after revoke: got %d", rec.Code)
+	}
+}
+
+func TestAdminSecretRejectsGarbage(t *testing.T) {
+	h := testHandler(t)
+	if rec := secretReq(t, h, "00000000-0000-0000-0000-000000000000", "generate"); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown cluster: got %d, want 404", rec.Code)
+	}
+	id := registerTestCluster(t, h, "Action Cluster")
+	if rec := secretReq(t, h, id, "explode"); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad action: got %d, want 400", rec.Code)
 	}
 }

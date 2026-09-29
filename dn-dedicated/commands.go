@@ -218,6 +218,8 @@ matchmaker can drive it unchanged:
 		clusterName     = fs.String("cluster-name", getenv("CLUSTER_NAME", ""), "cluster name shown in the server browser")
 		clusterWebURL   = fs.String("cluster-web-url", getenv("CLUSTER_WEB_URL", ""), "public https URL players authenticate against")
 		clusterCAFile   = fs.String("cluster-ca-file", getenv("CLUSTER_CA_FILE", "certs/ca.crt"), "cluster CA cert uploaded to the directory for TOFU")
+		clusterEmail    = fs.String("cluster-email", getenv("CLUSTER_EMAIL", ""), "contact address, required to list (the operator mails the sync secret there)")
+		clusterAgentURL = fs.String("cluster-agent-url", getenv("CLUSTER_AGENT_URL", ""), "public https URL of this host's sync agent (empty = no automatic secret delivery)")
 		clusterVersion  = fs.String("cluster-version", getenv("CLUSTER_VERSION", "1.0"), "server version shown in the browser")
 		clusterMOTD     = fs.String("cluster-motd", getenv("CLUSTER_MOTD", ""), "message of the day shown in the browser")
 		noMasterFile    = fs.String("no-master-server-file", getenv("DN_NO_MASTER_SERVER_FILE", "run/dn-no-master-server.txt"), "presence opts out of the directory")
@@ -318,6 +320,8 @@ matchmaker can drive it unchanged:
 		Version:   *clusterVersion,
 		MOTD:      *clusterMOTD,
 		CAFile:    *clusterCAFile,
+		Email:     *clusterEmail,
+		AgentURL:  *clusterAgentURL,
 		NoMasterFile: *noMasterFile,
 		Log:       os.Stderr,
 	}, mgr)

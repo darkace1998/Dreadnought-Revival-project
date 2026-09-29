@@ -11,10 +11,11 @@ Operators running battle servers have one optional extra, `battle-server-mod/` �
 ## Architecture
 
 ```
-[Windows client (unmodified)]
-        |
-        |  hostnames redirected via hosts file, TLS trusted via our own CA
-        |
+[Windows client (unmodified)]                  [Windows server browser]
+        |                                       (dn-dedicated-browser.exe)
+        |  hostnames redirected via hosts       picks a cluster, then the normal
+        |  file, TLS trusted via our own CA     launcher flow against it
+        |                                              |
         ├─ HTTPS :443 ──► [gateway]  TLS termination + reverse proxy
         │                     ├── profile-api.prod.greybox.sixfoot.live ─► [auth-server   :8081]
         │                     ├── legacyapi.prod.greybox.sixfoot.live   ─► [legacy-api    :8082]
@@ -23,11 +24,21 @@ Operators running battle servers have one optional extra, `battle-server-mod/` �
         ├─ HTTPS :65443 ─► [mmogbrain]  Greybox web-services API (catalog, inventory, session)
         └─ TLS   :48843 ─► [mmogbrain]  firmament social/presence socket
 
-[mmogbrain matchmaker] ──match formed──► [game-manager :8085]
-                                               │
-                                               ▼
-                                     wine + DreadGame-Win64-Shipping.exe
-                                     (one process per match, UDP 7777-7877)
+[mmogbrain matchmaker] ──match formed──► [dn-dedicated :8085]  (control plane;
+                                                │               game-manager is the fallback)
+                                                ▼
+                                      wine + DreadGame-Win64-Shipping.exe
+                                      (one process per match, UDP 7777-7877)
+
+[public directory: master-master :8091, admin :8092] ◄── register/heartbeat ── [dn-dedicated]
+        │   cluster list + CA certs + MOTDs + player counts (for the browser)
+        │   presence: who is mid-match on which cluster (one account, one match)
+        │   account mirror: sync_users / sync_bans / sync_snapshots / sync_log
+        ▲
+        │  push local users, pull everyone else's (per cluster)
+[sync-agent :8093] ── one per cluster (opt-out clusters replicate nothing)
+
+[operator browser] ──► [web-dashboard :8090] ──loopback──► :8081-:8085 admin endpoints
 ```
 
 Two different things are called "gateway", which is worth knowing before reading the config:
@@ -45,7 +56,9 @@ Two different things are called "gateway", which is worth knowing before reading
 | **mmogbrain** | 8083, 48843, 65443 | The bulk of the backend: mmog binary protocol, catalog, fleets, tech tree, matchmaking |
 | **master-server** | 8084 | Server registry, heartbeat, server browser |
 | **master-master** | 8091, 8092 (admin) | Public cluster directory for the server browser (see [Server browser](docs/server-browser.md)) |
-| **game-manager** | 8085 | Spawns and monitors battle-server processes |
+| **dn-dedicated** | 8085 | Spawns and monitors battle-server processes; registers the cluster with the directory (default control plane, `DN_CONTROL_PLANE=game-manager` falls back) |
+| **game-manager** | 8085 | Previous battle-server spawner; fallback only, one of the two may run |
+| **sync-agent** | 8093 (https) | Account roaming: pushes local users to the directory master, pulls everyone else's (see [Account roaming](#account-roaming)) |
 | **web-dashboard** | 8090 | Operator web UI: health, players, queue, matches, chat, logs, metrics (see [Web dashboard](#web-dashboard)) |
 | **DreadGame (Wine)** | 7777-7877/UDP | One battle server per active match |
 | **admin-cli** | — | Operator CLI (`servers`, `instances`, `stop-instance`, `ban`, `unban`, `queue`, `chat`, `players`, `grant`) |
@@ -102,13 +115,13 @@ There is no dedicated-server build of Dreadnought. The battle server is the **or
 ### 4. Start and stop
 
 ```bash
-bash scripts/start-services.sh      # starts all six services, then health-checks them
+bash scripts/start-services.sh      # starts all eight services, then health-checks them
 bash scripts/stop-services.sh
 ```
 
 `start-services.sh` refuses to double-start anything already running, pins each service's `DB_PATH` so the working directory cannot decide which database is opened, and prints the listening sockets when it finishes. Logs land in `run/<service>.log`.
 
-A healthy start ends with sockets on 80, 443, 8081-8085, 8090-8092, 48843 and 65443.
+A healthy start ends with sockets on 80, 443, 8081-8085, 8090-8093, 48843 and 65443.
 
 ### 5. Point clients at the server
 
@@ -266,7 +279,9 @@ Dreadnought-Revival-project/
 ├── legacy-api/      Go + SQLite -- profiles, inventory, match history
 ├── mmogbrain/       Go + SQLite -- mmog binary protocol, catalog, fleets, matchmaking
 ├── master-server/   Go + SQLite -- server registry and browser
-├── game-manager/    Go         -- battle-server spawner and port pool
+├── dn-dedicated/    Go         -- battle-server spawner + cluster directory registration (default control plane on :8085)
+├── game-manager/    Go         -- previous spawner, fallback via DN_CONTROL_PLANE=game-manager
+├── sync-agent/      Go         -- account roaming: push local users, pull the rest (see below)
 ├── gateway/         Go         -- TLS termination and reverse proxy
 ├── admin-cli/       Go         -- operator CLI
 ├── dn-launcher/     Go         -- Windows launcher replacement (client-side)
@@ -339,6 +354,17 @@ Set in `run/secrets.env` unless noted.
 | `DN_MATCH_MAX_WAIT` | mmogbrain | `60s` | How long an auto-scaled match waits for idle online players who have not queued |
 | `DN_MAX_INSTANCES` | dn-dedicated | from memory | Concurrent battle servers. Default `(RAM - 2 GB) / 1.6 GB` (8 on 16 GB): each Wine host is ~1.45 GB and nine of them got a live match OOM-killed. At the cap, new matches get 503 and their players stay queued until a server frees. `0` = no cap |
 | `MASTER_URL` | game-manager | `http://127.0.0.1:8084` | Master server URL |
+| `MASTER_MASTER_URL` | dn-dedicated | — | Public directory URL; empty disables listing |
+| `CLUSTER_NAME` | dn-dedicated | — | Browser display name |
+| `CLUSTER_WEB_URL` | dn-dedicated | — | Public https URL players authenticate against |
+| `CLUSTER_EMAIL` | dn-dedicated | — | **Required to list**: contact address; the operator mails the sync secret there by hand |
+| `CLUSTER_AGENT_URL` | dn-dedicated | — | Public https URL of this host's sync agent (`:8093`); empty means no automatic secret delivery |
+| `CLUSTER_CA_FILE` | dn-dedicated | `certs/ca.crt` | CA cert uploaded for TOFU (re-read every beat, so rotation needs no restart) |
+| `CLUSTER_VERSION` / `CLUSTER_MOTD` | dn-dedicated | `1.0` / — | Shown in the browser |
+| `DN_NO_MASTER_SERVER_FILE` | dn-dedicated, sync-agent | `run/dn-no-master-server.txt` | Opt-out: present means no listing **and** no account replication (no push, no pull, no presence) |
+| `SYNC_MASTER_URL` | sync-agent | — | Directory master to roam with; unset means no roaming |
+| `SYNC_INTERVAL` | sync-agent | `60s` | Push/pull cadence (minimum 10s) |
+| `SYNC_SECRET_FILE` / `SYNC_STATE_FILE` / `SYNC_ADDR` | sync-agent | `run/sync.env` / `run/sync-state.json` / `:8093` | Secret store (0600), pull cursor, https listen address |
 | `GAME_MGR_URL` | mmogbrain | `http://127.0.0.1:8085` | Game manager URL |
 | `DN_FORCE_GAME_MODE` | mmogbrain | *(unset — the queued mode runs)* | Forces every match into one game mode. A mode name, or `1` for `TM`. Off by default: TM is the only mode whose host logs `no orbit spawn locations set!`, and a player in it never reaches the ship selection screen. TM is also the only mode that supplies a loadout, so the two failures are mutually exclusive — see `docs/battle-server-data-path.md` |
 | `DN_CONNECT_PUSH_DELAY` | mmogbrain | `75s` (`45s` from `start-services.sh`) | **Fallback only.** How long to hold the `YA_Connect` travel push back when the control plane never reports the battle server ready. Normally the matchmaker polls `GET /instances/<id>` and pushes as soon as the engine is hosting; the push's log line records which gate opened as `gate=ready` or `gate=delay` |
@@ -450,6 +476,53 @@ in [Server browser](docs/server-browser.md), setup through go-live in the
 > address (`http://91.51.31.83:8091`) is baked into the distributed browser
 > builds (`-X main.defaultDirectory=…`), so testers see clusters without
 > typing anything.
+
+## Account roaming
+
+Joining a new cluster used to start from zero (own `auth.db` per cluster).
+With roaming, accounts — identity, balances, rank, ships, loadouts,
+purchases, tech-tree progress, contracts, career claims, friends/ignores,
+bans — follow the player across every cluster that syncs with the same
+directory master.
+
+How it works:
+
+- **Hub, not mesh.** The directory (`master-master`) holds the mirror
+  (`sync_users`, `sync_bans`, `sync_snapshots`, `sync_presence`, `sync_log`);
+  clusters never talk to each other, and no shared key exists anywhere.
+- **Per-cluster secret, human in the loop.** First registration must carry
+  `contact_email` (`CLUSTER_EMAIL`). In the directory admin dashboard
+  (`:8092`) you **generate** a secret (shown once — mail it to the cluster
+  owner yourself), **revoke** it (sync auth dies immediately), or **send** it
+  straight to the cluster's agent (generates if none exists; refuses if one
+  does — revoke first to rotate). Only hashes are stored, and auto-send works
+  **only over https** to `CLUSTER_AGENT_URL` — anything else is refused,
+  never downgraded. The cluster keeps it in `run/sync.env` (0600), via the
+  agent's `POST /sync/key` (https only, first write wins) or by hand.
+- **`sync-agent`** (own module, in the normal start/stop scripts) pushes
+  every local user and pulls remote changes every `SYNC_INTERVAL` (60 s).
+  It roams 25 tables (2 auth + 20 mmog + 3 legacy): everything the account
+  owns, including ship XP and purchases (which is what tech-tree progress
+  is), contracts, career claims, friends and ignores. Needs
+  `SYNC_MASTER_URL` + `CLUSTER_NAME`; without a secret it waits.
+- **Merge rules.** Snapshots are last-write-wins per user on `updated_at`
+  (ties break toward the lexicographically greater source, so all hosts
+  agree — run NTP). Three cases merge smarter: pulls apply only strictly
+  newer state (local unsynced earnings are never clobbered by a stale
+  master copy); friendships are pair rows that upsert with accepted-wins;
+  career-claim counts merge with MAX. Unfriending does not propagate.
+- **One account, one match.** Every push carries each user's live state
+  (active match slot or not); the browser asks `GET /presence/{user_id}`
+  before enabling Play — and again at launch — and blocks with the other
+  cluster's name while that account is mid-match elsewhere. Unknown (no or
+  unreachable directory) lets the player through: a dead directory must not
+  strand anyone.
+- **Deliberately local:** login sessions, live matchmaking state, battle
+  results and match history (per-cluster audit), chat, diagnostics.
+- **Opt-out is total:** `run/dn-no-master-server.txt` removes the cluster
+  from the listing *and* stops all replication (no push, no pull, no
+  presence) — so double-play against an opted-out cluster is undetectable
+  by design.
 
 ## Licence
 

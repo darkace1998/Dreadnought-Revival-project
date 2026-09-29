@@ -115,6 +115,15 @@ func newAPIRouter(h *handlers.Handler, log *logrus.Logger) http.Handler {
 	r.HandleFunc("/clusters", h.List).Methods(http.MethodGet)
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
 	r.Handle("/metrics", promhttp.Handler())
+
+	// Account roaming (stage 3): clusters push snapshots and pull everyone
+	// else's. Authentication is per-cluster (X-Sync-Key against the stored
+	// hash), checked inside the handlers — there is deliberately no shared
+	// key for the whole mesh.
+	r.HandleFunc("/sync/push", h.SyncPush).Methods(http.MethodPost)
+	r.HandleFunc("/sync/pull", h.SyncPull).Methods(http.MethodGet)
+	// Launcher presence check: public (see SyncPresence for the reasoning).
+	r.HandleFunc("/presence/{user_id}", h.SyncPresence).Methods(http.MethodGet)
 	return r
 }
 
@@ -134,6 +143,12 @@ func newAdminRouter(h *handlers.Handler, password string, log *logrus.Logger) ht
 	admin.HandleFunc("/api/clusters/{id}/block", h.AdminBlock).Methods(http.MethodPost)
 	admin.HandleFunc("/api/clusters/{id}/unblock", h.AdminUnblock).Methods(http.MethodPost)
 	admin.HandleFunc("/api/clusters/{id}", h.AdminDelete).Methods(http.MethodDelete)
+	admin.HandleFunc("/api/clusters/{id}/secret", h.AdminSecret).Methods(http.MethodPost)
+	admin.HandleFunc("/api/synclog", h.AdminSyncLog).Methods(http.MethodGet)
+	admin.HandleFunc("/api/syncusers", h.AdminSyncUsers).Methods(http.MethodGet)
+	admin.HandleFunc("/api/clusters/{id}/secret", h.AdminSecret).Methods(http.MethodPost)
+	admin.HandleFunc("/api/synclog", h.AdminSyncLog).Methods(http.MethodGet)
+	admin.HandleFunc("/api/syncusers", h.AdminSyncUsers).Methods(http.MethodGet)
 	return r
 }
 
