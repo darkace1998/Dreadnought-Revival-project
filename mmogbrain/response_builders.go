@@ -2077,17 +2077,53 @@ func appendMmogShipProgression(b []byte, stack []int, ship mmogShipSeed) ([]byte
 	return b, stack
 }
 
+// playerRankCount is the number of player ranks: the rows of the client's
+// DN_Ranks_Player table (Fledgling .. Anax of the Belt), matching its 51 rank
+// icons (UI_captain_rank_0..50).
+const playerRankCount = 51
+
+// buildMmogProgressionDataPayload answers YA_GetProgressionData, the reply the
+// client's rank system is built from.
+//
+// The parser (0x2A738D0, verified 2026-09-29) reads at the ROOT:
+//
+//	PR  player rank ladder     [{RP, CR}]            -> the rank thresholds
+//	SR  per-ship-class ladders {<CLASS>: [{RP, CR}]}
+//	FR  per-faction ladders    {<faction>: [{RP, CR}]}
+//	PU  player-rank unlocks    {<ItemID>: {Rank, AutoUnlock}}
+//	SU / FU                    class / faction rank unlocks [{ItemID, Rank, AutoUnlock}]
+//
+// The client ships none of these values -- DN_Ranks_Player holds only rank
+// names -- so they only ever came from the original service. We sent
+// result.ProgressionData (a list of ship ids, read by nothing), so the
+// client's ladder was EMPTY: the rank never moved and never ranked up, whatever
+// "rep" said ("the rank is not working", operator).
+//
+// PR now carries the server's own ladder (handlers.RankXPThreshold, the one
+// that moves current_rank) as CUMULATIVE reputation: entry i is where rank i+1
+// starts, entry 0 = rank 1 at 0. "rep" (YA_PlayerGet) is current_xp, the same
+// total, so the client's rank equals the server's.
+// GUESS: cumulative-from-0 is the reading of RP; the client's rank-for-RP
+// logic is a virtual override not traced. CR (the rank-up credit reward,
+// EYCreditsPoolType::RankUp) is 0: no value exists and none was chosen.
+// SR/FR/PU/SU/FU stay absent: no class/faction ladders and no rank-gated
+// unlocks, the same as before.
 func buildMmogProgressionDataPayload() []byte {
 	var b []byte
 	var stack []int
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetProgressionData")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b, stack = protocol.AppendArrayStart(b, stack, "ProgressionData")
-	for _, shipID := range starterShipIDs() {
-		b = protocol.AppendUnnamedInt32Field(b, shipID)
+	b, stack = protocol.AppendArrayStart(b, stack, "PR")
+	cumulative := int32(0)
+	for rank := int32(1); rank <= playerRankCount; rank++ {
+		cumulative += handlers.RankXPThreshold(rank) // 0 for rank 1
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		// Numeric strings: the parser reads RP/CR through the scalar union
+		// (type 2-4 switch at 0x142A73ADF).
+		b = protocol.AppendStringField(b, "RP", strconv.Itoa(int(cumulative)))
+		b = protocol.AppendStringField(b, "CR", "0")
+		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

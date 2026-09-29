@@ -41,8 +41,12 @@ var targetSizes = map[string]int{
 	// Was 2153. +594: goal m_title/m_description now go out as NSLOCTEXT(...)
 	// macros -- the FText import the client uses left bare strings blank.
 	"YA_GetStaticCareerData": 2747,
-	"YA_GetProgressionData":  126,
-	"YA_GetScoringData":      5753,
+	// Was 126. +1690: the reply now carries the PR rank ladder (51 {RP, CR}
+	// entries at the root, parser 0x2A738D0) instead of a list of ship ids
+	// under result that nothing read -- the client's rank thresholds came
+	// from here and were empty.
+	"YA_GetProgressionData": 1816,
+	"YA_GetScoringData":     5753,
 	// Was 227. +4278 for the quest catalog (ContractTable: the client's 24
 	// MPQuestCollection rows, ContractConfigTable, ContractNextResetTime) --
 	// the fields the client's parser for this reply (0x2A6B7F0) actually reads.

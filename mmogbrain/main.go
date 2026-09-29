@@ -440,6 +440,7 @@ func configureMatchAutoscale(mm *matchmaker.Matchmaker, log *logrus.Logger) {
 	mm.PlayersPerMatch = maxPlayers
 	mm.MaxWait = maxWait
 	mm.OnlinePlayers = socialHubInstance.onlinePlayerIDs
+	mm.OnHostLost = notifyHostLost // server_shutdown.go
 	log.WithFields(logrus.Fields{"max_players": maxPlayers, "max_wait": maxWait}).
 		Info("matchmaker: auto-scaled match size (online players not in a battle)")
 }
