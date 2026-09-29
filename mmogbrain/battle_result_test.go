@@ -90,8 +90,11 @@ func TestBattleResultAwardsOnce(t *testing.T) {
 	c1, f1, x1, s1 := read()
 	// Win + 3 kills: intermediate credits 1500+3*100 = 1800 x (1+0.75+0.25+1.00)
 	// = 5400; intermediate XP 1000+3*50 = 1150 x (1+1.25+0.25+1.00) = 4025.
-	if c1-c0 != 5400 || f1-f0 != 4025 || x1-x0 != 4025 || s1-s0 != 4025 {
-		t.Fatalf("deltas credits=%d freeXP=%d rankXP=%d shipXP=%d; want 5400/4025/4025/4025", c1-c0, f1-f0, x1-x0, s1-s0)
+	// Free XP is 25% of that (DN_REWARD_FREE_XP_PERCENT), 1006; it was the
+	// whole 4025 until 2026-09-29 (operator: "should be way less ... maybe
+	// 25 %"). Rank and ship XP still get the whole amount.
+	if c1-c0 != 5400 || f1-f0 != 1006 || x1-x0 != 4025 || s1-s0 != 4025 {
+		t.Fatalf("deltas credits=%d freeXP=%d rankXP=%d shipXP=%d; want 5400/1006/4025/4025", c1-c0, f1-f0, x1-x0, s1-s0)
 	}
 	for counter, want := range map[string]int32{"MatchesPlayed": 1, "MatchesWon": 1, "ShipsDestroyed": 3} {
 		if got := battleResultCounter(pid, counter); got != want {
@@ -191,5 +194,16 @@ func TestBattleFleetShipIDsAreFleetShipIDs(t *testing.T) {
 		if pawn[id] {
 			t.Errorf("id %d is a pawn id, not a fleet ship id", id)
 		}
+	}
+}
+
+// The end-of-match screen's free XP (xp_pools -> m_matchXPInfo.m_freeXP) is
+// the free share, and its pools add up to exactly what is paid as free XP.
+func TestFreeXPPoolsAreTheFreeShare(t *testing.T) {
+	r := currentBattleRewards()
+	_, xp := r.poolsFor("win", 3, 1)
+	free := xp.scaled(r.freeXPPct, r.freeXPOf(xp.total()))
+	if free.total() != r.freeXPOf(xp.total()) || free.total() >= xp.total() {
+		t.Errorf("free pools total %d, want %d (25%% of %d)", free.total(), r.freeXPOf(xp.total()), xp.total())
 	}
 }

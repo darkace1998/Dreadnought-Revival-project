@@ -1560,6 +1560,16 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	starterFleet := state.activeFleet()
 
 	b = protocol.AppendStringField(b, "RT", rt)
+	if rt == "YA_RefreshPlayerProfile" {
+		// The client sends YA_RefreshPlayerProfile after every match (22:00:53,
+		// 2026-09-29, a minute after the match end) and its handler
+		// (0x142A31845) re-parses the player data (0x142A3D820 on this very
+		// document) ONLY when "containsProfile" is a type-1 node that is
+		// truthy (0x140237D40, cmp [node], 1; 0x14038C4F0). Without it the
+		// reply was dropped and the hangar kept the pre-match free XP, ship XP
+		// and rank. GUESS: that a bool field makes node type 1.
+		b = protocol.AppendBoolField(b, "containsProfile", true)
+	}
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
 	// tll/tpl/tc/rep/repXX_X/ReputationGoalID/Membership.ExpireTime/

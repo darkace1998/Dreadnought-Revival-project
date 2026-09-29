@@ -60,6 +60,12 @@ type battleRewards struct {
 	xpBonuses, creditBonuses             []float64
 	fleetBonuses                         []float64 // by EYFleetType-1: Recruit, Veteran, Legendary
 	eliteTeamPct                         float64
+	// freeXPPct is the share of a match's XP that is ALSO paid as free XP.
+	// The rest is ship XP only. CHANGED 2026-09-29: free XP was 100% of the
+	// match XP ("the free xp should be way less than that maybe 25 % of the
+	// total XP", operator). GUESS: the operator's figure; the client's own
+	// XPStandardFreeXpPercentage (YA_GetProgressionData) is not sent or traced.
+	freeXPPct int32
 }
 
 // fleetBonus is the fleet battle bonus of an EYFleetType (1 Recruit,
@@ -114,6 +120,7 @@ func currentBattleRewards() battleRewards {
 		creditBonuses: parseRewardBonuses("DN_REWARD_CREDIT_BONUSES", []float64{0.75, 0.25}),
 		fleetBonuses:  parseRewardBonuses("DN_REWARD_FLEET_BONUSES", []float64{1.00, 1.25, 1.50}),
 		eliteTeamPct:  float64(n("DN_REWARD_ELITE_TEAM_PCT", 0)),
+		freeXPPct:     n("DN_REWARD_FREE_XP_PERCENT", 25),
 	}
 }
 
@@ -172,6 +179,22 @@ func (p rewardPools) total() int32 {
 		t += v
 	}
 	return t
+}
+
+// freeXPOf is the free XP a match's XP pays.
+func (r battleRewards) freeXPOf(xp int32) int32 {
+	return int32(math.Round(float64(xp) * float64(r.freeXPPct) / 100))
+}
+
+// scaled is p with every pool multiplied by pct/100, rounding differences
+// going to pool 0 so the counted total is exactly want.
+func (p rewardPools) scaled(pct int32, want int32) rewardPools {
+	var q rewardPools
+	for i, v := range p {
+		q[i] = int32(math.Round(float64(v) * float64(pct) / 100))
+	}
+	q[0] += want - q.total()
+	return q
 }
 
 func (p rewardPools) csv() string {
@@ -261,6 +284,13 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not recorded", http.StatusInternalServerError)
 		return
 	}
+	if fresh {
+		// The hangar's credits only change through YA_RewardCurrencies, whose
+		// handler ASSIGNS Credits/Points (buildMmogRewardCurrenciesPayload); it
+		// was sent at login only, so the hangar kept the pre-match balance
+		// until a restart (operator, 2026-09-29).
+		squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
+	}
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -282,8 +312,11 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 			shipPools[i] /= int32(len(flown))
 		}
 	}
+	// xp_pools become the screen's FREE XP (m_matchXPInfo.m_freeXP): the
+	// free share of the match XP, not all of it. Ship XP keeps the full split.
+	freePools := xpPools.scaled(rewards.freeXPPct, rewards.freeXPOf(xpPools.total()))
 	_, _ = fmt.Fprintf(w, "credit_pools=%s\nxp_pools=%s\nship_xp_pools=%s\nfleet_ships=%s\nflown_ships=%s\n",
-		creditPools.csv(), xpPools.csv(), shipPools.csv(),
+		creditPools.csv(), freePools.csv(), shipPools.csv(),
 		joinInt32s(battleFleetShipIDs(res.pid, fleetType)), joinInt32s(flown))
 }
 
@@ -326,7 +359,7 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	if n, _ := ins.RowsAffected(); n == 0 {
 		return credits, xp, false, nil // already paid
 	}
-	if err := grantBattleRewards(tx, res.pid, credits, xp, ships); err != nil {
+	if err := grantBattleRewards(tx, res.pid, credits, xp, rewards.freeXPOf(xp), ships); err != nil {
 		return 0, 0, false, err
 	}
 	return credits, xp, true, tx.Commit()
@@ -425,7 +458,7 @@ func joinInt32s(v []int32) string {
 	return strings.Join(parts, ",")
 }
 
-func grantBattleRewards(tx *sql.Tx, pid string, credits, xp int32, ships []int32) error {
+func grantBattleRewards(tx *sql.Tx, pid string, credits, xp, freeXP int32, ships []int32) error {
 	var currentXP, rank, rankXP int32
 	if err := tx.QueryRow(`SELECT current_xp, current_rank, rank_xp FROM player_state WHERE user_id=?`, pid).
 		Scan(&currentXP, &rank, &rankXP); err != nil {
@@ -443,7 +476,7 @@ func grantBattleRewards(tx *sql.Tx, pid string, credits, xp int32, ships []int32
 	}
 	if _, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, free_xp=free_xp+?,
 		current_xp=current_xp+?, current_rank=?, rank_xp=?, updated_at=datetime('now') WHERE user_id=?`,
-		credits, xp, xp, rank, rankXP, pid); err != nil {
+		credits, freeXP, xp, rank, rankXP, pid); err != nil {
 		return err
 	}
 	if len(ships) > 0 {
