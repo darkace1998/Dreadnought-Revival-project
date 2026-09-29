@@ -342,6 +342,14 @@ var migrations = []string{
 		updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
 		PRIMARY KEY (user_id, goal_id)
 	)`,
+	// Friend and ignore ids were stored in mixed forms (dashed and undashed);
+	// normalise to 32 lowercase hex, keeping pid_a <= pid_b (social.go
+	// socialID/friendPairKey).
+	`UPDATE player_friends SET
+		pid_a = min(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))),
+		pid_b = max(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))),
+		requester_id = lower(replace(requester_id,'-',''))`,
+	`UPDATE player_ignores SET pid = lower(replace(pid,'-','')), ignored_id = lower(replace(ignored_id,'-',''))`,
 }
 
 func Open(path string) (*sql.DB, error) {

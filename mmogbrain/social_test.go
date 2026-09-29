@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -261,22 +263,55 @@ func TestMutualAddResolvesToFriends(t *testing.T) {
 	}
 }
 
-// A friend request pushes one of the four server-initiated methods to the other
-// player if they are connected.
+// A friend request pushes presence.friends.friendrequest to the other player,
+// in the {type, data} envelope the dispatcher routes, with data.requestor the
+// asker's GUID string: "Friend request received from %s" (0x142AA87A0) parses
+// message+0x7B0, which the parser fills from data.requestor. The target comes in
+// dashed, as the client sends it, while peers are keyed by the 32-hex id -- the
+// lookup that used to find no one (operator, 2026-09-28: "no notification").
 func TestFriendRequestPushesToTarget(t *testing.T) {
 	hub := socialTestHub(t)
-	a, _ := socialTestPeer(t, hub, "player-a")
-	_, bRead := socialTestPeer(t, hub, "player-b")
+	const pa, pb = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	a, _ := socialTestPeer(t, hub, pa)
+	_, bRead := socialTestPeer(t, hub, pb)
 
 	go handlePresenceSocialMethod(socialRequest{
 		method: "presence.friends.add",
-		params: map[string]any{"pid": "player-b"},
+		params: map[string]any{"user": dashedPlayerGUID(pb)},
 		peer:   a, hub: hub,
 	})
 
-	msg := readPush(t, bRead)
-	if msg["method"] != "presence.friends.friendrequest" {
-		t.Errorf("push method = %v, want presence.friends.friendrequest", msg["method"])
+	if method, data := readNotice(t, bRead); method != "user.profile" || data["guid"] != dashedPlayerGUID(pa) {
+		t.Errorf("first push %v guid=%v, want the requester's user.profile", method, data["guid"])
+	}
+	method, data := readNotice(t, bRead)
+	if method != "presence.friends.friendrequest" {
+		t.Errorf("push type = %v, want presence.friends.friendrequest", method)
+	}
+	if data["requestor"] != dashedPlayerGUID(pa) || data["target"] != dashedPlayerGUID(pb) {
+		t.Errorf("requestor=%v target=%v, want %s / %s", data["requestor"], data["target"], dashedPlayerGUID(pa), dashedPlayerGUID(pb))
+	}
+}
+
+// Two players who each asked are friends; both get the confirm, with requestor
+// the one who asked first.
+func TestMutualFriendRequestConfirmsBoth(t *testing.T) {
+	hub := socialTestHub(t)
+	const pa, pb = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	_, aRead := socialTestPeer(t, hub, pa)
+	b, _ := socialTestPeer(t, hub, pb)
+	if err := hub.addFriend(pa, pb); err != nil {
+		t.Fatal(err)
+	}
+	go handlePresenceSocialMethod(socialRequest{
+		method: "presence.friends.add",
+		params: map[string]any{"user": dashedPlayerGUID(pa)},
+		peer:   b, hub: hub,
+	})
+	readNotice(t, aRead) // b's profile
+	method, data := readNotice(t, aRead)
+	if method != "presence.friends.friendrequestconfirmed" || data["requestor"] != dashedPlayerGUID(pa) || data["target"] != dashedPlayerGUID(pb) {
+		t.Errorf("got %v requestor=%v target=%v, want friendrequestconfirmed %s / %s", method, data["requestor"], data["target"], dashedPlayerGUID(pa), dashedPlayerGUID(pb))
 	}
 }
 
@@ -331,5 +366,188 @@ func TestChatJoinEventUsesTheNoticeMethod(t *testing.T) {
 	}
 	if params["channel"] != "dreadnought.global" {
 		t.Errorf("join event channel = %v, want dreadnought.global", params["channel"])
+	}
+}
+
+// The requester arrives undashed and the target as the client's dashed GUID;
+// both must land in one form, or the target never sees or accepts the request
+// (2026-09-28).
+func TestFriendRequestAcrossIDFormats(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const a = "0123456789abcdef0123456789abcdef"
+	const b = "fedcba9876543210fedcba9876543210"
+	if err := socialHubInstance.addFriend(a, dashedPlayerGUID(b)); err != nil {
+		t.Fatal(err)
+	}
+	pending := socialHubInstance.friendsOf(b)
+	if len(pending) != 1 || pending[0].state != "pending" || pending[0].playerID != a {
+		t.Fatalf("target's view: %+v", pending)
+	}
+	if err := socialHubInstance.confirmFriend(b, dashedPlayerGUID(a)); err != nil {
+		t.Fatal(err)
+	}
+	if got := socialHubInstance.friendsOf(a); len(got) != 1 || got[0].state != "accepted" {
+		t.Fatalf("after confirm: %+v", got)
+	}
+}
+
+// A player sent to a match is joined to its MatchAll and MatchTeam rooms and
+// told so; an earlier match's rooms are left (2026-09-28).
+func TestJoinMatchChannels(t *testing.T) {
+	hub := socialTestHub(t)
+	peer, _ := socialTestPeer(t, hub, "0123456789abcdef0123456789abcdef")
+	hub.joinMatchChannels(peer.playerID, "m1", 2)
+	peer.mu.Lock()
+	in := map[string]bool{}
+	for k := range peer.channels {
+		in[k] = true
+	}
+	peer.mu.Unlock()
+	if !in["m1.all"] || !in["m1-2.team"] {
+		t.Fatalf("channels after match m1: %v", in)
+	}
+	hub.joinMatchChannels(peer.playerID, "m2", 1)
+	peer.mu.Lock()
+	defer peer.mu.Unlock()
+	if peer.channels["m1.all"] || peer.channels["m1-2.team"] || !peer.channels["m2.all"] || !peer.channels["m2-1.team"] {
+		t.Fatalf("channels after match m2: %v", peer.channels)
+	}
+}
+
+// _OnChatChannelMessage (0x142AA7100) parses data.sender as a GUID string; an
+// object read as "" gave "GetUsername called with empty guid" and a nameless
+// chat line (operator's client log, 2026-09-28).
+func TestChatMessageSenderIsGUIDString(t *testing.T) {
+	const pid = "0123456789abcdef0123456789abcdef"
+	notice := chatMessageNotice("chat.channel.message", "m1.all", map[string]any{"pid": dashedPlayerGUID(pid)}, "hi")
+	data := notice["data"].(map[string]any)
+	want := "01234567-89ab-cdef-0123-456789abcdef"
+	if data["sender"] != want {
+		t.Errorf("data.sender = %#v, want the dashed GUID string %q", data["sender"], want)
+	}
+	if data["text"] != "hi" || data["channel"] != "m1.all" {
+		t.Errorf("data.text=%v data.channel=%v, want hi / m1.all", data["text"], data["channel"])
+	}
+}
+
+// Re-adding a friend you asked first: requestor is you, target the OTHER player.
+// Both used to be you, and the client listed the player as their own friend.
+func TestReAddingAnAcceptedFriendNeverNamesYourself(t *testing.T) {
+	hub := socialTestHub(t)
+	const pa, pb = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	a, aRead := socialTestPeer(t, hub, pa)
+	_, bRead := socialTestPeer(t, hub, pb)
+	if err := hub.addFriend(pa, pb); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.addFriend(pb, pa); err != nil {
+		t.Fatal(err)
+	}
+	go handlePresenceSocialMethod(socialRequest{
+		method: "presence.friends.add",
+		params: map[string]any{"user": dashedPlayerGUID(pb)},
+		peer:   a, hub: hub,
+	})
+	for name, r := range map[string]*bufio.Reader{"target": bRead, "requester": aRead} {
+		readNotice(t, r) // profile
+		_, data := readNotice(t, r)
+		if data["requestor"] != dashedPlayerGUID(pa) || data["target"] != dashedPlayerGUID(pb) {
+			t.Errorf("%s got requestor=%v target=%v, want %s / %s", name, data["requestor"], data["target"], dashedPlayerGUID(pa), dashedPlayerGUID(pb))
+		}
+	}
+}
+
+// The listing must reach the client's parser: root "data", each element
+// {friend: "<guid>"}, outgoing and incoming requests in separate lists. It went
+// out under "result" as presence objects, and every client restart showed an
+// empty friend list (operator, 2026-09-28).
+func TestFriendListingIsInTheShapeTheClientParses(t *testing.T) {
+	hub := socialTestHub(t)
+	const me, friend, asked, asker = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"cccccccccccccccccccccccccccccccc", "dddddddddddddddddddddddddddddddd"
+	peer, _ := socialTestPeer(t, hub, me)
+	for _, pair := range [][2]string{{me, friend}, {friend, me}, {me, asked}, {asker, me}} {
+		if err := hub.addFriend(pair[0], pair[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res := handlePresenceSocialMethod(socialRequest{method: "presence.friends.listing", peer: peer, hub: hub})
+	result, _ := res["result"].(map[string]any)
+	if result == nil {
+		result = res
+	}
+	data, ok := result[firmamentRootData].(map[string]any)
+	if !ok {
+		t.Fatalf("listing reply has no root data: %v", res)
+	}
+	one := func(key, want string) {
+		list, _ := data[key].([]any)
+		if len(list) != 1 || list[0].(map[string]any)["friend"] != dashedPlayerGUID(want) {
+			t.Errorf("data.%s = %v, want one element with friend %s", key, list, dashedPlayerGUID(want))
+		}
+	}
+	one("friends", friend)
+	one("pending_friends", asked)
+	one("incoming_friend_requests", asker)
+}
+
+func TestOnlineListsConnectedPlayersLoopbackOnly(t *testing.T) {
+	for addr, want := range map[string]int{"127.0.0.1:5000": http.StatusOK, "10.0.0.5:5000": http.StatusForbidden} {
+		req := httptest.NewRequest(http.MethodGet, "/online", nil)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		onlineHandler(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s: %d, want %d", addr, rec.Code, want)
+		}
+	}
+}
+
+// The friend list is pushed as a presence.friends.listing EVENT: the client
+// never requests it (it routes the type as an inbound event, 0x142A8DFA0).
+func TestFriendListingIsPushed(t *testing.T) {
+	hub := socialTestHub(t)
+	const me, friend, ignored = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "cccccccccccccccccccccccccccccccc"
+	_, read := socialTestPeer(t, hub, me)
+	_ = hub.addFriend(me, friend)
+	_ = hub.addFriend(friend, me)
+	_ = hub.addIgnore(me, ignored)
+	go hub.pushFriendListing(me)
+	method, data := readNotice(t, read)
+	if method != "presence.friends.listing" {
+		t.Fatalf("push type %q, want presence.friends.listing", method)
+	}
+	friends, _ := data["friends"].([]any)
+	if len(friends) != 1 || friends[0].(map[string]any)["friend"] != dashedPlayerGUID(friend) {
+		t.Errorf("data.friends = %v, want the one friend's GUID", friends)
+	}
+	ign, _ := data["ignores"].([]any)
+	if len(ign) != 1 || ign[0].(map[string]any)["ignored"] != dashedPlayerGUID(ignored) {
+		t.Errorf("data.ignores = %v, want {ignored: guid}", ign)
+	}
+}
+
+// Coming online and going offline reach every connected friend as
+// presence.friends.state, after the player's profile.
+func TestFriendStateIsBroadcastOnlineAndOffline(t *testing.T) {
+	hub := socialTestHub(t)
+	const me, friend = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	_, friendRead := socialTestPeer(t, hub, friend)
+	_ = hub.addFriend(me, friend)
+	_ = hub.addFriend(friend, me)
+	mePeer, _ := socialTestPeer(t, hub, me)
+
+	go hub.broadcastFriendState(me, true)
+	readNotice(t, friendRead) // profile
+	method, data := readNotice(t, friendRead)
+	if method != "presence.friends.state" || data["friend"] != dashedPlayerGUID(me) || data["status"] != float64(1) {
+		t.Errorf("online push: %s %v, want presence.friends.state friend=%s status=1", method, data, dashedPlayerGUID(me))
+	}
+
+	go hub.leave(mePeer)
+	readNotice(t, friendRead) // profile
+	method, data = readNotice(t, friendRead)
+	if method != "presence.friends.state" || data["status"] != float64(0) {
+		t.Errorf("offline push: %s %v, want status 0", method, data)
 	}
 }

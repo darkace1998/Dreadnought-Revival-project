@@ -18,6 +18,10 @@ import (
 	"strings"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	"github.com/sirupsen/logrus"
+	"sort"
+	"sync"
+	"time"
 )
 
 // socialRequest is one decoded JSON-RPC call from a connected player.
@@ -106,18 +110,40 @@ func handleUserMethod(r socialRequest) map[string]any {
 		// is_*) into the list the whois callback (0x142AAA090) consumes.
 		found := []any{}
 		notFound := []any{}
+		requester := ""
+		if r.peer != nil {
+			requester = r.peer.playerID
+		}
 		for _, id := range stringListParam(r.params, "users", "user", "ids") {
 			pid := protocol.NormalizePlayerPID(id)
 			if pid == "" || !playerExists(pid) {
 				notFound = append(notFound, id)
+				logWhois(requester, id, false)
+				// Answer it anyway. The client re-asks for an id until a user
+				// record with that guid comes back -- about 15 times a second,
+				// forever ("Successfully sent request to resolve 1 usernames",
+				// operator's log 2026-09-28) -- so an id we cannot resolve gets
+				// a placeholder record rather than no record.
+				found = append(found, unknownWhoisEntry(id))
 				continue
 			}
+			logWhois(requester, id, true)
 			found = append(found, r.hub.presenceEntry(pid))
+			// Fill the client's name cache: only a user.profile push does
+			// (see userProfileEvent); the reply alone left it re-asking.
+			if r.peer != nil {
+				peerID, online := "", false
+				if other := r.hub.peerFor(pid); other != nil {
+					peerID, online = other.peerID, true
+				}
+				_ = r.peer.send(userProfileEvent(pid, peerID, online))
+			}
 		}
 		return socialOK(map[string]any{
 			"users":           found,
 			"users_not_found": notFound,
 			firmamentRootData: map[string]any{"users": found, "users_not_found": notFound},
+			firmamentRootType: "user.whois",
 		})
 
 	case "user.search":
@@ -283,24 +309,29 @@ func handleChatMethod(r socialRequest) map[string]any {
 
 func handlePresenceSocialMethod(r socialRequest) map[string]any {
 	switch r.method {
-	case "presence.friends.listing", "presence.friends.state":
+	case "presence.friends.listing", "presence.friends.state", "presence.pending_friends.listing":
+		// The client reads the lists from the ROOT "data" (see
+		// friendListingData); "result" is kept for anything reading the old
+		// place.
 		friends, pending := r.hub.friendListing(r.peer.playerID)
+		data := r.hub.friendListingData(r.peer.playerID)
+		logrus.WithFields(logrus.Fields{
+			"player": r.peer.playerID, "method": r.method,
+			"friends": len(data["friends"].([]any)), "outgoing": len(data["pending_friends"].([]any)),
+			"incoming": len(data["incoming_friend_requests"].([]any)),
+		}).Info("social: friend listing")
 		return socialOK(map[string]any{
+			firmamentRootData: data,
+			firmamentRootType: r.method,
 			"friends":         friends,
 			"listing":         friends,
 			"pending_friends": pending,
 		})
 
-	case "presence.pending_friends.listing":
-		_, pending := r.hub.friendListing(r.peer.playerID)
-		return socialOK(map[string]any{
-			"pending_friends": pending,
-			"listing":         pending,
-			"friends":         pending,
-		})
-
 	case "presence.friends.add":
 		target := r.targetPlayer()
+		logrus.WithFields(logrus.Fields{"player": r.peer.playerID, "target": target, "params": paramKeys(r.params)}).
+			Info("social: friend request")
 		if target == "" || target == r.peer.playerID {
 			return socialError("a friend request needs another player")
 		}
@@ -316,8 +347,39 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 		if err := r.hub.addFriend(r.peer.playerID, target); err != nil {
 			return socialError(err.Error())
 		}
-		r.hub.notifyFriendEvent(target, "presence.friends.friendrequest", r.peer.playerID)
-		return socialOK(nil)
+		// Two players who each asked have become friends (addFriend turns the
+		// second request into an accept): tell BOTH, as a confirm would.
+		if state, requester := r.hub.friendState(r.peer.playerID, target); state == "accepted" {
+			// requestor is whoever asked FIRST, target the other one -- which
+			// is this player only when the other side asked first. FIXED
+			// 2026-09-28: target was always this player, so re-adding a friend
+			// you had asked first sent requestor == target == you, and the
+			// client listed the player as their own friend (operator).
+			me := socialID(r.peer.playerID)
+			other := socialID(target)
+			confirmedTarget := me
+			if socialID(requester) == me {
+				confirmedTarget = other
+			}
+			r.hub.notifyFriendEvent(target, "presence.friends.friendrequestconfirmed", requester, confirmedTarget, r.peer.playerID)
+			r.hub.notifyFriendEvent(r.peer.playerID, "presence.friends.friendrequestconfirmed", requester, confirmedTarget, target)
+		} else {
+			r.hub.notifyFriendEvent(target, "presence.friends.friendrequest", r.peer.playerID, target, r.peer.playerID)
+		}
+		// The client's add-result handler (0x142AA8A30) reads the target from
+		// the raw reply's data.notice.target (a GUID string) and adds it to its
+		// outgoing list; a bare "success" logged "Friend add request result.
+		// Failed to parse target" (operator, 2026-09-28) although the request
+		// was stored.
+		r.hub.pushFriendListing(r.peer.playerID)
+		r.hub.pushFriendListing(target)
+		return socialOK(map[string]any{
+			firmamentRootData: map[string]any{"notice": map[string]any{
+				"action": "presence.friends.add",
+				"status": "success",
+				"target": dashedPlayerGUID(socialID(target)),
+			}},
+		})
 
 	case "presence.friends.confirm":
 		target := r.targetPlayer()
@@ -327,7 +389,10 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 		if err := r.hub.confirmFriend(r.peer.playerID, target); err != nil {
 			return socialError(err.Error())
 		}
-		r.hub.notifyFriendEvent(target, "presence.friends.friendrequestconfirmed", r.peer.playerID)
+		// target asked; this player confirmed.
+		r.hub.notifyFriendEvent(target, "presence.friends.friendrequestconfirmed", target, r.peer.playerID, r.peer.playerID)
+		r.hub.pushFriendListing(r.peer.playerID)
+		r.hub.pushFriendListing(target)
 		return socialOK(nil)
 
 	case "presence.friends.remove", "presence.friends.removepending":
@@ -342,7 +407,9 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 		if r.method == "presence.friends.removepending" {
 			event = "presence.friends.friendrequestcanceled"
 		}
-		r.hub.notifyFriendEvent(target, event, r.peer.playerID)
+		r.hub.notifyFriendEvent(target, event, r.peer.playerID, target, r.peer.playerID)
+		r.hub.pushFriendListing(r.peer.playerID)
+		r.hub.pushFriendListing(target)
 		return socialOK(nil)
 
 	case "presence.ignore.listing":
@@ -357,6 +424,7 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 			if err := r.hub.addIgnore(r.peer.playerID, target); err != nil {
 				return socialError(err.Error())
 			}
+			r.hub.pushFriendListing(r.peer.playerID)
 		}
 		return socialOK(nil)
 
@@ -365,6 +433,7 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 			if err := r.hub.removeIgnore(r.peer.playerID, target); err != nil {
 				return socialError(err.Error())
 			}
+			r.hub.pushFriendListing(r.peer.playerID)
 		}
 		return socialOK(nil)
 	}
@@ -374,25 +443,56 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 // notifyFriendEvent pushes one of the four server-initiated friend methods to a
 // player if they are connected. Offline players pick the change up from their
 // next listing, which is why nothing is queued here.
-func (h *socialHub) notifyFriendEvent(targetPlayerID, method, actorPlayerID string) {
-	peer := h.peerFor(targetPlayerID)
+//
+// SHAPE, from the client (verified in the binary 2026-09-28): the parser
+// 0x142A52390 reads data.requestor -> message+0x7B0, data.target -> +0x7D0 and
+// data.friend -> +0x7F0, each a GUID STRING. "Friend request received from %s"
+// (0x142AA87A0) parses +0x7B0; the confirm handler (0x142AA8030) parses both
+// +0x7B0 and +0x7D0 and compares them with its own GUID (+0x3A8); the removed
+// handler (0x142AA857C) parses +0x7B0. requestor is the player who ASKED,
+// target the other one.
+// FIXED 2026-09-28: this was a JSON-RPC {method, params} frame -- the shape the
+// client SENDS, which its dispatcher never routes (see chatChannelNotice) --
+// and the recipient was looked up by the dashed GUID while peers are keyed by
+// the 32-hex id, so nothing was sent at all ("no notification", operator).
+func (h *socialHub) notifyFriendEvent(recipientID, method, requestorID, targetID, actorID string) {
+	peer := h.peerFor(socialID(recipientID))
+	fields := logrus.Fields{"event": method, "recipient": socialID(recipientID), "actor": socialID(actorID)}
 	if peer == nil {
+		logrus.WithFields(fields).Info("social: friend push NOT sent -- recipient offline (they get it from their next listing)")
 		return
 	}
-	actor := h.presenceEntry(actorPlayerID)
-	friends, pending := h.friendListing(targetPlayerID)
-	_ = peer.send(map[string]any{
-		"jsonrpc": "2.0",
-		"method":  method,
-		"params": map[string]any{
-			"pid":             actorPlayerID,
-			"PID":             actorPlayerID,
-			"user":            actor,
-			"friend":          actor,
-			"friends":         friends,
-			"pending_friends": pending,
-		},
-	})
+	actor := socialID(actorID)
+	// The actor's profile first, so the name cache has it when the handler
+	// resolves the GUID (GetUsername would otherwise queue a whois).
+	actorPeerID := ""
+	if ap := h.peerFor(actor); ap != nil {
+		actorPeerID = ap.peerID
+	}
+	_ = peer.send(userProfileEvent(actor, actorPeerID, actorPeerID != ""))
+	data := h.friendListingData(socialID(recipientID))
+	data["requestor"] = dashedPlayerGUID(socialID(requestorID))
+	data["target"] = dashedPlayerGUID(socialID(targetID))
+	data["friend"] = dashedPlayerGUID(actor)
+	data["users"] = []any{h.presenceEntry(actor)}
+	err := peer.send(firmamentEvent(method, data))
+	if err != nil {
+		logrus.WithFields(fields).WithError(err).Warn("social: friend push write failed")
+		return
+	}
+	logrus.WithFields(fields).Info("social: friend push delivered")
+}
+
+// friendState is the stored state of the pair ("pending", "accepted") and who
+// asked, or "" when there is no row.
+func (h *socialHub) friendState(playerID, otherID string) (state, requester string) {
+	other := socialID(otherID)
+	for _, e := range h.friendsOf(socialID(playerID)) {
+		if socialID(e.playerID) == other {
+			return e.state, socialID(e.requester)
+		}
+	}
+	return "", ""
 }
 
 // playerExists reports whether pid has a player record.
@@ -428,4 +528,45 @@ func stringListParam(params map[string]any, keys ...string) []string {
 		}
 	}
 	return nil
+}
+
+// whoisLogged rate-limits logUnresolvedWhois: the client re-asks for an
+// unresolved id about 15 times a second ("Successfully sent request to
+// resolve 1 usernames"), so each id is logged at most once a minute.
+var whoisLogged sync.Map // id -> time.Time
+
+// logWhois records a user.whois id, at most once a minute per id -- enough to
+// see which id a client loops on (operator's client log, 2026-09-28).
+func logWhois(requester, id string, found bool) {
+	if last, ok := whoisLogged.Load(id); ok && time.Since(last.(time.Time)) < time.Minute {
+		return
+	}
+	whoisLogged.Store(id, time.Now())
+	logrus.WithFields(logrus.Fields{"player": requester, "id": id, "known": found}).Info("social: user.whois")
+}
+
+// unknownWhoisEntry is the record sent back for an id this server cannot
+// resolve: the client's own guid, so its pending lookup completes.
+func unknownWhoisEntry(id string) map[string]any {
+	return map[string]any{
+		"guid":              id,
+		"pid":               id,
+		"PID":               id,
+		"name":              "Unknown player",
+		"display_name":      "Unknown player",
+		"full_display_name": "Unknown player",
+		"number":            "0",
+		"status":            "offline",
+		"online":            false,
+	}
+}
+
+// paramKeys lists a request's parameter names, for logs.
+func paramKeys(params map[string]any) []string {
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

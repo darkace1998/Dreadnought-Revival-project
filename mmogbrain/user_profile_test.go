@@ -33,4 +33,21 @@ func TestJoinNoticeUserMatchesOwnProfileGUID(t *testing.T) {
 	if got != own {
 		t.Fatalf("notice.user = %#v, own profile guid = %#v; they must be the same string", got, own)
 	}
+	// data.user too: the parser reads the data-level fields, and an object
+	// there parsed as the zero GUID -- "User 00000000-... joined", the join
+	// counted as someone else's and chat broke (2026-09-28).
+	if top := notice["data"].(map[string]any)["user"]; top != own {
+		t.Fatalf("data.user = %#v, want the own profile guid %#v", top, own)
+	}
+}
+
+// Channel members go out as GUID strings: objects read as a zero GUID per
+// member ("GetUsername called with empty guid", 2026-09-28).
+func TestChannelInfoMembersAreGUIDStrings(t *testing.T) {
+	info := socialHubInstance.channelInfo("dreadnought.global")
+	for _, m := range info["members"].([]any) {
+		if _, ok := m.(string); !ok {
+			t.Fatalf("member %#v is not a GUID string", m)
+		}
+	}
 }

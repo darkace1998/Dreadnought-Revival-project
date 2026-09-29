@@ -386,6 +386,7 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	// Battle-server mod: the scoring table the host cannot get without a
 	// login. Loopback only; see scoring_table.go.
 	r.HandleFunc("/battle/scoring", battleScoringHandler).Methods(http.MethodGet)
+	r.HandleFunc("/online", onlineHandler).Methods(http.MethodGet)
 
 	// Admin endpoints
 	adminSub := r.PathPrefix("/admin").Subrouter()

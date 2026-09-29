@@ -34,6 +34,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"net"
 	"sort"
@@ -44,6 +45,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // Channel type tokens the client's classifier accepts. A name whose type is not
@@ -263,13 +266,21 @@ func (h *socialHub) leave(peer *socialPeer) {
 	peer.close()
 
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	// Channel membership is keyed by PLAYER, not by connection, so a peer that
 	// has already been replaced by a reconnect must not tear down the
 	// replacement's membership on its way out.
 	if h.peers[peer.playerID] != peer {
+		h.mu.Unlock()
 		return
 	}
+	// The player really went offline: tell their friends, once the lock is
+	// released (the push looks peers up).
+	defer func() {
+		if h.db != nil {
+			h.broadcastFriendState(peer.playerID, false)
+		}
+	}()
+	defer h.mu.Unlock()
 	delete(h.peers, peer.playerID)
 	for name, members := range h.channels {
 		if members[peer.playerID] {
@@ -380,6 +391,18 @@ func dashedPlayerGUID(playerID string) string {
 }
 
 // friendPairKey orders a pair so one friendship is one row whichever side asks.
+// socialID is the one form a player id is stored and compared in by the
+// friend and ignore tables: 32 lowercase hex, no dashes. FIXED 2026-09-28: the
+// requester arrived undashed (the connection's id) and the target dashed (the
+// client's GUID text), so a pair was stored in mixed forms and the target's
+// own lookups -- listing his pending requests, accepting one -- never matched.
+func socialID(id string) string {
+	if n := protocol.NormalizePlayerPID(id); n != "" {
+		return n
+	}
+	return id
+}
+
 func friendPairKey(a, b string) (string, string) {
 	if a <= b {
 		return a, b
@@ -394,6 +417,7 @@ type friendEntry struct {
 }
 
 func (h *socialHub) friendsOf(playerID string) []friendEntry {
+	playerID = socialID(playerID)
 	database := h.db()
 	if database == nil || playerID == "" {
 		return nil
@@ -422,6 +446,8 @@ func (h *socialHub) friendsOf(playerID string) []friendEntry {
 }
 
 func (h *socialHub) addFriend(playerID, otherID string) error {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	database := h.db()
 	if database == nil {
 		return nil
@@ -440,6 +466,8 @@ func (h *socialHub) addFriend(playerID, otherID string) error {
 }
 
 func (h *socialHub) confirmFriend(playerID, otherID string) error {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	database := h.db()
 	if database == nil {
 		return nil
@@ -454,6 +482,8 @@ func (h *socialHub) confirmFriend(playerID, otherID string) error {
 }
 
 func (h *socialHub) removeFriend(playerID, otherID string) error {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	database := h.db()
 	if database == nil {
 		return nil
@@ -464,6 +494,7 @@ func (h *socialHub) removeFriend(playerID, otherID string) error {
 }
 
 func (h *socialHub) ignoreList(playerID string) []string {
+	playerID = socialID(playerID)
 	database := h.db()
 	if database == nil || playerID == "" {
 		return nil
@@ -484,6 +515,8 @@ func (h *socialHub) ignoreList(playerID string) []string {
 }
 
 func (h *socialHub) ignores(playerID, otherID string) bool {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	for _, id := range h.ignoreList(playerID) {
 		if id == otherID {
 			return true
@@ -493,6 +526,8 @@ func (h *socialHub) ignores(playerID, otherID string) bool {
 }
 
 func (h *socialHub) addIgnore(playerID, otherID string) error {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	database := h.db()
 	if database == nil {
 		return nil
@@ -504,6 +539,8 @@ func (h *socialHub) addIgnore(playerID, otherID string) error {
 }
 
 func (h *socialHub) removeIgnore(playerID, otherID string) error {
+	playerID = socialID(playerID)
+	otherID = socialID(otherID)
 	database := h.db()
 	if database == nil {
 		return nil
@@ -558,6 +595,64 @@ func (h *socialHub) presenceEntry(playerID string) map[string]any {
 	return entry
 }
 
+// friendListingData is the friend state in the shape the client parses, for
+// the root "data" of a listing reply and of the friend events.
+//
+// SHAPE, from the parser 0x142A52390 (verified in the binary 2026-09-28):
+//
+//	data.friends[]                  {friend, status, status_message, is_away, is_idle}
+//	data.pending_friends[]          {friend}   -> message+0x828
+//	data.incoming_friend_requests[] {friend}   -> message+0x840
+//
+// friend is the other player's GUID STRING (read with the string getter
+// 0x142A94CE0), status goes through the int getter it also uses for "hashed",
+// is_away/is_idle through the bool getter. FIXED 2026-09-28: the listing went
+// out under JSON-RPC "result", which this parser never reads, as presence
+// objects with no "friend" key -- so the client started every session with an
+// empty friend list although the rows were stored ("if I restart the client
+// all friends are gone", operator).
+//
+// GUESS: pending_friends holds OUTGOING requests and incoming_friend_requests
+// the incoming ones -- read from the names and the client's separate
+// "Couldn't find Incoming/Outgoing friend request" lookups; which list feeds
+// which UI has not been traced. status 1/0 (online/offline) matches what
+// userProfileEvent sends; the enum itself is untraced.
+func (h *socialHub) friendListingData(playerID string) map[string]any {
+	me := socialID(playerID)
+	friends := make([]any, 0)
+	outgoing := make([]any, 0)
+	incoming := make([]any, 0)
+	for _, entry := range h.friendsOf(me) {
+		other := socialID(entry.playerID)
+		item := map[string]any{"friend": dashedPlayerGUID(other)}
+		if entry.state == "accepted" {
+			status, message := 0, ""
+			if peer := h.peerFor(other); peer != nil {
+				status = 1
+				peer.mu.Lock()
+				message = peer.message
+				peer.mu.Unlock()
+			}
+			item["status"] = status
+			item["status_message"] = message
+			item["is_away"] = false
+			item["is_idle"] = false
+			friends = append(friends, item)
+			continue
+		}
+		if socialID(entry.requester) == me {
+			outgoing = append(outgoing, item)
+		} else {
+			incoming = append(incoming, item)
+		}
+	}
+	return map[string]any{
+		"friends":                  friends,
+		"pending_friends":          outgoing,
+		"incoming_friend_requests": incoming,
+	}
+}
+
 func (h *socialHub) friendListing(playerID string) ([]any, []any) {
 	var friends, pending []any
 	for _, entry := range h.friendsOf(playerID) {
@@ -584,8 +679,16 @@ func (h *socialHub) friendListing(playerID string) ([]any, []any) {
 func (h *socialHub) channelInfo(name string) map[string]any {
 	members := h.channelMembers(name)
 	users := make([]any, 0, len(members))
+	// members is a list of GUID STRINGS. The parser (0x142A52390) converts
+	// each data.members element to text and the channel-info handler
+	// (0x142A376A0) then parses those as GUIDs and resolves each name. They
+	// were user objects, which read as "" -- a zero GUID per member, and the
+	// client logged "GetUsername called with empty guid" for each one
+	// (operator's log, 2026-09-28). users keeps the full records.
+	memberIDs := make([]any, 0, len(members))
 	for _, pid := range members {
 		users = append(users, h.presenceEntry(pid))
+		memberIDs = append(memberIDs, dashedPlayerGUID(pid))
 	}
 	channelType, _ := chatChannelType(name)
 	return map[string]any{
@@ -594,7 +697,7 @@ func (h *socialHub) channelInfo(name string) map[string]any {
 		"name":         name,
 		"type":         channelType,
 		"users":        users,
-		"members":      users,
+		"members":      memberIDs,
 		"user_count":   len(users),
 		"modes":        []any{},
 	}
@@ -683,8 +786,18 @@ func chatChannelNotice(channel string, event string, user map[string]any) map[st
 		// data-level prefix. So both of these live directly in data.
 		"action":  event,
 		"channel": channel,
-		"user":    user,
-		"users":   []any{user},
+		// The joining user's GUID as a STRING, here as in notice.user.
+		// FIXED 2026-09-28: this was the whole user object. The join handler
+		// (0x142A377D0) logged "User 00000000-0000-0000-0000-000000000000
+		// joined channel dreadnought.global" and then "GetUsername called with
+		// empty guid" (operator's client log): the user it parsed was the zero
+		// GUID, which is not the player's own (+0x3A8), so the join counted as
+		// SOMEONE ELSE's and the channel name -- which only an own join stores
+		// -- stayed empty, and chat failed. The data-level fields are the ones
+		// this parser reads (see the probe note above); an object read as a
+		// string is "".
+		"user":  noticeUserGUID(user),
+		"users": []any{user},
 		// Kept as a sibling because the join/leave value resolved to the nested
 		// copy in an earlier probe round. Harmless, and cheaper than another
 		// round to decide which of the two the parser prefers.
@@ -729,11 +842,20 @@ func firmamentEvent(method string, data map[string]any) map[string]any {
 	}
 }
 
-// chatMessageNotice is the server-initiated delivery of one chat line.
 // chatMessageNotice is the server-initiated delivery of one chat line. Same
 // envelope as the membership notice: the dispatcher routes chat.channel.message
 // and chat.user.message the same way it routes chat.channel.notice.
+//
+// The parser (0x142A52390) reads data.channel -> message+0x530, data.text ->
+// +0x5B0 and data.sender -> +0x570, all as strings. _OnChatChannelMessage
+// (0x142AA7100) parses +0x570 as a GUID (0x142AA5940 -> 0x142A584B0) and
+// resolves the name with GetUsername, which fills from the user.profile cache
+// or queues a user.whois.
+// FIXED 2026-09-28: sender went out as the whole presence object, which the
+// parser reads as "" -> zero GUID -> "GetUsername called with empty guid"
+// (operator's client log, 19:09:23 client time) and a nameless chat line.
 func chatMessageNotice(method string, channel string, sender map[string]any, body string) map[string]any {
+	guid := noticeUserGUID(sender)
 	return firmamentEvent(method, map[string]any{
 		"channel":      channel,
 		"channel_name": channel,
@@ -741,9 +863,10 @@ func chatMessageNotice(method string, channel string, sender map[string]any, bod
 		"message":      body,
 		"content":      body,
 		"text":         body,
-		"sender":       sender,
-		"from":         sender,
-		"user":         sender,
+		"sender":       guid,
+		"from":         guid,
+		"user":         guid,
+		"users":        []any{sender},
 		"timestamp":    time.Now().Unix(),
 	})
 }
@@ -795,8 +918,28 @@ func firmamentSelfProfile(playerID, peerID string) map[string]any {
 //
 // So guid, profile and user_token must all be the same dashed GUID.
 func selfUserProfileEvent(playerID, peerID string) map[string]any {
+	return userProfileEvent(playerID, peerID, true)
+}
+
+// userProfileEvent is a user.profile push for any player. The dispatcher
+// (0x142A8DFA0) stores every user.profile's data in the profile map keyed by
+// data.guid, and that map is the name cache GetUsername (0x142AA3030) reads:
+// guid -> lowercase dashed text -> lookup at (+0x480)+0x70, and a miss queues
+// the guid for another user.whois on the next tick. A user.whois REPLY never
+// fills it, so for every other player the client re-asked ~15 times a second
+// forever and showed "Name//0" (operator, 2026-09-28) -- only the player's own
+// number showed, because only it arrived as a user.profile. online reports
+// whether the player is connected.
+func userProfileEvent(playerID, peerID string, online bool) map[string]any {
 	guid := dashedPlayerGUID(playerID)
 	name := mmogPlayerStateForPID(playerID).displayName
+	if name == "Local" {
+		name = ""
+	}
+	status := 0
+	if online {
+		status = 1
+	}
 	return firmamentEvent("user.profile", map[string]any{
 		"guid":              guid,
 		"profile":           guid,
@@ -805,14 +948,14 @@ func selfUserProfileEvent(playerID, peerID string) map[string]any {
 		"display_name":      name,
 		"full_display_name": name,
 		"status_message":    "",
-		"is_online":         true,
+		"is_online":         online,
 		"is_idle":           false,
 		"is_away":           false,
 		"is_private":        false,
 		"is_admin":          false,
 		// Numeric in the record builder (0x142A8CE00 sets online = status == 1);
 		// overrides the envelope's "success", which would read as offline.
-		"status":  1,
+		"status":  status,
 		"peer_id": peerID,
 	})
 }
@@ -910,4 +1053,39 @@ func (h *socialHub) onlinePlayerIDs() []string {
 func playerNumber(playerID string) string {
 	pid := normalizedPlayerStatePID(playerID)
 	return strconv.Itoa(int(crc32.ChecksumIEEE([]byte(pid))%9000) + 1000)
+}
+
+// joinMatchChannels puts a player into their match's chat rooms: "<match>.all"
+// (MatchAll) and "<match>-<team>.team" (MatchTeam). In-match chat failed with
+// "SendChat to MatchAll failed: channel name is empty" (operator's client log,
+// 2026-09-28): those slots, like Global's, are only filled by a join notice
+// naming the player himself (0x142A377D0), and nothing ever sent one for a
+// match. Called when the travel push (YA_Connect) goes out. Rooms of an earlier
+// match are left first, so a player is only ever in one match's chat.
+func (h *socialHub) joinMatchChannels(playerID, matchID string, team int32) {
+	peer := h.peerFor(socialID(playerID))
+	if peer == nil || matchID == "" {
+		return
+	}
+	all := matchID + ".all"
+	teamRoom := fmt.Sprintf("%s-%d.team", matchID, team)
+
+	peer.mu.Lock()
+	var old []string
+	for name := range peer.channels {
+		if t, _ := chatChannelType(name); (t == chatTypeAll || t == chatTypeTeam) && name != all && name != teamRoom {
+			old = append(old, name)
+		}
+	}
+	peer.mu.Unlock()
+	for _, name := range old {
+		h.leaveChannel(peer, name)
+	}
+
+	entry := h.presenceEntry(peer.playerID)
+	for _, name := range []string{all, teamRoom} {
+		if h.joinChannel(peer, name) {
+			_ = peer.send(chatJoinNotice(name, entry))
+		}
+	}
 }

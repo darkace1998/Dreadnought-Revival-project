@@ -141,6 +141,14 @@ call on the same thread; remote players are unaffected.
 [dn-host-loadout] restrictions: dropped a re-entrant ClientSetPlayerRestrictions on controller ...
 ```
 
+Not sufficient alone (2026-09-28): three hosts still overflowed at match end,
+each right after the guard dropped ONE nested call (clean ends show two). A
+second hook now cuts the loop at its source: the ClientSetPlayerRestrictions
+RPC stub (`0x5E5B80`) does nothing for a controller with no network
+connection (`PC+0x5A8` null) -- the host's own local player, whose client RPC
+would run in-process. Remote players are unaffected. Log:
+`restrictions: skipped the ClientSetPlayerRestrictions RPC to the host's local controller`.
+
 ## End-of-match screen (on; `dn_host_no_eom_stats.txt` turns it off)
 
 Symptom: the match ends, the screen fades to black and stays black. The client
@@ -156,7 +164,26 @@ the same way the engine's own RPC stubs do (`FindFunctionChecked` `0xD57C90`,
 `ProcessEvent` at vtable `0x1A8`). The MVP page gets no entries; the host has no
 ranking data to fill it with.
 
-Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller …`.
+Log: `eom stats: sent ClientSetTopPlayerMatchStats (empty, deferred) to controller …`.
+
+**Ordering (changed twice on 2026-09-29).** The client gathers its rewards in
+`UYEndOfMatchInitStage` (`0x32D4B0` -> `GatherEomReward` `0x340C40`), the first
+stage that `ClientStartEndOfMatchTransition` starts. Every fleet ship needs an
+`m_shipsXP` entry with exactly 13 pools, else the client files a `ShipXpError`
+report per ship. The rewards replicate as properties, so they must be written
+before that RPC leaves. The mod therefore holds each remote player's transition:
+it writes the rewards at once, and 3 s later (from the game-mode timer) sends the
+game's own `ClientStartEndOfMatchTransition` followed by
+`ClientSetTopPlayerMatchStats`.
+
+Log: `eom transition: controller … held for 3000 ms`, then
+`eom transition: ClientStartEndOfMatchTransition sent … (deferred)` and
+`eom stats: sent … (empty, deferred)`.
+`dn_host_eom_no_defer.txt` (or `DN_HOST_EOM_NO_DEFER=1`) restores the old flow:
+transition, stats, then rewards.
+
+(The first attempt deferred only the stats RPC. The reports kept coming, 3 s
+before the deferred send: the gather runs at the transition, not at the stats.)
 
 ## Teams, names and bot balance (on; `dn_host_no_team_sync.txt` turns it off)
 

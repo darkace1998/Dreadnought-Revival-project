@@ -1677,8 +1677,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// stored as 8-byte {id, xp} pairs -- the list the YA_UnlockItem reply's
 	// ShipXp is subtracted from (player-data +0x3B88) and the shape
 	// YA_ConvertShipXP sends back. Numeric strings, per the scalar union.
+	// Keyed the way the client looks them up -- by hull LOADOUT id, the tech
+	// tree's ClassId -- see clientShipXPs.
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
-	for _, entry := range persistedPlayerShipXPs(playerPID) {
+	for _, entry := range clientShipXPs(persistedPlayerShipXPs(playerPID)) {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(entry.shipID)))
 		b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(entry.xp)))

@@ -1601,6 +1601,8 @@ static void PlayersTick(uint8_t *gm);
 #define OFF_GM_TEAM_SIZE 0x97C
 static bool g_botsBCOnly = false;
 
+static void FlushPendingEomStats();
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
   if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
@@ -1626,6 +1628,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   }
   g_origGameModeTimer(gameMode);
   PlayersTick(gm);
+  FlushPendingEomStats();
 }
 
 // ---------------------------------------------------------------------------
@@ -1715,6 +1718,42 @@ static void __fastcall HookClientSetPlayerRestrictions(
   g_origClientSetPlayerRestrictions(pc, a2, a3, a4, a5, a6, a7, a8, a9, a10,
                                     a11, a12, a13, a14, a15, a16, a17, a18);
   --s_depth;
+}
+
+// The guard above is not enough on its own: on 2026-09-28 three hosts
+// (14:07, 14:19, 20:25) still overflowed at match end, each right after the
+// guard dropped ONE nested call -- clean match ends show it firing twice. So
+// the loop also runs through a path the _Implementation guard does not see.
+// This cuts it at its source instead: the ClientSetPlayerRestrictions RPC stub
+// (0x5E5B80, 18 args like the body -- this, 3 register bools, 14 stack slots)
+// does nothing for a controller WITHOUT a network connection (PC+0x5A8 null),
+// i.e. the host's own local player, whose "client RPC" would execute
+// in-process and re-enter SetPlayerRestrictions. Remote players' RPCs go out
+// unchanged. The local player is the host's spectator; its restrictions are
+// never shown to anyone.
+#define RVA_CLIENT_SET_PLAYER_RESTRICTIONS_RPC 0x5E5B80
+static tClientSetPlayerRestrictions g_origClientSetPlayerRestrictionsRPC = nullptr;
+
+static void __fastcall HookClientSetPlayerRestrictionsRPC(
+    void *pc, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6,
+    uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10, uint64_t a11,
+    uint64_t a12, uint64_t a13, uint64_t a14, uint64_t a15, uint64_t a16,
+    uint64_t a17, uint64_t a18) {
+  bool local = false;
+  __try {
+    local = pc && *(void **)((uint8_t *)pc + OFF_PC_NETCONNECTION) == nullptr;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    local = false;
+  }
+  if (local) {
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 3)
+      Logf("restrictions: skipped the ClientSetPlayerRestrictions RPC to the host's "
+           "local controller %p (it would execute in-process and loop)", pc);
+    return;
+  }
+  g_origClientSetPlayerRestrictionsRPC(pc, a2, a3, a4, a5, a6, a7, a8, a9, a10,
+                                       a11, a12, a13, a14, a15, a16, a17, a18);
 }
 
 // ---------------------------------------------------------------------------
@@ -2240,21 +2279,43 @@ static void PlayersTick(uint8_t *gm) {
 
 static bool SwitchOn(const char *envName, const char *markerFile);
 
-static void __fastcall HookClientStartEomTransition(void *orbitComp) {
-  g_origClientStartEomTransition(orbitComp);
+// The end-of-match TRANSITION itself is deferred, and the rewards go first.
+//
+// The client gathers its rewards in UYEndOfMatchInitStage (0x32D4B0 ->
+// 0x34A1F0 -> UYEndOfMatchDataManager::GatherEomReward 0x340C40), the FIRST
+// stage of the end-of-match flow that ClientStartEndOfMatchTransition starts.
+// For every fleet ship it looks the ship up in m_shipsXP (0x3FB0D0) and needs
+// exactly 13 pools (the EYXPPoolType::MAX array built by 0x332690), else it
+// files "ShipXpError: Ship XP pools were not gathered correctly" per ship.
+// The rewards reach the client by property replication, so they must be
+// written BEFORE the transition RPC leaves, with time to replicate.
+//
+// History, both verified from client_reports against this log:
+//   2026-09-28: stats RPC, then rewards -> a ShipXpError batch per player,
+//     0.5 s after "eom rewards: written".
+//   2026-09-29 morning: rewards, then the stats RPC 3 s later -> the SAME
+//     batches, now 3 s BEFORE "sent ... (deferred)": the gather had already
+//     run at the transition, which went out untouched before the write.
+// Now: rewards at once, then after EOM_TRANSITION_DELAY_MS the original
+// transition, and the stats RPC right after it (the order that fixed the
+// black screen). Sent from the game mode's once-a-second timer, which keeps
+// running after the match (verified 2026-09-29: "sent ... (deferred)" lines).
+// dn_host_eom_no_defer.txt / DN_HOST_EOM_NO_DEFER=1 restores the old flow
+// (transition, stats, then rewards).
+#define EOM_TRANSITION_DELAY_MS 3000
+struct PendingEomTransition {
+  void *orbitComp;
+  uint8_t *pc;
+  uint8_t *pri;
+  DWORD due;
+};
+static PendingEomTransition g_pendingEom[32];
+
+static void SendTopPlayerMatchStats(uint8_t *pc, uint8_t *pri, const char *how) {
   __try {
-    uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
-    if (!IsReadable(pc, OFF_PC_ORBIT_COMPONENT + 8) ||
-        *(void **)(pc + OFF_PC_ORBIT_COMPONENT) != orbitComp) {
-      Logf("eom stats: orbit component %p has no matching controller; not sent",
-           orbitComp);
-      return;
-    }
-    if (!*(void **)(pc + OFF_PC_NETCONNECTION))
-      return; // the host's own local player; its flow is not what anyone sees
-    uint8_t *pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
-    if (!IsReadable(pri, 0x800)) {
-      Logf("eom stats: controller %p has no player state; not sent", pc);
+    if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) != pri ||
+        !IsReadable(pri, 0x800)) {
+      Logf("eom stats: controller %p / PRI %p is gone; not sent (%s)", pc, pri, how);
       return;
     }
     uint64_t name = *(uint64_t *)(g_base + RVA_FNAME_CLIENT_SET_TOP_PLAYER_MATCH_STATS);
@@ -2266,17 +2327,90 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
     TArrayIntMin parms = {nullptr, 0, 0}; // TArray<FYPlayerMatchStat>, empty
     void **vt = *(void ***)pri;
     ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(pri, fn, &parms);
-    Logf("eom stats: sent ClientSetTopPlayerMatchStats (empty) to controller %p "
+    Logf("eom stats: sent ClientSetTopPlayerMatchStats (empty, %s) to controller %p "
          "PRI %p -- the client's SetupUIWidgets stage waits for it",
-         pc, pri);
+         how, pc, pri);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
-    Logf("eom stats: EXCEPTION sending ClientSetTopPlayerMatchStats for %p",
-         orbitComp);
+    Logf("eom stats: EXCEPTION sending ClientSetTopPlayerMatchStats for %p", pc);
   }
+}
+
+// The deferred half: the game's own transition, then the stats RPC.
+static void SendEomTransition(void *orbitComp, uint8_t *pc, uint8_t *pri, const char *how) {
+  bool ok = false;
+  __try {
+    ok = IsReadable(pc, OFF_PC_ORBIT_COMPONENT + 8) &&
+         *(void **)(pc + OFF_PC_ORBIT_COMPONENT) == orbitComp;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    ok = false;
+  }
+  if (!ok) {
+    Logf("eom transition: controller %p left before its end-of-match transition (%s)", pc, how);
+    return;
+  }
+  g_origClientStartEomTransition(orbitComp);
+  Logf("eom transition: ClientStartEndOfMatchTransition sent to controller %p (%s)", pc, how);
+  SendTopPlayerMatchStats(pc, pri, how);
+}
+
+// Game thread, once a second (HookGameModeTimer).
+static void FlushPendingEomStats() {
+  DWORD now = GetTickCount();
+  for (auto &p : g_pendingEom) {
+    if (p.pc && (int32_t)(now - p.due) >= 0) {
+      PendingEomTransition q = p;
+      p.pc = nullptr;
+      SendEomTransition(q.orbitComp, q.pc, q.pri, "deferred");
+    }
+  }
+}
+
+static void __fastcall HookClientStartEomTransition(void *orbitComp) {
+  uint8_t *pc = nullptr, *pri = nullptr;
+  __try {
+    pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
+    if (!IsReadable(pc, OFF_PC_ORBIT_COMPONENT + 8) ||
+        *(void **)(pc + OFF_PC_ORBIT_COMPONENT) != orbitComp) {
+      Logf("eom stats: orbit component %p has no matching controller; not sent",
+           orbitComp);
+      pc = nullptr;
+    } else if (!*(void **)(pc + OFF_PC_NETCONNECTION)) {
+      pc = nullptr; // the host's own local player; its flow is not what anyone sees
+    } else {
+      pri = *(uint8_t **)(pc + OFF_PC_PLAYER_STATE);
+      if (!IsReadable(pri, 0x800)) {
+        Logf("eom stats: controller %p has no player state; not sent", pc);
+        pc = nullptr;
+      }
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("eom stats: EXCEPTION reading the controller of %p", orbitComp);
+    pc = nullptr;
+  }
+  bool noDefer = SwitchOn("DN_HOST_EOM_NO_DEFER", "dn_host_eom_no_defer.txt");
+  if (!pc || noDefer) {
+    // Local player, unknown controller, or the old flow: transition now.
+    g_origClientStartEomTransition(orbitComp);
+    if (pc)
+      SendTopPlayerMatchStats(pc, pri, "immediate");
+  }
+  // Rewards (ReportMatchResult writes them) -- before the deferred transition.
   if (!SwitchOn("DN_HOST_NO_MATCH_RESULT", "dn_host_no_match_result.txt"))
     ReportMatchResult(orbitComp);
   else
     Logf("match result: OFF (dn_host_no_match_result.txt / DN_HOST_NO_MATCH_RESULT=1)");
+  if (!pc || noDefer)
+    return;
+  for (auto &p : g_pendingEom) {
+    if (!p.pc) {
+      p = {orbitComp, pc, pri, GetTickCount() + EOM_TRANSITION_DELAY_MS};
+      Logf("eom transition: controller %p held for %d ms so its rewards replicate "
+           "before the client's end-of-match init stage gathers them",
+           pc, EOM_TRANSITION_DELAY_MS);
+      return;
+    }
+  }
+  SendEomTransition(orbitComp, pc, pri, "queue full, immediate");
 }
 
 // Both of the switches below are opt-in separately from the loadout fix,
@@ -2744,6 +2878,10 @@ static DWORD WINAPI Startup(LPVOID) {
                       RVA_CLIENT_SET_PLAYER_RESTRICTIONS_IMPL,
                       (void *)&HookClientSetPlayerRestrictions,
                       (void **)&g_origClientSetPlayerRestrictions);
+  InstallSwitchedHook("restrictions (ClientSetPlayerRestrictions RPC, local controller)",
+                      RVA_CLIENT_SET_PLAYER_RESTRICTIONS_RPC,
+                      (void *)&HookClientSetPlayerRestrictionsRPC,
+                      (void **)&g_origClientSetPlayerRestrictionsRPC);
 
   // On by default: without it every score is 0. Opt out to diagnose.
   if (!SwitchOn("DN_HOST_NO_SCORING", "dn_host_no_scoring.txt")) {

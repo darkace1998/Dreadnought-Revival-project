@@ -936,6 +936,9 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 				}
 				state.connectPushed = true
 				state.queuedForMatch = false
+				// The match's chat rooms (MatchAll / MatchTeam); see
+				// joinMatchChannels.
+				socialHubInstance.joinMatchChannels(state.playerPID, status.matchID, status.team)
 				log.WithFields(logrus.Fields{
 					"remote": remote, "pid": state.playerPID,
 					"connect": net.JoinHostPort(status.serverIP, strconv.Itoa(int(status.serverPort))),
