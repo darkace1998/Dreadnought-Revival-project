@@ -699,11 +699,16 @@ func TestClaimBuysAResearchedItemWithCredits(t *testing.T) {
 //
 //	Sending PurchaseItem request (99968026432, 1, CR, )
 //
-// An offer must exist for a RESEARCHED per-ship item (the buy button needs one)
-// and must NOT exist for an unresearched one (offering those coincided with
-// research breaking live). Buying through the offer SKU charges credits, makes
-// the item owned, and replies with the ROOT fields the client reads
-// (0x2A2CAE8): result "bought", offer, quantity, currency.
+// The offer must exist BEFORE the research: the client fetches the store only
+// at login (0x3D2F40's only callers are the login step and a debug path), so
+// an offer created by the research reached the buy button only after a
+// restart (operator, 2026-09-29). CHANGED 2026-09-29: this asserted the
+// opposite -- no offer for an unresearched item, on the theory that offering
+// those broke research; the item-state function 0x543890 never consults
+// offers. The server still refuses to SELL an unresearched item. Buying
+// through the offer SKU charges credits, makes the item owned, and replies
+// with the ROOT fields the client reads (0x2A2CAE8): result "bought", offer,
+// quantity, currency.
 func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "650dd79476a1484b8adcd01ac2f17354"
@@ -722,8 +727,15 @@ func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 		}
 		return gatewayCatalogEntitySeed{}, false
 	}
-	if _, ok := offerFor(); ok {
-		t.Fatal("an unresearched module has a store offer")
+	early, ok := offerFor()
+	if !ok || early.priceAmount <= 0 {
+		t.Fatal("an unresearched module has no priced store offer; its price would only appear after a restart")
+	}
+	earlyBuy := protocol.AppendStringField(nil, "RT", "YA_PurchaseItem")
+	earlyBuy = append(earlyBuy, protocol.AppendStringField(nil, "offer", "999"+strconv.Itoa(module))...)
+	earlyBuy = protocol.AppendRootEnd(earlyBuy)
+	if r := buildMmogPurchasePayload("YA_PurchaseItem", pid, earlyBuy); bytes.Contains(r, protocol.AppendStringField(nil, "result", "bought")) {
+		t.Fatal("an unresearched module was sold")
 	}
 
 	unlock := protocol.AppendRootEnd(append(append(protocol.AppendStringField(nil, "RT", "YA_UnlockItem"),
