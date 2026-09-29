@@ -391,6 +391,10 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 			}
 			log.WithFields(logrus.Fields{"remote": remote, "pid": playerID, "channel": name}).Info("firmament: named chat channel for client")
 		}
+		// The friend list is pushed, never requested (social_presence.go),
+		// and the player's friends learn they are online.
+		socialHubInstance.pushFriendListing(playerID)
+		socialHubInstance.broadcastFriendState(playerID, true)
 	}
 
 	for {
@@ -453,6 +457,9 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 					peer.message = v
 				}
 				peer.mu.Unlock()
+				if playerID != "" {
+					socialHubInstance.broadcastFriendState(playerID, true)
+				}
 			}
 			if err := writeFirmamentResult(out, msg["id"], firmamentPresenceResult(method)); err != nil {
 				log.WithError(err).WithField("remote", remote).Warn("firmament: write presence result failed")
@@ -573,21 +580,39 @@ func writeFirmamentTypedMessage(conn firmamentWriter, id interface{}, msgType st
 // UE-side handler (0x142A3AB80) reads root.data.users[].guid/display_name.
 const firmamentRootData = "$data"
 
+// firmamentRootType is a key a result map may carry to give the reply a
+// top-level "type". The client's message parser (0x142A52390) reads root
+// "type" and "data", and callbacks such as the whois one (0x142AAA090, which
+// consumes the users[] the parser builds from data.users) are routed by that
+// type. Without it a user.whois reply was never delivered: the client asked
+// for the same player ~15 times a second forever ("Successfully sent request
+// to resolve 1 usernames") although this server answered every time
+// (known=true in its log), and every search result showed number 0
+// (operator, 2026-09-28).
+const firmamentRootType = "$type"
+
 func writeFirmamentResult(conn firmamentWriter, id interface{}, result map[string]interface{}) error {
 	msg := map[string]interface{}{
 		"id":      id,
 		"jsonrpc": "2.0",
 		"result":  result,
 	}
-	if data, ok := result[firmamentRootData]; ok {
+	_, hasData := result[firmamentRootData]
+	msgType, hasType := result[firmamentRootType]
+	if hasData || hasType {
 		inner := make(map[string]interface{}, len(result))
 		for k, v := range result {
-			if k != firmamentRootData {
+			if k != firmamentRootData && k != firmamentRootType {
 				inner[k] = v
 			}
 		}
 		msg["result"] = inner
-		msg["data"] = data
+		if hasData {
+			msg["data"] = result[firmamentRootData]
+		}
+		if hasType {
+			msg["type"] = msgType
+		}
 	}
 	response, _ := json.Marshal(msg)
 	response = append(response, '\r', '\n')
