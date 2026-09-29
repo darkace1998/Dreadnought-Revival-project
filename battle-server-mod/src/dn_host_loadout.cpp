@@ -1772,6 +1772,47 @@ static void __fastcall HookClientSetPlayerRestrictions(
 // unchanged. The local player is the host's spectator; its restrictions are
 // never shown to anyone.
 // ---------------------------------------------------------------------------
+// ClientApplyRespawnFilter re-entrancy guard (not switchable)
+//
+// THE end-of-match stack overflow (~40% of matches, ~3 ms after EndMatch).
+// Found 2026-09-29 by the stack probe below, which caught the cycle live:
+//
+//   0x28D6FB -> 0x5E5107 -> 0x41723D -> 0x744B7C -> 0xD1878B -> 0xD5B430 ->
+//   0xD5B2A4 -> 0x28D6FB -> ...        (862 repetitions in 512 KB of stack)
+//
+// 0x5E50C0 is the RPC stub of ClientApplyRespawnFilter (its FName global
+// 0x3E10168 is initialised at 0xCD48D). It calls ProcessEvent (0xD5B180), which
+// runs the exec thunk (0x744AF0) and the body 0x4171E0: that adds the filter's
+// value to this+0x1F0 and then, when the object's net check (0x141839880)
+// returns 1 -- which it does on this host, which reports itself DEDICATED --
+// forwards the same filter to the client by calling the stub again. For a
+// REMOTE player that is a network RPC and ends there; for the host's own
+// LOCAL player it executes in-process and calls the stub again, forever. The
+// same shape as the ClientSetPlayerRestrictions loop above.
+//
+// The guard drops only a NESTED call on the same thread: the first call
+// always goes through, so remote players get their RPC unchanged, and the
+// local player's in-process copy runs once.
+#define RVA_CLIENT_APPLY_RESPAWN_FILTER_RPC 0x5E50C0
+typedef void(__fastcall *tClientApplyRespawnFilter)(void *self, void *filter);
+static tClientApplyRespawnFilter g_origClientApplyRespawnFilter = nullptr;
+static __declspec(thread) int t_respawnFilterDepth = 0;
+
+static void __fastcall HookClientApplyRespawnFilter(void *self, void *filter) {
+  if (t_respawnFilterDepth > 0) {
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 3)
+      Logf("respawn filter: dropped a nested ClientApplyRespawnFilter on %p (the "
+           "local player's in-process RPC loop that overflowed the stack at match end)",
+           self);
+    return;
+  }
+  ++t_respawnFilterDepth;
+  g_origClientApplyRespawnFilter(self, filter);
+  --t_respawnFilterDepth;
+}
+
+// ---------------------------------------------------------------------------
 // End-of-match stack probe (DIAGNOSTIC; dn_host_no_stack_probe.txt /
 // DN_HOST_NO_STACK_PROBE=1 turns it off)
 //
@@ -1814,12 +1855,26 @@ static void ProbeScanAndReport(uintptr_t rsp, uintptr_t rip) {
   memset(g_probeKeys, 0, sizeof(g_probeKeys));
   memset(g_probeCounts, 0, sizeof(g_probeCounts));
   uint32_t candidates = 0;
+  // Every page is checked before it is read, the FIRST one included: the probe
+  // can fire just as the thread reaches the bottom of its stack, where RSP sits
+  // on the guard page -- reading it faulted this thread and took the host down
+  // (21:45:42 on 2026-09-29, "Unhandled page fault on read access to
+  // 00007FFFFE100000", thread = the probe). Guard / no-access pages end the scan.
+  uintptr_t readableTo = 0;
   for (uintptr_t p = rsp; p < rsp + PROBE_SCAN; p += 8) {
-    MEMORY_BASIC_INFORMATION mbi;
-    if ((p & 0xFFF) == 0 && (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) ||
-                             mbi.State != MEM_COMMIT))
+    if (p >= readableTo) {
+      MEMORY_BASIC_INFORMATION mbi;
+      if (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT ||
+          (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) || !(mbi.Protect & (PAGE_READWRITE | PAGE_READONLY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)))
+        break;
+      readableTo = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
+    }
+    uint64_t v;
+    __try {
+      v = *(uint64_t *)p;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
       break;
-    uint64_t v = *(uint64_t *)p;
+    }
     if (v < g_textLo || v >= g_textHi)
       continue;
     candidates++;
@@ -1938,11 +1993,15 @@ static LONG CALLBACK HostCrashHandler(EXCEPTION_POINTERS *ep) {
   ProbeWrite(g_crashLine);
   int shown = 0;
   uintptr_t limit = rsp + (code == EXCEPTION_STACK_OVERFLOW ? 4096 : 65536);
+  uintptr_t readableTo = 0;
   for (uintptr_t p = rsp; p < limit && shown < 40; p += 8) {
-    MEMORY_BASIC_INFORMATION mbi;
-    if ((p & 0xFFF) == 0 && (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) ||
-                             mbi.State != MEM_COMMIT))
-      break;
+    if (p >= readableTo) {
+      MEMORY_BASIC_INFORMATION mbi;
+      if (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT ||
+          (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
+        break;
+      readableTo = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
+    }
     uint64_t v = *(uint64_t *)p;
     if (v >= g_textLo && v < g_textHi) {
       wsprintfA(g_crashLine, "  0x%X\r\n", (unsigned)(v - g_base));
@@ -2571,6 +2630,81 @@ struct PendingEomTransition {
 };
 static PendingEomTransition g_pendingEom[32];
 
+// Personal stats page (the end-of-match "Player Stats" rows).
+//
+// The client fills UYWidget_EndOfMatchPlayerStatsPage from the array this RPC
+// delivers (PRI+0x7D0, set by ClientSetTopPlayerMatchStats; 0x4654D0 makes one
+// row per entry, NO filter by player) and each row (0x469280) reads +0x38 the
+// comparison, +0x3C the value (float, shown as a number), +0x18 the label
+// (FText) and +0x40 the difference to average (%.1f). The code that computed
+// these -- UYPlayerMatchStatisticsManager, RetrieveTopStatsForPlayers -- is not
+// in this exe (none of its log strings is referenced): it was server-build
+// code. So the mod builds the rows from the player's own PRI.
+//
+// FYPlayerMatchStat, 0x48 bytes (reflection 0x721FF0):
+//   +0x00 m_pid (8 bytes, unused by the page)
+//   +0x08 m_category FYPlayerMatchStatisticsCategory (reflection 0x7227A0):
+//         +0x08 vptr (FTableRowBase), +0x10 m_ID (byte), +0x18 m_name (FText,
+//         0x18), +0x30 m_priority (int)
+//   +0x38 m_comparison (byte)  +0x3C m_stat (float)  +0x40 m_statDiffToAvg
+//   (float)  +0x44 m_medal (byte)
+// Enums by registration order (0x6911EE): comparison NONE 0 .. PureStat 5;
+// category NONE 0, Assists 1, Kills 2, DoubleKills 3, DamageCausedDestroyer 4
+// .. DamageCausedByAbilities 9, PowerUsage 10, Healing 11, ...
+//
+// Rows: the three categories the PRI holds -- Kills (+0x848), Assists
+// (+0x858), "Damage with Modules" (DamageCausedByAbilities, +0x90C). Weapon
+// damage is one total on the PRI while the game splits it per target class, so
+// it is left out rather than split by guesswork. Labels are the English names
+// in DN_PlayerMatchStatistics_DT. Comparison PureStat: the value alone (no
+// average to compare against). The label FText is made by the engine's own
+// Conv_StringToText body (thunk 0x1E63460 -> 0x19D21F0, FText* (FText* out,
+// const FString* in)), so it is a real, ref-counted FText. The rows are
+// engine-allocated and never freed (a few hundred bytes per match); the local
+// copy in the PRI is the engine's own.
+#define RVA_TEXT_FROM_STRING 0x19D21F0
+typedef void *(__fastcall *tTextFromString)(void *outText, FStringMin *in);
+#define STAT_COMPARISON_PURE 5
+
+static int BuildPlayerMatchStats(uint8_t *pri, TArrayIntMin *out) {
+  struct Row {
+    uint8_t id;
+    const wchar_t *label;
+    float value;
+  } rows[3];
+  int n = 0;
+  __try {
+    rows[n++] = {2, L"Kills", (float)*(int32_t *)(pri + OFF_PRI_KILLS)};
+    rows[n++] = {1, L"Assists", (float)*(int32_t *)(pri + OFF_PRI_ASSISTS)};
+    rows[n++] = {9, L"Damage with Modules", *(float *)(pri + OFF_PRI_DAMAGE_ABILITIES)};
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return 0;
+  }
+  tOperatorNew alloc = (tOperatorNew)(g_base + RVA_OPERATOR_NEW);
+  uint8_t *arr = (uint8_t *)alloc((size_t)n * 0x48);
+  if (!arr)
+    return 0;
+  memset(arr, 0, (size_t)n * 0x48);
+  tTextFromString mkText = (tTextFromString)(g_base + RVA_TEXT_FROM_STRING);
+  for (int i = 0; i < n; ++i) {
+    uint8_t *e = arr + i * 0x48;
+    e[0x10] = rows[i].id;
+    int len = lstrlenW(rows[i].label) + 1;
+    wchar_t *buf = (wchar_t *)alloc((size_t)len * sizeof(wchar_t));
+    if (!buf)
+      return 0;
+    memcpy(buf, rows[i].label, (size_t)len * sizeof(wchar_t));
+    FStringMin str = {buf, len, len};
+    mkText(e + 0x18, &str);
+    e[0x38] = STAT_COMPARISON_PURE;
+    *(float *)(e + 0x3C) = rows[i].value;
+  }
+  out->data = (int32_t *)arr;
+  out->num = n;
+  out->max = n;
+  return n;
+}
+
 static void SendTopPlayerMatchStats(uint8_t *pc, uint8_t *pri, const char *how) {
   __try {
     if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) != pri ||
@@ -2584,12 +2718,15 @@ static void SendTopPlayerMatchStats(uint8_t *pc, uint8_t *pri, const char *how) 
       Logf("eom stats: ClientSetTopPlayerMatchStats not found on %p; not sent", pri);
       return;
     }
-    TArrayIntMin parms = {nullptr, 0, 0}; // TArray<FYPlayerMatchStat>, empty
+    int rows = 0;
+    TArrayIntMin parms = {nullptr, 0, 0}; // TArray<FYPlayerMatchStat>
+    if (!SwitchOn("DN_HOST_EMPTY_EOM_STATS", "dn_host_empty_eom_stats.txt"))
+      rows = BuildPlayerMatchStats(pri, &parms);
     void **vt = *(void ***)pri;
     ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(pri, fn, &parms);
-    Logf("eom stats: sent ClientSetTopPlayerMatchStats (empty, %s) to controller %p "
-         "PRI %p -- the client's SetupUIWidgets stage waits for it",
-         how, pc, pri);
+    Logf("eom stats: sent ClientSetTopPlayerMatchStats (%d personal stat rows, %s) to "
+         "controller %p PRI %p -- the client's SetupUIWidgets stage waits for it",
+         rows, how, pc, pri);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("eom stats: EXCEPTION sending ClientSetTopPlayerMatchStats for %p", pc);
   }
@@ -3153,6 +3290,11 @@ static DWORD WINAPI Startup(LPVOID) {
                       RVA_CLIENT_SET_PLAYER_RESTRICTIONS_RPC,
                       (void *)&HookClientSetPlayerRestrictionsRPC,
                       (void **)&g_origClientSetPlayerRestrictionsRPC);
+
+  InstallSwitchedHook("respawn filter (ClientApplyRespawnFilter RPC, re-entrancy guard)",
+                      RVA_CLIENT_APPLY_RESPAWN_FILTER_RPC,
+                      (void *)&HookClientApplyRespawnFilter,
+                      (void **)&g_origClientApplyRespawnFilter);
 
   // On by default: without it every score is 0. Opt out to diagnose.
   if (!SwitchOn("DN_HOST_NO_SCORING", "dn_host_no_scoring.txt")) {

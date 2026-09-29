@@ -675,3 +675,30 @@ TE's ROUND flow is not in this exe: `ClientPreRoundStart`,
 have FName globals referenced only by their initializers -- the server build
 ran rounds. Players therefore still respawn as in TDM; real rounds would have to
 be implemented in the mod.
+
+## ClientApplyRespawnFilter guard (not switchable) -- THE end-of-match overflow
+
+Found 2026-09-29 by the stack probe, which caught the cycle live (862
+repetitions in 512 KB of stack): `0x28D6FB -> 0x5E5107 -> 0x41723D -> 0x744B7C
+-> 0xD1878B -> 0xD5B430 -> 0xD5B2A4 -> ...`. `0x5E50C0` is the RPC stub of
+**ClientApplyRespawnFilter**. Through ProcessEvent it runs the body `0x4171E0`,
+which adds the filter to `this+0x1F0` and then, because the host reports itself
+dedicated, forwards the same filter to the client by calling the stub again. For
+the host's own local player that "client" call executes in-process: an endless
+loop at match end. The guard drops only a nested call on the same thread, so
+remote players' RPCs are unchanged. Log: `respawn filter: dropped a nested
+ClientApplyRespawnFilter ...`.
+
+## Personal stats page (on; `dn_host_empty_eom_stats.txt` sends the old empty list)
+
+`ClientSetTopPlayerMatchStats` used to go out empty, so the end-of-match
+"Player Stats" page had no rows. The client makes one row per array entry (no
+filter by player) from `FYPlayerMatchStat` (0x48 bytes: label FText at +0x18,
+comparison +0x38, value +0x3C, diff-to-average +0x40). The game's own code that
+computed these (`UYPlayerMatchStatisticsManager`) is not in this exe, so the mod
+builds three rows from the player's PRI, using the categories and English labels
+of `DN_PlayerMatchStatistics_DT`: **Kills** (+0x848), **Assists** (+0x858),
+**Damage with Modules** (+0x90C). Weapon damage is left out: the PRI holds one
+total, the game shows it per target class. The labels are made by the engine's
+own `Conv_StringToText` body (`0x19D21F0`). Log: `eom stats: sent
+ClientSetTopPlayerMatchStats (3 personal stat rows, deferred) ...`.
