@@ -95,9 +95,13 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogTunePayload()
 
 	// --- Matchmaking & Rooms ---
-	case "YA_EnterMatchmaking", "YA_SquadEnterMatchmaking":
+	case "YA_EnterMatchmaking":
 		return buildMmogEnterMatchmakingPayload(requestName, playerPID, payload)
+	case "YA_SquadEnterMatchmaking":
+		return squadHubInstance.enterSquadMatchmaking(playerPID, payload) // squad_matchmaking.go
 	case "YA_LeaveMatchmaking":
+		// A squad member leaving the queue takes the whole squad out.
+		squadHubInstance.cancelSquadMatchmaking(playerPID)
 		return buildMmogLeaveMatchmakingPayload(requestName, playerPID)
 	case "YA_QueryRooms":
 		return buildMmogQueryRoomsPayload()
@@ -112,7 +116,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogRoomSuccessPayload(mmogRoomResponseName(requestName))
 
 	// --- Squads ---
-	case "YA_SquadInvite", "YA_SquadAccept", "YA_SquadLeave", "YA_SquadEliteStatusUpdate":
+	case "YA_SquadInvite", "YA_SquadAccept", "YA_SquadLeave":
+		return buildMmogSquadRequestPayload(requestName, playerPID, payload) // squads.go
+	case "YA_SquadEliteStatusUpdate":
 		return buildMmogSquadPayload(requestName, playerPID)
 
 	// --- Chat ---
