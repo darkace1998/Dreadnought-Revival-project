@@ -11,11 +11,10 @@ Operators running battle servers have one optional extra, `battle-server-mod/` �
 ## Architecture
 
 ```
-[Windows client (unmodified)]                  [Windows server browser]
-        |                                       (dn-dedicated-browser.exe)
-        |  hostnames redirected via hosts       picks a cluster, then the normal
-        |  file, TLS trusted via our own CA     launcher flow against it
-        |                                              |
+[Windows client (unmodified)]
+        |
+        |  hostnames redirected via hosts file, TLS trusted via our own CA
+        |
         ├─ HTTPS :443 ──► [gateway]  TLS termination + reverse proxy
         │                     ├── profile-api.prod.greybox.sixfoot.live ─► [auth-server   :8081]
         │                     ├── legacyapi.prod.greybox.sixfoot.live   ─► [legacy-api    :8082]
@@ -30,6 +29,12 @@ Operators running battle servers have one optional extra, `battle-server-mod/` �
                                       wine + DreadGame-Win64-Shipping.exe
                                       (one process per match, UDP 7777-7877)
 
+[Windows server browser (dn-dedicated-browser.exe)]
+        │
+        │  picks a cluster from the directory (or by hand), trusts its CA,
+        │  signs in — then starts the same unmodified client above pointed
+        │  at that cluster (no hosts file: the game resolves no backend by name)
+        ▼
 [public directory: master-master :8091, admin :8092] ◄── register/heartbeat ── [dn-dedicated]
         │   cluster list + CA certs + MOTDs + player counts (for the browser)
         │   presence: who is mid-match on which cluster (one account, one match)
