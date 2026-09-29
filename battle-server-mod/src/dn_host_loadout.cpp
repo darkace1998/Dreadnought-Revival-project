@@ -203,6 +203,21 @@ static uintptr_t g_base = 0;
 #define OFF_GM_ENABLE_SPAWN_AI 0x961  // AYGameMode_Multiplayer::m_enableSpawnAI
 #define OFF_GS_GAME_MODE_TYPE 0x500   // AYGameState::m_gameModeType
 #define YGMT_BOOTCAMP 18              // EYGameModeType -- the proving ground
+// Team Elimination. Observed on live hosts (2026-09-29): a ?game=TE host logs
+// "type 5", a TDM host "type 3". TE starts with m_enableSpawnAI 0; forcing it
+// on for the whole match refilled both teams every time a bot died, so TE
+// "just played like a deathmatch" (operator). TE's ROUND flow is not in this
+// exe at all -- ClientPreRoundStart / ClientNewRoundStarts / ClientPostRoundEnd
+// / ClientRespawnTeamElimination have FName globals (0x3E10260, 0x3E10218,
+// 0x3E10268, 0x3E10298) referenced ONLY by their initializers, like
+// ClientSetTopPlayerMatchStats: the server build ran rounds. What the mod does
+// for TE (operator's call: "bots can be enabled but they should not respawn"):
+// spawner ON until both teams are filled, then OFF, so a destroyed bot stays
+// destroyed. See the timer below.
+#define YGMT_TEAM_ELIMINATION 5
+#ifndef OFF_GM_AI_TARGET_T1
+#define OFF_GM_AI_TARGET_T1 0x980
+#endif
 
 // UYVehicleMovementComp: 0x5C4EB0-0x5C511E (.pdata entry), one argument (this).
 // The only writer of +0x489. See HookVehicleViewCull.
@@ -1618,11 +1633,36 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
              *(int32_t *)(gm + OFF_GM_TEAM_SIZE),
              (type == YGMT_BOOTCAMP || !g_botsBCOnly) ? "" : " (bots limited to the proving ground)");
       }
-      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && (type == YGMT_BOOTCAMP || !g_botsBCOnly)) {
+      // TE: fill once, then no respawns. The fill has happened once the AI
+      // targets are set (gm+0x980/0x984, written by 0x3678F0 when the teams are
+      // filled -- the same signal bot balance uses); 15 s later the spawner is
+      // switched off for the rest of the match.
+      static void *s_teFilled = nullptr;
+      static DWORD s_teFilledAt = 0;
+      static void *s_teStopped = nullptr;
+      if (type == YGMT_TEAM_ELIMINATION && s_teStopped != gameMode &&
+          IsReadable(gm + OFF_GM_AI_TARGET_T1, 8)) {
+        bool filled = *(int32_t *)(gm + OFF_GM_AI_TARGET_T1) > 0 ||
+                      *(int32_t *)(gm + OFF_GM_AI_TARGET_T1 + 4) > 0;
+        if (filled && s_teFilled != gameMode) {
+          s_teFilled = gameMode;
+          s_teFilledAt = GetTickCount();
+        }
+        if (s_teFilled == gameMode && GetTickCount() - s_teFilledAt > 15000 &&
+            gm[OFF_GM_ENABLE_SPAWN_AI]) {
+          gm[OFF_GM_ENABLE_SPAWN_AI] = 0;
+          s_teStopped = gameMode;
+          Logf("bots: Team Elimination %p -- teams filled, m_enableSpawnAI 1 -> 0: "
+               "destroyed bots no longer respawn", gameMode);
+        }
+      }
+      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && s_teStopped != gameMode &&
+          (type == YGMT_BOOTCAMP || !g_botsBCOnly)) {
         gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
         Logf("bots: game mode %p (type %d) m_enableSpawnAI 0 -> 1. The game fills "
-             "both teams when the pre-match countdown reaches 50 s.",
-             gameMode, type);
+             "both teams when the pre-match countdown reaches 50 s%s.",
+             gameMode, type,
+             type == YGMT_TEAM_ELIMINATION ? " (Team Elimination: switched off again once filled)" : "");
       }
     }
   }
@@ -1731,6 +1771,223 @@ static void __fastcall HookClientSetPlayerRestrictions(
 // in-process and re-enter SetPlayerRestrictions. Remote players' RPCs go out
 // unchanged. The local player is the host's spectator; its restrictions are
 // never shown to anyone.
+// ---------------------------------------------------------------------------
+// End-of-match stack probe (DIAGNOSTIC; dn_host_no_stack_probe.txt /
+// DN_HOST_NO_STACK_PROBE=1 turns it off)
+//
+// The host overflows its stack in about 40% of matches, ~3 ms after EndMatch
+// starts ("Match over event" -> music reset -> EXCEPTION_STACK_OVERFLOW; 5 of
+// 12 matches on 2026-09-29). Neither Wine nor the game logs a backtrace, and
+// the restrictions guard above did not stop it, so the recursing function is
+// unknown. This finds it: the local-controller restrictions RPC fires on the
+// game thread right before every overflow, so it arms a watcher for 5 s. The
+// watcher repeatedly suspends the game thread and reads its RSP; once the stack
+// is PROBE_DEPTH deeper than at arm time, it scans the stack above RSP for
+// values inside the exe's code section, counts them, and writes the most
+// frequent ones -- the return addresses of the recursion -- as RVAs.
+//
+// While the game thread is suspended nothing here touches the C runtime or the
+// heap (the thread may hold their locks): wsprintfA into static buffers and a
+// raw WriteFile to dn_host_stackprobe.log beside the exe.
+#define PROBE_DEPTH (768 * 1024)
+#define PROBE_SCAN (512 * 1024)
+#define PROBE_SLOTS 4096
+static HANDLE g_probeTarget = nullptr;
+static volatile LONG g_probeArmed = 0;
+static volatile DWORD g_probeUntil = 0;
+static uintptr_t g_probeBaseline = 0;
+static uintptr_t g_textLo = 0, g_textHi = 0;
+static uint64_t g_probeKeys[PROBE_SLOTS];
+static uint32_t g_probeCounts[PROBE_SLOTS];
+static char g_probeLine[512];
+static HANDLE g_probeFile = INVALID_HANDLE_VALUE;
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+static void ProbeWrite(const char *text) {
+  if (g_probeFile == INVALID_HANDLE_VALUE)
+    return;
+  DWORD n = 0;
+  WriteFile(g_probeFile, text, (DWORD)lstrlenA(text), &n, nullptr);
+}
+
+static void ProbeScanAndReport(uintptr_t rsp, uintptr_t rip) {
+  memset(g_probeKeys, 0, sizeof(g_probeKeys));
+  memset(g_probeCounts, 0, sizeof(g_probeCounts));
+  uint32_t candidates = 0;
+  for (uintptr_t p = rsp; p < rsp + PROBE_SCAN; p += 8) {
+    MEMORY_BASIC_INFORMATION mbi;
+    if ((p & 0xFFF) == 0 && (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) ||
+                             mbi.State != MEM_COMMIT))
+      break;
+    uint64_t v = *(uint64_t *)p;
+    if (v < g_textLo || v >= g_textHi)
+      continue;
+    candidates++;
+    uint32_t h = (uint32_t)((v * 0x9E3779B97F4A7C15ull) >> 52) & (PROBE_SLOTS - 1);
+    for (int i = 0; i < PROBE_SLOTS; ++i, h = (h + 1) & (PROBE_SLOTS - 1)) {
+      if (g_probeKeys[h] == v || g_probeKeys[h] == 0) {
+        g_probeKeys[h] = v;
+        g_probeCounts[h]++;
+        break;
+      }
+    }
+  }
+  wsprintfA(g_probeLine,
+            "stack probe: game thread is %u KB deeper than at match end; rip RVA 0x%X; "
+            "%u code addresses in the top %u KB of stack. Most frequent (RVA x count):\r\n",
+            (unsigned)((g_probeBaseline - rsp) / 1024),
+            (unsigned)(rip >= g_base ? rip - g_base : 0), candidates, PROBE_SCAN / 1024);
+  ProbeWrite(g_probeLine);
+  for (int rank = 0; rank < 24; ++rank) {
+    int best = -1;
+    for (int i = 0; i < PROBE_SLOTS; ++i)
+      if (g_probeCounts[i] && (best < 0 || g_probeCounts[i] > g_probeCounts[best]))
+        best = i;
+    if (best < 0)
+      break;
+    wsprintfA(g_probeLine, "  0x%X x %u\r\n", (unsigned)(g_probeKeys[best] - g_base),
+              g_probeCounts[best]);
+    ProbeWrite(g_probeLine);
+    g_probeCounts[best] = 0;
+  }
+}
+
+static DWORD WINAPI StackProbeThread(LPVOID) {
+  for (;;) {
+    if (!g_probeArmed) {
+      Sleep(20);
+      continue;
+    }
+    if ((LONG)(GetTickCount() - g_probeUntil) >= 0) {
+      g_probeArmed = 0;
+      continue;
+    }
+    if (SuspendThread(g_probeTarget) == (DWORD)-1) {
+      g_probeArmed = 0;
+      continue;
+    }
+    CONTEXT ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.ContextFlags = CONTEXT_CONTROL;
+    if (GetThreadContext(g_probeTarget, &ctx) && g_probeBaseline > ctx.Rsp &&
+        g_probeBaseline - ctx.Rsp > PROBE_DEPTH) {
+      ProbeScanAndReport((uintptr_t)ctx.Rsp, (uintptr_t)ctx.Rip);
+      g_probeArmed = 0;
+    }
+    ResumeThread(g_probeTarget);
+    SwitchToThread();
+  }
+}
+
+// The exe's code range and the raw output file, shared by the stack probe and
+// the crash handler below. Safe to call more than once.
+static void InitProbeOutput() {
+  if (g_textLo)
+    return;
+  IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)g_base;
+  IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
+  g_textLo = g_base + nt->OptionalHeader.BaseOfCode;
+  g_textHi = g_textLo + nt->OptionalHeader.SizeOfCode;
+  char path[MAX_PATH];
+  DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+  while (len > 0 && path[len - 1] != '\\' && path[len - 1] != '/')
+    --len;
+  lstrcpyA(path + len, "dn_host_stackprobe.log");
+  g_probeFile = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Host crash handler (DIAGNOSTIC; same switch as the stack probe)
+//
+// The second host crash: "Unhandled Exception: EXCEPTION_ACCESS_VIOLATION
+// reading address 0xfffffff8" MID-match (3-5 min in), then the engine's crash
+// handler exits with status 3 -- 7 matches on 2026-09-28/29, 5 of them
+// identical. The engine's report lists frames without addresses and Wine logs
+// none, so the faulting code is unknown. A vectored handler sees the exception
+// first: for an access violation or stack overflow whose RIP is inside the
+// exe's code, it writes the fault RVA, the address read, and the exe code
+// addresses found on the stack above RSP in order (a rough call chain), to
+// dn_host_stackprobe.log. Faults in wer.dll itself (the IsReadable probes)
+// are not in the exe and are skipped. It only observes: always
+// EXCEPTION_CONTINUE_SEARCH. At most 4 reports per process.
+static volatile LONG g_crashReports = 0;
+static char g_crashLine[256];
+
+static LONG CALLBACK HostCrashHandler(EXCEPTION_POINTERS *ep) {
+  DWORD code = ep->ExceptionRecord->ExceptionCode;
+  if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_STACK_OVERFLOW)
+    return EXCEPTION_CONTINUE_SEARCH;
+  uintptr_t rip = (uintptr_t)ep->ContextRecord->Rip;
+  if (rip < g_textLo || rip >= g_textHi)
+    return EXCEPTION_CONTINUE_SEARCH;
+  if (InterlockedIncrement(&g_crashReports) > 4)
+    return EXCEPTION_CONTINUE_SEARCH;
+  uintptr_t addr = ep->ExceptionRecord->NumberParameters >= 2
+                       ? (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1]
+                       : 0;
+  uintptr_t rsp = (uintptr_t)ep->ContextRecord->Rsp;
+  wsprintfA(g_crashLine, "crash: %s at RVA 0x%X, address 0x%I64X, thread %u. Stack chain (RVA):\r\n",
+            code == EXCEPTION_STACK_OVERFLOW ? "STACK OVERFLOW" : "ACCESS VIOLATION",
+            (unsigned)(rip - g_base), (unsigned long long)addr, (unsigned)GetCurrentThreadId());
+  ProbeWrite(g_crashLine);
+  // Registers often hold the object that was null; worth a line.
+  CONTEXT *c = ep->ContextRecord;
+  wsprintfA(g_crashLine, "  rax=%I64X rbx=%I64X rcx=%I64X rdx=%I64X rsi=%I64X rdi=%I64X\r\n",
+            c->Rax, c->Rbx, c->Rcx, c->Rdx, c->Rsi, c->Rdi);
+  ProbeWrite(g_crashLine);
+  int shown = 0;
+  uintptr_t limit = rsp + (code == EXCEPTION_STACK_OVERFLOW ? 4096 : 65536);
+  for (uintptr_t p = rsp; p < limit && shown < 40; p += 8) {
+    MEMORY_BASIC_INFORMATION mbi;
+    if ((p & 0xFFF) == 0 && (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) ||
+                             mbi.State != MEM_COMMIT))
+      break;
+    uint64_t v = *(uint64_t *)p;
+    if (v >= g_textLo && v < g_textHi) {
+      wsprintfA(g_crashLine, "  0x%X\r\n", (unsigned)(v - g_base));
+      ProbeWrite(g_crashLine);
+      shown++;
+    }
+  }
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void InstallHostCrashHandler() {
+  if (SwitchOn("DN_HOST_NO_STACK_PROBE", "dn_host_no_stack_probe.txt"))
+    return;
+  InitProbeOutput();
+  if (AddVectoredExceptionHandler(1, HostCrashHandler))
+    Logf("crash handler: installed; access violations / stack overflows in the exe "
+         "are written to dn_host_stackprobe.log");
+}
+
+// Called on the game thread at match end (the restrictions RPC hook).
+static void ArmStackProbe() {
+  static int s_state = -1; // -1 unknown, 0 off, 1 on
+  if (s_state < 0) {
+    s_state = SwitchOn("DN_HOST_NO_STACK_PROBE", "dn_host_no_stack_probe.txt") ? 0 : 1;
+    if (s_state) {
+      InitProbeOutput();
+      if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
+                           &g_probeTarget, THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT, FALSE, 0) ||
+          !CreateThread(nullptr, 0, StackProbeThread, nullptr, 0, nullptr)) {
+        s_state = 0;
+        Logf("stack probe: could not start (thread handle or watcher thread)");
+      } else {
+        Logf("stack probe: armed on the game thread; a deep stack in the next 5 s is "
+             "written to dn_host_stackprobe.log");
+      }
+    }
+  }
+  if (!s_state)
+    return;
+  volatile char here = 0;
+  g_probeBaseline = (uintptr_t)&here;
+  g_probeUntil = GetTickCount() + 5000;
+  g_probeArmed = 1;
+}
+
 #define RVA_CLIENT_SET_PLAYER_RESTRICTIONS_RPC 0x5E5B80
 static tClientSetPlayerRestrictions g_origClientSetPlayerRestrictionsRPC = nullptr;
 
@@ -1746,6 +2003,7 @@ static void __fastcall HookClientSetPlayerRestrictionsRPC(
     local = false;
   }
   if (local) {
+    ArmStackProbe(); // the overflow follows within milliseconds when it happens
     static volatile LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 3)
       Logf("restrictions: skipped the ClientSetPlayerRestrictions RPC to the host's "
@@ -2115,7 +2373,9 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
 #define OFF_GS_PLAYER_ARRAY 0x470 // AGameState::PlayerArray (SDK)
 #define OFF_ACTOR_OWNER 0xC8      // AActor::Owner (SDK)
 #define OFF_GM_TEAM_SIZE 0x97C
+#ifndef OFF_GM_AI_TARGET_T1
 #define OFF_GM_AI_TARGET_T1 0x980
+#endif
 #define RVA_SET_TEAM_SIZE_AI 0x381550
 
 typedef void(__fastcall *tSetTeamSizeAI)(void *gameMode, int team, int size);
@@ -2581,9 +2841,19 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   // through a missing entry (null - 8). The crashing function is not
   // identified (no minidump: this DLL stubs WER). So an empty mode builds no
   // table -- TE scores 0, as before, and does not crash.
-  if (!mode[0]) {
-    Logf("scoring: mode name is EMPTY (Team Elimination) -- table not built, scores "
-         "stay 0 in this mode (it crashed the host with the table)");
+  //
+  // CHANGED 2026-09-29: hosts now report TE's mode as "TE" (the ?game=TE
+  // match URL), so the empty-name guard stopped firing and the table was built
+  // for TE again -- and ALL 7 TE matches since 2026-09-28 crashed the same way
+  // (7 of 7 AVs reading 0xfffffff8 were ?game=TE; no TDM match had one), 3-5
+  // min in: about when TE's first ROUND ends. GUESS: a round end scores an
+  // event the table leaves out on purpose (Winner/MatchEnd, excluded because
+  // they overflowed the host at EndMatch) and reads through the missing row.
+  // Until the crash handler below names the function, TE gets no table.
+  bool isTE = mode[0] == L'T' && mode[1] == L'E' && mode[2] == 0;
+  if (!mode[0] || isTE) {
+    Logf("scoring: mode \"%ls\" is Team Elimination -- table not built, scores stay 0 "
+         "in this mode (every TE match crashed the host with the table)", mode);
     return;
   }
   Logf("scoring: building the match table for mode \"%ls\"", mode);
@@ -2827,6 +3097,7 @@ static DWORD WINAPI Startup(LPVOID) {
   }
   Logf("battle server detected and enabled. module base 0x%llX",
        (unsigned long long)g_base);
+  InstallHostCrashHandler();
 
   if (MH_Initialize() != MH_OK) {
     Logf("MH_Initialize failed. Standing down.");
