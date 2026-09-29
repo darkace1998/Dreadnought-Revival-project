@@ -550,6 +550,7 @@ func TestResearchIsNotAPurchaseUntilBoughtWithCredits(t *testing.T) {
 		t.Fatalf("fund: %v", err)
 	}
 	const module = 68026413 // "Trafalgar Goliath Torpedo II", researched live
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	request := func(name string, fields ...[]byte) []byte {
 		b := protocol.AppendStringField(nil, "RT", name)
 		for _, f := range fields {
@@ -607,6 +608,7 @@ func TestClaimBuysAResearchedItemWithCredits(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	const module = 68026413 // "Trafalgar Goliath Torpedo II"
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	price := purchasePriceForItem(module)
 	if price <= 0 {
 		t.Fatalf("no credit price for %d", module)
@@ -719,6 +721,7 @@ func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 		t.Fatal(err)
 	}
 	const module = 68026432 // researched live: "Trafalgar Torpedo Salvo II"
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	offerFor := func() (gatewayCatalogEntitySeed, bool) {
 		for _, seed := range gatewayItemCatalogSeeds(pid) {
 			if seed.itemID == module {
@@ -879,6 +882,7 @@ func TestResearchSpendsTheShipsXP(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	const module = 68026413 // Goliath Torpedo II, on Trafalgar's research list
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	pawn, ok := researchHullPawn(module)
 	if !ok {
 		t.Fatal("no paying ship for the module")
