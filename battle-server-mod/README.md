@@ -619,3 +619,59 @@ Two of these have a trap attached, both of which cost real time to find:
   hull a player picked used to spawn as a Cerberus.
 - **Type 2, not 4.** The validity gate at `0x33C680` rejects loadouts recorded
   as type 4.
+
+## End-of-match stack probe (diagnostic; `dn_host_no_stack_probe.txt` turns it off)
+
+The host overflows its stack in about 40% of matches, ~3 ms after `EndMatch`
+starts ("Match over event" -> music reset -> `EXCEPTION_STACK_OVERFLOW`). No
+backtrace is logged anywhere, and the restrictions guard did not stop it, so
+the recursing function is still unknown.
+
+At match end (the local-controller restrictions RPC, which fires on the game
+thread right before every overflow) the mod arms a watcher for 5 s. The watcher
+repeatedly suspends the game thread and reads its stack pointer. Once the stack
+is 768 KB deeper than at arm time, it scans the top 512 KB for addresses inside
+the exe's code section and writes the most frequent ones (the recursion's return
+addresses, as RVAs) to **`dn_host_stackprobe.log`** beside the exe. While the
+game thread is suspended it avoids the C runtime and the heap: `wsprintfA` plus a
+raw `WriteFile`.
+
+Log: `stack probe: armed on the game thread ...` in `dn_host_loadout.log`, then,
+if the match overflows, a block in `dn_host_stackprobe.log`:
+
+    stack probe: game thread is 800 KB deeper than at match end; rip RVA 0x...; ...
+      0x2A... x 3120
+      ...
+
+## Host crash handler (diagnostic; same switch as the stack probe)
+
+The second host crash is `EXCEPTION_ACCESS_VIOLATION reading address
+0xfffffff8` mid-match, after which the engine's crash handler exits with status
+3. All 7 cases on 2026-09-28/29 were **Team Elimination** (`?game=TE`), 3-5
+minutes in. A vectored exception handler (installed at startup) writes, for an
+access violation or stack overflow whose RIP is in the exe, the fault RVA, the
+address read, the main registers and the exe return addresses on the stack to
+`dn_host_stackprobe.log`. Faults inside wer.dll (its own guarded reads) are
+skipped; it only observes and never handles. Log:
+`crash handler: installed ...` in `dn_host_loadout.log`.
+
+**Team Elimination gets no scoring table** (changed 2026-09-29). The old guard
+skipped the table only for an EMPTY mode name; hosts now report TE as `"TE"`,
+so the table was built again and every TE match crashed. TE matches without the
+table ended cleanly, so TE is skipped by name too; its scores stay 0. Log:
+`scoring: mode "TE" is Team Elimination -- table not built ...`.
+
+**Team Elimination: bots fill once, then no respawns** (changed 2026-09-29).
+TE (EYGameModeType 5 on live hosts) starts with `m_enableSpawnAI` 0; forcing it
+on for the whole match refilled both teams whenever a bot died, so TE played
+like a deathmatch. The mod now turns the spawner on before the match as usual,
+and 15 s after the teams are filled (the AI targets at gm+0x980/0x984 are set)
+switches it off: destroyed bots stay destroyed. Logs: `bots: ... type 5 ...
+(Team Elimination: switched off again once filled)`, then `bots: Team
+Elimination ... m_enableSpawnAI 1 -> 0: destroyed bots no longer respawn`.
+
+TE's ROUND flow is not in this exe: `ClientPreRoundStart`,
+`ClientNewRoundStarts`, `ClientPostRoundEnd` and `ClientRespawnTeamElimination`
+have FName globals referenced only by their initializers -- the server build
+ran rounds. Players therefore still respawn as in TDM; real rounds would have to
+be implemented in the mod.

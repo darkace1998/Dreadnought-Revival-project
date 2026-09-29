@@ -707,37 +707,41 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 // ASSUMPTION, no real price table survives -- and purchasePriceForItem charges
 // the same. Hidden from the storefront grid; they exist for the buy button.
 //
-// DN_OFFER_ALL_RESEARCH=1 (EXPERIMENT, off by default) also offers everything
-// the player's owned ships can research but has not yet. The catalog is only
-// fetched at login -- its one mmog-side trigger is the login step at
-// 0x2A338A0, the other caller (0xAC8400) a client debug path -- so without this
-// an item researched mid-session is not buyable until the next login. The
-// shipped store did offer every per-ship module. It is off because the one
-// session that had such offers reported research broken; the disassembly says
-// the research action (0x4FDCE0, state 2) does not consult offers, and this
-// switch exists to settle it.
+// CHANGED 2026-09-29: every per-ship weapon/module of EVERY base hull is now
+// offered, researched or not (DN_OFFER_RESEARCHED_ONLY=1 restores the old
+// scope). The catalog is fetched ONCE, at login -- verified: the market fetch
+// 0x3D2F40 has two callers, the login step 0x2A338A0 (reached only from the
+// YA_UserLogin reply branch at 0x2A25730 and the connection state machine
+// 0x2A20B10) and a debug path 0xAC8400; nothing the server can send mid-session
+// reloads it. So an item researched mid-session had no offer, hence no price,
+// until the next login ("we need to restart the game every time we research
+// something to get the purchase price", operator). The offer has to exist
+// before the research, as it did in the shipped store (1301 per-ship SKUs).
+//
+// The objection that kept this off -- one session with such offers reported
+// research broken -- does not hold up in the binary: the item-state function
+// every research/buy decision goes through (0x543890) returns 4 for an owned
+// item (the list at player data +0x3F90), 3 for a researched one (0x547DD0),
+// else walks the prerequisites; it never consults market offers. Offering an
+// unresearched item therefore cannot make it unresearchable (theory, to be
+// confirmed live). ALL hulls, not only owned ones: a hull researched and bought
+// mid-session needs its modules' offers too. +1162 hidden offers.
 func researchedItemOfferSeeds(playerID string, owned map[int32]struct{}) []gatewayCatalogEntitySeed {
 	if playerID == "" {
 		return nil
 	}
 	var seeds []gatewayCatalogEntitySeed
 	ids := persistedMmogPlayerPurchaseItemIDs(playerID)
-	if os.Getenv("DN_OFFER_ALL_RESEARCH") == "1" {
-		hullByLoadout := map[int32]baseShipLoadout{}
-		for _, h := range baseShipLoadouts {
-			hullByLoadout[h.loadoutID] = h
-		}
+	if os.Getenv("DN_OFFER_RESEARCHED_ONLY") != "1" {
 		seen := map[int32]bool{}
 		for _, id := range ids {
 			seen[id] = true
 		}
-		for _, loadout := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerID), playerID) {
-			if hull, ok := hullByLoadout[loadout.precastLoadoutID]; ok {
-				for _, item := range techTreeModuleItems(hull, 0) {
-					if !seen[item.id] {
-						seen[item.id] = true
-						ids = append(ids, item.id)
-					}
+		for _, hull := range baseShipLoadouts {
+			for _, item := range techTreeModuleItems(hull, 0) {
+				if !seen[item.id] {
+					seen[item.id] = true
+					ids = append(ids, item.id)
 				}
 			}
 		}
