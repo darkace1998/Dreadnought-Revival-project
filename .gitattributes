@@ -1,1 +1,6 @@
 *.bat text eol=crlf
+# Shell scripts and shell-sourced files MUST stay LF: a single CR breaks
+# execution on Linux ("invalid option name" from set -euo pipefail-style
+# lines, broken shebangs) and poisons sourced values with trailing \r.
+*.sh text eol=lf
+*.example text eol=lf
