@@ -549,7 +549,7 @@ func TestResearchIsNotAPurchaseUntilBoughtWithCredits(t *testing.T) {
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=50000, soft_currency=1000000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
-	const module = 68026413 // "Trafalgar Goliath Torpedo II", researched live
+	const module = 68026413                   // "Trafalgar Goliath Torpedo II", researched live
 	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	request := func(name string, fields ...[]byte) []byte {
 		b := protocol.AppendStringField(nil, "RT", name)
@@ -607,7 +607,7 @@ func TestClaimBuysAResearchedItemWithCredits(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	const module = 68026413 // "Trafalgar Goliath Torpedo II"
+	const module = 68026413                   // "Trafalgar Goliath Torpedo II"
 	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	price := purchasePriceForItem(module)
 	if price <= 0 {
@@ -720,7 +720,7 @@ func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 	if _, err := database.Exec(`UPDATE player_state SET soft_currency=1000000, free_xp=50000 WHERE user_id=?`, pid); err != nil {
 		t.Fatal(err)
 	}
-	const module = 68026432 // researched live: "Trafalgar Torpedo Salvo II"
+	const module = 68026432                   // researched live: "Trafalgar Torpedo Salvo II"
 	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	offerFor := func() (gatewayCatalogEntitySeed, bool) {
 		for _, seed := range gatewayItemCatalogSeeds(pid) {
@@ -881,7 +881,7 @@ func TestResearchSpendsTheShipsXP(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	const module = 68026413 // Goliath Torpedo II, on Trafalgar's research list
+	const module = 68026413                   // Goliath Torpedo II, on Trafalgar's research list
 	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	pawn, ok := researchHullPawn(module)
 	if !ok {

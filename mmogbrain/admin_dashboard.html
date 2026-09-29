@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server Admin</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5d6673; --line: #dfe3e8;
+  --accent: #2f6fdd; --good: #1f8a4c; --warn: #b86e00; --bad: #c43636; --chip: #eef1f5;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #191d23; --ink: #e6e9ed; --muted: #97a1ad; --line: #2a3038;
+    --accent: #6a9cff; --good: #47c07a; --warn: #e2a33b; --bad: #f06a6a; --chip: #232932;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #191d23; --ink: #e6e9ed; --muted: #97a1ad; --line: #2a3038;
+  --accent: #6a9cff; --good: #47c07a; --warn: #e2a33b; --bad: #f06a6a; --chip: #232932;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+header .spacer { flex: 1; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav button, .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 11px; border-radius: 7px; cursor: pointer; font: inherit; }
+nav button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.btn:disabled { opacity: .5; cursor: default; }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.muted { color: var(--muted); }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card .k { color: var(--muted); font-size: 12px; }
+.card .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.card .v.small { font-size: 15px; font-weight: 500; }
+section { margin-top: 18px; }
+section h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--chip); font-size: 12px; }
+.chip.good { color: var(--good); } .chip.bad { color: var(--bad); } .chip.warn { color: var(--warn); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+.dot.good { background: var(--good); } .dot.bad { background: var(--bad); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+input, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+input[type=search] { min-width: 220px; }
+pre.log { margin: 0; padding: 10px 12px; font: 12px/1.4 var(--mono); white-space: pre-wrap; word-break: break-all; max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.results { font-size: 12px; color: var(--muted); white-space: normal; }
+#login { max-width: 380px; margin: 12vh auto; }
+#login .card { padding: 20px; }
+#login input { width: 100%; margin: 10px 0; }
+.err { color: var(--bad); }
+.hidden { display: none !important; }
+@media (max-width: 640px) { input[type=search] { min-width: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<div id="login" class="hidden">
+  <div class="card">
+    <h1 style="margin-top:0;font-size:18px">Server Admin</h1>
+    <p class="muted">Enter the server's <code>ADMIN_KEY</code>. It is kept for this browser tab only.</p>
+    <form id="loginForm"><input id="keyInput" type="password" autocomplete="off" placeholder="Admin key" required>
+    <button class="btn" type="submit">Open dashboard</button></form>
+    <p id="loginErr" class="err"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <h1>Server Admin</h1>
+  <nav id="tabs">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="instances">Battle servers</button>
+    <button data-tab="players">Players</button>
+    <button data-tab="matches">Matches</button>
+    <button data-tab="reports">Bug reports</button>
+    <button data-tab="logs">Logs</button>
+  </nav>
+  <span class="spacer"></span>
+  <span id="updated" class="muted"></span>
+  <button class="btn" id="themeBtn" title="Toggle light/dark">◐</button>
+  <button class="btn" id="logoutBtn">Lock</button>
+</header>
+<main>
+  <div id="tab-overview">
+    <div class="grid" id="cards"></div>
+    <section><h2>Services</h2><div class="grid" id="services"></div></section>
+    <section><h2>Matches in the last 24 h by mode</h2><div class="grid" id="modes"></div></section>
+    <section><h2>Battle server outcomes (newest 40 logs)</h2><div class="grid" id="crashes"></div></section>
+  </div>
+
+  <div id="tab-instances" class="hidden">
+    <div class="row"><span class="muted">Every battle server the control plane is running. A crashed server can stay listed until it is stopped.</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Port</th><th>Mode</th><th>Map</th><th>Players</th><th>State</th><th>Up for</th><th></th></tr></thead><tbody id="instRows"></tbody></table></div>
+  </div>
+
+  <div id="tab-players" class="hidden">
+    <section style="margin-top:0"><h2>Online now</h2>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th>In match</th><th>Queued</th><th>Squad</th><th>Player id</th></tr></thead><tbody id="onlineRows"></tbody></table></div>
+    </section>
+    <section><h2>Accounts</h2>
+      <div class="row"><input id="playerSearch" type="search" placeholder="Search name or player id"><button class="btn" id="playerSearchBtn">Search</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th></th><th class="num">Rank</th><th class="num">XP</th><th class="num">Free XP</th><th class="num">Credits</th><th class="num">Premium</th><th class="num">Ships</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Kills</th><th>Last seen</th><th>Created</th></tr></thead><tbody id="playerRows"></tbody></table></div>
+    </section>
+  </div>
+
+  <div id="tab-matches" class="hidden">
+    <div class="table-wrap"><table><thead><tr><th>Started</th><th>Mode</th><th>Map</th><th>Status</th><th>Duration</th><th>Results</th></tr></thead><tbody id="matchRows"></tbody></table></div>
+  </div>
+
+  <div id="tab-reports" class="hidden">
+    <div class="row"><span class="muted">Reports the game clients send (YA_LogSpecial), newest first.</span></div>
+    <div class="table-wrap"><table><thead><tr><th>When (UTC)</th><th>Player</th><th>Type</th><th>Report</th><th>Details</th></tr></thead><tbody id="reportRows"></tbody></table></div>
+  </div>
+
+  <div id="tab-logs" class="hidden">
+    <div class="row">
+      <select id="logSrc">
+        <option value="mmogbrain">mmogbrain (server)</option>
+        <option value="firmament">mmogbrain (social/traffic)</option>
+        <option value="dn-dedicated">dn-dedicated (battle server control)</option>
+        <option value="mod">battle-server mod</option>
+        <option value="crashprobe">crash handler / stack probe</option>
+        <option value="gateway">gateway</option>
+        <option value="auth-server">auth-server</option>
+        <option value="battle">a battle server log…</option>
+      </select>
+      <select id="battleLog" class="hidden"></select>
+      <input id="logFilter" type="search" placeholder="Filter lines">
+      <select id="logLines"><option>100</option><option selected>300</option><option>1000</option></select>
+      <label class="muted"><input type="checkbox" id="logNoise"> show noise</label>
+      <button class="btn" id="logLoad">Load</button>
+      <label class="muted"><input type="checkbox" id="logFollow"> follow</label>
+    </div>
+    <pre class="log" id="logOut"></pre>
+  </div>
+</main>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { sessionStorage.removeItem(k); } catch (e) {} },
+  };
+  try { const t = localStorage.getItem('adminTheme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+
+  let key = store.get('adminKey');
+  let tab = 'overview';
+  let timer = null;
+
+  async function api(path, opts = {}) {
+    const res = await fetch('/admin/api' + path, { ...opts, headers: { 'X-Admin-Key': key || '' } });
+    if (res.status === 403) { lock('That key was not accepted.'); throw new Error('forbidden'); }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  // Every value from the server goes in as text, never as HTML.
+  function el(tag, attrs = {}, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') e.className = v; else if (k === 'onclick') e.onclick = v; else e.setAttribute(k, v);
+    }
+    for (const k of kids) if (k != null) e.append(k instanceof Node ? k : String(k));
+    return e;
+  }
+  const fmt = (n) => (n ?? 0).toLocaleString();
+  const ago = (iso) => {
+    if (!iso) return '';
+    const t = Date.parse(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
+    if (isNaN(t)) return iso;
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 90) return Math.round(s) + ' s';
+    if (s < 5400) return Math.round(s / 60) + ' min';
+    if (s < 172800) return Math.round(s / 3600) + ' h';
+    return Math.round(s / 86400) + ' d';
+  };
+  const card = (k, v, small) => el('div', { class: 'card' }, el('div', { class: 'k' }, k), el('div', { class: 'v' + (small ? ' small' : '') }, v));
+  const fill = (id, rows, empty, cols) => {
+    const t = $(id); t.replaceChildren();
+    if (!rows.length) t.append(el('tr', {}, el('td', { class: 'muted', colspan: cols }, empty)));
+    else rows.forEach((r) => t.append(r));
+  };
+
+  async function loadOverview() {
+    const o = await api('/overview');
+    $('cards').replaceChildren(
+      card('Online now', fmt(o.online)),
+      card('Battle servers', o.instances_crashed ? `${o.instances} (${o.instances_crashed} crashed)` : fmt(o.instances)),
+      card('Queued', fmt(o.queued)),
+      card('Matches, 24 h', fmt(o.matches_24h)),
+      card('Kills, 24 h', fmt(o.kills_24h)),
+      card('Credits paid, 24 h', fmt(o.credits_paid_24h)),
+      card('Accounts', fmt(o.accounts)),
+      card('New accounts, 24 h', fmt(o.new_accounts_24h)),
+      card('Bug reports, 24 h', fmt(o.reports_24h)),
+      card('Matches total', fmt(o.matches_total)),
+      card('mmogbrain up for', ago(new Date(Date.now() - o.uptime_seconds * 1000).toISOString()), true),
+    );
+    $('services').replaceChildren(...Object.entries(o.services).sort().map(([n, ok]) =>
+      el('div', { class: 'card' }, el('span', { class: 'dot ' + (ok ? 'good' : 'bad') }), n, el('div', { class: 'k' }, ok ? 'healthy' : 'not answering'))));
+    const modes = Object.entries(o.modes_24h || {});
+    $('modes').replaceChildren(...(modes.length ? modes.sort((a, b) => b[1] - a[1]).map(([m, n]) => card(m, fmt(n))) : [el('span', { class: 'muted' }, 'No matches in the last 24 hours.')]));
+    const c = o.host_crashes_recent || {};
+    $('crashes').replaceChildren(card('Ended cleanly', fmt(c.clean)), card('Stack overflow', fmt(c['stack overflow'])), card('Access violation', fmt(c['access violation'])));
+    if (o.control_plane_error) $('crashes').append(el('div', { class: 'card err' }, 'Control plane: ' + o.control_plane_error));
+  }
+
+  async function loadInstances() {
+    const d = await api('/instances');
+    fill('instRows', (d.instances || []).sort((a, b) => a.port - b.port).map((i) => {
+      const state = i.crashed ? el('span', { class: 'chip bad' }, 'crashed: ' + i.crashed)
+        : i.ready ? el('span', { class: 'chip good' }, 'running') : el('span', { class: 'chip warn' }, i.running ? 'starting' : 'stopped');
+      const stop = el('button', { class: 'btn danger', onclick: async (ev) => {
+        if (!confirm(`Stop the battle server on port ${i.port}? Players in it are sent back to the hangar.`)) return;
+        ev.target.disabled = true;
+        try { await api('/instances/' + encodeURIComponent(i.id), { method: 'DELETE' }); } catch (e) { alert(e.message); }
+        refresh();
+      } }, 'Stop');
+      return el('tr', {}, el('td', { class: 'num' }, i.port), el('td', {}, i.game_mode), el('td', {}, i.map),
+        el('td', {}, (i.player_names || []).join(', ') || '—'), el('td', {}, state), el('td', {}, ago(i.started_at)), el('td', {}, stop));
+    }), d.error ? d.error : 'No battle servers running.', 7);
+  }
+
+  async function loadOnline() {
+    const d = await api('/online');
+    fill('onlineRows', d.players.map((p) => el('tr', {}, el('td', {}, p.name || '?'), el('td', {}, p.status),
+      el('td', {}, p.match || '—'), el('td', {}, p.queued || '—'), el('td', {}, p.squad ? 'yes' : '—'),
+      el('td', { class: 'muted' }, p.pid))), 'Nobody is online.', 6);
+  }
+
+  async function loadPlayers() {
+    const q = $('playerSearch').value.trim();
+    const d = await api('/players?q=' + encodeURIComponent(q));
+    fill('playerRows', d.players.map((p) => el('tr', {}, el('td', {}, p.name || '?'),
+      el('td', {}, p.online ? el('span', { class: 'chip good' }, 'online') : ''),
+      ...[p.rank, p.xp, p.free_xp, p.credits, p.premium, p.ships, p.matches, p.wins, p.kills].map((v) => el('td', { class: 'num' }, fmt(v))),
+      el('td', {}, ago(p.updated)), el('td', { class: 'muted' }, (p.created || '').slice(0, 10)))), q ? 'No account matches.' : 'No accounts.', 13);
+  }
+
+  async function loadMatches() {
+    const d = await api('/matches');
+    fill('matchRows', d.matches.map((m) => {
+      let dur = '';
+      if (m.started && m.ended) dur = Math.round((Date.parse(m.ended) - Date.parse(m.started)) / 60000) + ' min';
+      const res = m.results.length ? m.results.map((r) => `${r.name} (T${r.team}, ${r.outcome}, ${r.kills}/${r.deaths}, +${fmt(r.credits)} cr, +${fmt(r.xp)} xp)`).join(' · ') : 'no results reported';
+      const chip = m.status === 'active' ? el('span', { class: 'chip good' }, 'active') : el('span', { class: 'chip' }, m.status);
+      return el('tr', {}, el('td', {}, ago(m.started) + ' ago'), el('td', {}, m.mode), el('td', {}, m.map), el('td', {}, chip), el('td', {}, dur),
+        el('td', { class: 'results' }, res));
+    }), 'No matches yet.', 6);
+  }
+
+  async function loadReports() {
+    const d = await api('/reports');
+    fill('reportRows', d.reports.map((r) => el('tr', {}, el('td', {}, r.when), el('td', {}, r.player), el('td', {}, r.type),
+      el('td', {}, r.name), el('td', { class: 'results' }, r.details))), 'No reports.', 5);
+  }
+
+  async function loadBattleLogList() {
+    const d = await api('/battle-logs');
+    const sel = $('battleLog'); const keep = sel.value; sel.replaceChildren();
+    d.logs.forEach((l) => sel.append(el('option', { value: l.name }, `${l.modified}  ${l.mode || ''}  ${l.crash ? '— ' + l.crash : ''}  (${l.name})`)));
+    if (keep) sel.value = keep;
+  }
+
+  async function loadLog() {
+    const src = $('logSrc').value;
+    $('battleLog').classList.toggle('hidden', src !== 'battle');
+    if (src === 'battle' && !$('battleLog').options.length) await loadBattleLogList();
+    const p = new URLSearchParams({ src, lines: $('logLines').value, q: $('logFilter').value, noise: $('logNoise').checked ? '1' : '0' });
+    if (src === 'battle') p.set('name', $('battleLog').value);
+    const out = $('logOut');
+    const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+    try {
+      const d = await api('/logs?' + p);
+      out.textContent = d.lines.length ? d.lines.join('\n') : '(no matching lines)';
+    } catch (e) { out.textContent = e.message; }
+    if (atBottom || !$('logFollow').checked) out.scrollTop = out.scrollHeight;
+  }
+
+  const loaders = {
+    overview: loadOverview, instances: loadInstances, players: () => Promise.all([loadOnline(), loadPlayers()]),
+    matches: loadMatches, reports: loadReports, logs: loadLog,
+  };
+  async function refresh() {
+    try { await loaders[tab](); $('updated').textContent = 'updated ' + new Date().toLocaleTimeString(); }
+    catch (e) { if (e.message !== 'forbidden') $('updated').textContent = 'update failed: ' + e.message; }
+  }
+  function schedule() {
+    clearInterval(timer);
+    const live = tab === 'overview' || tab === 'instances' || (tab === 'players' && !$('playerSearch').value) || (tab === 'logs' && $('logFollow').checked);
+    if (live) timer = setInterval(refresh, tab === 'logs' ? 5000 : 10000);
+  }
+  function show(t) {
+    tab = t;
+    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+    Object.keys(loaders).forEach((k) => $('tab-' + k).classList.toggle('hidden', k !== t));
+    refresh(); schedule();
+  }
+  function lock(msg) {
+    key = null; store.del('adminKey'); clearInterval(timer);
+    $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+    $('loginErr').textContent = msg || ''; $('keyInput').value = ''; $('keyInput').focus();
+  }
+  function unlock() { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); show(tab); }
+
+  $('loginForm').onsubmit = (e) => { e.preventDefault(); key = $('keyInput').value; store.set('adminKey', key); unlock(); };
+  $('logoutBtn').onclick = () => lock('');
+  $('themeBtn').onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('adminTheme', next); } catch (e) {}
+  };
+  document.querySelectorAll('#tabs button').forEach((b) => (b.onclick = () => show(b.dataset.tab)));
+  $('playerSearchBtn').onclick = () => { loadPlayers(); schedule(); };
+  $('playerSearch').onkeydown = (e) => { if (e.key === 'Enter') { loadPlayers(); schedule(); } };
+  $('logLoad').onclick = loadLog;
+  $('logSrc').onchange = loadLog;
+  $('battleLog').onchange = loadLog;
+  $('logFilter').onkeydown = (e) => { if (e.key === 'Enter') loadLog(); };
+  $('logFollow').onchange = schedule;
+
+  if (key) unlock(); else lock('');
+})();
+</script>
+</body>
+</html>
