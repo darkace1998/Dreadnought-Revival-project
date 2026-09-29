@@ -74,6 +74,8 @@ func main() {
 	admin.HandleFunc("/unban", h.AdminUnban).Methods(http.MethodPost)
 	admin.HandleFunc("/users", h.AdminUsers).Methods(http.MethodGet)
 	admin.HandleFunc("/bans", h.AdminBans).Methods(http.MethodGet)
+	admin.HandleFunc("/sessions", h.AdminSessions).Methods(http.MethodGet)
+	admin.HandleFunc("/sessions/{id}", h.AdminDeleteSession).Methods(http.MethodDelete)
 
 	// Internal endpoints (protected by X-Internal-Key header middleware) —
 	// for other services to check session revocation state, not for players.

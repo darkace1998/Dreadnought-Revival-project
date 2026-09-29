@@ -35,6 +35,8 @@
     <button data-tab="news">News</button>
     <button data-tab="logs">Logs</button>
     <button data-tab="metrics">Metrics</button>
+    <button data-tab="market">Market</button>
+    <button data-tab="audit">Audit</button>
     <button data-tab="backups">Backups</button>
     <button data-tab="config">Config</button>
   </nav>
@@ -48,6 +50,7 @@
 <main>
   <!-- OVERVIEW -->
   <section id="tab-overview" class="tab active">
+    <div id="alerts"></div>
     <div class="hero-grid">
       <div class="hero-card glass"><div class="hero-label">Services online</div><div class="hero-value" id="hero-up">–</div><div class="hero-sub" id="hero-up-sub">–</div></div>
       <div class="hero-card glass"><div class="hero-label">Players in queue</div><div class="hero-value" id="hero-queue">–</div><div class="hero-sub">waiting for match</div></div>
@@ -160,6 +163,15 @@
       </div>
     </div>
     <div class="card glass">
+      <div class="row-between"><h2>Login sessions <span id="sessions-count" class="pill"></span></h2>
+      <button id="sessions-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="sessions-table">
+        <thead><tr><th>Username</th><th>Created</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Revoking takes effect immediately: the token fails its next session check.</p>
+    </div>
+    <div class="card glass">
       <h2>Reset values & research</h2>
       <p class="muted">Reset account to fresh: <b>currencies</b> = starter values (10,000 credits, rank 1), <b>research</b> = all purchases/ship XP/fleets gone, starter fleet rebuilt. Savegames, contracts, bans and match history stay.</p>
       <div class="row">
@@ -208,6 +220,30 @@
         <tbody></tbody>
       </table></div>
       <p class="hint">Reported by the battle-server mod — who earned what (win pays more than loss/unknown).</p>
+    </div>
+    <div class="card glass">
+      <div class="row-between"><h2>Match center</h2>
+      <div class="row"><select id="match-select"></select><button id="match-reload" class="btn">↻</button></div></div>
+      <div id="match-detail"><p class="muted">Pick a match above.</p></div>
+    </div>
+    <div class="grid-2">
+      <div class="card glass">
+        <h2>Statistics</h2>
+        <div id="stats-box" class="kv"></div>
+      </div>
+      <div class="card glass">
+        <h2>Outcomes</h2>
+        <canvas id="chart-outcomes" height="140"></canvas>
+      </div>
+    </div>
+    <div class="card glass">
+      <div class="row-between"><h2>Match history <span id="history-count" class="pill"></span></h2>
+      <button id="history-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="history-table">
+        <thead><tr><th>ID</th><th>Mode</th><th>Map</th><th>Started</th><th>Players</th><th>Roster</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Legacy match archive (written by match-result reporting).</p>
     </div>
   </section>
 
@@ -283,6 +319,16 @@
       <p class="hint" id="log-path"></p>
       <pre id="log-view" class="logview">Nothing loaded yet.</pre>
     </div>
+    <div class="card glass">
+      <div class="row-between"><h2>Crash reports</h2>
+      <div class="row">
+        <select id="crash-dir"></select>
+        <select id="crash-file" class="hidden"></select>
+        <button id="crash-reload" class="btn">↻</button>
+      </div></div>
+      <pre id="crash-view" class="logview">No crash selected.</pre>
+      <p class="hint">Client crash dumps (.dmp) are listed, not viewed — they are binary.</p>
+    </div>
   </section>
 
   <!-- METRICS -->
@@ -291,6 +337,35 @@
       <div class="row-between"><h2>Metrics <span class="muted-sm">from all /metrics endpoints</span></h2>
       <button id="metrics-reload" class="btn">↻ Reload</button></div>
       <div id="metrics-grid" class="metrics-grid"></div>
+    </div>
+  </section>
+
+  <!-- MARKET -->
+  <section id="tab-market" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Market catalog <span id="catalog-count" class="pill"></span></h2>
+      <div class="row">
+        <input id="catalog-search" placeholder="Search (name / line / manufacturer) …">
+        <button id="catalog-reload" class="btn">↻ Reload</button>
+      </div></div>
+      <div class="table-wrap"><table id="catalog-table">
+        <thead><tr><th>Ship</th><th>Tier</th><th>Line</th><th>Manufacturer</th><th>Hero</th><th>Price</th><th>Owners</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Every buyable hull and hero with the price the store charges (25k doubling per tier — placeholder curve, originals lost).</p>
+    </div>
+  </section>
+
+  <!-- AUDIT -->
+  <section id="tab-audit" class="tab">
+    <div class="card glass">
+      <div class="row-between"><h2>Audit log <span id="audit-count" class="pill"></span></h2>
+      <button id="audit-reload" class="btn">↻ Reload</button></div>
+      <div class="table-wrap"><table id="audit-table">
+        <thead><tr><th>Time</th><th>Action</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="hint">Every mutating dashboard action, newest last. Stored in <code>run/web-dashboard-audit.log</code>.</p>
     </div>
   </section>
 

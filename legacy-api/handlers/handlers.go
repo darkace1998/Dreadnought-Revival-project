@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -296,6 +297,85 @@ func (h *Handler) AdminDeleteTile(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Log.WithField("tile", id).Info("launcher tile deleted")
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "deleted", "id": id})
+}
+
+// AdminHistory handles GET /admin/matches — legacy match history (newest
+// first) with each match's roster. match_history/match_players are written by
+// PostMatchResult; this is their operator-readable view.
+func (h *Handler) AdminHistory(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			limit = n
+		}
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	rows, err := h.DB.Query(`SELECT id,mode,map,started_at,ended_at FROM match_history
+		ORDER BY started_at DESC LIMIT ?`, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	type participant struct {
+		UserID string `json:"user_id"`
+		Team   int    `json:"team"`
+		Kills  int    `json:"kills"`
+		Deaths int    `json:"deaths"`
+		Damage int    `json:"damage"`
+	}
+	type match struct {
+		ID       string        `json:"id"`
+		Mode     string        `json:"mode"`
+		Map      string        `json:"map"`
+		Started  string        `json:"started_at"`
+		Ended    string        `json:"ended_at"`
+		Players  []participant `json:"players"`
+	}
+	out := []match{}
+	for rows.Next() {
+		var m match
+		var ended sql.NullString
+		if err := rows.Scan(&m.ID, &m.Mode, &m.Map, &m.Started, &ended); err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		m.Ended = ended.String
+		m.Players = []participant{}
+		prows, err := h.DB.Query(`SELECT user_id,team,kills,deaths,damage FROM match_players
+			WHERE match_id=? ORDER BY kills DESC`, m.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		for prows.Next() {
+			var p participant
+			if err := prows.Scan(&p.UserID, &p.Team, &p.Kills, &p.Deaths, &p.Damage); err != nil {
+				_ = prows.Close()
+				writeError(w, http.StatusInternalServerError, "db error")
+				return
+			}
+			m.Players = append(m.Players, p)
+		}
+		_ = prows.Close()
+		if err := prows.Err(); err != nil {
+			writeError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"matches": out, "count": len(out)})
 }
 
 // AgeConsent handles GET/POST /v2/dreadnought/ageconsent/

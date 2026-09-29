@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"dn-dedicated/internal/api"
+	"dn-dedicated/internal/directory"
 	"dn-dedicated/internal/gamedata"
 	"dn-dedicated/internal/master"
 	"dn-dedicated/internal/server"
@@ -210,6 +211,16 @@ matchmaker can drive it unchanged:
 		allowMock  = fs.Bool("allow-mock", false, "record a mock instance when no game process can be started (game-manager compatibility)")
 		showWindow = fs.Bool("show-window", false, "leave the engine's game window visible (debugging)")
 		logCmds    = fs.String("engine-log-cmds", getenv("DN_ENGINE_LOG_CMDS", ""), engineLogCmdsUsage)
+		// Public server browser (master-master directory). An empty
+		// master-master-url disables everything; run/dn-no-master-server.txt
+		// opts out at runtime (unlisted cluster, manual join only).
+		masterMasterURL = fs.String("master-master-url", getenv("MASTER_MASTER_URL", ""), "master-master directory base URL (empty = unlisted)")
+		clusterName     = fs.String("cluster-name", getenv("CLUSTER_NAME", ""), "cluster name shown in the server browser")
+		clusterWebURL   = fs.String("cluster-web-url", getenv("CLUSTER_WEB_URL", ""), "public https URL players authenticate against")
+		clusterCAFile   = fs.String("cluster-ca-file", getenv("CLUSTER_CA_FILE", "certs/ca.crt"), "cluster CA cert uploaded to the directory for TOFU")
+		clusterVersion  = fs.String("cluster-version", getenv("CLUSTER_VERSION", "1.0"), "server version shown in the browser")
+		clusterMOTD     = fs.String("cluster-motd", getenv("CLUSTER_MOTD", ""), "message of the day shown in the browser")
+		noMasterFile    = fs.String("no-master-server-file", getenv("DN_NO_MASTER_SERVER_FILE", "run/dn-no-master-server.txt"), "presence opts out of the directory")
 	)
 	var defaultURLOptions stringList
 	fs.Var(&defaultURLOptions, "url-option", `map URL option added to every instance, repeatable, e.g. "ylevelvariation=1"`)
@@ -299,6 +310,19 @@ matchmaker can drive it unchanged:
 	}
 	fmt.Println()
 
+	registrar := directory.New(directory.Config{
+		MasterURL: *masterMasterURL,
+		Name:      *clusterName,
+		WebURL:    *clusterWebURL,
+		BattleIP:  *serverIP,
+		Version:   *clusterVersion,
+		MOTD:      *clusterMOTD,
+		CAFile:    *clusterCAFile,
+		NoMasterFile: *noMasterFile,
+		Log:       os.Stderr,
+	}, mgr)
+	registrar.Start()
+
 	errCh := make(chan error, 1)
 	go func() {
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -321,6 +345,7 @@ matchmaker can drive it unchanged:
 	if err := httpSrv.Shutdown(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "http shutdown: %v\n", err)
 	}
+	registrar.Stop()
 	mgr.Shutdown()
 	fmt.Println("stopped.")
 	return nil

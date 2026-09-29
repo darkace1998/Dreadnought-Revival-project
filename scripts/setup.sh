@@ -60,13 +60,15 @@ echo
 echo "[*] Building services..."
 mkdir -p "$RUN_DIR"
 
-# web-dashboard is the newest module: make sure its sums are recorded
-# (needs network once) BEFORE the build loop below. Non-fatal -- the build
-# reports the real error if this was skipped while offline.
-if [ -d "$PROJECT_DIR/web-dashboard" ]; then
-  printf '    %-16s ' "go.sum sync"
-  (cd "$PROJECT_DIR/web-dashboard" && go mod tidy) 2>/dev/null && echo "OK" || echo "skipped (offline?)"
-fi
+# web-dashboard and dn-server-browser are client/operator modules: make sure
+# their sums are recorded (needs network once) BEFORE the build loop below.
+# Non-fatal -- the build reports the real error if this was skipped offline.
+for mod in web-dashboard dn-server-browser; do
+  if [ -d "$PROJECT_DIR/$mod" ]; then
+    printf '    %-16s ' "go.sum sync"
+    (cd "$PROJECT_DIR/$mod" && go mod tidy) 2>/dev/null && echo "OK ($mod)" || echo "skipped ($mod, offline?)"
+  fi
+done
 
 SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli web-dashboard)
 for svc in "${SERVICES[@]}"; do
@@ -90,6 +92,17 @@ fi
 # the toolchain cannot.
 printf '    %-16s ' "dn-launcher.exe"
 if (cd "$PROJECT_DIR" && GOOS=windows GOARCH=amd64 go build -o "$RUN_DIR/dn-launcher.exe" ./dn-launcher) 2>/dev/null; then
+  echo "OK (windows/amd64)"
+else
+  echo "skipped (cross-compile unavailable)"
+fi
+
+# The server browser is the second client-side component: same deal, plus its
+# window resources. rsrc_windows_amd64.syso is generated from winres/ (see
+# dn-server-browser/winres); without it the exe still builds, just with a
+# generic icon. -H windowsgui opens the window with no console flashing up.
+printf '    %-16s ' "dn-dedicated-browser.exe"
+if (cd "$PROJECT_DIR" && GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui" -o "$RUN_DIR/dn-dedicated-browser.exe" ./dn-server-browser) 2>/dev/null; then
   echo "OK (windows/amd64)"
 else
   echo "skipped (cross-compile unavailable)"

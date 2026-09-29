@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/auth-server/jwt"
 	"github.com/darkace1998/Dreadnought-Revival-project/auth-server/models"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
@@ -538,6 +540,73 @@ func (h *Handler) AdminBans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"bans": out, "count": len(out)})
+}
+
+// sessionIDPattern matches the UUIDs assigned to sessions. Session ids go
+// into a DELETE, and while that is parameterised, a garbage id is always a
+// caller bug worth a 400 rather than a silent no-op.
+var sessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// AdminSessions handles GET /admin/sessions — every login session with its
+// account, expiry and whether it already lapsed. Force-logout for stuck
+// sessions is DELETE /admin/sessions/{id}.
+func (h *Handler) AdminSessions(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query(`SELECT s.id,u.username,s.user_id,s.expires_at,s.created_at,
+		datetime(s.expires_at) <= datetime('now')
+		FROM sessions s JOIN users u ON u.id=s.user_id ORDER BY s.created_at DESC`)
+	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	type session struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		UserID   string `json:"user_id"`
+		Expires  string `json:"expires_at"`
+		Created  string `json:"created_at"`
+		Expired  bool   `json:"expired"`
+	}
+	out := []session{}
+	for rows.Next() {
+		var s session
+		var expired int
+		if err := rows.Scan(&s.ID, &s.Username, &s.UserID, &s.Expires, &s.Created, &expired); err != nil {
+			writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+			return
+		}
+		s.Expired = expired != 0
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"sessions": out, "count": len(out)})
+}
+
+// AdminDeleteSession handles DELETE /admin/sessions/{id} — revokes one login
+// session (force logout). The token stops validating on its next use because
+// session checks read this table.
+func (h *Handler) AdminDeleteSession(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if !sessionIDPattern.MatchString(id) {
+		writeGreyboxError(w, http.StatusBadRequest, -32602, "invalid session id")
+		return
+	}
+	res, err := h.DB.Exec(`DELETE FROM sessions WHERE id=?`, id)
+	if err != nil {
+		writeGreyboxError(w, http.StatusInternalServerError, -32603, "db error")
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeGreyboxError(w, http.StatusNotFound, -32001, "no such session")
+		return
+	}
+	h.Log.WithField("session", id).Warn("admin revoked a login session")
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "revoked", "id": id})
 }
 
 // AdminUsers handles GET /admin/users — lists every registered account with

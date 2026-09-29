@@ -61,9 +61,11 @@ function switchTab(name) {
   state.currentTab = name;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((s) => s.classList.toggle("active", s.id === "tab-" + name));
-  if (name === "players") { loadPlayers(); loadBans(); }
+  if (name === "players") { loadPlayers(); loadBans(); loadSessions(); }
   if (name === "queue") loadQueue();
-  if (name === "matches") { loadInstances(); loadResults(); }
+  if (name === "matches") { loadInstances(); loadResults(); loadMatchesList(); loadHistory(); }
+  if (name === "market") loadCatalog();
+  if (name === "audit") loadAudit();
   if (name === "online") loadOnline();
   if (name === "news") loadTiles();
   if (name === "backups") loadBackups();
@@ -120,6 +122,12 @@ async function loadStatus() {
     addEvent(ok ? "All services healthy again." : `Status change: ${data.up}/${data.total} online.`, ok ? "good" : "bad");
   }
   state.lastUp = key;
+
+  // stuck queue: players waiting while nothing forms and nothing runs.
+  if (data.queued_players > 0 && data.active_matches === 0 && data.instances === 0) state.queueStuck = (state.queueStuck || 0) + 1;
+  else state.queueStuck = 0;
+  state.lastStatus = data;
+  refreshAlerts();
 }
 
 function addEvent(text, kind = "") {
@@ -488,6 +496,7 @@ async function loadResults() {
   try {
     const data = await api("/api/results?limit=50");
     const list = data.results || [];
+    resultsCache = list;
     $("results-count").textContent = list.length + " reports";
     const tb = tbodyFor("results-table");
     tb.innerHTML = "";
@@ -499,6 +508,7 @@ async function loadResults() {
         <td>${esc(r.kills)}</td><td>${esc(r.credits)}</td><td>${esc(r.xp)}</td><td>${esc(r.reported_at)}</td>`;
       tb.appendChild(tr);
     }
+    renderStats();
   } catch (e) { toast("Results: " + e.message, "err"); }
 }
 
@@ -621,7 +631,12 @@ async function showPlayerDetail(pid, name) {
     })}</dl>
     <p><b>Fleets:</b><br>${fleetRows}</p>
     <p><b>Ships (top 12 by XP):</b><br>${shipRows}</p>
-    <p><b>Recent results:</b><br>${resRows}</p>`;
+    <p><b>Recent results:</b><br>${resRows}</p>
+    <div id="player-progress"><p class="muted">Loading career …</p></div>`;
+    showPlayerProgress(pid).then((html) => {
+      const el = $("player-progress");
+      if (el) el.innerHTML = html;
+    });
   } catch (e) { box.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
 }
 
@@ -683,6 +698,301 @@ async function doReset() {
   });
 }
 
+/* ---------- alerts ---------- */
+async function refreshAlerts() {
+  const box = $("alerts");
+  if (!box) return;
+  const st = state.lastStatus;
+  const alerts = [];
+  if (st && st.up < st.total) alerts.push(["bad", `${st.total - st.up} service(s) down — see Services below.`]);
+  if ((state.queueStuck || 0) >= 12) alerts.push(["warn", `Queue stuck: ${st.queued_players} waiting for ~60s with nothing forming.`]);
+  // Config + backups at most once a minute; status polls every 5s.
+  if (!state.alertsAt || Date.now() - state.alertsAt > 60000) {
+    state.alertsAt = Date.now();
+    try {
+      const cfg = await api("/api/config");
+      const cert = cfg.cert || {};
+      if (cert.expired) alerts.push(["bad", "TLS certificate EXPIRED — regenerate via gen-certs.sh."]);
+      else if (cert.not_after) {
+        const days = (new Date(cert.not_after) - Date.now()) / 86400000;
+        if (days < 30) alerts.push(["warn", `TLS certificate expires in ${Math.max(0, Math.round(days))} days.`]);
+      }
+    } catch (e) { /* config optional for alerts */ }
+    try {
+      const bk = await api("/api/backups");
+      if (!bk.count) alerts.push(["warn", "No backups yet — run backup.sh --install-cron."]);
+    } catch (e) { /* backups optional for alerts */ }
+    state.alertCache = alerts;
+  } else if (state.alertCache) {
+    alerts.push(...state.alertCache);
+  }
+  box.innerHTML = alerts.map(([k, t]) => `<div class="ev ${k === "bad" ? "bad" : ""}">${esc(t)}</div>`).join("");
+}
+
+/* ---------- match center ---------- */
+let matchesCache = [];
+async function loadMatchesList() {
+  try {
+    const data = await api("/api/matches?limit=50");
+    matchesCache = data.matches || [];
+    const sel = $("match-select");
+    const cur = sel.value;
+    sel.innerHTML = "";
+    const sorted = [...matchesCache].sort((a, b) => {
+      if ((a.status === "active") !== (b.status === "active")) return a.status === "active" ? -1 : 1;
+      return b.created_at.localeCompare(a.created_at);
+    });
+    for (const m of sorted) {
+      const o = document.createElement("option");
+      o.value = m.id;
+      o.textContent = `${m.status === "active" ? "● " : ""}${m.game_mode} ${m.map} · ${m.players}p · ${m.created_at}`;
+      sel.appendChild(o);
+    }
+    if (cur) sel.value = cur;
+    if (sel.value) showMatchDetail(sel.value);
+    else $("match-detail").innerHTML = '<p class="muted">No matches yet.</p>';
+  } catch (e) { toast("Matches: " + e.message, "err"); }
+}
+
+async function showMatchDetail(id) {
+  const box = $("match-detail");
+  box.innerHTML = '<p class="muted">Loading …</p>';
+  try {
+    const d = await api("/api/match/" + id);
+    const m = d.match || {};
+    const slots = d.slots || [];
+    const t1 = slots.filter((s) => s.team === 1).length;
+    const t2 = slots.filter((s) => s.team === 2).length;
+    let extra = "";
+    if (m.instance_id) {
+      try {
+        const inst = await api("/api/instance/" + m.instance_id);
+        extra = `<dt>host</dt><dd>${inst.ready === true ? "ready" : inst.ready === false ? "loading" : "unknown"}${inst.port ? " · port " + esc(inst.port) : ""}</dd>`;
+      } catch (e) { extra = `<dt>host</dt><dd>gone</dd>`; }
+    }
+    let logHint = "";
+    if (m.server_port) {
+      try {
+        const logs = await api("/api/logs?name=battle-logs");
+        const hit = (logs.files || []).find((f) => f.includes("port" + m.server_port));
+        if (hit) logHint = `<dt>battle log</dt><dd><code>${esc(hit)}</code> (Logs tab)</dd>`;
+      } catch (e) { /* logs optional */ }
+    }
+    const rows = slots.map((s) => `<td><code>${esc(s.user_id.slice(0, 8))}…</code></td><td>${esc(s.team)}</td>`).join("");
+    box.innerHTML = `<dl class="kv">
+      <dt>mode</dt><dd>${esc(m.game_mode)} on ${esc(m.map)}</dd>
+      <dt>status</dt><dd>${esc(m.status)} · teams ${t1}v${t2}</dd>
+      <dt>address</dt><dd>${esc(m.server_ip)}:${esc(m.server_port)}</dd>
+      <dt>formed</dt><dd>${esc(m.created_at)}${m.server_ready_at ? " · host ready " + esc(m.server_ready_at) : ""}</dd>
+      ${extra}${logHint}</dl>
+      <div class="table-wrap"><table><thead><tr><th>Player</th><th>Team</th></tr></thead><tbody>${rows || '<tr><td colspan="2" class="muted">No slots.</td></tr>'}</tbody></table></div>`;
+  } catch (e) { box.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+}
+
+/* ---------- statistics ---------- */
+let resultsCache = [];
+function renderStats() {
+  const list = resultsCache;
+  const by = (k) => list.filter((r) => r.outcome === k).length;
+  const wins = by("win"), losses = by("loss"), draws = by("draw"), unknown = list.length - wins - losses - draws;
+  const kills = list.reduce((a, r) => a + (r.kills || 0), 0);
+  const credits = list.reduce((a, r) => a + (r.credits || 0), 0);
+  const xp = list.reduce((a, r) => a + (r.xp || 0), 0);
+  const modes = {};
+  for (const r of list) {
+    const m = r.game_mode || "?";
+    modes[m] = modes[m] || { n: 0, win: 0 };
+    modes[m].n++;
+    if (r.outcome === "win") modes[m].win++;
+  }
+  const modeRows = Object.entries(modes).map(([m, v]) =>
+    `<dt>${esc(m)}</dt><dd>${v.n} reported · ${v.n ? Math.round((100 * v.win) / v.n) : 0}% won</dd>`).join("");
+  $("stats-box").innerHTML = `<dl class="kv">
+    <dt>reported</dt><dd>${list.length}</dd>
+    <dt>win rate</dt><dd>${list.length ? Math.round((100 * wins) / list.length) : 0}% (${wins}W/${losses}L/${draws}D/${unknown}?)</dd>
+    <dt>avg kills</dt><dd>${list.length ? (kills / list.length).toFixed(1) : 0}</dd>
+    <dt>paid out</dt><dd>${credits} credits · ${xp} XP</dd>${modeRows}</dl>`;
+  drawOutcomeBars($("chart-outcomes"), { wins, losses, draws, unknown });
+}
+
+function drawOutcomeBars(canvas, v) {
+  const ctx = canvas.getContext("2d");
+  const W = (canvas.width = canvas.clientWidth * 2);
+  const H = (canvas.height = 280);
+  ctx.clearRect(0, 0, W, H);
+  const total = Math.max(1, v.wins + v.losses + v.draws + v.unknown);
+  const bars = [
+    ["win", v.wins, "#34d399"], ["loss", v.losses, "#f87171"],
+    ["draw", v.draws, "#fbbf24"], ["?", v.unknown, "#8b98b8"],
+  ];
+  const bw = W / bars.length;
+  ctx.font = "22px sans-serif"; ctx.textAlign = "center";
+  bars.forEach(([label, n, color], i) => {
+    const h = ((H - 60) * n) / total;
+    ctx.fillStyle = color;
+    ctx.fillRect(i * bw + bw * 0.25, H - 30 - h, bw * 0.5, h);
+    ctx.fillStyle = "#e8eefc";
+    ctx.fillText(`${label} ${n}`, i * bw + bw / 2, H - 8);
+  });
+}
+
+/* ---------- history ---------- */
+async function loadHistory() {
+  try {
+    const data = await api("/api/history?limit=30");
+    const list = data.matches || [];
+    $("history-count").textContent = list.length + " matches";
+    const tb = tbodyFor("history-table");
+    tb.innerHTML = "";
+    for (const m of list) {
+      const roster = (m.players || []).map((p) => `${esc(p.user_id.slice(0, 8))} T${esc(p.team)} ${esc(p.kills)}k`).join(", ") || "–";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><code>${esc(m.id.slice(0, 8))}…</code></td><td>${esc(m.mode)}</td><td>${esc(m.map)}</td>
+        <td>${esc(m.started_at)}</td><td>${esc(m.players ? m.players.length : 0)}</td><td>${roster}</td>`;
+      tb.appendChild(tr);
+    }
+  } catch (e) { toast("History: " + e.message, "err"); }
+}
+
+/* ---------- catalog ---------- */
+let catalogCache = [];
+async function loadCatalog() {
+  try {
+    const data = await api("/api/catalog");
+    catalogCache = data.ships || [];
+    $("catalog-count").textContent = catalogCache.length + " hulls";
+    renderCatalog();
+  } catch (e) { toast("Catalog: " + e.message, "err"); }
+}
+function renderCatalog() {
+  const q = ($("catalog-search").value || "").toLowerCase();
+  const tb = tbodyFor("catalog-table");
+  tb.innerHTML = "";
+  for (const s of catalogCache) {
+    const hay = `${s.name} ${s.line} ${s.manufacturer} ${s.tier}`.toLowerCase();
+    if (q && !hay.includes(q)) continue;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${esc(s.name)}</td><td>${esc(s.tier)}</td><td>${esc(s.line)}</td>
+      <td>${esc(s.manufacturer)}</td><td>${s.hero ? "hero" : "–"}</td>
+      <td>${Number(s.price_credits).toLocaleString()}</td><td>${esc(s.owners)}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+/* ---------- audit ---------- */
+async function loadAudit() {
+  try {
+    const data = await api("/api/audit?lines=500");
+    const list = data.entries || [];
+    $("audit-count").textContent = list.length + " entries";
+    const tb = tbodyFor("audit-table");
+    tb.innerHTML = "";
+    for (const line of list) {
+      let time = "", action = "", detail = line;
+      try {
+        const o = JSON.parse(line);
+        time = o.time || ""; action = o.action || ""; detail = o.detail || "";
+      } catch (e) { /* raw line */ }
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(time)}</td><td><code>${esc(action)}</code></td><td>${esc(detail)}</td>`;
+      tb.appendChild(tr);
+    }
+  } catch (e) { toast("Audit: " + e.message, "err"); }
+}
+
+/* ---------- crash reports ---------- */
+async function loadCrashes() {
+  try {
+    const data = await api("/api/crashes");
+    const list = data.entries || [];
+    const dirSel = $("crash-dir");
+    const cur = dirSel.value;
+    dirSel.innerHTML = "";
+    if (!list.length) {
+      $("crash-view").textContent = "No crash reports yet.";
+      return;
+    }
+    for (const e of list) {
+      const o = document.createElement("option");
+      o.value = (e.dir ? "d:" : "f:") + e.name;
+      o.textContent = (e.dir ? "📁 " : "📄 ") + e.name;
+      dirSel.appendChild(o);
+    }
+    if (cur) dirSel.value = cur;
+    showCrash();
+  } catch (e) { toast("Crashes: " + e.message, "err"); }
+}
+
+async function showCrash() {
+  const v = $("crash-dir").value || "";
+  const isDir = v.startsWith("d:");
+  const name = v.slice(2);
+  const fileSel = $("crash-file");
+  try {
+    if (isDir) {
+      const data = await api("/api/crashes?dir=" + encodeURIComponent(name));
+      const files = data.files || [];
+      fileSel.classList.remove("hidden");
+      fileSel.innerHTML = "";
+      for (const f of files) {
+        const o = document.createElement("option");
+        o.value = f.name; o.textContent = `${f.name} (${fmtSize(f.size)})`;
+        fileSel.appendChild(o);
+      }
+      if (!files.length) { $("crash-view").textContent = "(empty report folder)"; return; }
+      const first = await api(`/api/crashes?dir=${encodeURIComponent(name)}&file=${encodeURIComponent(files[0].name)}&lines=200`);
+      $("crash-view").textContent = (first.lines || []).join("\n") || "(empty)";
+      return;
+    }
+    fileSel.classList.add("hidden");
+    const data = await api("/api/crashes?file=" + encodeURIComponent(name) + "&lines=200");
+    $("crash-view").textContent = (data.lines || []).join("\n") || "(empty)";
+  } catch (e) { $("crash-view").textContent = e.message; }
+}
+
+/* ---------- sessions ---------- */
+async function loadSessions() {
+  try {
+    const data = await api("/api/sessions");
+    const list = data.sessions || [];
+    $("sessions-count").textContent = list.length + " active";
+    const tb = tbodyFor("sessions-table");
+    tb.innerHTML = "";
+    for (const s of list) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(s.username)}</td><td>${esc(s.created_at)}</td><td>${esc(s.expires_at)}</td>
+        <td>${s.expired ? '<span class="badge warn">expired</span>' : '<span class="badge ok">live</span>'}</td><td></td>`;
+      const btn = document.createElement("button");
+      btn.className = "btn small danger"; btn.textContent = "Revoke";
+      btn.onclick = () => confirmAction("Revoke session?", `${s.username} will be signed out.`, async () => {
+        await api("/api/sessions/" + s.id, { method: "DELETE" });
+        toast("Session revoked.", "ok");
+        loadSessions();
+      });
+      tr.lastChild.appendChild(btn);
+      tb.appendChild(tr);
+    }
+  } catch (e) { toast("Sessions: " + e.message, "err"); }
+}
+
+/* ---------- player progress (career, season, contracts) ---------- */
+async function showPlayerProgress(pid) {
+  try {
+    const d = await api("/api/player/" + pid + "/progress");
+    const goals = (d.goals || []).map((g) => {
+      const stages = (g.stages || []).map((s) => s.amount).join("/");
+      return `${esc(g.title)} [${esc(g.category)}]: ${esc(g.progress)}${stages ? " (stages " + esc(stages) + ")" : ""}`;
+    }).join("<br>") || "–";
+    const seasons = (d.seasons || []).map((s) => `${esc(s.season_id)}: level ${esc(s.level)} (${esc(s.xp)} XP)`).join("<br>") || "–";
+    const contracts = (d.contracts || []).map((c) => `${esc(c.contract_id)}: ${esc(c.state)} ${esc(c.progress)}%`).join("<br>") || "–";
+    const counters = (d.counters || []).slice(0, 8).map((c) => `${esc(c.counter_id)}${c.counter_sub_id ? "/" + esc(c.counter_sub_id) : ""}: ${esc(c.value)}`).join("<br>") || "–";
+    return `<p><b>Career goals:</b><br>${goals}</p>
+      <p><b>Seasons:</b><br>${seasons}</p>
+      <p><b>Contracts:</b><br>${contracts}</p>
+      <p><b>Top counters:</b><br>${counters}</p>`;
+  } catch (e) { return `<p class="error">${esc(e.message)}</p>`; }
+}
+
 /* ---------- polling ---------- */
 async function refreshAll() {
   try { await api("/api/me"); hideLogin(); } catch { showLogin(); return; }
@@ -711,7 +1021,26 @@ document.addEventListener("DOMContentLoaded", () => {
   $("tile-save").onclick = saveTile;
   $("queue-clear-btn").onclick = () => clearQueue().catch((e) => toast(e.message, "err"));
   $("force-match-btn").onclick = () => forceMatch().catch((e) => toast(e.message, "err"));
-  $("backups-reload").onclick = loadBackups;  $("queue-reload").onclick = loadQueue;
+  $("backups-reload").onclick = loadBackups;
+  $("match-select").onchange = (e) => showMatchDetail(e.target.value);
+  $("match-reload").onclick = loadMatchesList;
+  $("history-reload").onclick = loadHistory;
+  $("catalog-reload").onclick = loadCatalog;
+  $("catalog-search").oninput = renderCatalog;
+  $("audit-reload").onclick = loadAudit;
+  $("crash-reload").onclick = loadCrashes;
+  $("crash-dir").onchange = showCrash;
+  $("crash-file").onchange = () => {
+    const v = $("crash-dir").value || "";
+    if (!v.startsWith("d:")) return;
+    const dir = v.slice(2), file = $("crash-file").value;
+    if (!file) return;
+    api(`/api/crashes?dir=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}&lines=200`)
+      .then((d) => { $("crash-view").textContent = (d.lines || []).join("\n") || "(empty)"; })
+      .catch((e) => { $("crash-view").textContent = e.message; });
+  };
+  $("sessions-reload").onclick = loadSessions;
+  $("queue-reload").onclick = loadQueue;
   $("instances-reload").onclick = loadInstances;
   $("servers-reload").onclick = loadServers;
   $("chat-reload").onclick = loadChat;

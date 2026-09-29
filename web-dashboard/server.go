@@ -49,6 +49,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	if !checkAdminKey(req.AdminKey, s.cfg.adminKey) {
 		s.log.Warn("dashboard login failed")
+		s.audit("login-failed", r.RemoteAddr)
 		writeError(w, http.StatusUnauthorized, "invalid admin key")
 		return
 	}
@@ -66,6 +67,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int((sessionLifetime).Seconds()),
 	})
 	s.log.Info("dashboard login ok")
+	s.audit("login", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok"})
 }
 
@@ -465,6 +467,7 @@ func (s *server) apiBroadcast(w http.ResponseWriter, r *http.Request) {
 		"channel": req.Channel, "content": req.Content,
 	})
 	s.log.WithField("channel", req.Channel).Info("dashboard broadcast")
+	s.audit("broadcast", req.Channel)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -505,6 +508,7 @@ func (s *server) apiUpsertTile(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamPostJSON(s.cfg.legacyURL, "/admin/tiles", s.cfg.adminKey, payload)
 	s.log.WithField("tile", id).Info("dashboard tile saved")
+	s.audit("tile-save", id)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -516,6 +520,7 @@ func (s *server) apiDeleteTile(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamDelete(s.cfg.legacyURL, "/admin/tiles/"+id, s.cfg.adminKey)
 	s.log.WithField("tile", id).Info("dashboard tile deleted")
+	s.audit("tile-delete", id)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -531,6 +536,7 @@ func (s *server) apiProvision(w http.ResponseWriter, r *http.Request) {	var payl
 	}
 	code, doc := s.upstreamPostJSON(s.cfg.mmogURL, "/admin/provision", s.cfg.adminKey, payload)
 	s.log.WithField("user_id", id).Warn("dashboard provisioned test account")
+	s.audit("provision", id)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -549,6 +555,7 @@ func (s *server) apiReset(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamPostJSON(s.cfg.mmogURL, "/admin/reset", s.cfg.adminKey, payload)
 	s.log.WithField("user_id", id).Warn("dashboard reset an account")
+	s.audit("reset", id)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -570,18 +577,21 @@ func (s *server) apiQueueKick(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamDelete(s.cfg.mmogURL, "/admin/queue/kick/"+id, s.cfg.adminKey)
 	s.log.WithField("queue_entry", id).Info("dashboard queue kick")
+	s.audit("queue-kick", id)
 	writeJSON(w, codeOr(code), doc)
 }
 
 func (s *server) apiQueueClear(w http.ResponseWriter, _ *http.Request) {
 	code, doc := s.upstreamPostJSON(s.cfg.mmogURL, "/admin/queue/clear", s.cfg.adminKey, nil)
 	s.log.Info("dashboard queue clear")
+	s.audit("queue-clear", "")
 	writeJSON(w, codeOr(code), doc)
 }
 
 func (s *server) apiForceMatch(w http.ResponseWriter, _ *http.Request) {
 	code, doc := s.upstreamPostJSON(s.cfg.mmogURL, "/admin/force-match", s.cfg.adminKey, nil)
 	s.log.Info("dashboard force match")
+	s.audit("force-match", "")
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -621,6 +631,207 @@ func (s *server) apiBackups(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"dir": dir, "backups": out, "count": len(out)})
 }
 
+// auditPath is the dashboard's own action log: every mutating operator action
+// lands here as one JSON line (who did what, when). Read back via /api/audit.
+func (s *server) auditPath() string {
+	return filepath.Join(s.cfg.runDir, "web-dashboard-audit.log")
+}
+
+func (s *server) audit(action, detail string) {
+	line, _ := json.Marshal(map[string]string{
+		"time":   time.Now().UTC().Format(time.RFC3339),
+		"action": action, "detail": detail,
+	})
+	f, err := os.OpenFile(s.auditPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		s.log.WithError(err).Warn("audit log write failed")
+		return
+	}
+	_, _ = f.Write(append(line, '\n'))
+	_ = f.Close()
+}
+
+// apiAudit tails the action log (newest last, like the other log endpoints).
+func (s *server) apiAudit(w http.ResponseWriter, r *http.Request) {
+	lines, _, err := tailFile(s.auditPath(), clampLines(r.URL.Query().Get("lines")))
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"entries": []string{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": lines, "count": len(lines)})
+}
+
+// crashDir locates the gateway's crash-report directory: it defaults to
+// "crash-reports" under the gateway's working directory (the repo root when
+// started via start-services.sh), or CRASH_REPORT_DIR when overridden.
+func (s *server) crashDir() string {
+	if v := os.Getenv("CRASH_REPORT_DIR"); v != "" {
+		if st, err := os.Stat(v); err == nil && st.IsDir() {
+			return v
+		}
+	}
+	for _, c := range []string{"crash-reports", filepath.Join("..", "crash-reports")} {
+		if st, err := os.Stat(c); err == nil && st.IsDir() {
+			return c
+		}
+	}
+	return ""
+}
+
+func validCrashName(name string) bool {
+	return name != "" && !strings.ContainsAny(name, `/\`) && !strings.HasPrefix(name, ".")
+}
+
+// apiCrashes lists crash reports, or tails one text file inside. UE4 client
+// crashes (.dmp) are binary and refused for viewing; the accompanying .log
+// files tail like any other log. One directory level only.
+func (s *server) apiCrashes(w http.ResponseWriter, r *http.Request) {
+	dir := s.crashDir()
+	if dir == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"entries": []string{}, "note": "no crash reports yet"})
+		return
+	}
+	sub, file := r.URL.Query().Get("dir"), r.URL.Query().Get("file")
+	if file != "" {
+		if !validCrashName(sub) && sub != "" || !validCrashName(file) {
+			writeError(w, http.StatusBadRequest, "invalid file")
+			return
+		}
+		path := filepath.Join(dir, file)
+		if sub != "" {
+			path = filepath.Join(dir, sub, file)
+		}
+		if lower := strings.ToLower(file); strings.HasSuffix(lower, ".dmp") || strings.HasSuffix(lower, ".mdmp") {
+			writeError(w, http.StatusNotFound, "binary dumps are listed, not viewed")
+			return
+		}
+		if st, err := os.Stat(path); err != nil || st.IsDir() || st.Size() > 1<<19 {
+			writeError(w, http.StatusNotFound, "not a viewable report file")
+			return
+		}
+		lines, truncated, err := tailFile(path, clampLines(r.URL.Query().Get("lines")))
+		if err != nil {
+			writeError(w, http.StatusNotFound, "cannot read report")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"file": file, "lines": lines, "truncated": truncated})
+		return
+	}
+	if sub != "" {
+		if !validCrashName(sub) {
+			writeError(w, http.StatusBadRequest, "invalid directory")
+			return
+		}
+		entries, err := os.ReadDir(filepath.Join(dir, sub))
+		if err != nil {
+			writeError(w, http.StatusNotFound, "no such report")
+			return
+		}
+		type entry struct {
+			Name string `json:"name"`
+			Size int64  `json:"size"`
+		}
+		out := []entry{}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			fi, err := e.Info()
+			if err != nil {
+				continue
+			}
+			out = append(out, entry{Name: e.Name(), Size: fi.Size()})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"dir": sub, "files": out})
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"entries": []string{}})
+		return
+	}
+	type entry struct {
+		Name  string `json:"name"`
+		Dir   bool   `json:"dir"`
+		Size  int64  `json:"size"`
+		MTime string `json:"mtime"`
+	}
+	out := []entry{}
+	for _, e := range entries {
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		var size int64
+		if !e.IsDir() {
+			size = fi.Size()
+		}
+		out = append(out, entry{Name: e.Name(), Dir: e.IsDir(), Size: size,
+			MTime: fi.ModTime().UTC().Format(time.RFC3339)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MTime > out[j].MTime })
+	if len(out) > 100 {
+		out = out[:100]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": out, "count": len(out)})
+}
+
+func (s *server) apiMatches(w http.ResponseWriter, r *http.Request) {
+	code, doc := s.upstreamGet(s.cfg.mmogURL, "/admin/matches", s.cfg.adminKey, map[string]string{
+		"limit": r.URL.Query().Get("limit"),
+	})
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiCatalog(w http.ResponseWriter, _ *http.Request) {
+	code, doc := s.upstreamGet(s.cfg.mmogURL, "/admin/catalog", s.cfg.adminKey, nil)
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiMatchDetail(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if len(id) < 1 || len(id) > 64 || strings.ContainsAny(id, " \t\r\n/") {
+		writeError(w, http.StatusBadRequest, "invalid match id")
+		return
+	}
+	code, doc := s.upstreamGet(s.cfg.mmogURL, "/admin/match/"+id, s.cfg.adminKey, nil)
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiPlayerProgress(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if !playerIDPattern.MatchString(strings.ToLower(id)) {
+		writeError(w, http.StatusBadRequest, "id must be a 32-hex player id")
+		return
+	}
+	code, doc := s.upstreamGet(s.cfg.mmogURL, "/admin/player/"+id+"/progress", s.cfg.adminKey, nil)
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiHistory(w http.ResponseWriter, r *http.Request) {
+	code, doc := s.upstreamGet(s.cfg.legacyURL, "/admin/matches", s.cfg.adminKey, map[string]string{
+		"limit": r.URL.Query().Get("limit"),
+	})
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiSessions(w http.ResponseWriter, _ *http.Request) {
+	code, doc := s.upstreamGet(s.cfg.authURL, "/admin/sessions", s.cfg.adminKey, nil)
+	writeJSON(w, codeOr(code), doc)
+}
+
+func (s *server) apiDeleteSession(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if !uuidPattern.MatchString(id) {
+		writeError(w, http.StatusBadRequest, "invalid session id: expected UUID")
+		return
+	}
+	code, doc := s.upstreamDelete(s.cfg.authURL, "/admin/sessions/"+id, s.cfg.adminKey)
+	s.log.WithField("session", id).Info("dashboard revoked a session")
+	s.audit("revoke-session", id)
+	writeJSON(w, codeOr(code), doc)
+}
+
 func codeOr(code int) int {
 	if code == 0 {
 		return http.StatusBadGateway
@@ -649,6 +860,7 @@ func (s *server) apiBan(w http.ResponseWriter, r *http.Request) {
 		"username": req.Username, "reason": req.Reason,
 	})
 	s.log.WithField("username", req.Username).Info("dashboard ban")
+	s.audit("ban", req.Username+" / "+req.Reason)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -668,6 +880,7 @@ func (s *server) apiUnban(w http.ResponseWriter, r *http.Request) {
 		"username": req.Username,
 	})
 	s.log.WithField("username", req.Username).Info("dashboard unban")
+	s.audit("unban", req.Username)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -701,6 +914,7 @@ func (s *server) apiGrant(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamPostJSON(s.cfg.mmogURL, "/admin/grant", s.cfg.adminKey, payload)
 	s.log.WithField("user_id", req.UserID).Info("dashboard grant")
+	s.audit("grant", req.UserID)
 	writeJSON(w, codeOr(code), doc)
 }
 
@@ -776,6 +990,7 @@ func (s *server) apiGrantAll(w http.ResponseWriter, r *http.Request) {
 		"granted": granted, "failed": len(results) - granted,
 		"credits": req.Credits, "premium": req.Premium, "free_xp": req.FreeXP,
 	}).Warn("dashboard grant-all")
+	s.audit("grant-all", "granted")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"granted": granted, "failed": len(results) - granted, "results": results,
 	})
@@ -789,6 +1004,7 @@ func (s *server) apiStopInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	code, doc := s.upstreamDelete(s.cfg.gameMgrURL, "/instances/"+id, s.cfg.internalKey)
 	s.log.WithField("instance_id", id).Info("dashboard stop-instance")
+	s.audit("stop-instance", id)
 	writeJSON(w, codeOr(code), doc)
 }
 

@@ -44,11 +44,13 @@ Two different things are called "gateway", which is worth knowing before reading
 | **legacy-api** | 8082 | Player profiles, inventory, match history |
 | **mmogbrain** | 8083, 48843, 65443 | The bulk of the backend: mmog binary protocol, catalog, fleets, tech tree, matchmaking |
 | **master-server** | 8084 | Server registry, heartbeat, server browser |
+| **master-master** | 8091, 8092 (admin) | Public cluster directory for the server browser (see [Server browser](docs/server-browser.md)) |
 | **game-manager** | 8085 | Spawns and monitors battle-server processes |
 | **web-dashboard** | 8090 | Operator web UI: health, players, queue, matches, chat, logs, metrics (see [Web dashboard](#web-dashboard)) |
 | **DreadGame (Wine)** | 7777-7877/UDP | One battle server per active match |
 | **admin-cli** | — | Operator CLI (`servers`, `instances`, `stop-instance`, `ban`, `unban`, `queue`, `chat`, `players`, `grant`) |
 | **dn-launcher** | — | Windows launcher replacement (register / sign in / start the game) |
+| **dn-server-browser** | — | Windows server browser (`dn-dedicated-browser.exe`): pick a cluster, auto-handles certs, then the normal launcher flow (see [Server browser](docs/server-browser.md)) |
 
 ---
 
@@ -77,7 +79,7 @@ bash scripts/setup.sh
 
 - checks the toolchain (and warns, without failing, if Wine is absent);
 - generates a self-signed CA and server certificate into `certs/` if none exists;
-- builds all seven services into `run/`, plus `run/dn-launcher.exe` (cross-compiled for Windows);
+- builds all eight services into `run/`, plus `run/dn-launcher.exe` and `run/dn-dedicated-browser.exe` (cross-compiled for Windows);
 - writes `run/secrets.env` with a freshly generated `JWT_SECRET` and `ADMIN_KEY` (mode 600) if it does not exist;
 - verifies the extracted game data under `data/` is present.
 
@@ -106,7 +108,7 @@ bash scripts/stop-services.sh
 
 `start-services.sh` refuses to double-start anything already running, pins each service's `DB_PATH` so the working directory cannot decide which database is opened, and prints the listening sockets when it finishes. Logs land in `run/<service>.log`.
 
-A healthy start ends with sockets on 80, 443, 8081-8085, 8090, 48843 and 65443.
+A healthy start ends with sockets on 80, 443, 8081-8085, 8090-8092, 48843 and 65443.
 
 ### 5. Point clients at the server
 
@@ -268,6 +270,9 @@ Dreadnought-Revival-project/
 ├── gateway/         Go         -- TLS termination and reverse proxy
 ├── admin-cli/       Go         -- operator CLI
 ├── dn-launcher/     Go         -- Windows launcher replacement (client-side)
+├── dn-server-browser/ Go       -- Windows server browser, `dn-dedicated-browser.exe` (client-side)
+├── master-master/   Go + SQLite -- public cluster directory for the server browser
+├── web-dashboard/   Go         -- operator web UI (see below)
 ├── shared/          shared packages (db, logging, middleware, game data loader)
 ├── data/            extracted game data: item tables, loadouts, assets (committed)
 ├── certs/           CA + server certificate  (generated, gitignored)
@@ -285,6 +290,9 @@ Dreadnought-Revival-project/
 └── docs/
     ├── client-data-reference.md    extracted item/ship id maps and naming rules
     ├── client-data-validation.md   audit of every id the server emits
+    ├── dashboard.md                operator web UI reference
+    ├── server-browser.md           cluster directory + server browser reference
+    ├── server-browser-testing.md   runbook: setup, testing, go-live
     └── reference/                  third-party reference material
 ```
 
@@ -378,6 +386,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: this is a server for 
 - [Client data reference](docs/client-data-reference.md) — extracted item and ship id maps, naming rules
 - [Client data validation](docs/client-data-validation.md) — audit of every id the server emits
 - [Web dashboard](docs/dashboard.md) — operator UI: setup, routes, security
+- [Server browser](docs/server-browser.md) — cluster directory + browser exe reference
+- [Server browser runbook](docs/server-browser-testing.md) — setup, testing, go-live
 
 ## Web dashboard
 
@@ -416,6 +426,25 @@ It also required small new read-only admin endpoints on the existing services
 legacy-api) plus the action endpoints above. After match end, purchases and
 grants the server pushes fresh balances to connected clients, so no client
 restart is needed to see them.
+
+## Server browser
+
+New: players pick a **cluster** (one full stack) instead of hand-configuring
+a launcher. `master-master/` (ports **8091**, admin panel **8092**) is the
+public cluster directory — run once, with its own `master-master/setup.sh`,
+`start.sh`, `stop.sh` (it is deliberately not part of the main scripts).
+Each cluster lists itself from `dn-dedicated` every 30 seconds (name, addresses,
+version, MOTD, CA certificate, live player/server counts); stale clusters
+vanish automatically, and `run/dn-no-master-server.txt` opts a cluster out
+(manual IP join only, no restart needed either way).
+
+`dn-server-browser/` builds `dn-dedicated-browser.exe`: cluster list with
+player counts and MOTDs, manual server add for unlisted clusters, per-cluster
+CA trust (fingerprint compare, one Windows confirmation on first join, then
+remembered), per-cluster accounts, and the normal launcher flow into the game
+— no certificate to install by hand, no JSON editing, no hosts file. Details
+in [Server browser](docs/server-browser.md), setup through go-live in the
+[runbook](docs/server-browser-testing.md).
 
 ## Licence
 

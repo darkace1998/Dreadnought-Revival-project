@@ -231,6 +231,147 @@ func adminReset(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// adminCatalog handles GET /admin/catalog — every buyable hull and hero with
+// the price the store charges for it (purchasePriceForItem, the same
+// derivation the till uses) plus how many accounts own it. Read-only market
+// overview for the dashboard; the authoritative definitions stay in the
+// roster and the catalog.
+func adminCatalog(w http.ResponseWriter, _ *http.Request) {
+	owners := map[int32]int64{}
+	if database := currentMmogPlayerStateDB(); database != nil {
+		rows, err := database.Query(`SELECT item_id,COUNT(*) FROM player_purchases GROUP BY item_id`)
+		if err == nil {
+			for rows.Next() {
+				var id int32
+				var n int64
+				if err := rows.Scan(&id, &n); err != nil {
+					break
+				}
+				owners[id] = n
+			}
+			_ = rows.Close()
+		}
+	}
+	type offer struct {
+		ID           int32  `json:"id"`
+		Name         string `json:"name"`
+		Tier         int32  `json:"tier"`
+		Line         string `json:"line"`
+		Manufacturer string `json:"manufacturer"`
+		Hero         bool   `json:"hero"`
+		Price        int32  `json:"price_credits"`
+		Owners       int64  `json:"owners"`
+	}
+	out := []offer{}
+	for _, hull := range baseShipLoadouts {
+		out = append(out, offer{
+			ID: hull.loadoutID, Name: hull.name, Tier: hull.tier, Line: hull.hullLine,
+			Manufacturer: baseShipManufacturerByClassSize[hull.hullLine],
+			Price:        purchasePriceForItem(hull.loadoutID), Owners: owners[hull.loadoutID],
+		})
+	}
+	for _, hero := range heroShipLoadouts {
+		out = append(out, offer{
+			ID: hero.loadoutID, Name: hero.name, Tier: hero.tier, Line: hero.hullLine,
+			Manufacturer: hero.manufacturer, Hero: true,
+			Price:        purchasePriceForItem(hero.loadoutID), Owners: owners[hero.loadoutID],
+		})
+	}
+	writeAdminLiveJSON(w, http.StatusOK, map[string]interface{}{"ships": out, "count": len(out)})
+}
+
+// adminPlayerProgress handles GET /admin/player/{id}/progress — career goals
+// with live progress, season levels and contracts. The static career
+// catalogue lives in code (careerGoalsConfig); progress counters live in the
+// DB. Companion to the handlers-package player detail, which cannot see the
+// goal catalogue from its package.
+func adminPlayerProgress(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	pid := protocol.NormalizePlayerPID(id)
+	if pid == "" {
+		writeAdminLiveError(w, http.StatusBadRequest, "id must be a 32-hex player id")
+		return
+	}
+	type stage struct {
+		Amount int32  `json:"amount"`
+		Reward int32  `json:"reward"`
+		Type   string `json:"reward_type"`
+	}
+	type goal struct {
+		ID       string  `json:"id"`
+		Title    string  `json:"title"`
+		Category string  `json:"category"`
+		Progress int32   `json:"progress"`
+		Stages   []stage `json:"stages"`
+	}
+	goals := []goal{}
+	for _, g := range careerGoalsConfig() {
+		gg := goal{ID: g.id, Title: g.title, Category: g.category,
+			Progress: careerGoalProgressForPlayer(pid, g.id)}
+		for _, s := range g.stages {
+			gg.Stages = append(gg.Stages, stage{Amount: s.amountToComplete, Reward: s.reward, Type: s.rewardType})
+		}
+		goals = append(goals, gg)
+	}
+	type season struct {
+		SeasonID string `json:"season_id"`
+		XP       int64  `json:"xp"`
+		Level    int    `json:"level"`
+	}
+	seasons := []season{}
+	type contract struct {
+		ID       string `json:"contract_id"`
+		State    string `json:"state"`
+		Progress int    `json:"progress"`
+		Updated  string `json:"updated_at"`
+	}
+	contracts := []contract{}
+	type counter struct {
+		Counter string `json:"counter_id"`
+		Sub     string `json:"counter_sub_id"`
+		Value   int64  `json:"value"`
+	}
+	counters := []counter{}
+	if database := currentMmogPlayerStateDB(); database != nil {
+		if rows, err := database.Query(`SELECT season_id,xp,level FROM player_season_progress
+			WHERE user_id=? ORDER BY season_id`, pid); err == nil {
+			for rows.Next() {
+				var s season
+				if err := rows.Scan(&s.SeasonID, &s.XP, &s.Level); err != nil {
+					break
+				}
+				seasons = append(seasons, s)
+			}
+			_ = rows.Close()
+		}
+		if rows, err := database.Query(`SELECT contract_id,state,progress,updated_at FROM player_contracts
+			WHERE user_id=? ORDER BY updated_at DESC`, pid); err == nil {
+			for rows.Next() {
+				var c contract
+				if err := rows.Scan(&c.ID, &c.State, &c.Progress, &c.Updated); err != nil {
+					break
+				}
+				contracts = append(contracts, c)
+			}
+			_ = rows.Close()
+		}
+		if rows, err := database.Query(`SELECT counter_id,counter_sub_id,value FROM player_stats_counters
+			WHERE user_id=? ORDER BY value DESC LIMIT 20`, pid); err == nil {
+			for rows.Next() {
+				var c counter
+				if err := rows.Scan(&c.Counter, &c.Sub, &c.Value); err != nil {
+					break
+				}
+				counters = append(counters, c)
+			}
+			_ = rows.Close()
+		}
+	}
+	writeAdminLiveJSON(w, http.StatusOK, map[string]interface{}{
+		"goals": goals, "seasons": seasons, "contracts": contracts, "counters": counters,
+	})
+}
+
 // validQueueEntryID keeps the kick target to plausible queue-entry ids
 // (UUIDs): the id goes into a DELETE, and while that is parameterised, a
 // garbage id is always a caller bug worth a 400 rather than a silent no-op.

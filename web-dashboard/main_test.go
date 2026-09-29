@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -191,5 +192,106 @@ func TestGrantAllRejectsGarbage(t *testing.T) {
 	s.apiGrantAll(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want 400 for malformed grant-all", rec.Code)
+	}
+}
+
+func auditTestServer(t *testing.T, runDir string) *server {
+	t.Helper()
+	s := testServer()
+	s.cfg.runDir = runDir
+	return s
+}
+
+func TestAuditAppendsAndReadsBack(t *testing.T) {
+	s := auditTestServer(t, t.TempDir())
+	s.audit("grant", "alice")
+	s.audit("ban", "mallory")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	req.Header.Set("X-Admin-Key", "test-admin-key")
+	rec := httptest.NewRecorder()
+	s.requireAuth(http.HandlerFunc(s.apiAudit)).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", rec.Code)
+	}
+	// Entries are JSON lines carried as JSON strings (double-encoded), so
+	// parse twice: envelope first, then each entry.
+	var doc struct {
+		Entries []string `json:"entries"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if len(doc.Entries) != 2 {
+		t.Fatalf("got %d entries, want 2 (%s)", len(doc.Entries), rec.Body.String())
+	}
+	seen := map[string]bool{}
+	for _, line := range doc.Entries {
+		var e struct {
+			Action string `json:"action"`
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatalf("decode entry %q: %v", line, err)
+		}
+		seen[e.Action+"/"+e.Detail] = true
+	}
+	if !seen["grant/alice"] || !seen["ban/mallory"] {
+		t.Errorf("entries missing: %v", seen)
+	}
+}
+
+func TestAuditEmptyWhenNoLogYet(t *testing.T) {
+	s := auditTestServer(t, t.TempDir())
+	rec := httptest.NewRecorder()
+	s.apiAudit(rec, httptest.NewRequest(http.MethodGet, "/api/audit", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", rec.Code)
+	}
+}
+
+func TestCrashesListsAndTails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "crash-1.log"), []byte("boom\nline2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "crash-1.dmp"), []byte{0, 1, 2, 3}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := testServer()
+	s.cfg.runDir = dir
+	// crashDir looks beside runDir; point it by env instead.
+	t.Setenv("CRASH_REPORT_DIR", dir)
+
+	rec := httptest.NewRecorder()
+	s.apiCrashes(rec, httptest.NewRequest(http.MethodGet, "/api/crashes", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "crash-1.log") {
+		t.Errorf("missing entry: %s", rec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/crashes?file=crash-1.log", nil)
+	rec = httptest.NewRecorder()
+	s.apiCrashes(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "boom") {
+		t.Errorf("tail failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Binary dumps are listed but refused for viewing.
+	req = httptest.NewRequest(http.MethodGet, "/api/crashes?file=crash-1.dmp", nil)
+	rec = httptest.NewRecorder()
+	s.apiCrashes(rec, req)
+	if rec.Code == http.StatusOK && strings.Contains(rec.Body.String(), `"lines"`) {
+		t.Errorf("binary dump served for viewing: %s", rec.Body.String())
+	}
+
+	// Traversal is rejected.
+	req = httptest.NewRequest(http.MethodGet, "/api/crashes?file=../x", nil)
+	rec = httptest.NewRecorder()
+	s.apiCrashes(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400 for traversal", rec.Code)
 	}
 }

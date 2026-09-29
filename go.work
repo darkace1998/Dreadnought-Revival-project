@@ -11,4 +11,6 @@ use (
 	./mmogbrain
 	./shared
 	./web-dashboard
+	./master-master
+	./dn-server-browser
 )

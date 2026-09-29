@@ -63,10 +63,16 @@ fleets, ships + ship XP, purchases, queue, live match, results),
 `/api/online` (connected Firmament peers with queue/match status),
 `/api/instances`, `/api/instance/{id}`, `/api/servers`, `/api/chat?channel=global`,
 `/api/results` (reported match results + payouts),
+`/api/matches` + `/api/match/{id}` (match rows with slots for the match center),
+`/api/catalog` (buyable hulls/heroes + prices + owner counts),
+`/api/history` (legacy match archive with rosters),
+`/api/sessions` + `DELETE /api/sessions/{id}` (login sessions, revoke),
+`/api/player/{id}/progress` (career goals, seasons, contracts, counters),
 `/api/bans` (active bans), `/api/tiles` (launcher news),
 `/api/logs?name=…&lines=200` (allowlist, incl. `mmog-frames` = repo-root log
 and `battle-logs`), `/api/metrics-summary`, `/api/backups` (archives from
-`scripts/backup.sh`, read-only).
+`scripts/backup.sh`, read-only), `/api/crashes` (client crash reports: list +
+text view) and `/api/audit` (dashboard action log).
 Writing (with frontend confirm): `POST /api/grant` (credits/premium/free-XP
 to one player), `POST /api/grant-all` (same amounts to **every** account
 with game data), `POST /api/provision` (equip test account live, values are

@@ -190,7 +190,7 @@ side's entries, and mark every claim `verified` or `suspected`.
 
 ## Key Files
 
-- `go.work` — 9 modules; `dn-dedicated` is not one of them
+- `go.work` — 12 modules (`dn-server-browser` and `master-master` included); `dn-dedicated` is not one of them
 - `scripts/setup.sh` — build + certs + secrets, one shot
 - `scripts/start-services.sh` / `stop-services.sh` — the shipped launcher/stopper
 - `scripts/wine-client.sh` — run the real client against this stack, locally

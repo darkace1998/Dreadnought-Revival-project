@@ -81,6 +81,7 @@ func main() {
 	admin.HandleFunc("/tiles", h.AdminTiles).Methods(http.MethodGet)
 	admin.HandleFunc("/tiles", h.AdminUpsertTile).Methods(http.MethodPost)
 	admin.HandleFunc("/tiles/{id}", h.AdminDeleteTile).Methods(http.MethodDelete)
+	admin.HandleFunc("/matches", h.AdminHistory).Methods(http.MethodGet)
 
 	// Phase 7 — completeness endpoints
 	r.HandleFunc("/v2/dreadnought/server/status", h.ServerStatus).Methods(http.MethodGet)

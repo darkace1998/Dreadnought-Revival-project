@@ -31,6 +31,7 @@ func resultsTestHandler(t *testing.T) *Handler {
 			VALUES('m-old','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'loss',0,3,0,1000,750,500,'2026-01-01 00:00:00')`,
 		`INSERT INTO battle_results(match_id,user_id,team,outcome,kills,deaths,assists,damage,credits,xp,created_at)
 			VALUES('m-new','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',2,'win',4,1,2,9000,1900,1300,'2026-06-01 00:00:00')`,
+		`CREATE TABLE matches(id TEXT PRIMARY KEY, game_mode TEXT, map TEXT, battle_match_id TEXT NOT NULL DEFAULT '')`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("setup: %v", err)
