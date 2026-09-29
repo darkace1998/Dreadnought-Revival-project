@@ -499,8 +499,9 @@ How it works:
   `contact_email` (`CLUSTER_EMAIL`). In the directory admin dashboard
   (`:8092`) you **generate** a secret (shown once — mail it to the cluster
   owner yourself), **revoke** it (sync auth dies immediately), or **send** it
-  straight to the cluster's agent (generates if none exists; refuses if one
-  does — revoke first to rotate). Only hashes are stored, and auto-send works
+  straight to the cluster's agent (always generates fresh — rotating any
+  previous one — and pushes it right away; plaintext still shown once for
+  the mail backup). Only hashes are stored, and auto-send works
   **only over https** to `CLUSTER_AGENT_URL` — anything else is refused,
   never downgraded. The cluster keeps it in `run/sync.env` (0600), via the
   agent's `POST /sync/key` (https only, first write wins) or by hand.

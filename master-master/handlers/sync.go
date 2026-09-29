@@ -763,10 +763,10 @@ func (h *Handler) AdminSyncUsers(w http.ResponseWriter, r *http.Request) {
 //     (copy it into the mail to the cluster owner; it is never stored).
 //   {"action":"revoke"}   → hash cleared; the cluster's sync calls fail from
 //     now on until a new secret is generated.
-//   {"action":"send"}     → if no secret is set, generate one AND push it to
-//     the cluster's agent URL right away (https only, never plaintext);
-//     returns the plaintext once for the mail backup. If a secret already
-//     exists its plaintext is unknowable — revoke first (which rotates).
+//   {"action":"send"}     → generate a FRESH secret (rotating any previous
+//     one, whose plaintext is unknowable anyway) AND push it to the
+//     cluster's agent URL right away (https only, never plaintext); returns
+//     the plaintext once for the mail backup, plus whether the push landed.
 func (h *Handler) AdminSecret(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var req struct {
@@ -776,9 +776,9 @@ func (h *Handler) AdminSecret(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	var name, agentURL, hash string
-	if err := h.DB.QueryRow(`SELECT name,agent_url,secret_hash FROM clusters WHERE id=?`,
-		id).Scan(&name, &agentURL, &hash); err != nil {
+	var name, agentURL string
+	if err := h.DB.QueryRow(`SELECT name,agent_url FROM clusters WHERE id=?`,
+		id).Scan(&name, &agentURL); err != nil {
 		writeError(w, http.StatusNotFound, "cluster not found")
 		return
 	}
@@ -795,10 +795,6 @@ func (h *Handler) AdminSecret(w http.ResponseWriter, r *http.Request) {
 	case "generate", "send":
 	default:
 		writeError(w, http.StatusBadRequest, "action must be generate, revoke or send")
-		return
-	}
-	if req.Action == "send" && hash != "" {
-		writeError(w, http.StatusConflict, "a secret is already set (plaintext unknown) — revoke first, then send rotates to a fresh one")
 		return
 	}
 	raw := make([]byte, 24)

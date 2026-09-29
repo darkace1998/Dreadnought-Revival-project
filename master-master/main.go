@@ -129,17 +129,20 @@ func newAPIRouter(h *handlers.Handler, log *logrus.Logger) http.Handler {
 	return r
 }
 
-// newAdminRouter serves the operator dashboard and its JSON API, everything
-// behind HTTP Basic auth. Nothing here is reachable through the cluster
-// listener, and nothing cluster-facing is reachable here.
+// newAdminRouter serves the operator dashboard and its JSON API. The page
+// shell itself is PUBLIC (it contains no data — every number loads through
+// the API below): that keeps the browser from caching HTTP Basic credentials,
+// so each fresh open and each refresh starts logged out and the password
+// lives only in the page's JS memory. The JSON API stays behind Basic auth,
+// verified per request, stateless — curl keeps working unchanged.
 func newAdminRouter(h *handlers.Handler, password string, log *logrus.Logger) http.Handler {
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware(log))
 	r.HandleFunc("/health", h.Health).Methods(http.MethodGet)
+	r.HandleFunc("/admin", serveAdminPage).Methods(http.MethodGet)
+	r.HandleFunc("/admin/", serveAdminPage).Methods(http.MethodGet)
 	admin := r.PathPrefix("/admin").Subrouter()
 	admin.Use(adminBasicAuth(password))
-	admin.HandleFunc("", serveAdminPage).Methods(http.MethodGet)
-	admin.HandleFunc("/", serveAdminPage).Methods(http.MethodGet)
 	admin.HandleFunc("/api/clusters", h.AdminListAll).Methods(http.MethodGet)
 	admin.HandleFunc("/api/clusters/{id}/motd", h.AdminSetMOTD).Methods(http.MethodPost)
 	admin.HandleFunc("/api/clusters/{id}/block", h.AdminBlock).Methods(http.MethodPost)

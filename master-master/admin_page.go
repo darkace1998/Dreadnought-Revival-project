@@ -2,10 +2,12 @@ package main
 
 import "net/http"
 
-// serveAdminPage serves the operator dashboard: every cluster (online,
-// stale, blocked), MOTD editing, block/unblock/delete. Same origin as the
-// JSON API, so the browser's Basic-auth session covers the fetch calls with
-// no extra login code.
+// serveAdminPage serves the operator dashboard shell: headings, empty
+// tables, and the script. Deliberately public (no auth): it carries zero
+// data, and serving it openly is what keeps the browser from caching the
+// admin password — every open and every refresh starts at the login form,
+// the password lives only in JS memory, and all data loads through the
+// Basic-authed JSON API.
 func serveAdminPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -45,10 +47,28 @@ const masterAdminPageHTML = `<!doctype html>
   select { padding:7px 10px; font:inherit; font-size:13px; color:#e6eef5; background:#0c1621;
     border:1px solid #24405a; border-radius:6px; max-width:260px; }
   label.dim { color:#7f93a5; font-size:12.5px; }
+  #login { position:fixed; inset:0; background:rgba(6,10,15,.96); display:flex; z-index:10; }
+  #login[hidden] { display:none; }
+  #login .box { margin:auto; width:min(360px,92vw); padding:28px; background:#0c141d;
+    border:1px solid #2f5a78; border-radius:10px; }
+  #login h2 { margin:0 0 6px; font-size:17px; color:#9fe4ff; }
+  #login input { width:100%; padding:10px 12px; font:inherit; color:#e6eef5; background:#0c1621;
+    border:1px solid #24405a; border-radius:6px; box-sizing:border-box; margin:10px 0 4px; }
 </style>
 <h1>Cluster directory</h1>
 <p class="note">Every registered cluster, including stale and blocked ones. Browsers only see fresh online rows.</p>
-<div class="row"><button onclick="load()">↻ Reload</button><span id="count"></span></div>
+<div class="row"><button onclick="load()">↻ Reload</button><span id="count"></span>
+  <span style="flex:1"></span><button onclick="logout()">Sign out</button></div>
+<div id="login"><div class="box">
+  <h2>Operator sign-in</h2>
+  <p class="note">Directory admin password. Kept in this page's memory only —
+    refresh or a new tab signs out.</p>
+  <form onsubmit="event.preventDefault();doLogin()">
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Admin password">
+    <button style="width:100%;margin-top:10px" type="submit">Sign in</button>
+  </form>
+  <div class="msg" id="loginmsg"></div>
+</div></div>
 <div class="msg" id="msg"></div>
 <h2>Manual sync</h2>
 <p class="note">Trigger a push/pull cycle on the clusters right now instead of waiting for the
@@ -101,10 +121,40 @@ const masterAdminPageHTML = `<!doctype html>
   const esc = v => String(v == null ? "" : v);
   let motdId = null;
   let lastClusters = [];
+  // Operator password, page memory only: never stored (no cookie, no
+  // localStorage), so every refresh and every new tab starts logged out.
+  // The browser never sees a Basic challenge for the shell, which is what
+  // would otherwise cache the password behind our backs.
+  let authHdr = null;
   function say(t, bad) { $('msg').textContent = t; $('msg').className = 'msg ' + (bad ? 'bad' : 'good'); }
+  function sayLogin(t) { $('loginmsg').textContent = t; $('loginmsg').className = 'msg ' + (t ? 'bad' : ''); }
+  async function doLogin() {
+    const pw = $('pw').value;
+    if (!pw) { sayLogin('Enter the admin password.'); return; }
+    sayLogin('');
+    const hdr = 'Basic ' + btoa(':' + pw);
+    try {
+      const r = await fetch('/admin/api/sync-settings', { headers: { 'Authorization': hdr } });
+      if (!r.ok) throw new Error('Wrong password.');
+      authHdr = hdr;
+      $('pw').value = '';
+      $('login').hidden = true;
+      say('');
+      load();
+    } catch (e) { sayLogin(String(e && e.message || e)); }
+  }
+  function logout() {
+    authHdr = null;
+    $('pw').value = '';
+    $('login').hidden = false;
+    sayLogin('');
+    setTimeout(() => $('pw').focus(), 0);
+  }
   async function call(method, path, body) {
-    const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
+    if (!authHdr) { logout(); throw new Error('Signed out — sign in again.'); }
+    const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json', 'Authorization': authHdr },
       body: body === undefined ? undefined : JSON.stringify(body) });
+    if (r.status === 401) { logout(); throw new Error('Signed out — sign in again.'); }
     const doc = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(doc.error || ('HTTP ' + r.status));
     return doc;
@@ -295,6 +345,7 @@ const masterAdminPageHTML = `<!doctype html>
       load();
     } catch (e) { say(String(e && e.message || e), true); }
   };
-  load();
+  // No auto-load: the login overlay is up, and loading would only 401.
+  $('pw').focus();
 </script>
 `

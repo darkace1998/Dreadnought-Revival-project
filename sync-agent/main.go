@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -284,6 +283,7 @@ func (a *agent) optedOut() bool {
 // checked: slots carry the binary-protocol pid (undashed), other writers
 // may use the dashed form.
 func inLiveMatch(db *sql.DB, uid string) bool {
+	uid = normID(uid)
 	var one int
 	err := db.QueryRow(`SELECT 1 FROM match_slots s JOIN matches m ON m.id=s.match_id
 		WHERE (s.user_id=? OR s.user_id=?) AND m.status='active' LIMIT 1`,

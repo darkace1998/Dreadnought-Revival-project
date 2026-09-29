@@ -80,8 +80,6 @@ func testDBs(t *testing.T) databases {
 	return databases{auth: auth, mmog: mmog, legacy: legacy}
 }
 
-func TestBundleRoundtrip(t *testing.T) {
-
 const roundtripPID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 const roundtripDashed = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
@@ -145,7 +143,7 @@ func TestBundleRoundtrip(t *testing.T) {
 	if id != roundtripDashed {
 		t.Errorf("auth id = %q, want dashed %q", id, roundtripDashed)
 	}
-	// Row counts match everywhere.
+	// Row counts match everywhere (pair tables match either column).
 	for _, spec := range syncedTables {
 		var a, c int
 		dbA := src.byName(spec.db)
@@ -155,11 +153,16 @@ func TestBundleRoundtrip(t *testing.T) {
 		if spec.db != "mmog" {
 			keyA, keyC = roundtripDashed, roundtripDashed
 		}
-		q := "SELECT COUNT(*) FROM " + spec.table + " WHERE " + col + "=?"
-		if err := dbA.QueryRow(q, keyA).Scan(&a); err != nil {
+		q, argsA, argsC := "SELECT COUNT(*) FROM "+spec.table+" WHERE "+col+"=?", []any{keyA}, []any{keyC}
+		if spec.pairCols[0] != "" {
+			q = "SELECT COUNT(*) FROM " + spec.table + " WHERE " +
+				spec.pairCols[0] + "=? OR " + spec.pairCols[1] + "=?"
+			argsA, argsC = []any{keyA, keyA}, []any{keyC, keyC}
+		}
+		if err := dbA.QueryRow(q, argsA...).Scan(&a); err != nil {
 			t.Fatalf("count %s: %v", spec.table, err)
 		}
-		if err := dbC.QueryRow(q, keyC).Scan(&c); err != nil {
+		if err := dbC.QueryRow(q, argsC...).Scan(&c); err != nil {
 			t.Fatalf("count %s: %v", spec.table, err)
 		}
 		if a != c {
@@ -299,6 +302,15 @@ func findSpec(db, table string) tableSpec {
 
 func TestFriendsMergeAcceptedWins(t *testing.T) {
 	dbs := testDBs(t)
+	// Production shape (the shared helper builds PK-less TEXT tables):
+	// the pair upsert needs PRIMARY KEY(pid_a,pid_b) for ON CONFLICT.
+	if _, err := dbs.mmog.Exec(`DROP TABLE player_friends`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbs.mmog.Exec(`CREATE TABLE player_friends(pid_a TEXT, pid_b TEXT,
+		requester_id TEXT, state TEXT, created_at TEXT, PRIMARY KEY(pid_a,pid_b))`); err != nil {
+		t.Fatal(err)
+	}
 	a := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	b := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	apply := func(rows []map[string]any) {
@@ -419,7 +431,8 @@ func TestCareerClaimsTakeMax(t *testing.T) {
 	}
 }
 
-func TestKeyReceiveFirstWriteWins(t *testing.T) {	dir := t.TempDir()
+func TestKeyReceiveFirstWriteWins(t *testing.T) {
+	dir := t.TempDir()
 	a := &agent{cfg: config{secretFile: filepath.Join(dir, "sync.env")}, log: testLogger(t)}
 	post := func(tlsOn bool, body string) int {
 		rec := httptest.NewRecorder()
@@ -461,6 +474,16 @@ func testLogger(t *testing.T) *logrus.Logger {
 
 func TestApplyIdentitySkipsDuplicateName(t *testing.T) {
 	dbs := testDBs(t)
+	// Production shape (the shared helper builds UNIQUE-less tables):
+	// username and email are UNIQUE in auth, which is what makes the
+	// pulled duplicate collide instead of duplicating.
+	if _, err := dbs.auth.Exec(`DROP TABLE users`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbs.auth.Exec(`CREATE TABLE users(id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
+		email TEXT NOT NULL UNIQUE, password_hash TEXT, created_at TEXT, banned_at TEXT, steam_id TEXT)`); err != nil {
+		t.Fatal(err)
+	}
 	// Local account owns the address; a pulled account with a different id
 	// but the same email (registered twice in the sync window) must not
 	// abort the apply — it is skipped, the local row wins by staying.

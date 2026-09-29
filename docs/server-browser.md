@@ -36,7 +36,10 @@ operator dashboard under `/admin` (HTTP Basic, `MASTER_ADMIN_PASSWORD`):
 full list incl. stale and blocked, MOTD editing, **secret generate/revoke/
 send-to-cluster (https only)**, block/unblock, delete — plus user mirror
 (search, balances, ban state) and the sync audit log (every communication
-logged, both directions).
+logged, both directions). The dashboard signs in per page load: the password
+lives only in the page's JS memory (no cookie, no storage), so every fresh
+open and every refresh asks again — the browser never gets a chance to cache
+it. The JSON API behind the page stays Basic-authed per request.
 
 Open registration means anyone can list a cluster — removal, not prevention,
 is the moderation model: blocking a name refuses its re-registration (403),
@@ -174,7 +177,8 @@ player. Design notes:
   `contact_email` (`CLUSTER_EMAIL`). In the admin dashboard you
   **generate** a secret (shown once — mail it yourself), **revoke** it
   (sync auth dies immediately), or **send** it straight to the cluster
-  (generates if none exists; refuses if one does — revoke first to rotate).
+  (always generates fresh, rotating any previous one, and pushes it right
+  away; the plaintext is still shown once for the mail backup).
   Only hashes are stored. Auto-send works **only over https** to the
   cluster's agent URL (`CLUSTER_AGENT_URL`, e.g. `https://play.example.org:8093`);
   anything else is refused, never downgraded.
