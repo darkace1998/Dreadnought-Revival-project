@@ -345,11 +345,48 @@ var migrations = []string{
 	// Friend and ignore ids were stored in mixed forms (dashed and undashed);
 	// normalise to 32 lowercase hex, keeping pid_a <= pid_b (social.go
 	// socialID/friendPairKey).
-	`UPDATE player_friends SET
-		pid_a = min(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))),
-		pid_b = max(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))),
-		requester_id = lower(replace(requester_id,'-',''))`,
-	`UPDATE player_ignores SET pid = lower(replace(pid,'-','')), ignored_id = lower(replace(ignored_id,'-',''))`,
+	//
+	// NOT a plain UPDATE: live tables hold mirrored pairs ((A,B) plus (B,A),
+	// from the mixed-form era) that normalise onto the same PRIMARY KEY and
+	// kill the migration — which kills mmogbrain at startup (fatal: open
+	// database). So both tables are rebuilt, collapsing each pair to one row:
+	// accepted wins, otherwise the earliest row; deterministic everywhere.
+	`CREATE TABLE player_friends_new (
+		pid_a        TEXT NOT NULL,
+		pid_b        TEXT NOT NULL,
+		requester_id TEXT NOT NULL,
+		state        TEXT NOT NULL DEFAULT 'pending',
+		created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (pid_a, pid_b)
+	)`,
+	`INSERT INTO player_friends_new(pid_a,pid_b,requester_id,state,created_at)
+	SELECT n_a, n_b, min(requester_id), 'accepted', min(created_at)
+	FROM (SELECT min(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))) AS n_a,
+		max(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))) AS n_b,
+		lower(replace(requester_id,'-','')) AS requester_id, created_at
+		FROM player_friends WHERE state='accepted')
+	GROUP BY n_a, n_b`,
+	`INSERT INTO player_friends_new(pid_a,pid_b,requester_id,state,created_at)
+	SELECT n_a, n_b, min(requester_id), min(state), min(created_at)
+	FROM (SELECT min(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))) AS n_a,
+		max(lower(replace(pid_a,'-','')), lower(replace(pid_b,'-',''))) AS n_b,
+		lower(replace(requester_id,'-','')) AS requester_id, state, created_at
+		FROM player_friends WHERE state<>'accepted')
+	WHERE (n_a, n_b) NOT IN (SELECT pid_a, pid_b FROM player_friends_new)
+	GROUP BY n_a, n_b`,
+	`DROP TABLE player_friends`,
+	`ALTER TABLE player_friends_new RENAME TO player_friends`,
+	`CREATE TABLE player_ignores_new (
+		pid        TEXT NOT NULL,
+		ignored_id TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (pid, ignored_id)
+	)`,
+	`INSERT INTO player_ignores_new(pid,ignored_id,created_at)
+	SELECT lower(replace(pid,'-','')), lower(replace(ignored_id,'-','')), min(created_at)
+	FROM player_ignores GROUP BY 1, 2`,
+	`DROP TABLE player_ignores`,
+	`ALTER TABLE player_ignores_new RENAME TO player_ignores`,
 	// A squad queues as one party (squads.go): the matchmaker places a party
 	// whole, on one team. '' = queued alone.
 	`ALTER TABLE queue_entries ADD COLUMN party_id TEXT NOT NULL DEFAULT ''`,

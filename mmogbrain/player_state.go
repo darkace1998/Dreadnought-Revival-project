@@ -1509,12 +1509,20 @@ func purchasedInventoryItemIDs(playerPID string) []int32 {
 // item is a tech-tree hull with one. A prerequisite counts once the player has
 // researched or bought it (any player_purchases row) or holds it as an owned
 // ship (the starter fleet is never "purchased").
+//
+// Per-ship weapons/modules too (since 2026-09-29): their prerequisite is their
+// hull, the same rule the client applies from the tree.
 func missingHullPrerequisite(playerPID string, itemID int32) (int32, bool) {
 	var prereq []int32
 	for _, item := range techTreeBaseItems() {
 		if !item.module && item.id == itemID {
 			prereq = item.prereq
 			break
+		}
+	}
+	if len(prereq) == 0 {
+		if hull, ok := researchHullLoadout(itemID); ok {
+			prereq = []int32{hull}
 		}
 	}
 	if len(prereq) == 0 {

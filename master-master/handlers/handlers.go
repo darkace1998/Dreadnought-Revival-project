@@ -146,14 +146,16 @@ type Cluster struct {
 // instead of littering the directory with a new row per boot.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name     string `json:"name"`
-		WebURL   string `json:"web_url"`
-		BattleIP string `json:"battle_ip"`
-		Version  string `json:"version"`
-		MOTD     string `json:"motd"`
-		CACert   string `json:"ca_cert"`
-		Players  int    `json:"players"`
-		Servers  int    `json:"servers"`
+		Name         string `json:"name"`
+		WebURL       string `json:"web_url"`
+		BattleIP     string `json:"battle_ip"`
+		Version      string `json:"version"`
+		MOTD         string `json:"motd"`
+		CACert       string `json:"ca_cert"`
+		ContactEmail string `json:"contact_email"`
+		AgentURL     string `json:"agent_url"`
+		Players      int    `json:"players"`
+		Servers      int    `json:"servers"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -182,6 +184,23 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if len([]rune(req.MOTD)) > 500 {
 		writeError(w, http.StatusBadRequest, "motd too long (max 500 chars)")
 		return
+	}
+	// Contact email is required: it is the only channel over which the
+	// operator hands out the account-sync secret (by hand, by mail).
+	req.ContactEmail = strings.TrimSpace(req.ContactEmail)
+	if !emailPattern.MatchString(req.ContactEmail) {
+		writeError(w, http.StatusBadRequest, "contact_email must be a reachable mail address")
+		return
+	}
+	// The agent URL carries a fresh secret on operator request, so it must
+	// be https — checked again at send time, but refused here already.
+	req.AgentURL = strings.TrimSpace(req.AgentURL)
+	if req.AgentURL != "" {
+		parsedAgent, err := url.Parse(req.AgentURL)
+		if err != nil || parsedAgent.Scheme != "https" || parsedAgent.Host == "" {
+			writeError(w, http.StatusBadRequest, "agent_url must be an https URL")
+			return
+		}
 	}
 	fingerprint, err := caFingerprint(req.CACert)
 	if err != nil {
@@ -213,18 +232,20 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if err == sql.ErrNoRows {
 		id = uuid.New().String()
 		if _, err := h.DB.Exec(`INSERT INTO clusters(id,name,web_url,battle_ip,version,motd,ca_cert,
-			ca_fingerprint,players,servers,last_heartbeat,registered_at)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			ca_fingerprint,contact_email,agent_url,players,servers,last_heartbeat,registered_at)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			id, req.Name, req.WebURL, req.BattleIP, req.Version, req.MOTD,
-			req.CACert, fingerprint, req.Players, req.Servers, now, now); err != nil {
+			req.CACert, fingerprint, req.ContactEmail, req.AgentURL,
+			req.Players, req.Servers, now, now); err != nil {
 			h.Log.WithError(err).Error("register cluster: db insert")
 			writeError(w, http.StatusInternalServerError, "registration failed")
 			return
 		}
 	} else if _, err := h.DB.Exec(`UPDATE clusters SET web_url=?,battle_ip=?,version=?,motd=?,
-		ca_cert=?,ca_fingerprint=?,players=?,servers=?,status='online',last_heartbeat=?
-		WHERE id=?`, req.WebURL, req.BattleIP, req.Version, req.MOTD,
-		req.CACert, fingerprint, req.Players, req.Servers, now, id); err != nil {
+		ca_cert=?,ca_fingerprint=?,contact_email=?,agent_url=?,players=?,servers=?,
+		status='online',last_heartbeat=? WHERE id=?`, req.WebURL, req.BattleIP, req.Version, req.MOTD,
+		req.CACert, fingerprint, req.ContactEmail, req.AgentURL,
+		req.Players, req.Servers, now, id); err != nil {
 		h.Log.WithError(err).Error("register cluster: db update")
 		writeError(w, http.StatusInternalServerError, "registration failed")
 		return
@@ -344,7 +365,9 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 // offline and blocked ones, newest heartbeat first. Operator eyes only.
 func (h *Handler) AdminListAll(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.DB.Query(`SELECT id,name,web_url,battle_ip,version,motd,
-		players,servers,status,blocked,last_heartbeat,registered_at FROM clusters
+		players,servers,status,blocked,contact_email,agent_url,secret_hash!='',
+		COALESCE((SELECT MAX(time) FROM sync_log WHERE cluster_id=clusters.id),''),
+		last_heartbeat,registered_at FROM clusters
 		ORDER BY last_heartbeat DESC`)
 	if err != nil {
 		h.Log.WithError(err).Error("admin list clusters: db query")
@@ -365,19 +388,25 @@ func (h *Handler) AdminListAll(w http.ResponseWriter, r *http.Request) {
 		Servers       int    `json:"servers"`
 		Status        string `json:"status"`
 		Blocked       bool   `json:"blocked"`
+		Email         string `json:"contact_email"`
+		AgentURL      string `json:"agent_url"`
+		HasSecret     bool   `json:"has_secret"`
+		LastSync      string `json:"last_sync"`
 		LastHeartbeat string `json:"last_heartbeat"`
 		RegisteredAt  string `json:"registered_at"`
 	}
 	out := []cluster{}
 	for rows.Next() {
 		var c cluster
-		var blocked int
+		var blocked, hasSecret int
 		if err := rows.Scan(&c.ID, &c.Name, &c.WebURL, &c.BattleIP, &c.Version, &c.MOTD,
-			&c.Players, &c.Servers, &c.Status, &blocked, &c.LastHeartbeat, &c.RegisteredAt); err != nil {
+			&c.Players, &c.Servers, &c.Status, &blocked, &c.Email, &c.AgentURL,
+			&hasSecret, &c.LastSync, &c.LastHeartbeat, &c.RegisteredAt); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to fetch cluster list")
 			return
 		}
 		c.Blocked = blocked != 0
+		c.HasSecret = hasSecret != 0
 		out = append(out, c)
 	}
 	if err := rows.Err(); err != nil {

@@ -41,6 +41,11 @@ type Config struct {
 	Version   string // server version string shown in the browser
 	MOTD      string // message of the day shown in the browser
 	CAFile    string // cluster CA cert (certs/ca.crt): uploaded so browsers can TOFU it
+	// Email is required to list: the directory operator mails the account-sync
+	// secret there by hand. AgentURL is this host's sync-agent endpoint
+	// (https://host:8093, may be empty: then no automatic secret delivery).
+	Email    string
+	AgentURL string
 	// NoMasterFile, when present, opts the cluster out (run/dn-no-master-server.txt).
 	NoMasterFile string
 	Log          io.Writer
@@ -78,12 +83,12 @@ func (r *Registrar) logf(format string, args ...interface{}) {
 	fmt.Fprintf(r.cfg.Log, format+"\n", args...)
 }
 
-// Enabled reports whether registration is configured at all. Only the
-// directory URL and a name are needed: any cluster may list itself, no key
-// to request. Abuse is handled by removal (operator blocklist), not by
-// prevention.
+// Enabled reports whether registration is configured at all. Directory URL,
+// name and contact email are all required: without an address the operator
+// cannot mail the sync secret, and the listing stays silent rather than
+// erroring every 30 seconds.
 func (r *Registrar) Enabled() bool {
-	return r.cfg.MasterURL != "" && r.cfg.Name != ""
+	return r.cfg.MasterURL != "" && r.cfg.Name != "" && r.cfg.Email != ""
 }
 
 // optedOut reports whether the opt-out file exists right now. Checked every
@@ -101,7 +106,7 @@ func (r *Registrar) optedOut() bool {
 // Safe to call once; Stop is safe without Start and twice.
 func (r *Registrar) Start() {
 	if !r.Enabled() {
-		r.logf("directory: disabled (set MASTER_MASTER_URL and CLUSTER_NAME to list this cluster)")
+		r.logf("directory: disabled (set MASTER_MASTER_URL, CLUSTER_NAME and CLUSTER_EMAIL to list this cluster)")
 		return
 	}
 	r.mu.Lock()
@@ -179,14 +184,16 @@ func (r *Registrar) beat() {
 	}
 	servers, players := r.counts()
 	body, _ := json.Marshal(map[string]interface{}{
-		"name":      r.cfg.Name,
-		"web_url":   r.cfg.WebURL,
-		"battle_ip": r.cfg.BattleIP,
-		"version":   r.cfg.Version,
-		"motd":      r.cfg.MOTD,
-		"ca_cert":   string(ca),
-		"players":   players,
-		"servers":   servers,
+		"name":          r.cfg.Name,
+		"web_url":       r.cfg.WebURL,
+		"battle_ip":     r.cfg.BattleIP,
+		"version":       r.cfg.Version,
+		"motd":          r.cfg.MOTD,
+		"ca_cert":       string(ca),
+		"contact_email": r.cfg.Email,
+		"agent_url":     r.cfg.AgentURL,
+		"players":       players,
+		"servers":       servers,
 	})
 	req, err := http.NewRequest(http.MethodPost,
 		strings.TrimRight(r.cfg.MasterURL, "/")+"/clusters/register", bytes.NewReader(body))

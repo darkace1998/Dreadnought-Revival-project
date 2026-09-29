@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -80,8 +81,90 @@ func normalizeFingerprint(s string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(s), ":", ""), " ", ""))
 }
 
-// FingerprintOfCACert returns the hex SHA-256 of the first CERTIFICATE in a
-// PEM bundle — the same value master-master computes server-side.
+// RegisterCheck asks the directory whether this callsign or address is
+// already taken on ANY cluster (the mirror knows every pushed account).
+// Callers fail OPEN on transport errors: the cluster's own registration
+// stays authoritative with its 409, this is only the early friendly answer.
+func (c *DirectoryClient) RegisterCheck(username, email string) (bool, error) {
+	base := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
+	if base == "" {
+		return false, fmt.Errorf("no directory configured")
+	}
+	username, email = strings.TrimSpace(username), strings.TrimSpace(email)
+	if username == "" && email == "" {
+		return false, fmt.Errorf("username or email required")
+	}
+	target := base + "/register-check?username=" + url.QueryEscape(username) +
+		"&email=" + url.QueryEscape(email)
+	resp, err := c.http().Get(target)
+	if err != nil {
+		return false, fmt.Errorf("contact the directory: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("directory answered HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if err != nil {
+		return false, fmt.Errorf("read directory response: %w", err)
+	}
+	var doc struct {
+		Taken bool `json:"taken"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return false, fmt.Errorf("parse directory response: %w", err)
+	}
+	return doc.Taken, nil
+}
+
+// normalizeUserID folds both account id spellings (dashed auth UUID,
+// undashed game pid) into the undashed lowercase form the sync mesh keys
+// everything by.
+func normalizeUserID(id string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(id), "-", ""))
+}
+
+// Presence asks the directory whether this account is right now in a match
+// on any OTHER cluster. except excludes the cluster the player is joining
+// (directory id, or cluster name for hand-added servers that have no id).
+// A transport failure is an error — callers fail OPEN (let the player in)
+// because a dead directory must not strand anyone; the guard is best-effort,
+// not a lock.
+func (c *DirectoryClient) Presence(userID, except string) (inMatch bool, cluster string, err error) {
+	base := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
+	if base == "" {
+		return false, "", fmt.Errorf("no directory configured")
+	}
+	uid := normalizeUserID(userID)
+	if uid == "" {
+		return false, "", fmt.Errorf("no account id")
+	}
+	target := base + "/presence/" + uid
+	if strings.TrimSpace(except) != "" {
+		q := url.QueryEscape(strings.TrimSpace(except))
+		target += "?except=" + q
+	}
+	resp, err := c.http().Get(target)
+	if err != nil {
+		return false, "", fmt.Errorf("contact the directory: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return false, "", fmt.Errorf("directory answered HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	if err != nil {
+		return false, "", fmt.Errorf("read directory response: %w", err)
+	}
+	var doc struct {
+		InMatch bool   `json:"in_match"`
+		Cluster string `json:"cluster"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return false, "", fmt.Errorf("parse directory response: %w", err)
+	}
+	return doc.InMatch, doc.Cluster, nil
+}
 func FingerprintOfCACert(pemData []byte) (string, error) {
 	for rest := pemData; ; {
 		var block *pem.Block

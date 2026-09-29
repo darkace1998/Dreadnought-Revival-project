@@ -185,6 +185,8 @@ var targetSizes = map[string]int{
 	// generator had dropped it as removed -- and every hull above tier 1 now carries
 	// its prerequisite from the game's own unlock tree (tech_tree_links.go), where
 	// 11 line roots had none (2026-09-28). ~26KB is proven safe.
+	// 18884 for one evening (2026-09-29) while module entries carried Prereq;
+	// that crashed the client and is off by default (DN_TECHTREE_MODULE_PREREQ).
 	"YA_GetTechTree": 14296,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now

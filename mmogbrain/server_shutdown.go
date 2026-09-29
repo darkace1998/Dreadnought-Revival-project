@@ -26,8 +26,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-
-
 func buildServerShutdownPayload() []byte {
 	b := protocol.AppendStringField(nil, "RT", "YA_ServerShutdown")
 	// Numeric string: the scalar union reads an int32 node as 0.

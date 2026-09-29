@@ -388,6 +388,11 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	r.HandleFunc("/battle/scoring", battleScoringHandler).Methods(http.MethodGet)
 	r.HandleFunc("/online", onlineHandler).Methods(http.MethodGet)
 
+	// Admin dashboard (admin_dashboard.go): registered before the /admin
+	// subrouter so the static page is served without a key; its data API
+	// requires the admin key.
+	registerAdminDashboard(r, adminKey, getenv("GAME_MGR_URL", "http://127.0.0.1:8085"), os.Getenv("INTERNAL_API_KEY"))
+
 	// Admin endpoints
 	adminSub := r.PathPrefix("/admin").Subrouter()
 	adminSub.Use(adminKeyMiddleware(adminKey))

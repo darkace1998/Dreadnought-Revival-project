@@ -63,14 +63,14 @@ mkdir -p "$RUN_DIR"
 # web-dashboard and dn-server-browser are client/operator modules: make sure
 # their sums are recorded (needs network once) BEFORE the build loop below.
 # Non-fatal -- the build reports the real error if this was skipped offline.
-for mod in web-dashboard dn-server-browser; do
+for mod in web-dashboard dn-server-browser sync-agent; do
   if [ -d "$PROJECT_DIR/$mod" ]; then
     printf '    %-16s ' "go.sum sync"
     (cd "$PROJECT_DIR/$mod" && go mod tidy) 2>/dev/null && echo "OK ($mod)" || echo "skipped ($mod, offline?)"
   fi
 done
 
-SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli web-dashboard)
+SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli web-dashboard sync-agent)
 for svc in "${SERVICES[@]}"; do
   printf '    %-16s ' "$svc"
   (cd "$PROJECT_DIR" && go build -o "$RUN_DIR/$svc" "./$svc")

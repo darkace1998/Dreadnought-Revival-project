@@ -549,7 +549,8 @@ func TestResearchIsNotAPurchaseUntilBoughtWithCredits(t *testing.T) {
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=50000, soft_currency=1000000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
-	const module = 68026413 // "Trafalgar Goliath Torpedo II", researched live
+	const module = 68026413                   // "Trafalgar Goliath Torpedo II", researched live
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	request := func(name string, fields ...[]byte) []byte {
 		b := protocol.AppendStringField(nil, "RT", name)
 		for _, f := range fields {
@@ -606,7 +607,8 @@ func TestClaimBuysAResearchedItemWithCredits(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	const module = 68026413 // "Trafalgar Goliath Torpedo II"
+	const module = 68026413                   // "Trafalgar Goliath Torpedo II"
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	price := purchasePriceForItem(module)
 	if price <= 0 {
 		t.Fatalf("no credit price for %d", module)
@@ -699,11 +701,16 @@ func TestClaimBuysAResearchedItemWithCredits(t *testing.T) {
 //
 //	Sending PurchaseItem request (99968026432, 1, CR, )
 //
-// An offer must exist for a RESEARCHED per-ship item (the buy button needs one)
-// and must NOT exist for an unresearched one (offering those coincided with
-// research breaking live). Buying through the offer SKU charges credits, makes
-// the item owned, and replies with the ROOT fields the client reads
-// (0x2A2CAE8): result "bought", offer, quantity, currency.
+// The offer must exist BEFORE the research: the client fetches the store only
+// at login (0x3D2F40's only callers are the login step and a debug path), so
+// an offer created by the research reached the buy button only after a
+// restart (operator, 2026-09-29). CHANGED 2026-09-29: this asserted the
+// opposite -- no offer for an unresearched item, on the theory that offering
+// those broke research; the item-state function 0x543890 never consults
+// offers. The server still refuses to SELL an unresearched item. Buying
+// through the offer SKU charges credits, makes the item owned, and replies
+// with the ROOT fields the client reads (0x2A2CAE8): result "bought", offer,
+// quantity, currency.
 func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "650dd79476a1484b8adcd01ac2f17354"
@@ -713,7 +720,8 @@ func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 	if _, err := database.Exec(`UPDATE player_state SET soft_currency=1000000, free_xp=50000 WHERE user_id=?`, pid); err != nil {
 		t.Fatal(err)
 	}
-	const module = 68026432 // researched live: "Trafalgar Torpedo Salvo II"
+	const module = 68026432                   // researched live: "Trafalgar Torpedo Salvo II"
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	offerFor := func() (gatewayCatalogEntitySeed, bool) {
 		for _, seed := range gatewayItemCatalogSeeds(pid) {
 			if seed.itemID == module {
@@ -722,8 +730,15 @@ func TestResearchedModuleIsBoughtThroughItsStoreOffer(t *testing.T) {
 		}
 		return gatewayCatalogEntitySeed{}, false
 	}
-	if _, ok := offerFor(); ok {
-		t.Fatal("an unresearched module has a store offer")
+	early, ok := offerFor()
+	if !ok || early.priceAmount <= 0 {
+		t.Fatal("an unresearched module has no priced store offer; its price would only appear after a restart")
+	}
+	earlyBuy := protocol.AppendStringField(nil, "RT", "YA_PurchaseItem")
+	earlyBuy = append(earlyBuy, protocol.AppendStringField(nil, "offer", "999"+strconv.Itoa(module))...)
+	earlyBuy = protocol.AppendRootEnd(earlyBuy)
+	if r := buildMmogPurchasePayload("YA_PurchaseItem", pid, earlyBuy); bytes.Contains(r, protocol.AppendStringField(nil, "result", "bought")) {
+		t.Fatal("an unresearched module was sold")
 	}
 
 	unlock := protocol.AppendRootEnd(append(append(protocol.AppendStringField(nil, "RT", "YA_UnlockItem"),
@@ -866,7 +881,8 @@ func TestResearchSpendsTheShipsXP(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	const module = 68026413 // Goliath Torpedo II, on Trafalgar's research list
+	const module = 68026413                   // Goliath Torpedo II, on Trafalgar's research list
+	grantModuleHull(t, database, pid, module) // modules need their hull (module_prereq_test.go)
 	pawn, ok := researchHullPawn(module)
 	if !ok {
 		t.Fatal("no paying ship for the module")

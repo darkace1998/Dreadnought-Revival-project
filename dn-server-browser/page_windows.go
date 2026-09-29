@@ -164,6 +164,7 @@ const browserPageHTML = `<!doctype html>
       <button class="link" onclick="openLogs()">Open game log folder</button>
       <span class="spacer"></span>
       <div class="msg" id="playmsg"></div>
+      <button class="link" id="recheck" hidden onclick="checkPresence()">Check again</button>
       <button class="go play" id="play" onclick="play()">Play</button>
     </aside>
   </section>
@@ -326,8 +327,12 @@ const browserPageHTML = `<!doctype html>
     motd.hidden = !bits.length;
     motd.textContent = bits.join(' · ');
     say('playmsg', '');
+    $('recheck').hidden = true;
     $('play').disabled = false;
     show('home');
+    // One account, one match: ask the directory whether this account is
+    // already mid-match on another cluster before enabling Play.
+    checkPresence();
     // News tiles belong to the selected cluster (transport is cluster-bound),
     // so they load here — not at page boot, when no cluster is selected yet.
     // This is also why the tiles were missing: the one boot-time fetch ran
@@ -335,6 +340,26 @@ const browserPageHTML = `<!doctype html>
     dnNews();
   }
   function signOut() { dnSignOut(); pick('login'); show('signin'); }
+  function checkPresence() {
+    say('playmsg', 'Checking whether this account is already in a match…');
+    dnCheckPresence();
+  }
+  function dnPresenceResult(r) {
+    r = r || {};
+    if (r.checked && r.inMatch) {
+      const where = r.cluster ? " on '" + r.cluster + "'" : ' on another server';
+      say('playmsg', "You're already connected to a match" + where + '. ' +
+        'Finish or leave it there first — one account can only be in one match at a time.', 'bad');
+      $('play').disabled = true;
+      $('recheck').hidden = false;
+      return;
+    }
+    // Unknown (no directory, unreachable) lets the player through: a dead
+    // directory must not strand anyone. The launch itself re-checks.
+    say('playmsg', '');
+    $('recheck').hidden = true;
+    $('play').disabled = false;
+  }
   function play() {
     $('play').disabled = true;
     say('playmsg', 'Launching Dreadnought…');
@@ -343,6 +368,9 @@ const browserPageHTML = `<!doctype html>
   function dnPlayResult(r) {
     if (r.ok) { say('playmsg', 'Game started. Good hunting, Captain.', 'good'); return; }
     say('playmsg', r.error, 'bad');
+    // A presence block keeps Play disabled (with "Check again" visible) so
+    // the player cannot hammer launch while the other match runs.
+    if (r.blocked) { $('play').disabled = true; $('recheck').hidden = false; return; }
     $('play').disabled = false;
     if (r.cert) show('clusters');
     if (r.game) $('gamepath').classList.add('missing');

@@ -1560,6 +1560,16 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	starterFleet := state.activeFleet()
 
 	b = protocol.AppendStringField(b, "RT", rt)
+	if rt == "YA_RefreshPlayerProfile" {
+		// The client sends YA_RefreshPlayerProfile after every match (22:00:53,
+		// 2026-09-29, a minute after the match end) and its handler
+		// (0x142A31845) re-parses the player data (0x142A3D820 on this very
+		// document) ONLY when "containsProfile" is a type-1 node that is
+		// truthy (0x140237D40, cmp [node], 1; 0x14038C4F0). Without it the
+		// reply was dropped and the hangar kept the pre-match free XP, ship XP
+		// and rank. GUESS: that a bool field makes node type 1.
+		b = protocol.AppendBoolField(b, "containsProfile", true)
+	}
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
 	// tll/tpl/tc/rep/repXX_X/ReputationGoalID/Membership.ExpireTime/
@@ -2311,7 +2321,34 @@ func appendMmogTechTreeModuleItem(b []byte, stack []int, item techTreeItem) ([]b
 	// as the per-ship records, so a module still has to be filed under the right
 	// maker. Dropping the two dead fields is what keeps ~1400 module entries
 	// inside the client's 32768-byte receive ring.
+	// Its hull as its prerequisite. ADDED 2026-09-29: the "only three fields
+	// are read" note above does not hold for research. CanResearchItem
+	// (0x31E880) copies the tech-tree record (0x3F51A0; the +0x10 TArray copy
+	// at 0x1403F52A7) and hands that array to the item-state walk (0x543890),
+	// which counts a prerequisite met when it is owned or researched. With no
+	// Prereq every module of every ship was researchable ("u can research
+	// modules of ships u dont own", operator). Same field order as a hull node
+	// (NumTechTreeItemsRequired before ProxyType, Prereq after it), the form
+	// the loader is known to parse.
+	//
+	// REVERTED 2026-09-29, same evening: with Prereq on module entries the
+	// client CRASHED (operator; no client log yet). GUESS: a loader or tree-
+	// widget path for items with prerequisites needs the UI/layout fields only
+	// hull entries carry. Off by default; DN_TECHTREE_MODULE_PREREQ=1 sends it
+	// again for testing. The server still refuses research of a module whose
+	// hull the player neither owns nor has researched (missingHullPrerequisite).
+	sendPrereq := techTreeModulePrereq && len(item.prereq) > 0
+	if sendPrereq {
+		b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(len(item.prereq)))
+	}
 	b = protocol.AppendStringField(b, "ProxyType", strconv.Itoa(techTreeProxyTypeModule))
+	if sendPrereq {
+		prereqs := make([]string, 0, len(item.prereq))
+		for _, id := range item.prereq {
+			prereqs = append(prereqs, strconv.Itoa(int(id)))
+		}
+		b, stack = protocol.AppendStringArrayField(b, stack, "Prereq", prereqs)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
@@ -2392,7 +2429,13 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 			id: row.ID,
 			// ClassId keys the per-ship record, so it is the HULL's id, not
 			// the module's -- that is what files this module under this ship.
-			classID:      hull.loadoutID,
+			classID: hull.loadoutID,
+			// Its hull is its prerequisite. FIXED 2026-09-29: modules carried
+			// none, and the item-state walk (0x543890) counts a prerequisite
+			// as met when it is owned or researched -- so an empty list made
+			// every module of every ship researchable, paid with free XP
+			// ("u can research modules of ships u dont own", operator).
+			prereq:       []int32{hull.loadoutID},
 			manufacturer: manufacturerID,
 			tier:         techTreeWireTier(row.Tier),
 			xpCost:       techTreeModuleXPCost(row.Tier),
@@ -3405,6 +3448,10 @@ var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 // client logging "ComposeModuleUiDataForShip | Modules not found for ship id".
 // DN_TECHTREE_NO_MODULES=1 strips them again.
 var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
+
+// techTreeModulePrereq sends each module entry's hull as its Prereq (see
+// appendMmogTechTreeModuleItem). Off: it crashed the client.
+var techTreeModulePrereq = os.Getenv("DN_TECHTREE_MODULE_PREREQ") == "1"
 
 // techTreeSingleWrap restores the single wrapping array; see
 // buildMmogTechTreeDocument.

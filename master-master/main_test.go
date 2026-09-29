@@ -78,3 +78,20 @@ func TestAdminListenerNeedsAuth(t *testing.T) {
 		}
 	}
 }
+
+// The page shell is public by design (it carries no data — that is what
+// keeps the browser from caching the admin password, so every open and
+// every refresh starts logged out). The JSON API behind it stays authed.
+func TestAdminShellPublicApiAuthed(t *testing.T) {
+	_, admin := testRouters(t)
+	for _, path := range []string{"/admin", "/admin/"} {
+		if rec := get(t, admin, path); rec.Code != http.StatusOK {
+			t.Errorf("GET %s without creds: got %d, want 200 (public shell)", path, rec.Code)
+		}
+	}
+	for _, path := range []string{"/admin/api/clusters", "/admin/api/sync-settings", "/admin/api/synclog"} {
+		if rec := get(t, admin, path); rec.Code != http.StatusUnauthorized {
+			t.Errorf("GET %s without creds: got %d, want 401", path, rec.Code)
+		}
+	}
+}
