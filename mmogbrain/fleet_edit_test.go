@@ -909,8 +909,81 @@ func TestResearchSpendsTheShipsXP(t *testing.T) {
 	if !bytes.Contains(root, protocol.AppendStringField(nil, "ShipXp", "2000")) {
 		t.Error("root ShipXp must be the 2000 spent: the client subtracts it")
 	}
-	if !bytes.Contains(result, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(pawn)))) {
-		t.Error("result.ShipID must name the ship whose XP was spent")
+	// CHANGED 2026-09-29: the client keys ship XP by the tech tree's ClassId,
+	// the hull LOADOUT id, not the pawn (CanResearchItem 0x31E880 -> 0x3FC410
+	// on item+0x28); see ship_xp_keys.go. This asserted the pawn id.
+	hull, _ := researchHullLoadout(module)
+	if !bytes.Contains(result, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(hull)))) {
+		t.Errorf("result.ShipID must name the ship whose XP was spent, as the client keys it (hull loadout %d)", hull)
+	}
+	if !bytes.Contains(extractNamedMmogArray(t, get, "ShipXps"), protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(hull)))) {
+		t.Errorf("ShipXps has no entry under hull loadout %d, the id the client looks the XP up by", hull)
+	}
+}
+
+// Every base hull's XP must reach the client under the hull's loadout id --
+// the ClassId its modules and its child hulls carry -- or ship XP reads as 0
+// and nothing costing XP can be researched ("tier 2 ships: research
+// requirements not met", operator 2026-09-29).
+func TestShipXPIsKeyedByTheTechTreeClassID(t *testing.T) {
+	for _, hull := range baseShipLoadouts {
+		pawn, ok := dreadconfig.ShipIDForPrecastLoadout(hull.loadoutID)
+		if !ok {
+			continue
+		}
+		found := false
+		for _, e := range clientShipXPs([]shipXPEntry{{shipID: pawn, xp: 1}}) {
+			found = found || e.shipID == hull.loadoutID
+		}
+		if !found {
+			t.Errorf("%s: XP stored under pawn %d is not sent under its loadout id %d", hull.name, pawn, hull.loadoutID)
+		}
+	}
+}
+
+// Researching a tier-2 hull spends its PARENT hull's ship XP, and the reply
+// names the parent in the client's key space.
+func TestHullResearchSpendsTheParentsShipXP(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	var child, parent int32
+	for _, hull := range baseShipLoadouts {
+		if p, ok := techTreeHullParents[hull.loadoutID]; ok && hull.tier == 2 && p != 0 {
+			child, parent = hull.loadoutID, p
+			break
+		}
+	}
+	if child == 0 {
+		t.Fatal("no tier-2 hull with a parent")
+	}
+	key, pawn, ok := researchShip(child)
+	if !ok || key != parent {
+		t.Fatalf("researchShip(%d) = %d, %v; want its parent %d", child, key, ok, parent)
+	}
+	if _, err := database.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,5000)`, pid, pawn); err != nil {
+		t.Fatal(err)
+	}
+	req := protocol.AppendStringField(nil, "RT", "YA_UnlockItem")
+	req = append(req, protocol.AppendStringField(nil, "ItemID", strconv.Itoa(int(child)))...)
+	req = append(req, protocol.AppendStringField(nil, "ShipXp", "2500")...)
+	req = append(req, protocol.AppendStringField(nil, "FreeXp", "0")...)
+	req = protocol.AppendRootEnd(req)
+	if err := persistUnlockItem(database, pid, req); err != nil {
+		t.Fatal(err)
+	}
+	reply := buildMmogUnlockItemPayload(pid, req)
+	result := extractNamedMmogObject(t, reply, "result")
+	if !bytes.Contains(result, protocol.AppendStringField(nil, fieldStatus, "succeeded")) {
+		t.Fatalf("tier-2 hull research with enough parent ship XP failed: %q", reply)
+	}
+	if got := persistedPlayerShipXP(pid, pawn); got != 2500 {
+		t.Errorf("parent ship XP %d, want 2500 after spending 2500", got)
+	}
+	if !bytes.Contains(result, protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(parent)))) {
+		t.Errorf("result.ShipID must be the parent hull %d", parent)
 	}
 }
 

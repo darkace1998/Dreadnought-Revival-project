@@ -1109,7 +1109,7 @@ type unlockOutcome struct {
 	succeeded     bool
 	freeXPCharged int32
 	shipXPCharged int32
-	shipID        int32 // whose XP shipXPCharged came from (pawn id)
+	shipID        int32 // whose XP shipXPCharged came from (hull loadout id, the client's key)
 }
 
 var lastUnlockOutcomes sync.Map // normalized pid + "|" + item id -> unlockOutcome
@@ -1143,8 +1143,12 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	// research list (its class, at its row's tier -- see researchHullPawn), and
 	// that is the ship whose XP the client spent. Anything else (hull unlocks)
 	// still charges free XP only.
+	// CHANGED 2026-09-29: hulls charge their PARENT hull's ship XP (the
+	// client pays a hull's research from its ClassId ship -- see
+	// ship_xp_keys.go); before, only modules were charged and hull research
+	// cost ship XP nothing on our side.
 	shipXP := firstMmogInt32Field(payload, "ShipXp", "shipXp", "ShipXP")
-	shipID, shipKnown := researchHullPawn(itemID)
+	shipKey, shipID, shipKnown := researchShip(itemID)
 	if shipXP < 0 || !shipKnown {
 		shipXP = 0
 	}
@@ -1223,7 +1227,7 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	committed = true
 	outcome = unlockOutcome{succeeded: true, freeXPCharged: freeXP, shipXPCharged: shipXP}
 	if shipXP > 0 {
-		outcome.shipID = shipID
+		outcome.shipID = shipKey // the reply names it in the client's key space
 	}
 	return nil
 }
