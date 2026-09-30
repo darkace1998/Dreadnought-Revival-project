@@ -683,6 +683,22 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
 			}
+			// A ship just claimed by research goes to the client now, not at
+			// the next login (buildMmogShipClaimPush). Before the fleet
+			// update below, so the fleets can name it.
+			if requestName == "YA_UnlockItem" {
+				shipID := firstMmogInt32Field(frame.Payload, "ItemID", "itemID", "itemId")
+				if takeNewlyClaimedShip(state.playerPID, shipID) {
+					if payload, ok := buildMmogShipClaimPush(state.playerPID, shipID); ok {
+						if pushID, err := uuid.NewRandom(); err == nil {
+							push := protocol.BuildResponseFrame(pushID, frame.MsgType, payload)
+							if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_ClaimItem", push, appEncoder, encryptResponses, "ship claim push failed", "sent YA_ClaimItem push for a claimed ship"); err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
 			// A ship just researched (claimed) or bought can unlock a fleet
 			// (unlockedFleets), and the client learns its fleets only from
 			// YA_PlayerFleets / YA_FleetUpdate -- so without this the Veteran or
@@ -776,6 +792,16 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			// rebuilt after that push and never re-reads it. Sending the balance
 			// again here is harmless -- the YA_RewardCurrencies handler ASSIGNS
 			// Credits/Points (0x142A2C56D) rather than adding them.
+			// The converter charges GP, and its reply handler does not touch
+			// the GP balance: send the new one right after it.
+			if requestName == "YA_ConvertShipXP" {
+				if pushID, err := uuid.NewRandom(); err == nil {
+					push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogRewardCurrenciesPayload(state.playerPID))
+					if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_RewardCurrencies", push, appEncoder, encryptResponses, "currency push failed", "sent YA_RewardCurrencies push after XP conversion"); err != nil {
+						return err
+					}
+				}
+			}
 			if requestName == "YA_RefreshPlayerProfile" {
 				if pushID, err := uuid.NewRandom(); err == nil {
 					push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogRewardCurrenciesPayload(state.playerPID))

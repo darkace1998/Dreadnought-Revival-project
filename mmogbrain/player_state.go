@@ -1123,6 +1123,15 @@ type unlockOutcome struct {
 
 var lastUnlockOutcomes sync.Map // normalized pid + "|" + item id -> unlockOutcome
 
+// newlyClaimedShips marks ships granted by a research, until the connection
+// has pushed them to the client (takeNewlyClaimedShip).
+var newlyClaimedShips sync.Map // normalized pid + "|" + item id -> true
+
+func takeNewlyClaimedShip(playerPID string, itemID int32) bool {
+	_, ok := newlyClaimedShips.LoadAndDelete(unlockOutcomeKey(playerPID, itemID))
+	return ok
+}
+
 func unlockOutcomeKey(playerPID string, itemID int32) string {
 	return normalizedPlayerStatePID(playerPID) + "|" + strconv.Itoa(int(itemID))
 }
@@ -1256,6 +1265,11 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	}
 	committed = true
 	outcome = unlockOutcome{succeeded: true, freeXPCharged: freeXP, shipXPCharged: shipXP}
+	if isShipItem(itemID) {
+		// A ship was just granted: the connection pushes it to the client
+		// (buildMmogShipClaimPush), which otherwise learns ships only at login.
+		newlyClaimedShips.Store(unlockOutcomeKey(playerPID, itemID), true)
+	}
 	if shipXP > 0 {
 		outcome.shipID = shipKey // the reply names it in the client's key space
 	}

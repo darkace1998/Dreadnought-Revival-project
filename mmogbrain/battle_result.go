@@ -295,7 +295,7 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rewards := currentBattleRewards()
-	credits, xp, fresh, err := recordBattleResult(res, rewards)
+	credits, xp, gains, fresh, err := recordBattleResult(res, rewards)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{"match": match, "player": pid}).Error("battle result: not recorded")
 		http.Error(w, "not recorded", http.StatusInternalServerError)
@@ -307,6 +307,11 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		// was sent at login only, so the hangar kept the pre-match balance
 		// until a restart (operator, 2026-09-29).
 		squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
+		// ...and free XP and ship XP, which reach the client only through
+		// YA_PlayerGet (login) and never refreshed after a match ("the free xp
+		// is not getting updated ... i need to restart the game", operator
+		// 2026-09-30). See buildMmogShipXPSyncPush.
+		squadHubInstance.push(pid, buildMmogShipXPSyncPush(pid, gains))
 	}
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh}).Info("battle result")
@@ -349,13 +354,14 @@ type battleResult struct {
 
 // recordBattleResult stores the result and grants its rewards in one
 // transaction. fresh is false when this (match, player) was already recorded.
-func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp int32, fresh bool, err error) {
+// gains is the ship XP each ship earned, by pawn id.
+func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp int32, gains map[int32]int32, fresh bool, err error) {
 	database := currentMmogPlayerStateDB()
 	if database == nil {
-		return 0, 0, false, fmt.Errorf("database unavailable")
+		return 0, 0, nil, false, fmt.Errorf("database unavailable")
 	}
 	if err := seedMmogPlayerState(database, res.pid); err != nil {
-		return 0, 0, false, err
+		return 0, 0, nil, false, err
 	}
 	res.fleetType = matchFleetType(database, res.match)
 	credits, xp = rewards.forOutcome(res.outcome, res.kills, res.fleetType)
@@ -368,23 +374,33 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	unplayed := unplayedFleetPawnIDs(res.pid, res.fleetType, ships)
 	unplayedXP := rewards.unplayedShipPools(res.outcome, res.fleetType).total()
 
+	gains = map[int32]int32{}
+	if len(ships) > 0 {
+		for _, ship := range ships {
+			gains[ship] += xp / int32(len(ships))
+		}
+	}
+	for _, ship := range unplayed {
+		gains[ship] += unplayedXP
+	}
+
 	tx, err := database.Begin()
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, nil, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	ins, err := tx.Exec(`INSERT OR IGNORE INTO battle_results(match_id,user_id,team,outcome,kills,deaths,assists,damage,credits,xp,fleet_type)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?)`, res.match, res.pid, res.team, res.outcome, res.kills, res.deaths, res.assists, res.damage, credits, xp, res.fleetType)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, nil, false, err
 	}
 	if n, _ := ins.RowsAffected(); n == 0 {
-		return credits, xp, false, nil // already paid
+		return credits, xp, nil, false, nil // already paid
 	}
 	if err := grantBattleRewards(tx, res.pid, credits, xp, rewards.freeXPOf(xp), ships, unplayed, unplayedXP); err != nil {
-		return 0, 0, false, err
+		return 0, 0, nil, false, err
 	}
-	return credits, xp, true, tx.Commit()
+	return credits, xp, gains, true, tx.Commit()
 }
 
 // matchFleetType is the EYFleetType of the match a result was reported for,

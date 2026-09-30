@@ -146,6 +146,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogPurchasePayload(requestName, playerPID, payload)
 	case "YA_BuyEliteStatus", "YA_BuyDaypass", "YA_ActivateElite":
 		return buildMmogElitePurchasePayload(requestName, playerPID, payload)
+	case "YA_ConvertShipXP":
+		return buildMmogConvertShipXPPayload(playerPID, payload)
 	case "YA_ConvertXPToCredits", "YA_ExchangeXP":
 		return buildMmogXPConversionPayload(requestName, playerPID, payload)
 	case "YA_CompleteContract", "YA_ClaimContract":

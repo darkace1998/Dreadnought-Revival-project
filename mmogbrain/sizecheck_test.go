@@ -37,7 +37,10 @@ var targetSizes = map[string]int{
 	// "result" the way the MaxSquadSize reader does, so a nested-only array read
 	// as zero and the client had an EMPTY game-mode list -- no mode selectable,
 	// Play could not start a match.
-	"YA_GetGameConfigData": 967,
+	// 967 -> 1038 (+71): root "XpConversion" {HardCurrency, ShipXp, FreeXp}, the
+	// free XP converter's rate (parser 0x142A2EEFA). Without it the client's
+	// ship-XP increment was 0 and it never converted anything.
+	"YA_GetGameConfigData": 1038,
 	// Was 2153. +594: goal m_title/m_description now go out as NSLOCTEXT(...)
 	// macros -- the FText import the client uses left bare strings blank.
 	"YA_GetStaticCareerData": 2747,
@@ -320,7 +323,11 @@ var targetSizes = map[string]int{
 	// derives the player rank) carries the accumulated XP instead of a fixed
 	// "0" -- "100" for the test account. Every client was stuck at the first
 	// rank, so rank-gated ships never unlocked (2026-09-28).
-	"YA_PlayerGet": 7302,
+	// 7302 -> 7666 (+364): ShipXps lists every owned ship, at 0 when it has no
+	// XP (the four starters, under both their loadout and pawn ids). The
+	// in-session XP push (buildMmogShipXPSyncPush) can only update a ship the
+	// client already has in this list.
+	"YA_PlayerGet": 7666,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which

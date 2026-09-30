@@ -423,3 +423,51 @@ func TestPurchaseReplyKeepsTheOwnedList(t *testing.T) {
 		t.Error("a failed purchase reply carries inventory, which would replace the owned list")
 	}
 }
+
+// A ship claimed by research reaches the client in-session: the YA_ClaimItem
+// handler (0x142A38B10) adds result.addedLoadouts to the loadout list and
+// fires the loadout-added event. Without it a researched ship appeared only
+// after a restart (operator 2026-09-30). No "inventory": its presence would
+// replace the client's owned-item list.
+func TestResearchedShipIsPushedToTheClient(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=1000000 WHERE user_id=?`, pid); err != nil {
+		t.Fatal(err)
+	}
+	const hull = 33489267
+	grantParentModulesBought(t, database, pid, hull)
+	req := protocol.AppendStringField(nil, "RT", "YA_UnlockItem")
+	req = append(req, protocol.AppendStringField(nil, "ItemID", strconv.Itoa(hull))...)
+	req = append(req, protocol.AppendStringField(nil, "FreeXp", "2500")...)
+	if err := persistUnlockItem(database, pid, protocol.AppendRootEnd(req)); err != nil {
+		t.Fatal(err)
+	}
+	if !takeNewlyClaimedShip(pid, hull) {
+		t.Fatal("a researched ship was not marked for the client")
+	}
+	if takeNewlyClaimedShip(pid, hull) {
+		t.Error("the claim mark must be taken once")
+	}
+	push, ok := buildMmogShipClaimPush(pid, hull)
+	if !ok {
+		t.Fatal("no claim push for the granted ship")
+	}
+	added := extractNamedMmogArray(t, push, "addedLoadouts")
+	if !bytes.Contains(added, protocol.AppendInt32Field(nil, "precastLoadout", hull)) {
+		t.Error("addedLoadouts does not carry the claimed ship")
+	}
+	if !bytes.Contains(push, protocol.AppendStringField(nil, fieldStatus, "succeeded")) {
+		t.Error(`result.status must be "succeeded"`)
+	}
+	if bytes.Contains(push, []byte("\x09inventory")) {
+		t.Error("the claim push must not carry inventory: it would replace the owned-item list")
+	}
+	// A module grants no ship and is never marked.
+	if _, ok := buildMmogShipClaimPush(pid, 68026413); ok {
+		t.Error("a module produced a ship claim push")
+	}
+}

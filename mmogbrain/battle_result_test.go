@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -260,5 +261,50 @@ func TestUnplayedFleetShipsEarnAShare(t *testing.T) {
 	}
 	if line == "" || p.total() != 350 {
 		t.Errorf("unplayed_ship_xp_pools %q totals %d, want 350", line, p.total())
+	}
+}
+
+// Free XP and ship XP reach the client only through YA_PlayerGet, so after a
+// match they stayed stale until a relog (operator 2026-09-30). A fresh result
+// queues a YA_ConvertShipXP push: result "bought", FreeXp the new total
+// (assigned by the client), and each ship's gain as a NEGATIVE ShipXp (the
+// client subtracts), keyed by the hull loadout id the client uses.
+func TestBattleResultPushesTheNewXP(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	squadHubInstance.connected(pid) // pushes go only to players online
+	t.Cleanup(func() { squadHubInstance.disconnected(pid) })
+	_ = squadHubInstance.drainPushes(pid)
+	flown := battleFleetLoadouts(pid, 0)[0]
+	req := httptest.NewRequest(http.MethodGet, "/battle/result?match=M3&pid="+pid+"&team=2&final=2&kills=3&ships="+flown.entryID(), nil)
+	req.RemoteAddr = "127.0.0.1:5000"
+	battleResultHandler(httptest.NewRecorder(), req)
+
+	var push []byte
+	for _, p := range squadHubInstance.drainPushes(pid) {
+		if protocol.FirstStringField(p, "RT") == "YA_ConvertShipXP" {
+			push = p
+		}
+	}
+	if push == nil {
+		t.Fatal("no YA_ConvertShipXP push queued after the result")
+	}
+	var freeXP int32
+	if err := database.QueryRow(`SELECT free_xp FROM player_state WHERE user_id=?`, pid).Scan(&freeXP); err != nil {
+		t.Fatal(err)
+	}
+	if got := protocol.ExtractStringField(push, "result"); got != "bought" {
+		t.Errorf("result %q, want bought (the handler's success value)", got)
+	}
+	if got := protocol.ExtractStringField(push, "FreeXp"); got != strconv.Itoa(int(freeXP)) {
+		t.Errorf("FreeXp %q, want the new total %d", got, freeXP)
+	}
+	entry := string(protocol.AppendStringField(nil, "ShipID", strconv.Itoa(int(fleetShipKey(flown))))) +
+		string(protocol.AppendStringField(nil, "ShipXp", "-4025"))
+	if !strings.Contains(string(push), entry) {
+		t.Errorf("no ShipXps entry {ShipID %d, ShipXp -4025} for the flown ship", fleetShipKey(flown))
 	}
 }

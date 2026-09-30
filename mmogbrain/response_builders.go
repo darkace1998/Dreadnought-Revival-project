@@ -1616,6 +1616,11 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 		// 4 as string, and read our int32 (0x56) as 0, so the floating tags
 		// 0x57 (4 bytes) and 0x77 (8 bytes) are types 1 and 2. GUESS: 0x57 is
 		// type 1; if the hangar still keeps stale XP, 0x77 is next.
+		// DISPROVEN 2026-09-30: the client's node builder (0x142A3E290) makes
+		// NO type-1 nodes -- 0x57/0x77 become type 2, bool and every integer
+		// type 3 -- so this check can never pass and this reply is never
+		// re-parsed. Free XP and ship XP are refreshed by the
+		// YA_ConvertShipXP push after each match (buildMmogShipXPSyncPush).
 		b = protocol.AppendFloat32Field(b, "containsProfile", 1)
 	}
 	b = protocol.AppendStringField(b, "PID", playerPID)
@@ -1737,8 +1742,25 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// YA_ConvertShipXP sends back. Numeric strings, per the scalar union.
 	// Keyed the way the client looks them up -- by hull LOADOUT id, the tech
 	// tree's ClassId -- see clientShipXPs.
+	//
+	// Every OWNED ship is listed, at 0 when it has no XP yet: the in-session
+	// XP update (buildMmogShipXPSyncPush) can only change a ship that is
+	// already in this list -- the client looks the id up and skips it if
+	// absent -- so a ship earning its first XP would otherwise show 0 until
+	// the next login.
+	shipXPEntries := persistedPlayerShipXPs(playerPID)
+	hasXP := map[int32]bool{}
+	for _, e := range shipXPEntries {
+		hasXP[e.shipID] = true
+	}
+	for _, l := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		if id := l.ship.id; id != 0 && !hasXP[id] {
+			hasXP[id] = true
+			shipXPEntries = append(shipXPEntries, shipXPEntry{shipID: id})
+		}
+	}
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
-	for _, entry := range clientShipXPs(persistedPlayerShipXPs(playerPID)) {
+	for _, entry := range clientShipXPs(shipXPEntries) {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(entry.shipID)))
 		b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(entry.xp)))
@@ -4253,6 +4275,13 @@ func buildMmogGameConfigDataPayload() []byte {
 		b = protocol.AppendInt32Field(b, "TeamSize", mode.TeamSize)
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	// The converter's rate, read off the ROOT (see xpConversion).
+	gpRate, shipRate, freeRate := xpConversion()
+	b, stack = protocol.AppendObjectStart(b, stack, "XpConversion")
+	b = protocol.AppendStringField(b, "HardCurrency", strconv.Itoa(int(gpRate)))
+	b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(shipRate)))
+	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(freeRate)))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendInt32Field(b, "MaxSquadSize", 5)
@@ -7357,4 +7386,224 @@ func fleetRefFromPayload(payload []byte) string {
 		return guid
 	}
 	return protocol.FirstNonEmptyString(payload, "FleetID", "fleetId", "FleetId")
+}
+
+// buildMmogShipXPSyncPush tells a connected client its new free XP and what
+// each ship just earned, without a relog.
+//
+// Both reach the client only through YA_PlayerGet: the YA_RefreshPlayerProfile
+// reply is never re-parsed, because its handler (0x142A31845) wants
+// "containsProfile" as a type-1 node and the client's decoder (0x142A3E290)
+// makes no type-1 nodes at all (tags map to 0 null, 2 float/double, 3
+// bool/int, 4 string, 5/6 containers, 7 bytes). The one handler that updates
+// both in-session is YA_ConvertShipXP's (0x142A2FC05..0x142A2FF28): with root
+// result == "bought" it ASSIGNS FreeXp to player-data +0x3B98 and, for every
+// ShipXps entry, SUBTRACTS ShipXp from that ship's entry in +0x3B88, then fires
+// the free-XP-changed and convert-result events. So the gains go as negative
+// ShipXp, keyed the way the client keys ship XP (clientShipXPs).
+//
+// Not verified live: that the client accepts this frame unsolicited (the
+// fleet and currency pushes are accepted the same way), and that the convert
+// result event shows nothing the player did not ask for.
+func buildMmogShipXPSyncPush(playerPID string, gains map[int32]int32) []byte {
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_ConvertShipXP")
+	b = protocol.AppendStringField(b, "result", "bought")
+	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(mmogPlayerStateForPID(playerPID).freeXP)))
+	pawns := make([]int32, 0, len(gains))
+	for pawn := range gains {
+		pawns = append(pawns, pawn)
+	}
+	sort.Slice(pawns, func(i, j int) bool { return pawns[i] < pawns[j] })
+	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
+	for _, pawn := range pawns {
+		if gains[pawn] <= 0 {
+			continue
+		}
+		for _, e := range clientShipXPs([]shipXPEntry{{shipID: pawn, xp: gains[pawn]}}) {
+			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+			b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(e.shipID)))
+			b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(-e.xp)))
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
+	}
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// buildMmogShipClaimPush hands a connected client a ship it just claimed by
+// research, so it appears without a relog ("if u research a ship we also need
+// to restart the game", operator 2026-09-30).
+//
+// The client learns ships only from YA_PlayerGet -- except through the
+// YA_ClaimItem reply handler (0x142A38B10): with result.status "succeeded"
+// it parses every result.addedLoadouts entry with the loadout parser
+// 0x142A6F9F0 (ID, PID, precastLoadout, shipID, name, class, displayInfo,
+// weapon*/ability*/perk* -- the fields appendMmogShipLoadoutEntry writes),
+// appends it to player-data +0x3990 and fires the loadout-added event
+// (+0x7E0), which the fleet manager listens to (OnLoadoutAdded). It then
+// re-requests YA_GetPlayerProgression.
+//
+// "inventory" is deliberately ABSENT: when present the handler replaces the
+// owned-item list with it (0x142A38E78 -> 0x142A6CED0), and a ship needs no
+// item change. The handler applies inventory only if the field exists.
+//
+// Not verified live: that the client accepts this frame unsolicited (the
+// fleet and currency pushes are accepted the same way).
+func buildMmogShipClaimPush(playerPID string, shipItemID int32) ([]byte, bool) {
+	var loadout mmogShipLoadoutSeed
+	found := false
+	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
+		if l.precastLoadoutID == shipItemID {
+			loadout, found = l, true
+			break
+		}
+	}
+	if !found {
+		return nil, false
+	}
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_ClaimItem")
+	b = protocol.AppendStringField(b, "ItemID", strconv.Itoa(int(shipItemID)))
+	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
+	b = protocol.AppendStringField(b, "reason", "")
+	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
+	b, stack = appendMmogShipLoadoutEntry(b, stack, playerPID, loadout, true)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b, true
+}
+
+// xpConversion is the ship-XP-to-free-XP rate the client is told in
+// YA_GetGameConfigData's root "XpConversion" (parser 0x142A2EEFA: HardCurrency
+// -> mmog +0x4080, ShipXp -> +0x4084, FreeXp -> +0x4088): HardCurrency GP
+// converts ShipXp ship XP into FreeXp free XP. The client prices a conversion
+// with it (HasGpToConvertAllShipXp 0x140AD44B0: floor(shipXp / ShipXp) *
+// HardCurrency GP) and offers it only for fully researched ships
+// (IsItemVeteranStatus 0x548A00). Nothing was sent, so ShipXp read 0 and the
+// converter could never convert.
+//
+// Values: "The conversion rate is really horrible at 1 GP for 40 free XP"
+// (official Steam forum). That 40 ship XP make 40 free XP (1:1) is the usual
+// reading of that line, not stated outright. Overridable:
+// DN_XP_CONVERSION_GP / DN_XP_CONVERSION_SHIP_XP / DN_XP_CONVERSION_FREE_XP.
+func xpConversion() (gp, shipXP, freeXP int32) {
+	n := func(env string, def int32) int32 {
+		if v, err := strconv.Atoi(os.Getenv(env)); err == nil && v > 0 {
+			return int32(v)
+		}
+		return def
+	}
+	return n("DN_XP_CONVERSION_GP", 1), n("DN_XP_CONVERSION_SHIP_XP", 40), n("DN_XP_CONVERSION_FREE_XP", 40)
+}
+
+// buildMmogConvertShipXPPayload answers YA_ConvertShipXP: the free XP
+// converter in the hangar. The request (sender 0x142A40DA0) carries only
+// ShipXps [{ShipID, ShipXp}] -- how much XP from which ship; the price is the
+// server's to charge, at the rate sent in XpConversion.
+//
+// The reply handler (0x142A2FC05) treats result "bought" as success (and
+// "ok" as nothing at all), then ASSIGNS FreeXp and subtracts every ShipXps
+// entry's ShipXp from that ship. It does not touch GP, so the connection
+// pushes the new balance after this reply (YA_RewardCurrencies).
+//
+// Not checked here: that the ships are fully researched. The client offers
+// the converter only for those; the server trusts that and checks the XP and
+// GP amounts, which is what could be abused.
+func buildMmogConvertShipXPPayload(playerPID string, payload []byte) []byte {
+	type entry struct{ clientID, pawn, amount int32 }
+	var entries []entry
+	current := int32(0)
+	for _, f := range protocol.Scalars(payload) {
+		v := int32(f.Num)
+		if f.IsStr {
+			n, _ := strconv.Atoi(f.Str)
+			v = int32(n)
+		}
+		switch strings.ToLower(f.Name) {
+		case "shipid":
+			current = v
+		case "shipxp":
+			if current != 0 {
+				entries = append(entries, entry{clientID: current, amount: v})
+				current = 0
+			}
+		}
+	}
+	reply := func(result, reason string, freeXP int32, converted []entry) []byte {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "result": result, "reason": reason,
+			"entries": len(converted)}).Info("mmog: YA_ConvertShipXP")
+		var b []byte
+		var stack []int
+		b = protocol.AppendStringField(b, "RT", "YA_ConvertShipXP")
+		b = protocol.AppendStringField(b, "result", result)
+		b = protocol.AppendStringField(b, "reason", reason)
+		b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(freeXP)))
+		b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
+		for _, e := range converted {
+			b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+			b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(e.clientID)))
+			b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(e.amount)))
+			b, stack = protocol.AppendObjectEnd(b, stack)
+		}
+		b, _ = protocol.AppendObjectEnd(b, stack)
+		return b
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return reply("failed", "database unavailable", 0, nil)
+	}
+	gpRate, shipRate, freeRate := xpConversion()
+	var converted []entry
+	var gpCost, freeGain int64
+	for _, e := range entries {
+		steps := e.amount / shipRate
+		if e.amount <= 0 || steps <= 0 {
+			continue
+		}
+		e.pawn = e.clientID
+		if isShipItem(e.clientID) {
+			if pawn, ok := dreadconfig.ShipIDForPrecastLoadout(e.clientID); ok {
+				e.pawn = pawn
+			}
+		}
+		e.amount = steps * shipRate
+		gpCost += int64(steps) * int64(gpRate)
+		freeGain += int64(steps) * int64(freeRate)
+		converted = append(converted, e)
+	}
+	if len(converted) == 0 {
+		return reply("failed", "nothing to convert", mmogPlayerStateForPID(pid).freeXP, nil)
+	}
+	tx, err := database.Begin()
+	if err != nil {
+		return reply("failed", "database unavailable", 0, nil)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, e := range converted {
+		res, err := tx.Exec(`UPDATE player_ship_xp SET xp=xp-?, updated_at=datetime('now') WHERE user_id=? AND ship_id=? AND xp>=?`,
+			e.amount, pid, e.pawn, e.amount)
+		if err != nil {
+			return reply("failed", "database error", 0, nil)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return reply("failed", "not enough ship XP", 0, nil)
+		}
+	}
+	res, err := tx.Exec(`UPDATE player_state SET premium_currency=premium_currency-?, free_xp=free_xp+?, updated_at=datetime('now')
+		WHERE user_id=? AND premium_currency>=?`, gpCost, freeGain, pid, gpCost)
+	if err != nil {
+		return reply("failed", "database error", 0, nil)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return reply("failed", "not enough GP", 0, nil)
+	}
+	if err := tx.Commit(); err != nil {
+		return reply("failed", "database error", 0, nil)
+	}
+	return reply("bought", "", mmogPlayerStateForPID(pid).freeXP, converted)
 }
