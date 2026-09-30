@@ -2328,6 +2328,26 @@ static bool RewardsScreenEnabled() {
   return !SwitchOn("DN_HOST_NO_EOM_REWARDS", "dn_host_no_eom_rewards.txt");
 }
 
+#define RVA_ACTOR_FLUSH_NET_DORMANCY 0x171C000
+#define VT_ACTOR_FORCE_NET_UPDATE 0x580
+typedef void(__fastcall *tActorVoid)(void *actor);
+
+// PushActorNow asks the engine to replicate an actor on its next net tick:
+// FlushNetDormancy, then ForceNetUpdate. 1 if both calls were made.
+static int PushActorNow(void *actor) {
+  if (!actor)
+    return 0;
+  __try {
+    ((tActorVoid)(g_base + RVA_ACTOR_FLUSH_NET_DORMANCY))(actor);
+    void **vt = *(void ***)actor;
+    ((tActorVoid)vt[VT_ACTOR_FORCE_NET_UPDATE / 8])(actor);
+    return 1;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("eom rewards: EXCEPTION 0x%08X pushing actor %p", GetExceptionCode(), actor);
+    return 0;
+  }
+}
+
 static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   char v[512];
   int32_t credits[REWARD_POOLS] = {}, xp[REWARD_POOLS] = {}, shipXp[REWARD_POOLS] = {};
@@ -2352,6 +2372,7 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   tAssign fstr = (tAssign)(g_base + RVA_FSTRING_ASSIGN);
   tAssign tarr = (tAssign)(g_base + RVA_TARRAY_INT_ASSIGN);
 
+  uint8_t *xpmOut = nullptr;
   __try {
     uint8_t *ci = pri + OFF_PRI_CREDITS_INFO;
     tarr(ci + 0x00, &creditsArr);
@@ -2359,6 +2380,7 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
     fstr(ci + 0x18, &battleID);
 
     uint8_t *xpm = *(uint8_t **)(pri + OFF_PRI_XP_MANAGER);
+    xpmOut = xpm;
     if (!xpm || !IsReadable(xpm + OFF_XPM_MATCH_XP, 0x38)) {
       Logf("eom rewards: credits written; PRI %p has no XP manager, match XP not written", pri);
       return;
@@ -2394,8 +2416,22 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
     Logf("eom rewards: EXCEPTION 0x%08X writing PRI %p", GetExceptionCode(), pri);
     return;
   }
+  // Push both actors to the owning client NOW rather than whenever the net
+  // driver next considers them. The rewards are written straight into memory;
+  // replication picks the change up only on the actor's next net update, and
+  // with only the delay to rely on the client's end-of-match init stage still
+  // found no pools in 4 of 5 matches (ShipXpError at 22:29, 23:59, 02:03,
+  // 08:18 on 2026-09-29/30, each with the rewards written 4.5-5 s before the
+  // transition, for exactly the reported ship ids). FlushNetDormancy first,
+  // in case an actor is dormant (a dormant actor does not replicate at all).
+  // Both are the engine's own AActor functions, from their native
+  // registrations (0x1D3810A / 0x1D3812C): ForceNetUpdate's exec thunk
+  // 0x1E70010 ends in "jmp [vtable+0x580]" (a virtual); FlushNetDormancy's
+  // thunk 0x1E6FF00 jumps to its body 0x171C000 (this).
+  int pushed = PushActorNow(pri) + PushActorNow(xpmOut);
   Logf("eom rewards: PRI %p written -- scoring pool credits %d xp %d, %d fleet ships "
-       "(%d flown), both finalized", pri, credits[0], xp[0], nFleet, nFlown);
+       "(%d flown), both finalized; %d actor(s) pushed (FlushNetDormancy + ForceNetUpdate)",
+       pri, credits[0], xp[0], nFleet, nFlown, pushed);
 }
 
 // ---------------------------------------------------------------------------

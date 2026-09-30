@@ -702,3 +702,11 @@ of `DN_PlayerMatchStatistics_DT`: **Kills** (+0x848), **Assists** (+0x858),
 total, the game shows it per target class. The labels are made by the engine's
 own `Conv_StringToText` body (`0x19D21F0`). Log: `eom stats: sent
 ClientSetTopPlayerMatchStats (3 personal stat rows, deferred) ...`.
+
+**Rewards are pushed, not just written** (2026-09-30). ShipXpError kept coming
+in 4 of 5 matches although the rewards were written 4.5-5 s before the
+transition, for exactly the reported ship ids: replication only notices the
+change on the actor's next net update. After writing, the mod now calls the
+engine's own `FlushNetDormancy` (body `0x171C000`) and `ForceNetUpdate`
+(virtual at vtable `+0x580`, from its exec thunk `0x1E70010`) on the PRI and
+on the XP actor. Log: `eom rewards: ... written ...; 2 actor(s) pushed`.
