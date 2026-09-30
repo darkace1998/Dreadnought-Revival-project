@@ -708,5 +708,14 @@ in 4 of 5 matches although the rewards were written 4.5-5 s before the
 transition, for exactly the reported ship ids: replication only notices the
 change on the actor's next net update. After writing, the mod now calls the
 engine's own `FlushNetDormancy` (body `0x171C000`) and `ForceNetUpdate`
-(virtual at vtable `+0x580`, from its exec thunk `0x1E70010`) on the PRI and
-on the XP actor. Log: `eom rewards: ... written ...; 2 actor(s) pushed`.
+(virtual at vtable `+0x580`, from its exec thunk `0x1E70010`) on the PRI.
+Log: `eom rewards: ... written ...; PRI pushed 1`. `dn_host_no_eom_push.txt`
+(or `DN_HOST_NO_EOM_PUSH=1`) turns the push off.
+
+The first build also pushed the "XP actor" at PRI+0x930. It is not an actor:
+it is a `UYXPManager : UActorComponent`, so neither function exists on it and
+vtable `+0x580` is an unrelated virtual. With that build the client's
+end-of-match screen had no Rewards tab (MVP / Stats / Scoreboard only, no
+`RewardsPageAnimated` stage; 2026-09-30) and no ShipXpError. The component
+replicates through the PRI's channel, so pushing the PRI covers it. Not
+verified live yet that this brings the tab back.

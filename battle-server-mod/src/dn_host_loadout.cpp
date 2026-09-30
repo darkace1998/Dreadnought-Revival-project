@@ -2434,9 +2434,20 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   // registrations (0x1D3810A / 0x1D3812C): ForceNetUpdate's exec thunk
   // 0x1E70010 ends in "jmp [vtable+0x580]" (a virtual); FlushNetDormancy's
   // thunk 0x1E6FF00 jumps to its body 0x171C000 (this).
-  int pushed = PushActorNow(pri) + PushActorNow(xpmOut);
+  //
+  // ONLY the PRI. The XP manager (PRI+0x930) is a UYXPManager : UActorComponent,
+  // NOT an actor (SDK: DreadGame.YXPManager), so FlushNetDormancy and vtable
+  // +0x580 do not exist on it -- slot +0x580 of a component's vtable is some
+  // other virtual. The first build of this pushed it too, and the client's
+  // end-of-match screen lost its Rewards tab (MVP/Stats/Scoreboard only,
+  // operator 2026-09-30). A component replicates through its owner's actor
+  // channel, so forcing the PRI covers m_matchXPInfo as well.
+  // dn_host_no_eom_push.txt / DN_HOST_NO_EOM_PUSH=1 turns the push off, to
+  // bisect it against the end-of-match screen without a rebuild.
+  (void)xpmOut;
+  int pushed = SwitchOn("DN_HOST_NO_EOM_PUSH", "dn_host_no_eom_push.txt") ? 0 : PushActorNow(pri);
   Logf("eom rewards: PRI %p written -- scoring pool credits %d xp %d, %d fleet ships "
-       "(%d flown, unplayed share %d), both finalized; %d actor(s) pushed (FlushNetDormancy + ForceNetUpdate)",
+       "(%d flown, unplayed share %d), both finalized; PRI pushed %d (FlushNetDormancy + ForceNetUpdate)",
        pri, credits[0], xp[0], nFleet, nFlown, haveUnplayed ? unplayed[0] : 0, pushed);
 }
 
