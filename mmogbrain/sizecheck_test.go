@@ -205,7 +205,11 @@ var targetSizes = map[string]int{
 	// where the parser (0x2A796D0 -> player-data +0x3F90) reads it, and now
 	// includes the per-ship ids of the default player's fitted defaults, so the
 	// ship's own modules read as owned instead of asking to be researched.
-	"YA_GetPlayerPurchases": 436,
+	// 436 -> 492 (+56): the owned hulls themselves (4 starters x 14 bytes).
+	// The client accepts a tier-2's prerequisite only from this list or
+	// ProgressionData (GetTechTreeItemState 0x543890 -> 0x548990), and the
+	// starters were in neither, so no tier-2 could be researched.
+	"YA_GetPlayerPurchases": 492,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the
 	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,

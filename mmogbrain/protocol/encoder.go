@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"math"
 	"strconv"
 )
 
@@ -107,6 +108,19 @@ func AppendInt32Field(b []byte, name string, value int32) []byte {
 	b = appendFieldNameAndType(b, name, 0x56)
 	var raw [4]byte
 	binary.LittleEndian.PutUint32(raw[:], uint32(value))
+	b = append(b, raw[:]...)
+	return b
+}
+
+// AppendFloat32Field writes a 4-byte float (wire tag 0x57; the client's size
+// table 0x142A62F00 gives 0x57 four bytes and 0x77 eight). Its document
+// parser types it as a floating-point node, which the client's scalar getters
+// read as type 1 -- the one type some handlers (YA_RefreshPlayerProfile's
+// containsProfile) insist on.
+func AppendFloat32Field(b []byte, name string, value float32) []byte {
+	b = appendFieldNameAndType(b, name, 0x57)
+	var raw [4]byte
+	binary.LittleEndian.PutUint32(raw[:], math.Float32bits(value))
 	b = append(b, raw[:]...)
 	return b
 }

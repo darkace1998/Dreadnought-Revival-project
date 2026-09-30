@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -363,6 +365,11 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 func queuedFleetType(database *sql.DB, pid string, payload []byte) int32 {
 	fleetRef := protocol.FirstNonEmptyString(payload, "FleetID", "fleetId", "FleetId")
 	var fleetType int32
+	if id := fleetIDForRef(database, pid, fleetRef); id != 0 {
+		if err := database.QueryRow(`SELECT fleet_type FROM player_fleets WHERE user_id=? AND fleet_id=?`, pid, id).Scan(&fleetType); err == nil && fleetType > 0 {
+			return fleetType
+		}
+	}
 	if fleetRef != "" {
 		if err := database.QueryRow(`SELECT fleet_type FROM player_fleets WHERE user_id=? AND (token=? OR CAST(fleet_id AS TEXT)=?) LIMIT 1`,
 			pid, fleetRef, fleetRef).Scan(&fleetType); err == nil && fleetType > 0 {
@@ -1087,7 +1094,7 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 	// they feed a separate native reflection class (YLocalServerPlayerDataInformation),
 	// not the parser, and are shared with the YA_PlayerGet fleet summary.
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	b = protocol.AppendStringField(b, "FID", normalizedPlayerStatePID(playerPID))
+	b = protocol.AppendStringField(b, "FID", fleetFID(playerPID, fleet.fleetID))
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = appendMmogFleetRuntimeFields(b, fleet)
 	b, stack = appendMmogFleetRawFields(b, stack, fleet)
@@ -1099,24 +1106,45 @@ func appendMmogPlayerFleetEntry(b []byte, stack []int, playerPID string, fleet m
 func appendMmogFleetUnlockEntry(b []byte, stack []int, fleet mmogFleetSeed) ([]byte, []int) {
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 	b = protocol.AppendStringField(b, "Type", strconv.Itoa(int(fleet.fleetType)))
-	b = protocol.AppendBoolField(b, "Unlocked", fleet.active || len(fleet.shipLoadouts) > 0)
+	b = protocol.AppendBoolField(b, "Unlocked", true) // only unlocked fleets are sent (unlockedFleets)
 	b = protocol.AppendStringField(b, "Name", fleet.displayName)
 	b = protocol.AppendStringField(b, "FleetID", fleet.token)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
 }
 
-// unlockedFleetsOnly filters a fleet list to the fleets the player actually
-// owns/has unlocked — i.e. fleets that are active or contain at least one ship.
-// A new player owns only the Recruit fleet; the locked Veteran/Legendary
-// fleets (0 ships, not active) must NOT be sent. Sending those empty locked
-// fleets made the client's fleet validator reject the whole set ("Invalid
-// fleet data, fleet array is empty"). Falls back to the raw list if that would
-// leave nothing to send.
-func unlockedFleetsOnly(fleets []mmogFleetSeed) []mmogFleetSeed {
+// fleetUnlockTiers is the ship tier range that unlocks a fleet type, from the
+// game's own text: "Unlock one ship of Tiers I-II / III-IV / IV-V to access
+// this Fleet" (Recruit / Veteran / Legendary).
+var fleetUnlockTiers = map[int32][2]int32{1: {1, 2}, 2: {3, 4}, 3: {4, 5}}
+
+// unlockedFleets filters a fleet list to the fleets the player has unlocked:
+// Recruit, any fleet that is active or holds ships, and any fleet whose unlock
+// tiers the player owns a ship of.
+//
+// The client treats EVERY fleet it is sent as unlocked: UpdatePlayerFleetData
+// (0x35FDF0) copies each parsed fleet into the fleet manager with its lock
+// count (+0x3C) set to 0, and GetHighestUnlockedFleet (0x346BD0) returns the
+// highest type among entries with +0x3C <= 0. So which fleets are unlocked is
+// decided purely by which we send.
+//
+// This used to send only fleets that were active or held ships, "because empty
+// locked fleets made the client reject the whole set" -- a belief from
+// 2026-07-22 that the 2026-07-27 finding replaced ("Invalid fleet data, fleet
+// array is empty" was response ORDERING). With it, an empty fleet was never
+// sent, so Veteran and Legendary could never unlock: you cannot put a ship in
+// a fleet the client says is locked ("the others are locked", 2026-09-30).
+// Falls back to the raw list if that would leave nothing to send.
+func unlockedFleets(state mmogPlayerState, playerPID string, fleets []mmogFleetSeed) []mmogFleetSeed {
+	ownedTiers := map[int32]bool{}
+	for _, l := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		if tier, ok := shipTierForIDChecked(l.precastLoadoutID); ok {
+			ownedTiers[tier] = true
+		}
+	}
 	out := make([]mmogFleetSeed, 0, len(fleets))
 	for _, fleet := range fleets {
-		if fleet.active || len(fleet.shipLoadouts) > 0 {
+		if fleetUnlocked(fleet, ownedTiers) {
 			out = append(out, fleet)
 		}
 	}
@@ -1124,6 +1152,20 @@ func unlockedFleetsOnly(fleets []mmogFleetSeed) []mmogFleetSeed {
 		return fleets
 	}
 	return out
+}
+
+func fleetUnlocked(fleet mmogFleetSeed, ownedTiers map[int32]bool) bool {
+	if fleet.fleetType <= 1 || fleet.active || len(fleet.shipLoadouts) > 0 {
+		return true
+	}
+	if r, ok := fleetUnlockTiers[fleet.fleetType]; ok {
+		for t := r[0]; t <= r[1]; t++ {
+			if ownedTiers[t] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func buildMmogPlayerFleetsPayload(playerPID string) []byte {
@@ -1134,7 +1176,7 @@ func buildMmogPlayerFleetsPayload(playerPID string) []byte {
 	if len(fleets) == 0 {
 		fleets = []mmogFleetSeed{starterFleetState()}
 	}
-	fleets = unlockedFleetsOnly(fleets)
+	fleets = unlockedFleets(state, playerPID, fleets)
 
 	// "result" IS the fleet array itself — not an object wrapping one.
 	//
@@ -1217,7 +1259,7 @@ func buildMmogFleetUpdatePush(playerPID string) []byte {
 	if len(fleets) == 0 {
 		fleets = []mmogFleetSeed{starterFleetState()}
 	}
-	fleets = unlockedFleetsOnly(fleets)
+	fleets = unlockedFleets(state, playerPID, fleets)
 
 	// The client parses YA_FleetUpdate with the SAME parser as YA_PlayerFleets,
 	// which gates on the top-level FID/PID wrapper before it will read the
@@ -1567,8 +1609,14 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 		// document) ONLY when "containsProfile" is a type-1 node that is
 		// truthy (0x140237D40, cmp [node], 1; 0x14038C4F0). Without it the
 		// reply was dropped and the hangar kept the pre-match free XP, ship XP
-		// and rank. GUESS: that a bool field makes node type 1.
-		b = protocol.AppendBoolField(b, "containsProfile", true)
+		// and rank.
+		// CHANGED 2026-09-30: a bool (0x05), sent for one day, is almost
+		// certainly NOT type 1: the client's scalar getters (FUN_1402380b0 /
+		// FUN_140238000) treat types 1 and 2 as floating point, 3 as int64 and
+		// 4 as string, and read our int32 (0x56) as 0, so the floating tags
+		// 0x57 (4 bytes) and 0x77 (8 bytes) are types 1 and 2. GUESS: 0x57 is
+		// type 1; if the hangar still keeps stale XP, 0x77 is next.
+		b = protocol.AppendFloat32Field(b, "containsProfile", 1)
 	}
 	b = protocol.AppendStringField(b, "PID", playerPID)
 	b = protocol.AppendStringField(b, "SID", "local_session")
@@ -2254,6 +2302,11 @@ type techTreeItem struct {
 	position     int32
 	xpCost       int32
 	prereq       []int32
+	// techItemsRequired is NumTechTreeItemsRequired: how many of the PARENT
+	// ship's modules (the items keyed to this node's ClassId) the player must
+	// have bought before this hull can be researched ("claimed"). See
+	// techTreeShipUnlockModules.
+	techItemsRequired int32
 	// hero items are laid out in their own grid on the manufacturer page
 	// (HeroShipTechTreeRow0..4 alongside TechTreeRow0..4), so their Position
 	// counts from zero independently of the ships'.
@@ -2986,8 +3039,37 @@ func techTreeBaseItems() []techTreeItem {
 			items = append(items, techTreeModuleItems(hull, manufacturerID)...)
 		}
 	}
+	// The unlock gate: N modules of the parent must be BOUGHT first. Capped at
+	// what the parent's tree offers, so no hull becomes unreachable -- and 0
+	// when modules are stripped, since the client could then count nothing.
+	modulesOf := map[int32]int32{}
+	for _, item := range items {
+		if item.module {
+			modulesOf[item.classID]++
+		}
+	}
+	for i := range items {
+		if items[i].module || len(items[i].prereq) == 0 {
+			continue
+		}
+		items[i].techItemsRequired = min(techTreeShipUnlockModules, modulesOf[items[i].prereq[0]])
+	}
 	return items
 }
+
+// techTreeShipUnlockModules is how many modules of the previous ship must be
+// bought before the next one can be researched and claimed -- the original
+// game's rule, whose UI says "PURCHASE MODULES TO UNLOCK HIGHER TIER SHIPS" and
+// "YOU NEED MORE TECH TO CLAIM", and shows "Requirements Not Met" until then.
+//
+// GUESS at the number, from the best evidence found: players on the official
+// Steam forum were told "do you have the 5 modules bought? if so click on the
+// Orcus icon and it should ask to invest some research points" (a tier-2 ship,
+// whose tier-1 parent has exactly 5 modules in this tree), and that you
+// "research and buy certain amount of modules to get a ship". The per-ship
+// values the original backend sent are in no client file. The client reads it
+// as NumTechTreeItemsRequired; see appendMmogTechTreeItem.
+const techTreeShipUnlockModules = 5
 
 // techTreeHeroItems turns the hero roster into tech tree nodes.
 //
@@ -3581,11 +3663,27 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	b, stack = appendMmogTechTreeUI(b, stack, uiX, float64(item.tier)*techTreeGridY)
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
-	numRequired := len(item.prereq)
+	// NumTechTreeItemsRequired is NOT the prerequisite count (it was sent as
+	// len(item.prereq) until 2026-09-30). It is how many items of the record's
+	// ClassId ship the player must already have -- and a hull's ClassId is its
+	// PARENT hull (techTreeHullClassID), so for a hull it reads "N modules of
+	// the previous ship" (techTreeShipUnlockModules).
+	//   - UTechTreeInterpreter::GetModulePurchaseState (0xAA7D00) calls
+	//     0xAA7E40, which walks every tree item keyed to ClassId (+0x28) and
+	//     counts those fitted to that ship while it is owned (0xA9D230) plus
+	//     the owned ones (0x548990); a sum below +0x38 (this field, loader
+	//     0x1404000A0) gives state 1, "Requirements Not Met"
+	//     (UI_Button_ModuleDetails_Purchase). The count overrides every other
+	//     state, owned included.
+	//   - GetTechTreeItemState (0x543890) compares the same field against
+	//     GetNumOfPurchasedTechTreeItemsByShipId (0x542730) before research.
+	// Our tree leaves out what a ship already fields, so only bought modules
+	// count. The server applies the same rule (hullUnlockShortfall).
+	numRequired := item.techItemsRequired
 	if techTreeNoPrereq {
 		numRequired = 0
 	}
-	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(numRequired))
+	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", strconv.Itoa(int(numRequired)))
 	// DIAGNOSTIC (DN_TECHTREE_CANARY=1): give the FIRST item an out-of-range
 	// ProxyType so the loader is forced to announce itself. UYTechTreeManager's
 	// only log line is "Invalid tech tree item type: %d", emitted when the
@@ -4319,6 +4417,17 @@ func clientOwnedItemIDs(playerPID string) []int32 {
 	}
 	state := mmogPlayerStateForPID(playerPID)
 	for _, loadout := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+		// The ship ITSELF. GetTechTreeItemState (0x543890) walks a hull's
+		// prerequisites and accepts one only if it is in this list (0x548990
+		// reads +0x3F90) or researched (0x547DD0, ProgressionData); anything
+		// else is state 1, "Requirements Not Met". The starter hulls were in
+		// neither -- owned through their loadout rows, never purchased or
+		// researched -- so once the real unlock paths (ddab1ce, 2026-09-28
+		// 19:32) gave every tier-2 a starter as parent, no player could
+		// research a tier-2 again. Every tier-2 research row predates that
+		// commit; accounts with admin-tool rows for their starters were
+		// unaffected. Reported live 2026-09-30.
+		add(loadout.precastLoadoutID)
 		hull, ok := fittedByLoadout[loadout.precastLoadoutID]
 		if !ok {
 			continue
@@ -6065,8 +6174,16 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		b = protocol.AppendStringField(b, "softCurrency", strconv.Itoa(int(balance)))
 		b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
 		b, stack = protocol.AppendObjectEnd(b, stack)
-		b, stack = protocol.AppendArrayStart(b, stack, "inventory")
-		b, _ = protocol.AppendObjectEnd(b, stack)
+		// The client's reply handler, on "bought" and whenever "inventory" is
+		// present at all (0x142A2D245), REPLACES its owned-item list
+		// (player-data +0x39E8) with inventory.Items (0x142A6CED0 clears the
+		// list, then reads the child named "Items"). An empty "inventory" array
+		// here wiped the list on every purchase, so the ships dropped out of it
+		// and every other module read "Unowned Ship!" until a relog (operator
+		// 2026-09-30). Send the full list, or nothing on a failure.
+		if result == "bought" {
+			b, _ = appendInventoryObject(b, stack, playerPID)
+		}
 		return b
 	}
 	if itemID == 0 {
@@ -6100,6 +6217,18 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	if isVanity, sold, _ := vanityOffer(itemID); isVanity && !sold {
 		return reply("failed", "not for sale", 0, 0)
 	}
+	// Ships. A tech-tree hull is never sold: the original game CLAIMS it by
+	// researching it with XP once the parent's modules are bought, and
+	// persistUnlockItem grants it then. Credits bought nothing here -- the
+	// row was written, the ship never granted (no loadout row), the credits
+	// gone. A hero ship is sold, for GP ("Once purchased with GP, Hero Ships
+	// instantly unlock the fleet level", Dreadnought wiki FAQ), and is granted
+	// below with its loadout.
+	shipCategory := (itemID >> 24) & 0xff
+	if shipCategory == mmogItemCategoryShipLoadoutPrecast {
+		return reply("failed", "ships are claimed through research, not bought", 0, 0)
+	}
+	isHero := shipCategory == mmogItemCategoryShipLoadoutHero
 	// Every purchasable item is owned once: player_purchases is keyed by
 	// (user_id, item_id) and the INSERT below is OR IGNORE, so quantity > 1
 	// charged N times and granted one item. It was also an exploit: the price
@@ -6148,7 +6277,9 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	deductSQL := `UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`
 	insufficient := "insufficient credits"
 	creditsLeft := softCurrency - price
-	if isVanity, _, _ := vanityOffer(itemID); isVanity {
+	// GUESS: a hero's GP price. The derived price is the store's CREDIT scale
+	// (gatewayMarketCreditPrice); the original GP prices are in no client file.
+	if isVanity, _, _ := vanityOffer(itemID); isVanity || isHero {
 		creditsLeft = softCurrency
 		deductSQL = `UPDATE player_state SET premium_currency=premium_currency-?, updated_at=datetime('now') WHERE user_id=? AND premium_currency>=?`
 		insufficient = "insufficient premium currency"
@@ -6178,6 +6309,11 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		if n, _ := upgraded.RowsAffected(); n == 0 {
 			// Already owned — rollback (via defer) undoes the currency deduction above.
 			return reply("failed", "item already owned", 0, softCurrency)
+		}
+	}
+	if isHero {
+		if err := grantUnlockedShipLoadout(tx, pid, itemID); err != nil {
+			return reply("failed", "ship grant failed", 0, softCurrency)
 		}
 	}
 
@@ -7108,11 +7244,25 @@ func buildMmogClaimItemPushPayload(playerPID string) []byte {
 	// Sending a wrong loadout here would be inventing one.
 	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "inventory")
-	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = appendInventoryObject(b, stack, playerPID)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+// appendInventoryObject writes "inventory" the way the client reads it: an
+// OBJECT whose "Items" array holds the owned-item entries. The owned-item
+// parser (0x142A6CED0) is handed the inventory node and looks up the child
+// "Items" in it (FName global 0x143D9AB80) -- the same lookup it makes on the
+// player-data object in YA_PlayerGet. Entries written straight into an
+// "inventory" array are never found: the list is cleared and refilled with
+// nothing, which is the "Updated 0 items" the YA_ClaimItem push produced on
+// 2026-08-14.
+func appendInventoryObject(b []byte, stack []int, playerPID string) ([]byte, []int) {
+	b, stack = protocol.AppendObjectStart(b, stack, "inventory")
+	b, stack = protocol.AppendArrayStart(b, stack, "Items")
+	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return protocol.AppendObjectEnd(b, stack)
 }
 
 // connectURLName makes a display name safe inside a travel URL. The address is
@@ -7138,4 +7288,73 @@ func connectURLName(name string) string {
 		}
 	}
 	return string(out)
+}
+
+// isShipItem reports whether an item id is a ship (a precast or hero loadout),
+// by the category law.
+func isShipItem(itemID int32) bool {
+	category := (itemID >> 24) & 0xff
+	return category == mmogItemCategoryShipLoadoutPrecast || category == mmogItemCategoryShipLoadoutHero
+}
+
+// fleetFID is the FID a fleet goes out under in YA_PlayerFleets / YA_FleetUpdate.
+//
+// The client identifies fleets BY THIS VALUE, not by type: the parser
+// (0x142A77910) turns it into an FName via 0x142A1D450, which parses the 32
+// hex digits as a GUID and rejects only an all-zero one (0x142A65F80 -> None,
+// fleet skipped); the fleet manager is then looked up by it ("Fleet not known
+// at fleet manager. Fleet=%s"), and every fleet request carries it back --
+// YA_AddToFleet / YA_RemoveFromFleet / YA_SetFleetFlagship as the 16-byte GUID
+// field "fleet", YA_EnterMatchmaking as the string "FleetID".
+//
+// Every fleet used to carry the player's PID, so with Veteran unlocked the
+// client had two fleets with one identity: selecting Veteran opened Recruit,
+// and every edit and queue landed on Recruit too ("if i click on the veteran
+// fleet on manage it goes to the recruit fleet", 2026-09-30). The Recruit fleet
+// keeps the PID, so nothing already stored changes; the others get a stable
+// value derived from the PID and the fleet number.
+func fleetFID(playerPID string, fleetID int32) string {
+	pid := normalizedPlayerStatePID(playerPID)
+	if fleetID <= 1 {
+		return pid
+	}
+	sum := md5.Sum([]byte("dreadnought-fleet:" + pid + ":" + strconv.Itoa(int(fleetID))))
+	return hex.EncodeToString(sum[:])
+}
+
+// fleetIDForRef maps a fleet reference the client sent back (an FID, as a
+// string or a GUID's hex) to the player's fleet id, or 0.
+func fleetIDForRef(database *sql.DB, playerPID, ref string) int32 {
+	ref = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(ref), "-", ""))
+	if ref == "" || database == nil {
+		return 0
+	}
+	pid := normalizedPlayerStatePID(playerPID)
+	rows, err := database.Query(`SELECT fleet_id FROM player_fleets WHERE user_id=?`, pid)
+	if err != nil {
+		return 0
+	}
+	var ids []int32
+	for rows.Next() {
+		var id int32
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	_ = rows.Close() // closed before returning: the store has ONE connection
+	for _, id := range ids {
+		if fleetFID(pid, id) == ref {
+			return id
+		}
+	}
+	return 0
+}
+
+// fleetRefFromPayload is the fleet reference a fleet request carries: the
+// GUID field "fleet" (fleet edits) or the string "FleetID" (matchmaking).
+func fleetRefFromPayload(payload []byte) string {
+	if guid, ok := protocol.ExtractGUIDField(payload, "fleet"); ok {
+		return guid
+	}
+	return protocol.FirstNonEmptyString(payload, "FleetID", "fleetId", "FleetId")
 }

@@ -968,7 +968,10 @@ func persistRenameShipLoadout(database *sql.DB, playerPID string, payload []byte
 }
 
 func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte) error {
-	fleetID := firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId")
+	fleetID := fleetIDForRef(database, playerPID, fleetRefFromPayload(payload))
+	if fleetID == 0 {
+		fleetID = firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId")
+	}
 	loadoutID := firstMmogInt32Field(payload, "FlagShipLoadoutID", "flagshipLoadoutID", "LoadoutID", "loadoutID")
 	shipID := firstMmogInt32Field(payload, "FlagShipID", "shipID", "shipId", "ShipID")
 	if fleetID == 0 {
@@ -1033,6 +1036,12 @@ const (
 // -- plus `shipId`. So the only sane target is the fleet the player currently
 // has active, falling back to the starter fleet if none is marked.
 func fleetEditTargetFleetID(database *sql.DB, playerPID string, payload []byte) int32 {
+	// The client names the fleet by its FID, as the GUID field "fleet"
+	// (captured: YA_AddToFleet{fleet: <GUID>, shipId}). This was never read,
+	// so every edit fell through to the active fleet, Recruit.
+	if fleetID := fleetIDForRef(database, playerPID, fleetRefFromPayload(payload)); fleetID != 0 {
+		return fleetID
+	}
 	if fleetID := firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId"); fleetID != 0 {
 		return fleetID
 	}
@@ -1160,6 +1169,27 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	if missing, ok := missingHullPrerequisite(playerPID, itemID); ok {
 		logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID, "requires": missing}).
 			Info("mmog: YA_UnlockItem refused -- prerequisite hull not researched")
+		return nil
+	}
+
+	// ...and, for a hull, the modules of its parent bought first -- the
+	// client's NumTechTreeItemsRequired gate (techTreeShipUnlockModules).
+	if have, need, parent, short := hullUnlockShortfall(playerPID, itemID); short {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID, "parent": parent,
+			"modules_bought": have, "modules_required": need}).
+			Info("mmog: YA_UnlockItem refused -- not enough of the parent ship's modules bought")
+		return nil
+	}
+	// The request says how the client SPLIT the cost between ship XP and free
+	// XP -- the player's choice, and what the client deducts locally, so it
+	// is charged as sent. But the total was taken at face value, so any
+	// research could be had for 0; it must cover the tree's cost. The client
+	// offers exactly the XPCost it was sent (the captured request in
+	// realUnlockItemPayload offered 5000 when every cost was a flat 5000).
+	if cost, inTree := techTreeResearchCost(itemID); inTree && shipXP+freeXP < cost {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID, "cost": cost,
+			"ship_xp": shipXP, "free_xp": freeXP}).
+			Warn("mmog: YA_UnlockItem refused -- offered XP below the tech tree cost")
 		return nil
 	}
 
@@ -1539,6 +1569,47 @@ func missingHullPrerequisite(playerPID string, itemID int32) (int32, bool) {
 	for _, p := range prereq {
 		if !have[p] {
 			return p, true
+		}
+	}
+	return 0, false
+}
+
+// hullUnlockShortfall reports whether a hull still lacks the parent-ship
+// modules the tech tree requires before it can be researched: have of need
+// bought, counting the same thing the client does (GetNumOfPurchasedTechTree
+// ItemsByShipId, 0x542730) -- owned purchases among the parent's tree modules.
+// Research-only rows do not count: the rule is "PURCHASE MODULES".
+func hullUnlockShortfall(playerPID string, itemID int32) (have, need, parent int32, short bool) {
+	items := techTreeBaseItems()
+	for _, item := range items {
+		if !item.module && item.id == itemID && item.techItemsRequired > 0 {
+			need, parent = item.techItemsRequired, item.prereq[0]
+			break
+		}
+	}
+	if need == 0 {
+		return 0, 0, 0, false
+	}
+	modules := map[int32]bool{}
+	for _, item := range items {
+		if item.module && item.classID == parent {
+			modules[item.id] = true
+		}
+	}
+	for _, id := range ownedPurchaseItemIDs(playerPID) {
+		if modules[id] {
+			have++
+		}
+	}
+	return have, need, parent, have < need
+}
+
+// techTreeResearchCost is the XP an item costs to research, if it is a tech
+// tree node. Officer briefings and anything else outside the tree report false.
+func techTreeResearchCost(itemID int32) (int32, bool) {
+	for _, item := range techTreeBaseItems() {
+		if item.id == itemID {
+			return item.xpCost, true
 		}
 	}
 	return 0, false

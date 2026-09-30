@@ -77,12 +77,12 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
 		// live 2026-08-02. Without them the scanners stopped at ItemID and the
 		// whole request read as empty.
-		case 0x76:
+		case 0x76, 0x77: // 8-byte int / float64
 			if i+8 > len(payload) {
 				return false
 			}
 			i += 8
-		case 0x66:
+		case 0x66, 0x57: // 4-byte int / float32
 			if i+4 > len(payload) {
 				return false
 			}
@@ -174,12 +174,12 @@ func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
 		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
 		// live 2026-08-02. Without them the scanners stopped at ItemID and the
 		// whole request read as empty.
-		case 0x76:
+		case 0x76, 0x77: // 8-byte int / float64
 			if i+8 > len(payload) {
 				return nil, false
 			}
 			i += 8
-		case 0x66:
+		case 0x66, 0x57: // 4-byte int / float32
 			if i+4 > len(payload) {
 				return nil, false
 			}
@@ -272,7 +272,7 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
 		// live 2026-08-02. Without them the scanners stopped at ItemID and the
 		// whole request read as empty.
-		case 0x76:
+		case 0x76, 0x77: // 8-byte int / float64
 			if i+8 > len(payload) {
 				return 0, false
 			}
@@ -281,7 +281,7 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 			if name == target {
 				return int32(value64), true
 			}
-		case 0x66:
+		case 0x66, 0x57: // 4-byte int / float32
 			if i+4 > len(payload) {
 				return 0, false
 			}
@@ -382,12 +382,12 @@ func ExtractRequestName(payload []byte) string {
 		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
 		// live 2026-08-02. Without them the scanners stopped at ItemID and the
 		// whole request read as empty.
-		case 0x76:
+		case 0x76, 0x77: // 8-byte int / float64
 			if i+8 > len(payload) {
 				return ""
 			}
 			i += 8
-		case 0x66:
+		case 0x66, 0x57: // 4-byte int / float32
 			if i+4 > len(payload) {
 				return ""
 			}
@@ -500,12 +500,12 @@ func ExtractGUIDField(payload []byte, target string) (string, bool) {
 		// in YA_UnlockItem (ItemID as 0x76, ShipXp/FreeXp as 0x66), captured
 		// live 2026-08-02. Without them the scanners stopped at ItemID and the
 		// whole request read as empty.
-		case 0x76:
+		case 0x76, 0x77: // 8-byte int / float64
 			if i+8 > len(payload) {
 				return "", false
 			}
 			i += 8
-		case 0x66:
+		case 0x66, 0x57: // 4-byte int / float32
 			if i+4 > len(payload) {
 				return "", false
 			}

@@ -202,9 +202,9 @@ func validateMmogPayloadNesting(t *testing.T, payload []byte) {
 				t.Fatalf("string/bytes overruns payload at byte %d", i)
 			}
 			i += valueLen
-		case 0x56:
+		case 0x56, 0x57: // int32, float32 (client size table 0x142A62F00)
 			if i+4 > len(payload) {
-				t.Fatalf("int32 value truncated at byte %d", i)
+				t.Fatalf("int32/float value truncated at byte %d", i)
 			}
 			i += 4
 		case 0x0c, 0x0d:
@@ -2070,7 +2070,7 @@ func assertMmogPayloadHasNoSiblingFNameCollisions(t *testing.T, payloadName stri
 			}
 			strLen := int(binary.LittleEndian.Uint32(payload[idx : idx+4]))
 			idx += 4 + strLen
-		case 0x56: // int32
+		case 0x56, 0x57: // int32, float32
 			idx += 4
 		case 0x05: // bool
 			idx++

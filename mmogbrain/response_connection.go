@@ -683,6 +683,20 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if err := writeMmogAppResponse(log, conn, remote, frame.RequestID, requestName, response, appEncoder, encryptResponses, "request response failed", "sent request response"); err != nil {
 				return err
 			}
+			// A ship just researched (claimed) or bought can unlock a fleet
+			// (unlockedFleets), and the client learns its fleets only from
+			// YA_PlayerFleets / YA_FleetUpdate -- so without this the Veteran or
+			// Legendary fleet appeared only after a relog. Same push as the one
+			// after YA_PlayerFleets below; the client rebuilds its fleet list
+			// from it, so repeating it is harmless.
+			if (requestName == "YA_UnlockItem" || requestName == "YA_PurchaseItem") && isShipItem(firstMmogInt32Field(frame.Payload, "ItemID", "itemID", "itemId")) {
+				if pushID, err := uuid.NewRandom(); err == nil {
+					push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogFleetUpdatePush(state.playerPID))
+					if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_FleetUpdate", push, appEncoder, encryptResponses, "fleet update push failed", "sent YA_FleetUpdate push after a ship unlock"); err != nil {
+						return err
+					}
+				}
+			}
 			if requestName == "YA_PlayerFleets" {
 				// UYFleetManager's readiness bitmask (this+0x110) is written exactly
 				// once at connection setup and never again — confirmed live via a

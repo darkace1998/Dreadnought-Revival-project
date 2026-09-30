@@ -253,6 +253,7 @@ func TestUnlockItemRecordsOwnershipAndCharges(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	grantParentModulesBought(t, database, pid, 33489267) // the unlock gate (module_prereq_test.go)
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=10000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
@@ -397,6 +398,7 @@ func TestUnlockItemDoesNotChargeTwiceForTheSameItem(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	grantParentModulesBought(t, database, pid, 33489267) // the unlock gate (module_prereq_test.go)
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=20000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
@@ -432,6 +434,7 @@ func TestUnlockItemResponseCarriesWhatTheClientReads(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	grantParentModulesBought(t, database, pid, 33489267) // the unlock gate (module_prereq_test.go)
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=50000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
@@ -509,6 +512,7 @@ func TestUnlockGrantsAShipLoadout(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	grantParentModulesBought(t, database, pid, 33489267) // the unlock gate (module_prereq_test.go)
 	if _, err := database.Exec(`UPDATE player_state SET free_xp=50000 WHERE user_id=?`, pid); err != nil {
 		t.Fatalf("fund: %v", err)
 	}
@@ -975,6 +979,7 @@ func TestHullResearchSpendsTheParentsShipXP(t *testing.T) {
 	if child == 0 {
 		t.Fatal("no tier-2 hull with a parent")
 	}
+	grantParentModulesBought(t, database, pid, child) // the unlock gate (module_prereq_test.go)
 	key, pawn, ok := researchShip(child)
 	if !ok || key != parent {
 		t.Fatalf("researchShip(%d) = %d, %v; want its parent %d", child, key, ok, parent)
@@ -1003,10 +1008,9 @@ func TestHullResearchSpendsTheParentsShipXP(t *testing.T) {
 	}
 }
 
-// The fleet a player queues with decides the match's fleet tier. A captured
-// YA_EnterMatchmaking carried FleetID = the PLAYER's id, so FleetID is only
-// trusted when it names one of the player's fleets; otherwise the active fleet
-// decides.
+// The fleet a player queues with decides the match's fleet tier. FleetID is
+// the fleet's FID (fleetFID); when it names none of the player's fleets, the
+// active fleet decides.
 func TestQueuedFleetTypeFollowsTheActiveFleet(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "650dd79476a1484b8adcd01ac2f17354"
@@ -1034,9 +1038,19 @@ func TestQueuedFleetTypeFollowsTheActiveFleet(t *testing.T) {
 		}
 	}
 
+	// CHANGED 2026-09-30: FleetID is the queued fleet's FID, and every fleet
+	// used to go out with FID = the player's id -- which is why it looked like
+	// "the player's id". Fleets now have their own FIDs (fleetFID); the
+	// player's id is the Recruit fleet's.
 	setActive(2)
-	if got := queuedFleetType(database, pid, request(pid)); got != 2 {
-		t.Errorf("FleetID = the player's id: got fleet type %d, want the active fleet's 2", got)
+	if got := queuedFleetType(database, pid, request(pid)); got != 1 {
+		t.Errorf("FleetID = the player's id (Recruit's FID): got fleet type %d, want 1", got)
+	}
+	if got := queuedFleetType(database, pid, request(fleetFID(pid, 3))); got != 3 {
+		t.Errorf("FleetID = the Legendary fleet's FID: got fleet type %d, want 3", got)
+	}
+	if got := queuedFleetType(database, pid, request("ffffffffffffffffffffffffffffffff")); got != 2 {
+		t.Errorf("FleetID naming no fleet: got fleet type %d, want the active fleet's 2", got)
 	}
 	if got := queuedFleetType(database, pid, request("LegendaryFleet")); got != 3 {
 		t.Errorf("FleetID = a fleet token: got fleet type %d, want 3", got)

@@ -379,10 +379,15 @@ var unlockContainerExportSurfaces = []ExportSurface{
 	{TableCategory: "YProgressionUnlockContainerFunction", ExportPath: unlockContainerTablesExportPath},
 }
 
+// NumShipsToUnlockFleet is 1 for every fleet: the game's own text is "Unlock
+// one ship of Tiers I-II / III-IV / IV-V to access this Fleet". It was 2 and
+// 3, unsourced, from the initial commit. Which tiers unlock a fleet is
+// mmogbrain's fleetUnlockTiers; AllowedTiers is what a fleet may HOLD and also
+// feeds the client's AI spawn tiers, so it is left as it was.
 var fleetEligibilityValues = []FleetEligibility{
 	{Token: "Recruit", DisplayName: "Recruit Fleet", FleetType: 1, AllowedTiers: []int32{1, 2}, NumShipsToUnlockFleet: 0, BaseMaintenanceCost: 1, MaintenanceTime: 0, FleetRatingMin: 1.0, FleetRatingCost: 1},
-	{Token: "Veteran", DisplayName: "Veteran Fleet", FleetType: 2, AllowedTiers: []int32{2, 3}, NumShipsToUnlockFleet: 2, BaseMaintenanceCost: 1000, MaintenanceTime: 600, FleetRatingMin: 2.0, FleetRatingCost: 200},
-	{Token: "Legendary", DisplayName: "Legendary Fleet", FleetType: 3, AllowedTiers: []int32{4, 5}, NumShipsToUnlockFleet: 3, BaseMaintenanceCost: 2000, MaintenanceTime: 1200, FleetRatingMin: 4.0, FleetRatingCost: 500},
+	{Token: "Veteran", DisplayName: "Veteran Fleet", FleetType: 2, AllowedTiers: []int32{2, 3}, NumShipsToUnlockFleet: 1, BaseMaintenanceCost: 1000, MaintenanceTime: 600, FleetRatingMin: 2.0, FleetRatingCost: 200},
+	{Token: "Legendary", DisplayName: "Legendary Fleet", FleetType: 3, AllowedTiers: []int32{4, 5}, NumShipsToUnlockFleet: 1, BaseMaintenanceCost: 2000, MaintenanceTime: 1200, FleetRatingMin: 4.0, FleetRatingCost: 500},
 }
 
 var (
