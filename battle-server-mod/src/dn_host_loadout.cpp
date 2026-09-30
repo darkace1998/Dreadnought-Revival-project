@@ -2351,7 +2351,7 @@ static int PushActorNow(void *actor) {
 static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   char v[512];
   int32_t credits[REWARD_POOLS] = {}, xp[REWARD_POOLS] = {}, shipXp[REWARD_POOLS] = {};
-  int32_t zero[REWARD_POOLS] = {};
+  int32_t zero[REWARD_POOLS] = {}, unplayed[REWARD_POOLS] = {};
   int32_t fleet[MAX_FLEET_SHIPS] = {}, flown[MAX_FLEET_SHIPS] = {};
   if (ParseInts(FieldValue(body, "credit_pools", v, sizeof(v)), credits, REWARD_POOLS) != REWARD_POOLS ||
       ParseInts(FieldValue(body, "xp_pools", v, sizeof(v)), xp, REWARD_POOLS) != REWARD_POOLS ||
@@ -2359,6 +2359,11 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
     Logf("eom rewards: mmogbrain sent no pools (older mmogbrain?); screen stays empty");
     return;
   }
+  // What every fleet ship NOT flown earned (mmogbrain unplayedShipPools, 10% of
+  // the XP without performance by default). Optional: an older mmogbrain does
+  // not send it, and those ships then show 0, as before.
+  bool haveUnplayed =
+      ParseInts(FieldValue(body, "unplayed_ship_xp_pools", v, sizeof(v)), unplayed, REWARD_POOLS) == REWARD_POOLS;
   int nFleet = ParseInts(FieldValue(body, "fleet_ships", v, sizeof(v)), fleet, MAX_FLEET_SHIPS);
   int nFlown = ParseInts(FieldValue(body, "flown_ships", v, sizeof(v)), flown, MAX_FLEET_SHIPS);
 
@@ -2369,6 +2374,7 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   TArrayIntMin xpArr = {xp, REWARD_POOLS, REWARD_POOLS};
   TArrayIntMin shipArr = {shipXp, REWARD_POOLS, REWARD_POOLS};
   TArrayIntMin zeroArr = {zero, REWARD_POOLS, REWARD_POOLS};
+  TArrayIntMin unplayedArr = {haveUnplayed ? unplayed : zero, REWARD_POOLS, REWARD_POOLS};
   tAssign fstr = (tAssign)(g_base + RVA_FSTRING_ASSIGN);
   tAssign tarr = (tAssign)(g_base + RVA_TARRAY_INT_ASSIGN);
 
@@ -2401,7 +2407,7 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
         bool wasFlown = false;
         for (int j = 0; j < nFlown; ++j)
           wasFlown |= flown[j] == fleet[i];
-        tarr(e + 0x08, wasFlown ? &shipArr : &zeroArr); // m_shipXp
+        tarr(e + 0x08, wasFlown ? &shipArr : &unplayedArr); // m_shipXp
         tarr(e + 0x18, &zeroArr);                        // m_freeXp
       }
     }
@@ -2430,8 +2436,8 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   // thunk 0x1E6FF00 jumps to its body 0x171C000 (this).
   int pushed = PushActorNow(pri) + PushActorNow(xpmOut);
   Logf("eom rewards: PRI %p written -- scoring pool credits %d xp %d, %d fleet ships "
-       "(%d flown), both finalized; %d actor(s) pushed (FlushNetDormancy + ForceNetUpdate)",
-       pri, credits[0], xp[0], nFleet, nFlown, pushed);
+       "(%d flown, unplayed share %d), both finalized; %d actor(s) pushed (FlushNetDormancy + ForceNetUpdate)",
+       pri, credits[0], xp[0], nFleet, nFlown, haveUnplayed ? unplayed[0] : 0, pushed);
 }
 
 // ---------------------------------------------------------------------------

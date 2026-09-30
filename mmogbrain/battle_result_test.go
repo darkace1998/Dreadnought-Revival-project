@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -205,5 +206,59 @@ func TestFreeXPPoolsAreTheFreeShare(t *testing.T) {
 	free := xp.scaled(r.freeXPPct, r.freeXPOf(xp.total()))
 	if free.total() != r.freeXPOf(xp.total()) || free.total() >= xp.total() {
 		t.Errorf("free pools total %d, want %d (25%% of %d)", free.total(), r.freeXPOf(xp.total()), xp.total())
+	}
+}
+
+// Every ship of the fleet earns ship XP, not only the ones flown ("all ship
+// need to get xp if u take them in the fleet ... ther is like 10% of the total
+// xp earned is for the other ships that were not played", operator
+// 2026-09-30; the game: "every ship in that fleet will earn Ship XP"). The
+// performance reward goes only to the ships played.
+func TestUnplayedFleetShipsEarnAShare(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	fleet := battleFleetLoadouts(pid, 0)
+	if len(fleet) < 2 {
+		t.Fatalf("the starter fleet has %d ships; need at least 2", len(fleet))
+	}
+	flown, benched := fleet[0], fleet[1]
+	shipXP := func(id int32) (xp int64) {
+		_ = database.QueryRow(`SELECT xp FROM player_ship_xp WHERE user_id=? AND ship_id=?`, pid, id).Scan(&xp)
+		return
+	}
+	req := httptest.NewRequest(http.MethodGet, "/battle/result?match=M2&pid="+pid+"&team=2&final=2&kills=3&ships="+flown.entryID(), nil)
+	req.RemoteAddr = "127.0.0.1:5000"
+	rec := httptest.NewRecorder()
+	battleResultHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%d %q", rec.Code, rec.Body.String())
+	}
+	// Flown: the whole match XP, 4025 (see TestBattleResultAwardsOnce).
+	// Not flown: 10% of the XP WITHOUT the 3 kills: 1000 x 3.5 = 3500 -> 350.
+	if got := shipXP(flown.ship.id); got != 4025 {
+		t.Errorf("flown ship earned %d, want 4025", got)
+	}
+	if got := shipXP(benched.ship.id); got != 350 {
+		t.Errorf("unflown fleet ship earned %d, want 350 (10%% of the XP without performance)", got)
+	}
+	// ...and the end-of-match screen gets the same amount for those ships.
+	var line string
+	for _, l := range strings.Split(rec.Body.String(), "\n") {
+		if strings.HasPrefix(l, "unplayed_ship_xp_pools=") {
+			line = strings.TrimPrefix(l, "unplayed_ship_xp_pools=")
+		}
+	}
+	var p rewardPools
+	for i, v := range strings.Split(line, ",") {
+		if i < rewardPoolCount {
+			n, _ := strconv.Atoi(v)
+			p[i] = int32(n)
+		}
+	}
+	if line == "" || p.total() != 350 {
+		t.Errorf("unplayed_ship_xp_pools %q totals %d, want 350", line, p.total())
 	}
 }

@@ -66,6 +66,13 @@ type battleRewards struct {
 	// total XP", operator). GUESS: the operator's figure; the client's own
 	// XPStandardFreeXpPercentage (YA_GetProgressionData) is not sent or traced.
 	freeXPPct int32
+	// unplayedShipXPPct is what every ship of the match's fleet that was NOT
+	// flown earns: this share of the match's XP WITHOUT the performance part,
+	// so the performance reward goes only to the ships played. The game's own
+	// text: "Whichever fleet you choose to play ... every ship in that fleet
+	// will earn Ship XP after you finish a match." GUESS: 10% is the
+	// operator's figure (2026-09-30); only flown ships earned anything before.
+	unplayedShipXPPct int32
 }
 
 // fleetBonus is the fleet battle bonus of an EYFleetType (1 Recruit,
@@ -121,6 +128,8 @@ func currentBattleRewards() battleRewards {
 		fleetBonuses:  parseRewardBonuses("DN_REWARD_FLEET_BONUSES", []float64{1.00, 1.25, 1.50}),
 		eliteTeamPct:  float64(n("DN_REWARD_ELITE_TEAM_PCT", 0)),
 		freeXPPct:     n("DN_REWARD_FREE_XP_PERCENT", 25),
+
+		unplayedShipXPPct: n("DN_REWARD_UNPLAYED_SHIP_XP_PERCENT", 10),
 	}
 }
 
@@ -195,6 +204,14 @@ func (p rewardPools) scaled(pct int32, want int32) rewardPools {
 	}
 	q[0] += want - q.total()
 	return q
+}
+
+// unplayedShipPools is what each fleet ship that was not flown earns: the
+// match's XP pools without the performance part, scaled to unplayedShipXPPct.
+func (r battleRewards) unplayedShipPools(outcome string, fleetType int) rewardPools {
+	_, base := r.poolsFor(outcome, 0, fleetType)
+	want := int32(math.Round(float64(base.total()) * float64(r.unplayedShipXPPct) / 100))
+	return base.scaled(r.unplayedShipXPPct, want)
 }
 
 func (p rewardPools) csv() string {
@@ -315,8 +332,10 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	// xp_pools become the screen's FREE XP (m_matchXPInfo.m_freeXP): the
 	// free share of the match XP, not all of it. Ship XP keeps the full split.
 	freePools := xpPools.scaled(rewards.freeXPPct, rewards.freeXPOf(xpPools.total()))
-	_, _ = fmt.Fprintf(w, "credit_pools=%s\nxp_pools=%s\nship_xp_pools=%s\nfleet_ships=%s\nflown_ships=%s\n",
-		creditPools.csv(), freePools.csv(), shipPools.csv(),
+	// unplayed_ship_xp_pools is what every fleet ship NOT flown earned (see
+	// unplayedShipXPPct); the mod shows it on those ships, which read 0 before.
+	_, _ = fmt.Fprintf(w, "credit_pools=%s\nxp_pools=%s\nship_xp_pools=%s\nunplayed_ship_xp_pools=%s\nfleet_ships=%s\nflown_ships=%s\n",
+		creditPools.csv(), freePools.csv(), shipPools.csv(), rewards.unplayedShipPools(res.outcome, fleetType).csv(),
 		joinInt32s(battleFleetShipIDs(res.pid, fleetType)), joinInt32s(flown))
 }
 
@@ -342,9 +361,12 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	credits, xp = rewards.forOutcome(res.outcome, res.kills, res.fleetType)
 
 	// Ship XP goes to the hulls actually flown, resolved to pawn ids the way
-	// player_ship_xp keys them. Resolved BEFORE the transaction: the store has
-	// one connection, and a query inside an open transaction waits for itself.
+	// player_ship_xp keys them, and a smaller share to the rest of the fleet.
+	// Resolved BEFORE the transaction: the store has one connection, and a
+	// query inside an open transaction waits for itself.
 	ships := flownShipIDs(res.pid, res.ships)
+	unplayed := unplayedFleetPawnIDs(res.pid, res.fleetType, ships)
+	unplayedXP := rewards.unplayedShipPools(res.outcome, res.fleetType).total()
 
 	tx, err := database.Begin()
 	if err != nil {
@@ -359,7 +381,7 @@ func recordBattleResult(res battleResult, rewards battleRewards) (credits, xp in
 	if n, _ := ins.RowsAffected(); n == 0 {
 		return credits, xp, false, nil // already paid
 	}
-	if err := grantBattleRewards(tx, res.pid, credits, xp, rewards.freeXPOf(xp), ships); err != nil {
+	if err := grantBattleRewards(tx, res.pid, credits, xp, rewards.freeXPOf(xp), ships, unplayed, unplayedXP); err != nil {
 		return 0, 0, false, err
 	}
 	return credits, xp, true, tx.Commit()
@@ -407,20 +429,42 @@ func flownShipIDs(pid string, loadoutIDs []string) []int32 {
 // ShipXpError for Ship IDs 33489265/67/68/69/70 -- exactly the fleetShipID
 // (= precast loadout id) of the five ships in that player's active fleet.
 func battleFleetShipIDs(pid string, fleetType int) []int32 {
+	var ids []int32
+	seen := map[int32]bool{}
+	for _, l := range battleFleetLoadouts(pid, fleetType) {
+		if id := fleetShipKey(l); id != 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// battleFleetLoadouts is the fleet the player fought with: the active fleet
+// of the match's fleet type.
+func battleFleetLoadouts(pid string, fleetType int) []mmogShipLoadoutSeed {
 	state := mmogPlayerStateForPID(pid)
-	fleets := state.activeFleets()
 	fleet := state.activeFleet()
-	for _, f := range fleets {
+	for _, f := range state.activeFleets() {
 		if int(f.fleetType) == fleetType {
 			fleet = f
 			break
 		}
 	}
+	return fleet.shipLoadouts
+}
+
+// unplayedFleetPawnIDs is the fleet's ships that were not flown, by pawn id
+// (how player_ship_xp keys them), once each.
+func unplayedFleetPawnIDs(pid string, fleetType int, flown []int32) []int32 {
+	skip := map[int32]bool{}
+	for _, id := range flown {
+		skip[id] = true
+	}
 	var ids []int32
-	seen := map[int32]bool{}
-	for _, l := range fleet.shipLoadouts {
-		if id := fleetShipKey(l); id != 0 && !seen[id] {
-			seen[id] = true
+	for _, l := range battleFleetLoadouts(pid, fleetType) {
+		if id := l.ship.id; id != 0 && !skip[id] {
+			skip[id] = true
 			ids = append(ids, id)
 		}
 	}
@@ -458,7 +502,7 @@ func joinInt32s(v []int32) string {
 	return strings.Join(parts, ",")
 }
 
-func grantBattleRewards(tx *sql.Tx, pid string, credits, xp, freeXP int32, ships []int32) error {
+func grantBattleRewards(tx *sql.Tx, pid string, credits, xp, freeXP int32, ships, unplayed []int32, unplayedXP int32) error {
 	var currentXP, rank, rankXP int32
 	if err := tx.QueryRow(`SELECT current_xp, current_rank, rank_xp FROM player_state WHERE user_id=?`, pid).
 		Scan(&currentXP, &rank, &rankXP); err != nil {
@@ -479,13 +523,25 @@ func grantBattleRewards(tx *sql.Tx, pid string, credits, xp, freeXP int32, ships
 		credits, freeXP, xp, rank, rankXP, pid); err != nil {
 		return err
 	}
+	addShipXP := func(ship, amount int32) error {
+		if amount <= 0 {
+			return nil
+		}
+		_, err := tx.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,?)
+			ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=xp+?, updated_at=datetime('now')`, pid, ship, amount, amount)
+		return err
+	}
 	if len(ships) > 0 {
 		share := xp / int32(len(ships))
 		for _, ship := range ships {
-			if _, err := tx.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,?)
-				ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=xp+?, updated_at=datetime('now')`, pid, ship, share, share); err != nil {
+			if err := addShipXP(ship, share); err != nil {
 				return err
 			}
+		}
+	}
+	for _, ship := range unplayed {
+		if err := addShipXP(ship, unplayedXP); err != nil {
+			return err
 		}
 	}
 	return nil
