@@ -459,10 +459,30 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 	}
 	writer := newLogWriter(logTo, fileOut, inst.ID, cfg.Verbose, inst.markReady)
 	writer.onPlayer = inst.onPlayerEvent
-	cmd.Stdout = writer
-	cmd.Stderr = writer
+	// The child writes into a pipe WE own, not one exec creates. With a
+	// non-file Stdout, cmd.Wait also waits for its copy of the output to reach
+	// EOF -- and the first host started in a Wine prefix launches the prefix's
+	// shared processes (wineserver, services.exe, explorer.exe, rpcss.exe, ...),
+	// which inherit that pipe and outlive the host. killTaggedProcesses spares
+	// them on purpose (killing them takes down every other host), so the pipe
+	// never closed: the host on port 7900 was gone, yet the instance stayed
+	// "running" with its port reserved, logging "did not exit within 10s"
+	// every 15 s (2026-09-30). With an *os.File, cmd.Wait waits for the
+	// process alone, and the copy below is closed once the host has exited.
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		if logFile != nil {
+			_ = logFile.Close()
+		}
+		return nil, fmt.Errorf("output pipe: %w", err)
+	}
+	cmd.Stdout = outW
+	cmd.Stderr = outW
+	copied := make(chan struct{})
 
 	if err := cmd.Start(); err != nil {
+		_ = outR.Close()
+		_ = outW.Close()
 		if logFile != nil {
 			_ = logFile.Close()
 		}
@@ -473,6 +493,11 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 		return nil, fmt.Errorf("start battle server: %w", err)
 	}
 	inst.cmd = cmd
+	_ = outW.Close() // the child has its own copy; ours would keep the pipe open
+	go func() {
+		_, _ = io.Copy(writer, outR)
+		close(copied)
+	}()
 
 	if !cfg.ShowWindow {
 		go inst.suppressWindow()
@@ -480,6 +505,18 @@ func Launch(cfg LaunchConfig) (*Instance, error) {
 
 	go func() {
 		err := cmd.Wait()
+		// Let the host's last lines through, then stop reading: anything still
+		// holding the pipe is a shared Wine process, not this host.
+		select {
+		case <-copied:
+		case <-time.After(outputDrainGrace):
+			_ = outR.Close() // interrupts the copy's Read on Linux
+			select {
+			case <-copied:
+			case <-time.After(outputDrainGrace):
+			}
+		}
+		_ = outR.Close()
 		inst.mu.Lock()
 		inst.err = err
 		inst.mu.Unlock()
@@ -808,6 +845,10 @@ func (i *Instance) Stop(timeout time.Duration) error {
 		return fmt.Errorf("instance %s did not exit within %s", i.ID, timeout)
 	}
 }
+
+// outputDrainGrace is how long, after a host exits, its output is still read
+// before the pipe is closed on whatever else holds it.
+const outputDrainGrace = 2 * time.Second
 
 // logWriter forwards the child's output line by line, tagged with the instance
 // id. Unless verbose is set it only passes lines that look like errors or state
