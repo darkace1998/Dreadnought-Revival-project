@@ -59,6 +59,13 @@ pre.log { margin: 0; padding: 10px 12px; font: 12px/1.4 var(--mono); white-space
 #login input { width: 100%; margin: 10px 0; }
 .err { color: var(--bad); }
 .hidden { display: none !important; }
+.manage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.manage h3 { margin: 0 0 4px; font-size: 16px; }
+.manage .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin: 12px 0; }
+.manage label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.manage input, .manage select { width: 100%; }
+.ok { color: var(--good); }
+td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 @media (max-width: 640px) { input[type=search] { min-width: 0; width: 100%; } }
 </style>
 </head>
@@ -106,6 +113,27 @@ pre.log { margin: 0; padding: 10px 12px; font: 12px/1.4 var(--mono); white-space
     <section style="margin-top:0"><h2>Online now</h2>
       <div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th>In match</th><th>Queued</th><th>Squad</th><th>Player id</th></tr></thead><tbody id="onlineRows"></tbody></table></div>
     </section>
+    <div id="manage" class="manage hidden">
+      <div class="row" style="justify-content:space-between;margin:0">
+        <div><h3 id="mName"></h3><div class="muted" id="mInfo"></div></div>
+        <button class="btn" id="mClose">Close</button>
+      </div>
+      <div class="grid" id="mCards" style="margin-top:12px"></div>
+      <section><h2>Balances</h2>
+        <div class="fields">
+          <label>Credits<input id="mCredits" type="number" step="1" placeholder="amount"></label>
+          <label>GP (gold)<input id="mPremium" type="number" step="1" placeholder="amount"></label>
+          <label>Free XP<input id="mFreeXP" type="number" step="1" placeholder="amount"></label>
+        </div>
+        <div class="row"><button class="btn" id="mAdd">Add (negative subtracts)</button><button class="btn" id="mSet">Set exactly</button>
+          <span class="muted">Empty fields are left unchanged.</span></div>
+      </section>
+      <section><h2>Hero ships</h2>
+        <div class="row"><select id="mHero"></select><button class="btn" id="mGrant">Grant ship</button></div>
+        <div class="muted" id="mShips"></div>
+      </section>
+      <p id="mMsg"></p>
+    </div>
     <section><h2>Accounts</h2>
       <div class="row"><input id="playerSearch" type="search" placeholder="Search name or player id"><button class="btn" id="playerSearchBtn">Search</button></div>
       <div class="table-wrap"><table><thead><tr><th>Name</th><th></th><th class="num">Rank</th><th class="num">XP</th><th class="num">Free XP</th><th class="num">Credits</th><th class="num">Premium</th><th class="num">Ships</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Kills</th><th>Last seen</th><th>Created</th></tr></thead><tbody id="playerRows"></tbody></table></div>
@@ -243,11 +271,65 @@ pre.log { margin: 0; padding: 10px 12px; font: 12px/1.4 var(--mono); white-space
   async function loadPlayers() {
     const q = $('playerSearch').value.trim();
     const d = await api('/players?q=' + encodeURIComponent(q));
-    fill('playerRows', d.players.map((p) => el('tr', {}, el('td', {}, p.name || '?'),
+    fill('playerRows', d.players.map((p) => el('tr', {}, el('td', {}, el('a', { class: 'link', onclick: () => openManage(p.pid) }, p.name || '?')),
       el('td', {}, p.online ? el('span', { class: 'chip good' }, 'online') : ''),
       ...[p.rank, p.xp, p.free_xp, p.credits, p.premium, p.ships, p.matches, p.wins, p.kills].map((v) => el('td', { class: 'num' }, fmt(v))),
       el('td', {}, ago(p.updated)), el('td', { class: 'muted' }, (p.created || '').slice(0, 10)))), q ? 'No account matches.' : 'No accounts.', 13);
   }
+
+  // --- player management -------------------------------------------------
+  let managed = null;
+  function renderManage(d) {
+    managed = d.pid;
+    $('manage').classList.remove('hidden');
+    $('mName').textContent = d.name || '?';
+    $('mInfo').textContent = d.pid + (d.online ? ' · online (changes reach the game now)' : ' · offline (applied at next login)');
+    $('mCards').replaceChildren(card('Credits', fmt(d.credits)), card('GP', fmt(d.premium)), card('Free XP', fmt(d.free_xp)), card('Rank', fmt(d.rank)));
+    const sel = $('mHero'); sel.replaceChildren();
+    const free = d.heroes.filter((h) => !h.owned);
+    free.forEach((h) => sel.append(el('option', { value: h.id }, `T${h.tier} ${h.name}`)));
+    if (!free.length) sel.append(el('option', { value: '' }, 'owns every hero ship'));
+    $('mGrant').disabled = !free.length;
+    const heroes = d.ships.filter((s) => s.hero).map((s) => `T${s.tier} ${s.name}`);
+    $('mShips').textContent = `${d.ships.length} ships owned` + (heroes.length ? ` · heroes: ${heroes.join(', ')}` : ' · no hero ships');
+  }
+  async function openManage(pid) {
+    $('mMsg').textContent = '';
+    try { renderManage(await api('/players/' + pid)); $('manage').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    catch (e) { $('mMsg').className = 'err'; $('mMsg').textContent = String(e.message || e); }
+  }
+  async function post(path, body, okMsg) {
+    const msg = $('mMsg');
+    try {
+      const res = await fetch('/admin/api' + path, { method: 'POST', headers: { 'X-Admin-Key': key || '', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (res.status === 403) { lock('That key was not accepted.'); return; }
+      const text = await res.text();
+      if (!res.ok) { let m = text; try { m = JSON.parse(text).error || text; } catch (e) {} throw new Error(m); }
+      renderManage(JSON.parse(text)); msg.className = 'ok'; msg.textContent = okMsg; loadPlayers();
+    } catch (e) { msg.className = 'err'; msg.textContent = String(e.message || e); }
+  }
+  function amounts() {
+    const out = {};
+    [['credits', 'mCredits'], ['premium', 'mPremium'], ['free_xp', 'mFreeXP']].forEach(([k, id]) => {
+      const v = $(id).value.trim(); if (v !== '') out[k] = Math.trunc(Number(v));
+    });
+    return out;
+  }
+  function changeBalances(mode) {
+    const a = amounts();
+    if (!Object.keys(a).length) { $('mMsg').className = 'err'; $('mMsg').textContent = 'Enter at least one amount.'; return; }
+    const what = Object.entries(a).map(([k, v]) => `${k}: ${mode === 'add' && v > 0 ? '+' : ''}${v}`).join(', ');
+    if (!confirm(`${mode === 'add' ? 'Add' : 'Set'} for ${$('mName').textContent}: ${what}?`)) return;
+    post(`/players/${managed}/currency`, { mode, ...a }, 'Balances updated.').then(() => ['mCredits', 'mPremium', 'mFreeXP'].forEach((id) => ($(id).value = '')));
+  }
+  $('mAdd').onclick = () => changeBalances('add');
+  $('mSet').onclick = () => changeBalances('set');
+  $('mGrant').onclick = () => {
+    const sel = $('mHero'); if (!sel.value) return;
+    if (!confirm(`Grant ${sel.options[sel.selectedIndex].text} to ${$('mName').textContent}?`)) return;
+    post(`/players/${managed}/ships`, { ship_id: Number(sel.value) }, 'Ship granted.');
+  };
+  $('mClose').onclick = () => { $('manage').classList.add('hidden'); managed = null; };
 
   async function loadMatches() {
     const d = await api('/matches');

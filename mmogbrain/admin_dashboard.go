@@ -74,6 +74,7 @@ func registerAdminDashboard(r *mux.Router, adminKey, controlPlaneURL, internalKe
 	api.HandleFunc("/reports", adminAPIReports).Methods(http.MethodGet)
 	api.HandleFunc("/logs", adminAPILogs).Methods(http.MethodGet)
 	api.HandleFunc("/battle-logs", adminAPIBattleLogs).Methods(http.MethodGet)
+	registerAdminPlayerManagement(api)
 }
 
 func writeAdminJSON(w http.ResponseWriter, v any) {
