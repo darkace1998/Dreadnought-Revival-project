@@ -766,6 +766,24 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 					return err
 				}
 			}
+			// Back in the hangar after a match, the client sends
+			// YA_RefreshPlayerProfile (seen 20-40 s after every result, e.g.
+			// result 15:02:25 -> refresh 15:03:00 on 2026-09-30). The balance
+			// pushed with the result arrives while the player is still in the
+			// match, and the hangar did not show it until a relog ("credits are
+			// not getting updated if the match ends and the player goes back to
+			// the hangar", 2026-09-30). GUESS at the mechanism: the frontend is
+			// rebuilt after that push and never re-reads it. Sending the balance
+			// again here is harmless -- the YA_RewardCurrencies handler ASSIGNS
+			// Credits/Points (0x142A2C56D) rather than adding them.
+			if requestName == "YA_RefreshPlayerProfile" {
+				if pushID, err := uuid.NewRandom(); err == nil {
+					push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogRewardCurrenciesPayload(state.playerPID))
+					if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_RewardCurrencies", push, appEncoder, encryptResponses, "currency push failed", "sent YA_RewardCurrencies push after profile refresh"); err != nil {
+						return err
+					}
+				}
+			}
 			if requestName == "YA_UnlockItem" && claimItemPushEnabled {
 				// OFF BY DEFAULT because it is DESTRUCTIVE. Measured twice on a
 				// live client (2026-08-14): the frame is received and handled --
