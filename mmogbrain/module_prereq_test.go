@@ -120,25 +120,35 @@ func TestModulePrereqsAreSent(t *testing.T) {
 // bought before a hull can be researched ("PURCHASE MODULES TO UNLOCK HIGHER
 // TIER SHIPS"). Sent as len(prereq) until 2026-09-30, then briefly as 0 for
 // every entry, which switched the original mechanic off. Every hull with a
-// parent requires techTreeShipUnlockModules (capped at what the parent
-// offers); roots, heroes and modules require nothing.
+// parent requires its parent tier's count (techTreeShipUnlockModulesByTier:
+// 5/7/12/17, capped at what the parent offers -- briefings are not modules);
+// a briefing requires officerBriefingModulesRequired of its own ship's; roots,
+// heroes and modules require nothing.
 func TestHullsRequireTheirParentsModules(t *testing.T) {
 	items := techTreeBaseItems()
 	modulesOf := map[int32]int32{}
 	for _, item := range items {
-		if item.module {
+		if item.module && !isOfficerBriefing(item.id) {
 			modulesOf[item.classID]++
 		}
+	}
+	tierOf := map[int32]int32{}
+	for _, hull := range baseShipLoadouts {
+		tierOf[hull.loadoutID] = hull.tier
 	}
 	gated := 0
 	for _, item := range items {
 		switch {
+		case isOfficerBriefing(item.id):
+			if item.techItemsRequired != officerBriefingModulesRequired {
+				t.Errorf("briefing %d requires %d, want %d", item.id, item.techItemsRequired, officerBriefingModulesRequired)
+			}
 		case item.module || len(item.prereq) == 0:
 			if item.techItemsRequired != 0 {
 				t.Errorf("item %d requires %d, want 0", item.id, item.techItemsRequired)
 			}
 		default:
-			want := min(techTreeShipUnlockModules, modulesOf[item.prereq[0]])
+			want := min(techTreeShipUnlockModulesFor(tierOf[item.prereq[0]]), modulesOf[item.prereq[0]])
 			if want == 0 || item.techItemsRequired != want {
 				t.Errorf("hull %d requires %d of parent %d's %d modules, want %d (and >0)",
 					item.id, item.techItemsRequired, item.prereq[0], modulesOf[item.prereq[0]], want)

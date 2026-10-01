@@ -77,7 +77,9 @@ func TestNoModuleIsFreeToResearch(t *testing.T) {
 
 	free := 0
 	for _, item := range techTreeBaseItems() {
-		if item.module && item.xpCost == 0 {
+		// Officer briefings are exempt: they are not researched, they come
+		// with the ship that unlocks them, and the server refuses research.
+		if item.module && item.xpCost == 0 && !isOfficerBriefing(item.id) {
 			free++
 		}
 	}

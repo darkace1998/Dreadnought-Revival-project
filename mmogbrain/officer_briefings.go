@@ -10,30 +10,51 @@ import (
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
-// Officer briefings in the tech tree.
+// Officer briefings.
 //
-// The game's own text says how they work: "Ship Experience can be used in a
-// specific ship's tech tree to research its modules, weapons, officer
-// briefings, and higher-tier ships", "After you have researched a piece of
-// tech, you can then buy it with Credits", and "Credits can be used to
-// purchase modules, weapons, and officer briefings". The tech tree never
-// listed any (no category-6 item was ever researched or bought on any account,
-// 2026-10-01), so the officer slots could not be upgraded at all.
+// How the game unlocked them (Dreadnought wiki, "Officer Briefings": "As of
+// the shipyard update, all officer briefings must be unlocked through
+// purchasing specific ships within their tech trees. The tier of ships varies
+// from Tier 3 to Tier 4"), and the briefing is then usable on every ship:
 //
-// What the client data fixes:
-//   - which briefings exist: the regular PRK_COM/WPN/NAV/ENG perks the store
-//     sold (CatalogIDTable carries 20 of them as "999"+id SKUs; the _Hero
-//     variants are fitted to hero ships only and were never sold);
-//   - which ships have officer slots: every tier III-V hull's blueprint fits
-//     four briefings, no tier I-II hull fits any;
-//   - the slot a briefing goes in: the client classifies the id itself (cached
-//     item type, slot tags 7-10), as it does for modules.
+//   - the four "101" briefings (Communications/Engineering/Navigation/Weapons
+//     101) are fitted on every tier III-V hull's blueprint, so any such ship
+//     brings them;
+//   - each of the other 16 is unlocked by ONE ship (officerBriefingUnlockShip).
+//     The mapping is not in the client's data -- no progression blueprint fits
+//     those 16 (only the PAX demo loadouts do) -- it comes from the wiki's
+//     table, read through search-result quotes of it (the page itself refuses
+//     this server). It is consistent with the client: every named ship is in
+//     the roster, and every one is tier III or IV, as the wiki says.
 //
-// Briefing ids are SHARED (0xFF middle byte in every blueprint, the store and
-// the conversion table) -- unlike weapons and modules they are not per ship.
-// Research and ownership are therefore account-wide: the client keys
-// research by item id, so a briefing researched on one ship is researched on
-// all ("research ... officer briefings on any ship you own").
+// The tree carried no briefing at all, and no account ever owned one beyond
+// what its ships fit (2026-10-01). A first attempt here made all 20 briefings
+// researchable on every ship; that matched the generic "research ... officer
+// briefings" text but not this rule, and it was replaced the same day.
+//
+// Briefing ids are SHARED (0xFF middle byte in every source), so ownership is
+// account-wide, as the rule requires.
+
+// officerBriefingUnlockShip maps each non-101 briefing to the ship (precast
+// loadout id) whose purchase unlocks it. Source: see above.
+var officerBriefingUnlockShip = map[int32]int32{
+	117374977: 33489287, // Module Recycler     <- Lorica (Dreadnought, T4)
+	117374978: 33489286, // Retaliator          <- Jutland (Dreadnought, T4)
+	117374980: 33489281, // Feedback Loop       <- Palos (Tactical Cruiser, T3)
+	117374981: 33489294, // Desperate Measures  <- Murometz (Artillery Cruiser, T4)
+	117374983: 33489276, // It's a Trap!        <- Machias (Corvette, T3)
+	117374984: 33489295, // Adrenaline Shot     <- Koschei (Tactical Cruiser, T4)
+	117374986: 33489297, // Reinforced          <- Aion (Tactical Cruiser, T4)
+	117374987: 33489288, // Tip the Scales      <- Voronezh (Dreadnought, T4)
+	117374988: 33489274, // Slow and Steady     <- Chernobog (Dreadnought, T3)
+	117374989: 33489291, // Navigation Expert   <- Medusa (Corvette, T4)
+	117374990: 33489285, // Nerves of Steel     <- Vigo (Destroyer, T4)
+	117374992: 33489284, // Engine Rigger       <- Vindicta (Destroyer, T4)
+	117374993: 33489283, // Module Amper        <- Blud (Destroyer, T4)
+	117374994: 33489293, // Glass Cannon        <- Nox (Artillery Cruiser, T4)
+	117374995: 33489289, // Destruction Cascade <- Stribog (Corvette, T4)
+	117374997: 33489292, // Survival Instinct   <- Onager (Artillery Cruiser, T4)
+}
 
 var (
 	officerBriefingsOnce sync.Once
@@ -89,59 +110,18 @@ func hullHasOfficerSlots(hull baseShipLoadout) bool {
 	return false
 }
 
-// officerBriefingXPCost is what researching a briefing costs.
-// GUESS: no source gives briefing costs (like module costs, issue #66). One
-// price for every ship, because research is account-wide and the server
-// checks the offered XP against the tree's cost.
-var officerBriefingXPCost = techTreeModuleXPCost(3)
+// officerBriefingModulesRequired is how many of the unlocking ship's modules
+// must be bought before its briefing unlocks. Source: the operator, from
+// gameplay footage (Jutland: 2 modules for its briefing, 2026-10-01). GUESS:
+// that the briefing is then owned outright, with no XP or credits.
+const officerBriefingModulesRequired = 2
 
-// officerBriefingPrice is what buying a researched briefing costs, in
-// credits. GUESS: the 5,000 the store already showed for every briefing (no
-// source gives briefing prices, issue #66); one price, as ownership is
-// account-wide.
-const officerBriefingPrice int32 = 5000
-
-// officerBriefingOfferSeeds are the briefings' store offers: HIDDEN, like the
-// modules', so a briefing is bought through its tech tree entry after
-// research (the BUY action looks up the item's offer, 0x41F4C0) rather than
-// straight off the shelf -- 12 of them used to be sold openly with no research.
-func officerBriefingOfferSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
-	var seeds []gatewayCatalogEntitySeed
-	for _, id := range officerBriefings() {
-		name, _ := dreadconfig.AuthoritativeItemName(id)
-		key, found := dreadconfig.ItemHeadlineKey(id)
-		if !found {
-			key = marketItemLocalizationKeys[id]
-		}
-		seed := gatewayCatalogEntitySeed{
-			itemID:          id,
-			externalID:      extractedMarketItemExternalID(id, name),
-			displayName:     name,
-			localizationKey: key,
-			entityType:      "item",
-			itemType:        itemTypeFromCategoryLaw(id),
-			priceCurrencyID: "CR",
-			priceAmount:     officerBriefingPrice,
-			quantity:        1,
-			hidden:          true,
-		}
-		if _, bought := owned[id]; bought {
-			seed.owned = true
-		}
-		seeds = append(seeds, seed)
-	}
-	return seeds
-}
-
-// officerBriefingTechTreeItems are a hull's briefing entries: every briefing
-// it does not already fit, filed under it like a module.
+// officerBriefingTechTreeItems is the briefing a ship unlocks, shown in its
+// tech tree under it. It costs no XP: it comes with buying the ship.
 func officerBriefingTechTreeItems(hull baseShipLoadout, manufacturerID int32, fitted map[int32]bool, position int32) []techTreeItem {
-	if !hullHasOfficerSlots(hull) {
-		return nil
-	}
 	var items []techTreeItem
 	for _, id := range officerBriefings() {
-		if fitted[id] {
+		if officerBriefingUnlockShip[id] != hull.loadoutID || fitted[id] {
 			continue
 		}
 		items = append(items, techTreeItem{
@@ -150,48 +130,66 @@ func officerBriefingTechTreeItems(hull baseShipLoadout, manufacturerID int32, fi
 			prereq:       []int32{hull.loadoutID},
 			manufacturer: manufacturerID,
 			tier:         techTreeWireTier(hull.tier),
-			xpCost:       officerBriefingXPCost,
 			position:     position,
-			module:       true,
+			// The client's gate, shown as "requirements not met" until
+			// the modules are bought (NumTechTreeItemsRequired).
+			techItemsRequired: officerBriefingModulesRequired,
+			module:            true,
 		})
 		position++
 	}
 	return items
 }
 
-// officerResearchShip picks the ship whose XP pays for a briefing.
-//
-// The request names only the item (YA_UnlockItem: ItemID, ShipXp, FreeXp --
-// sender 0x142a4c340), and a briefing id is the same on every ship, so the
-// ship the client charged cannot be read from it. GUESS: the owned ship with
-// officer slots that has the most ship XP, if that covers what was spent --
-// right whenever only one ship could have paid. Must not run inside a
-// database transaction (single connection).
-func officerResearchShip(playerPID string, shipXP int32) (clientKey, pawn int32, ok bool) {
-	if shipXP <= 0 {
-		return 0, 0, false
-	}
-	xpByPawn := map[int32]int32{}
-	for _, e := range persistedPlayerShipXPs(playerPID) {
-		xpByPawn[e.shipID] = e.xp
-	}
+// officerBriefingsOwnedThroughShips is every briefing the player owns by
+// owning ships: the ones its ships fit (the 101s) and the ones its ships
+// unlock. Shared ids, so they count on every ship.
+func officerBriefingsOwnedThroughShips(playerPID string) []int32 {
 	hulls := map[int32]baseShipLoadout{}
 	for _, h := range baseShipLoadouts {
 		hulls[h.loadoutID] = h
 	}
-	best := int32(-1)
-	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
-		hull, isBase := hulls[l.precastLoadoutID]
-		if !isBase || !hullHasOfficerSlots(hull) {
-			continue
-		}
-		p, found := dreadconfig.ShipIDForPrecastLoadout(hull.loadoutID)
-		if !found {
-			continue
-		}
-		if xp := xpByPawn[p]; xp >= shipXP && xp > best {
-			best, clientKey, pawn, ok = xp, hull.loadoutID, p, true
+	unlockedBy := map[int32][]int32{}
+	for briefing, ship := range officerBriefingUnlockShip {
+		unlockedBy[ship] = append(unlockedBy[ship], briefing)
+	}
+	seen := map[int32]bool{}
+	var out []int32
+	add := func(id int32) {
+		if id > 0 && isOfficerBriefing(id) && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
 		}
 	}
-	return clientKey, pawn, ok
+	bought := map[int32]bool{}
+	for _, id := range ownedPurchaseItemIDs(playerPID) {
+		bought[id] = true
+	}
+	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
+		hull, ok := hulls[l.precastLoadoutID]
+		if !ok {
+			continue
+		}
+		for _, p := range hull.perks {
+			add(p)
+		}
+		if len(unlockedBy[hull.loadoutID]) == 0 {
+			continue
+		}
+		// The ship's own briefing needs officerBriefingModulesRequired of its
+		// modules bought first.
+		have := int32(0)
+		for _, item := range techTreeModuleItems(hull, 0) {
+			if !isOfficerBriefing(item.id) && bought[item.id] {
+				have++
+			}
+		}
+		if have >= officerBriefingModulesRequired {
+			for _, b := range unlockedBy[hull.loadoutID] {
+				add(b)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }

@@ -3120,32 +3120,48 @@ func techTreeBaseItems() []techTreeItem {
 	// when modules are stripped, since the client could then count nothing.
 	modulesOf := map[int32]int32{}
 	for _, item := range items {
-		if item.module {
+		if item.module && !isOfficerBriefing(item.id) {
 			modulesOf[item.classID]++
 		}
+	}
+	tierOf := map[int32]int32{}
+	for _, hull := range baseShipLoadouts {
+		tierOf[hull.loadoutID] = hull.tier
 	}
 	for i := range items {
 		if items[i].module || len(items[i].prereq) == 0 {
 			continue
 		}
-		items[i].techItemsRequired = min(techTreeShipUnlockModules, modulesOf[items[i].prereq[0]])
+		parent := items[i].prereq[0]
+		items[i].techItemsRequired = min(techTreeShipUnlockModulesFor(tierOf[parent]), modulesOf[parent])
 	}
 	return items
 }
 
-// techTreeShipUnlockModules is how many modules of the previous ship must be
-// bought before the next one can be researched and claimed -- the original
-// game's rule, whose UI says "PURCHASE MODULES TO UNLOCK HIGHER TIER SHIPS" and
-// "YOU NEED MORE TECH TO CLAIM", and shows "Requirements Not Met" until then.
+// techTreeShipUnlockModulesByTier is how many modules of the previous ship
+// must be BOUGHT before the next one can be researched and claimed, by the
+// previous ship's tier -- the original game's rule, whose UI says "PURCHASE
+// MODULES TO UNLOCK HIGHER TIER SHIPS" and "YOU NEED MORE TECH TO CLAIM", and
+// shows "Requirements Not Met" until then. The client reads it as
+// NumTechTreeItemsRequired; see appendMmogTechTreeItem.
 //
-// GUESS at the number, from the best evidence found: players on the official
-// Steam forum were told "do you have the 5 modules bought? if so click on the
-// Orcus icon and it should ask to invest some research points" (a tier-2 ship,
-// whose tier-1 parent has exactly 5 modules in this tree), and that you
-// "research and buy certain amount of modules to get a ship". The per-ship
-// values the original backend sent are in no client file. The client reads it
-// as NumTechTreeItemsRequired; see appendMmogTechTreeItem.
+// Source: the operator, from gameplay footage of the original game (Jutland,
+// tier IV: 17 modules for the next ship; "it applies to all tier 4 ships"),
+// with tiers I-III set by the operator (2026-10-01). It replaces a flat 5,
+// which came from one Steam-forum post about a tier-I ship (whose 5 still
+// stands). Capped at what the parent's tree offers, so no hull becomes
+// unreachable.
+var techTreeShipUnlockModulesByTier = map[int32]int32{1: 5, 2: 7, 3: 12, 4: 17}
+
+// techTreeShipUnlockModules is the requirement for a parent of unknown tier.
 const techTreeShipUnlockModules = 5
+
+func techTreeShipUnlockModulesFor(parentTier int32) int32 {
+	if n, ok := techTreeShipUnlockModulesByTier[parentTier]; ok {
+		return n
+	}
+	return techTreeShipUnlockModules
+}
 
 // techTreeHeroItems turns the hero roster into tech tree nodes.
 //
@@ -4521,6 +4537,11 @@ func clientOwnedItemIDs(playerPID string) []int32 {
 				add(inflatedItemID(id, class))
 			}
 		}
+	}
+	// Officer briefings come with the ships that unlock them, and count on
+	// every ship (officer_briefings.go).
+	for _, id := range officerBriefingsOwnedThroughShips(playerPID) {
+		add(id)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
@@ -6089,9 +6110,6 @@ func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 	if b, ok := marketBundleByID(itemID); ok {
 		return b.priceGP(), true
 	}
-	if isOfficerBriefing(itemID) {
-		return officerBriefingPrice, true
-	}
 	// Derive it exactly as the catalog entry did -- same itemType source, same
 	// tier source, same function -- so the two agree by construction rather
 	// than by two tables being kept in step by hand.
@@ -6308,9 +6326,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("bought", "ok", charged, balance)
 	}
 
-	// Officer briefings too: researched in a ship's tech tree, then bought
-	// with credits (officer_briefings.go).
-	if _, perShip := perShipResearchRow(itemID); perShip || isOfficerBriefing(itemID) {
+	if _, perShip := perShipResearchRow(itemID); perShip {
 		status, reason, charged := claimResearchedItem(playerPID, itemID)
 		var balance int32
 		_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
@@ -6482,9 +6498,6 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 				return int32(id)
 			}
 			if _, ok := heroByID(int32(id)); ok {
-				return int32(id)
-			}
-			if isOfficerBriefing(int32(id)) {
 				return int32(id)
 			}
 		}
@@ -7161,6 +7174,9 @@ func appendOwnedInventoryEntriesCounted(b []byte, stack []int, playerPID string)
 	// the less important entry: the ship itself reaches the client through
 	// ShipLoadouts.
 	purchased := purchasedInventoryItemIDs(playerPID)
+	// Briefings owned through ships are inventory items like bought ones; the
+	// officer slots offer what the owned list holds.
+	purchased = append(purchased, officerBriefingsOwnedThroughShips(playerPID)...)
 	isShip := func(id int32) bool {
 		category := (id >> 24) & 0xff
 		return category == mmogItemCategoryShipLoadoutPrecast || category == mmogItemCategoryShipLoadoutHero

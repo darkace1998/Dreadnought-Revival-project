@@ -1153,6 +1153,13 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	}
 	outcome := unlockOutcome{}
 	defer func() { lastUnlockOutcomes.Store(unlockOutcomeKey(playerPID, itemID), outcome) }()
+	// A briefing is not researched: it comes with the ship that unlocks it
+	// (officer_briefings.go). Refused without charging anything.
+	if isOfficerBriefing(itemID) {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "item_id": itemID}).
+			Info("mmog: YA_UnlockItem refused -- an officer briefing comes with its ship")
+		return nil
+	}
 	freeXP := firstMmogInt32Field(payload, "FreeXp", "freeXp", "FreeXP")
 	if freeXP < 0 {
 		freeXP = 0
@@ -1168,10 +1175,6 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	// cost ship XP nothing on our side.
 	shipXP := firstMmogInt32Field(payload, "ShipXp", "shipXp", "ShipXP")
 	shipKey, shipID, shipKnown := researchShip(itemID)
-	if !shipKnown && isOfficerBriefing(itemID) {
-		// A briefing id is the same on every ship; see officerResearchShip.
-		shipKey, shipID, shipKnown = officerResearchShip(playerPID, shipXP)
-	}
 	if shipXP < 0 || !shipKnown {
 		shipXP = 0
 	}
@@ -1612,7 +1615,8 @@ func hullUnlockShortfall(playerPID string, itemID int32) (have, need, parent int
 	}
 	modules := map[int32]bool{}
 	for _, item := range items {
-		if item.module && item.classID == parent {
+		// Briefings are not modules: they come with the ship (officer_briefings.go).
+		if item.module && item.classID == parent && !isOfficerBriefing(item.id) {
 			modules[item.id] = true
 		}
 	}

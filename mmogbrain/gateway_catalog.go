@@ -607,7 +607,7 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			continue
 		}
 		if isOfficerBriefing(itemID) {
-			continue // offered hidden, after research: officerBriefingOfferSeeds
+			continue // not sold: a briefing comes with the ship that unlocks it (officer_briefings.go)
 		}
 		emitted[itemID] = true
 		localizationKey := marketItemLocalizationKeys[sourceID]
@@ -694,13 +694,6 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	// Per-ship offers ONLY for weapons/modules the player has RESEARCHED (and
 	// those already bought, marked owned). See researchedItemOfferSeeds.
 	for _, seed := range researchedItemOfferSeeds(playerID, purchased) {
-		if !emitted[seed.itemID] {
-			emitted[seed.itemID] = true
-			seeds = append(seeds, seed)
-		}
-	}
-	// Officer briefings: see officer_briefings.go.
-	for _, seed := range officerBriefingOfferSeeds(purchased) {
 		if !emitted[seed.itemID] {
 			emitted[seed.itemID] = true
 			seeds = append(seeds, seed)
