@@ -29,6 +29,9 @@ import (
 // what a player actually chose grows it by one entry per choice.
 const vanityPrice = 100
 
+// coatingPrice is a ship coating's original GP price (see vanityOffer).
+const coatingPrice = 350
+
 // vanityCurrency is what cosmetics are priced and charged in: premium currency
 // (SP), the operator's choice (2026-09-28: every cosmetic 100 premium). The
 // client shows a cosmetic's premium price (SPPrice, from an SP offer): with the
@@ -54,7 +57,12 @@ func vanityOffer(itemID int32) (isVanity, sold bool, price int32) {
 		return true, false, 0
 	}
 	// Every sold cosmetic, the former free defaults included, costs the same
-	// (operator, 2026-09-28).
+	// (operator, 2026-09-28) -- except ship coatings, whose original price is
+	// documented: "350" GP per coating, for one manufacturer and class line
+	// (Steam forum, "Skin Coatings"). The rest have no surviving price.
+	if v.Category() == 22 {
+		return true, true, coatingPrice
+	}
 	return true, true, vanityPrice
 }
 

@@ -1923,9 +1923,43 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// to module ownership. Reported live as "tried to buy it but it never
 	// updated". See purchasedInventoryItemIDs.
 	b, stack = protocol.AppendArrayStart(b, stack, "Items")
-	b, stack = appendOwnedInventoryEntries(b, stack, playerPID)
+	var sent, total int
+	b, stack, sent, total = appendOwnedInventoryEntriesCounted(b, stack, playerPID)
+	// The rest goes in YA_PushInventory, a frame of its own (see
+	// buildMmogPushInventoryPayload).
+	if sent < total {
+		inventoryNeedsPush.Store(playerPID, true)
+	} else {
+		inventoryNeedsPush.Delete(playerPID)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
+}
+
+// inventoryNeedsPush marks players whose owned list did not fit YA_PlayerGet.
+var inventoryNeedsPush sync.Map
+
+// buildMmogPushInventoryPayload delivers the WHOLE owned list in a frame of
+// its own.
+//
+// YA_PlayerGet shares one 32 KB frame with the player's ships, so the owned
+// list is cut to fit: measured 2026-10-01, 125 of 407 items for a large
+// account. Cosmetics go last in that list, so they are exactly what was cut --
+// a bought paint then looks unowned in the hangar (operator, 2026-10-01).
+//
+// YA_PushInventory is the client's own message for this (dispatcher branch
+// 0x2A318B1): it reads the ROOT "inventory" and "loadouts", applies
+// inventory.Items to the owned list (0x142A6CED0 into +0x39E8, the same fill
+// YA_PlayerGet uses) when it is non-empty, adds any new loadouts, and then
+// re-requests YA_GetPlayerProgression and YA_GetPlayerPurchases. With nothing
+// else in the frame, ~600 entries fit the budget. "loadouts" is omitted: an
+// absent array reads as empty and adds nothing.
+func buildMmogPushInventoryPayload(playerPID string) []byte {
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_PushInventory")
+	b, _ = appendInventoryObject(b, stack, playerPID)
 	return b
 }
 
@@ -6027,6 +6061,14 @@ func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 	if row, ok := perShipResearchRow(itemID); ok {
 		return gatewayMarketCreditPrice(itemTypeFromCategoryLaw(itemID), row.Tier), true
 	}
+	// Hero ships and bundles: the same GP price the Market shows
+	// (market_offers.go).
+	if h, ok := heroByID(itemID); ok {
+		return heroPriceGP(h.tier), true
+	}
+	if b, ok := marketBundleByID(itemID); ok {
+		return b.priceGP(), true
+	}
 	// Derive it exactly as the catalog entry did -- same itemType source, same
 	// tier source, same function -- so the two agree by construction rather
 	// than by two tables being kept in step by hand.
@@ -6051,6 +6093,9 @@ func purchasedItemType(itemID int32) string {
 	// Cosmetics fell through to the "ship" default below.
 	if isVanityItemID(itemID) {
 		return "vanity"
+	}
+	if _, ok := marketBundleByID(itemID); ok {
+		return "bundle"
 	}
 	category, ok := dreadconfig.GetCategoryForItemID(itemID)
 	if !ok {
@@ -6228,6 +6273,18 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	// A per-ship weapon/module is bought only AFTER it is researched: research
 	// with XP first, then buy with credits (the original game, per the
 	// operator). That is the claim path, which also covers YA_ClaimItem.
+	if bundle, ok := marketBundleByID(itemID); ok {
+		charged, heroes, reason := grantMarketBundle(database, pid, bundle)
+		var balance int32
+		_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
+		currency = mmogCurrencyPremium
+		if reason != "" {
+			return reply("failed", reason, 0, balance)
+		}
+		pushBundleGrants(pid, heroes)
+		return reply("bought", "ok", charged, balance)
+	}
+
 	if _, perShip := perShipResearchRow(itemID); perShip {
 		status, reason, charged := claimResearchedItem(playerPID, itemID)
 		var balance int32
@@ -6394,6 +6451,12 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 				return int32(id)
 			}
 			if isVanity, sold, _ := vanityOffer(int32(id)); isVanity && sold {
+				return int32(id)
+			}
+			if _, ok := marketBundleByID(int32(id)); ok {
+				return int32(id)
+			}
+			if _, ok := heroByID(int32(id)); ok {
 				return int32(id)
 			}
 		}
@@ -7028,6 +7091,13 @@ func appendMmogCompactShipLoadout(b []byte, stack []int, playerPID string, loado
 }
 
 func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byte, []int) {
+	b, stack, _, _ = appendOwnedInventoryEntriesCounted(b, stack, playerPID)
+	return b, stack
+}
+
+// appendOwnedInventoryEntriesCounted also reports how many of the owned
+// entries fit the frame.
+func appendOwnedInventoryEntriesCounted(b []byte, stack []int, playerPID string) ([]byte, []int, int, int) {
 	emitted := map[int32]bool{}
 	// Only ItemID and Amount are sent. NewPromotionID and Credits used to go out
 	// as "0" on every entry, and are now omitted: FUN_142a77660 reads them
@@ -7090,18 +7160,19 @@ func appendOwnedInventoryEntries(b []byte, stack []int, playerPID string) ([]byt
 	// makes some owned items look unowned; overrunning the ring makes the whole
 	// login hang with no error. The first is visible and recoverable, the
 	// second is not -- so stop, and say so loudly.
+	sent := 0
 	for i, id := range ids {
 		if len(b) > playerDataFrameBudget {
 			logrus.WithFields(logrus.Fields{
 				"player": playerPID, "sent": i, "owned": len(ids),
 				"bytes": len(b), "budget": playerDataFrameBudget,
-			}).Error("mmog: owned inventory truncated to fit the client's receive ring -- " +
-				"items past this point will look unowned")
+			}).Warn("mmog: owned inventory truncated to fit this frame -- the rest follows in YA_PushInventory")
 			break
 		}
 		b, stack = entry(b, stack, id, amounts[i])
+		sent++
 	}
-	return b, stack
+	return b, stack, sent, len(ids)
 }
 
 // buildMmogClaimItemPushPayload is the frame that tells a client, mid-session,

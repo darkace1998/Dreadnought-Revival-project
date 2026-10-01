@@ -113,6 +113,17 @@ func allowAppearance(mode string, owned map[int32]bool, playerPID string, loadou
 	if mode == "off" {
 		return true
 	}
+	// A hero's own appearance comes with the hero.
+	if a, ok := dreadconfig.HeroShipAppearance(loadoutID); ok {
+		withHero := make(map[int32]bool, len(owned)+8)
+		for id, v := range owned {
+			withHero[id] = v
+		}
+		for _, id := range a.Items() {
+			withHero[id] = true
+		}
+		owned = withHero
+	}
 	unowned := unownedAppearanceItems(owned, displayInfo)
 	if len(unowned) == 0 {
 		return true

@@ -41,9 +41,22 @@ type gatewayCatalogEntitySeed struct {
 	owned           bool
 	hidden          bool
 	quantity        int32
-	isNew           bool
-	gateIdentity    bool
-	bundleItems     []gatewayCatalogEntitySeed
+	// heroShip marks a hero ship offer (IsHeroShip), promotionFlags carries
+	// EYMarketItemPromotionFlags bits (Featured, ShipVanity, ...), and
+	// offerItemIDs are the items an offer references in ItemIDs, from which
+	// the client derives its section. See market_offers.go.
+	heroShip       bool
+	promotionFlags int
+	offerItemIDs   []int32
+	// localizedName/localizedDescription are the original store's localized
+	// text objects; image is a file under data/market-images. See
+	// market_offers.go.
+	localizedName        dreadconfig.Localized
+	localizedDescription dreadconfig.Localized
+	image                string
+	isNew                bool
+	gateIdentity         bool
+	bundleItems          []gatewayCatalogEntitySeed
 }
 
 func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDataReady bool) map[string]any {
@@ -104,6 +117,9 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		bundles := gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
 		payload["Bundles"] = bundles
 		payload["bundles"] = bundles
+		// The bundle index (0x142a5dd80 via 0x142a61be0) reads the response
+		// filed under "bundles" and, when it is an object, its "entities".
+		payload["entities"] = bundles
 	}
 	return payload
 }
@@ -128,7 +144,17 @@ func gatewayRequestedCatalogCollection(playerID string, requestedCatalog string,
 	case "currency_catalog_real":
 		return gatewayCurrencyCatalogCollection(gatewayMarketEntities(gatewayCurrencyCatalogSeeds("RMT", "RMT"), playerDataReady))
 	case "currency_catalog_virtual":
-		return gatewayCurrencyCatalogCollection(gatewayMarketEntities(gatewayCurrencyCatalogSeeds("CR", "CR"), playerDataReady))
+		// DN_BUNDLE_LISTING=0 sends it empty (no bundles in the Market).
+		entities := []any{}
+		if os.Getenv("DN_BUNDLE_LISTING") != "0" {
+			entities = gatewayBundleListing(playerDataReady)
+		}
+		return map[string]any{
+			"entities":    entities,
+			"Items":       []any{},
+			"ItemOffers":  []any{},
+			"ForexOffers": []any{},
+		}
 	default:
 		return nil
 	}
@@ -670,6 +696,13 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			seeds = append(seeds, seed)
 		}
 	}
+	// Hero ships: see market_offers.go.
+	for _, seed := range heroCatalogSeeds(playerID) {
+		if !emitted[seed.itemID] {
+			emitted[seed.itemID] = true
+			seeds = append(seeds, seed)
+		}
+	}
 	// Cosmetics: see vanity_store.go.
 	for _, seed := range vanityCatalogSeeds(purchased) {
 		if !emitted[seed.itemID] {
@@ -677,6 +710,8 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			seeds = append(seeds, seed)
 		}
 	}
+	// Bundles are NOT here: they are offers of the virtual currency catalog
+	// (gatewayBundleListing), where the client looks for them.
 	return seeds
 }
 
@@ -885,8 +920,14 @@ func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 	// items[] array for the same duplicate-FYItemData-load reason as the
 	// Starter Bundle (see NOTE above) — we don't have real bundle contents
 	// data to populate them with anyway.
-	seeds = append(seeds, realCatalogBucketSeeds("Bundles", "bundle", "bundle", "CR", 1000, realCatalogBucketIDBase["Bundles"])...)
-	return seeds
+	// The retail catalog's bundle SKUs were listed here with no contents and a
+	// fallback price: buying one charged 1,000 credits and granted nothing.
+	// They are replaced by the original bundles whose contents are documented
+	// (market_offers.go). DN_PLACEHOLDER_BUNDLES=1 lists the old ones again.
+	if os.Getenv("DN_PLACEHOLDER_BUNDLES") == "1" {
+		seeds = append(seeds, realCatalogBucketSeeds("Bundles", "bundle", "bundle", "CR", 1000, realCatalogBucketIDBase["Bundles"])...)
+	}
+	return append(seeds, marketBundleCatalogSeeds()...)
 }
 
 func gatewayMarketIdentity(seed gatewayCatalogEntitySeed, _ bool) (int32, int32, int32, string) {
@@ -958,6 +999,14 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	for _, item := range seed.bundleItems {
 		bundleItemIDs = append(bundleItemIDs, item.itemID)
 	}
+	promotionFlags := seed.promotionFlags
+	for _, id := range seed.offerItemIDs {
+		bundleItemIDs = append(bundleItemIDs, id)
+	}
+	if isShipVanityOffer(seed) {
+		bundleItemIDs = append(bundleItemIDs, seed.itemID)
+		promotionFlags |= promotionFlagShipVanity
+	}
 	entity := map[string]any{
 		"ID":      itemID,
 		"Sku":     seed.externalID,
@@ -1020,7 +1069,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"OnSale":                  false,
 		"ItemStatsArray":          itemStatsArray,
 		"AdditionalTextArray":     []any{},
-		"IsHeroShip":              false,
+		"IsHeroShip":              seed.heroShip,
 		// Tier drives the UI's tier badge, whose texture path is built as
 		// /Game/Generic/UI/tiers/UI_tier_<n>. With no tier field at all the
 		// client read the value uninitialised and asked for nonsense like
@@ -1040,7 +1089,14 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"LoadoutID":              loadoutID,
 		"PriceID":                priceID,
 		"campaign_id":            "",
-		"PromotionFlagSet":       []any{},
+		// The store's sections come from THIS field, not PromotionFlags: the
+		// entity converter (0x142a7e1a0) reads the PromotionFlagSet array of
+		// names, maps each through 0x142a62a50 (featured=1, spotlight=2,
+		// onsale/sale=4, new, recommended, hot, popular) and writes the OR as
+		// the offer's PromotionFlags. Bundles sent PromotionFlags=1 with an
+		// empty set and the Featured section stayed empty (operator,
+		// 2026-10-01).
+		"PromotionFlagSet": promotionFlagSetNames(promotionFlags),
 		// The 12 fields below are the ones FYItemOfferData::Load (0x142a6d760)
 		// actually reads. Everything above is either read by FYItemData::Load
 		// (Name/Flags/GrantedCurrency/ImgUrl*) or inert display scaffolding.
@@ -1058,7 +1114,7 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"RCSymbol":        "$",
 		"OriginalPrice":   originalPrice,
 		"ExpirationTime":  0,
-		"PromotionFlags":  0,
+		"PromotionFlags":  promotionFlags,
 		"ProvidedCredits": seed.providedCredits,
 		"ProvidedPoints":  seed.providedPoints,
 		// ItemIDs is how the offer loader reads a bundle's contents. Unlike
@@ -1070,6 +1126,74 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		"items":        bundleItems,
 		"entities":     []any{},
 		"entitlements": []any{},
+	}
+	// "name" and "Name" are ONE key to the client: the entity converter
+	// reads them through UE's FJsonObject, whose field map compares FStrings
+	// case-insensitively, and Go writes "name" after "Name", so "name" wins.
+	// An empty localization key therefore erased the display name: every hero
+	// ship rendered as "99967043392<DNT>EMPTY Name in json en" -- its Sku, then
+	// the converter's error (0x142a806c0, "<DNT> Empty Name in Json " + the
+	// locale), because the value it found was "". With no key, leave "name"
+	// out and the display name stands.
+	if entity["name"] == "" {
+		delete(entity, "name")
+	}
+	// The original store's catalog spelled an offer's text as objects keyed
+	// by locale ({"en": ..., "de": ...}), and the client still reads it so:
+	// the item converter takes the header and the bundle-name/locale tables
+	// from "name" and both long and short descriptions from "description"
+	// (0x142a5e920, looked up per culture by 0x142a60830), and "Name" and
+	// "Description" -- which collide with them -- through the same localized
+	// reader (0x142a60670). With plain strings there are no locales, and the
+	// hero and bundle pages showed the converter's placeholder text
+	// (operator, 2026-10-01).
+	if len(seed.localizedName) > 0 {
+		entity["name"] = seed.localizedName
+	}
+	if len(seed.localizedDescription) > 0 {
+		entity["description"] = seed.localizedDescription
+	}
+	// Pictures are URLs (full_image_url/thumbnail_image_url for the offer
+	// converter 0x142a7f520, ImgUrlS/M/L for FYItemData). The path is made
+	// absolute per request by gatewayAbsoluteImageURLs, on the host the client
+	// fetched the catalog from.
+	if seed.image != "" {
+		url := marketImagePath + seed.image
+		for _, key := range []string{"full_image_url", "thumbnail_image_url", "ImageURL", "ImgUrlS", "ImgUrlM", "ImgUrlL"} {
+			entity[key] = url
+		}
+	}
+	// A bundle's contents, in the original store's shape: "items" holds one
+	// {external_id, quantity} per contained item, external_id being the item
+	// id. It is the ONLY source of a bundle offer's item ids: the converter
+	// starts every offer from an empty object, and the bundle converter
+	// (0x142a81060) fills ItemIDs from items[].external_id alone -- our
+	// "ItemIDs" field never reaches the client's offer. With items empty the
+	// bundles referenced nothing, so the client derived no ShipVanity (0x20) or
+	// CaptainVanity (0x40) flag for them -- and those two flags are exactly
+	// what the Bundles section's filters, SHIP ITEMS and CAPTAIN GEAR
+	// (0x140aebb40), select by in the shop query (0x14041e9e0, offer +0x110).
+	// (That query also lists time-limited offers, but no converter carries
+	// ExpirationTime, so it is always 0 here.) Minimal objects, not whole
+	// entities: those caused duplicate FYItemData loads (issue #58).
+	if seed.entityType == "bundle" && len(seed.offerItemIDs) > 0 {
+		contents := make([]any, 0, len(seed.offerItemIDs))
+		for _, id := range seed.offerItemIDs {
+			contents = append(contents, map[string]any{"external_id": strconv.Itoa(int(id)), "quantity": 1})
+		}
+		entity["items"] = contents
+	}
+	// A bundle's "currency" array: the currencies it includes, as
+	// {amount, currency_type}. The bundle converter (0x142a82880) reads it
+	// into ProvidedCredits ("CR") and ProvidedPoints ("SP"/"GP"); without it the
+	// client logged "Field currency was not found" for every bundle. GP is
+	// never listed: a bundle here grants none (see marketBundles).
+	if seed.entityType == "bundle" {
+		included := []any{}
+		if seed.providedCredits > 0 {
+			included = append(included, map[string]any{"amount": seed.providedCredits, "currency_type": "CR"})
+		}
+		entity["currency"] = included
 	}
 	if seed.grantedCurrency != "" {
 		entity["granted_currency_id"] = seed.grantedCurrency
@@ -1212,7 +1336,9 @@ func techTreeShipClass(shipID int32) int32 {
 // uses. The client reads it as "Gp2CreditsConversion" and had nothing to read,
 // leaving the exchange at 0. No authentic rate survives in the extracted game
 // data, so this is a chosen value: 1 GP buys 250 credits.
-const gatewayGpToCreditsRate = 250
+// CHANGED 2026-10-01 to the documented rate: "500 GP = 52,500 Credits"
+// (patch 1.4.1 notes, via the Dreadnought wiki), i.e. 1 GP buys 105 credits.
+const gatewayGpToCreditsRate = 105
 
 // gatewayMarketPriceID names the price a purchase is made against. The client
 // reads it as "PriceID" and echoes it back when buying, so it has to be stable
@@ -1263,4 +1389,63 @@ func gatewayMarketCreditPrice(itemType string, tier int32) int32 {
 // at all.
 func gatewayMarketItemIsDevelopmentAsset(displayName string) bool {
 	return strings.Contains(displayName, "Precast Development") || strings.Contains(displayName, "DevLoadout")
+}
+
+// promotionFlagShipVanity is EYMarketItemPromotionFlags::YMIPF_ShipVanity (5)
+// as a bit (SDK DreadGame.YShop.EYMarketItemPromotionFlags: Featured 0,
+// Spotlight 1, OnSale 2, Recommended 3, Popular 4, ShipVanity 5,
+// CaptainVanity 6, HavocReward 7).
+const promotionFlagShipVanity = 1 << 5
+
+// isShipVanityOffer reports whether a catalog entry is a ship cosmetic
+// (categories 20-24) offered on its own.
+//
+// Such an offer must reference its item: the client sorts offers into the
+// Market's ship cosmetics section and the ship customization screen by their
+// promotion flags, and derives those from the items an offer references
+// (ItemOffer::SetPromotionFlagsFromOfferedItemsCollection, which looks each
+// one up in the item list -- "ItemOffer %s references item %d that was not
+// found in YItemIdList"). Every offer went out with ItemIDs empty and
+// PromotionFlags 0, and both places stayed empty although all 1,217 ship
+// cosmetics were in the catalog (operator 2026-09-30). The offer carries its
+// own id in ItemIDs and the ShipVanity bit directly. Captain cosmetics, whose
+// section works, are left as they were.
+//
+// Not verified live. DN_SHIP_VANITY_OFFER_FIX=0 restores the old shape.
+func isShipVanityOffer(seed gatewayCatalogEntitySeed) bool {
+	if os.Getenv("DN_SHIP_VANITY_OFFER_FIX") == "0" || len(seed.bundleItems) > 0 {
+		return false
+	}
+	c := (seed.itemID >> 24) & 0xff
+	return c >= 20 && c <= 24
+}
+
+// gatewayBundleListing is the virtual currency catalog: the bundle OFFERS.
+//
+// In the original store this catalog held what is bought with GP, bundles
+// among it, and the client still treats it so. The Market manager (0x142a5dd80)
+// does two things with its entities:
+//
+//   - appends them to the SAME list as the item catalogs' entities, indexes
+//     each by "id", and converts it into an offer (0x142a5b960; a "bundle"
+//     entity_type goes to the bundle converter 0x142a7ccc0) -- so each entry
+//     must be a complete offer: id, prices, PromotionFlagSet, ...;
+//   - collects their "entity_id"s (0x142a60370) as the list of bundles to
+//     keep: the catalog parser (0x142a34700) stores a /bundles entry's
+//     details only if its "external_id" is one of them, and drops the rest.
+//
+// The bundles used to be in the item catalog with this catalog empty: no
+// bundle was ever kept and the Bundles section stayed empty. A first fix sent
+// bare {entity_id} entries here; the client logged "Entity is missing id field
+// id", "Field prices was not found" for each, then crashed reading 0x8
+// (operator, 2026-10-01). So the entries are the full offers, with entity_id
+// set to the bundle's external_id so the two halves match.
+func gatewayBundleListing(playerDataReady bool) []any {
+	out := []any{}
+	for _, seed := range marketBundleCatalogSeeds() {
+		entity := gatewayMarketEntity(seed, playerDataReady)
+		entity["entity_id"] = seed.externalID
+		out = append(out, entity)
+	}
+	return out
 }

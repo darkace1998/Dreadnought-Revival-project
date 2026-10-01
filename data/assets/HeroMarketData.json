@@ -1,0 +1,1336 @@
+{
+ "heroes": {
+  "67043329": {
+   "description": {
+    "de": "Dies ist das Flaggschiff von Crom Gallant, dem ehemaligen Chef des Forschung- und Entwicklung-Sektor von Akula Inustries.",
+    "en": "This is the flagship of Crom Gallant, erstwhile head of R&D at Akula Industries.",
+    "es": "Este es el buque insignia de Crom Gallant, antiguo responsable de I+D de Akula Industries.",
+    "fr": "C'est le vaisseau amiral de Crom Gallant, ancien directeur de R&D chez Akula Vektor.",
+    "pl": "To okręt flagowy Croma Gallanta, dawnego naczelnika Wydziału Badań i Rozwoju w Akula Industries.",
+    "ru": "Это флагман Крома Галланта, бывшего руководителя отдела исследований и разработок в «Акуле Индастриз».",
+    "zh-cn": "这是前阿库拉工厂研发总监克罗姆·加兰特的旗舰。"
+   },
+   "image": "UI_AssaultH_Huscarl.png",
+   "name": {
+    "de": "Huscarl – Vintage",
+    "en": "Huscarl - Vintage",
+    "es": "Huscarl - Clásico",
+    "fr": "Huscarl (rétro)",
+    "pl": "Klasyczny Huskarl",
+    "ru": "Хускарл — винтаж",
+    "zh-cn": "赫斯加尔 - 复古"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043330": {
+   "image": "UI_AssaultM_Troy.png",
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043331": {
+   "description": {
+    "de": "Die Trident ist das Flaggschiff von Captain Melville Blanco, der im Großen Sonnenkrieg für die PKF kämpfte. Nach der Schlacht am Deimos wurde er nie wiedergesehen. Er war damals bekannt für seine obsessive Jagd nach dem weißen Transhuman-Dreadnought, der seine ganze Flotte ausgelöscht hatte.",
+    "en": "The Trident is the flagship of Captain Melville Blanco, who fought for the PCF during the Great Solar War. He went AWOL after the battle of Deimos, becoming notorious for his obsessive hunt for the pale transhuman dreadnought which had decimated his fleet in the battle.",
+    "es": "El Trident es el buque insignia del capitán Melville Blanco, que luchó por la FPC durante la Gran Guerra Solar. Desertó después de la batalla de Deimos, haciéndose notorio por su búsqueda obsesiva por el pálido Dreadnought transhumano que había diezmado a su flota en la batalla.",
+    "fr": "Le Trident est le vaisseau amiral du capitaine Melville Blanco, qui combattit pour la FPC durant la Grande guerre solaire. Il fut déclaré disparu au combat après la bataille de Deimos. Il était célèbre pour sa quête obsessive du Dreadnought transhumain pâle qui avait décimé sa flotte au combat.",
+    "pl": "„Trójząb” jest flagowcem kapitana Melville’a Blanco, który walczył w szeregach FWK podczas wielkiej wojny solarnej. Po bitwie o Dejmosa Blanco odleciał wbrew rozkazom i zasłynął z obsesyjnego polowania na białego drednota syntetyków, który zdziesiątkował jego flotę podczas bitwy.",
+    "ru": "«Трезубец» — флагман капитана Мелвилла Бланко, который сражался за ПКФ в ходе Великой Солнечной войны. После битвы за Деймос он ушел в самоволку и обрел дурную славу за навязчивую погоню за исчезающим дредноутом транслюдей, который уничтожил его флот в бою.",
+    "zh-cn": "三叉戟是梅尔维尔·布兰科舰长的旗舰，在太阳系大战期间为泛殖民地舰队效力。他在火卫二之战后擅自离开，由于沉迷于猎杀在战役中摧毁了他的舰队的超人类无畏舰而臭名昭著。"
+   },
+   "image": "UI_DreadnoughtH_Trident.png",
+   "name": {
+    "de": "Trident – Vintage",
+    "en": "Trident - Vintage",
+    "es": "Trident - Clásico",
+    "fr": "Trident (rétro)",
+    "pl": "Klasyczny „Trójząb”",
+    "ru": "Трезубец — винтаж",
+    "zh-cn": "三叉戟 - 复古"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043332": {
+   "description": {
+    "de": "Die Morningstar ist Bix’ legendäres Schlachtschiff, das er durch die Wirren des Großen Sonnenkrieges steuerte und mit dem er zahlreiche bedeutende Schlachten für die PKF gewann.",
+    "en": "The Morningstar is Bix's legendary battleship, which he captained during the Great Solar War, winning many major battles for the PCF.",
+    "es": "El Morningstar es el legendario acorazado de Bix, que capitaneó durante la Gran Guerra Solar, ganando muchas batallas importantes para la FPC.",
+    "fr": "Le Morningstar est le vaisseau de combat légendaire de Bix, aux commandes duquel il a remporté de nombreuses batailles pour la FPC durant la Grande guerre solaire.",
+    "pl": "„Gwiazda Zaranna” to legendarny okręt wojenny Bixa, którym dowodził podczas wielkiej wojny solarnej, wielokrotnie przechylając szale zwycięstwa na rzecz Floty Wszechkolonialnej.",
+    "ru": "«Утренняя звезда» — легендарный линкор Бикса. Он был его капитаном во время Великой Солнечной войны и принес ПКФ победы во многих крупных сражениях.",
+    "zh-cn": "启明星号是比克斯的传奇战舰：他在伟大的太阳系战争中担任启明星号舰长，为泛殖民地舰队赢得了许多重大战役。"
+   },
+   "image": "UI_DreadnoughtM_Morningstar.png",
+   "name": {
+    "de": "Morningstar – Vintage",
+    "en": "Morningstar - Vintage",
+    "es": "Morningstar - Clásico",
+    "fr": "Morningstar (rétro)",
+    "pl": "Klasyczna „Gwiazda zaranna”",
+    "ru": "Утренняя звезда — винтаж",
+    "zh-cn": "启明星 - 复古"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043333": {
+   "description": {
+    "de": "Diese modifizierte Version eines Zmeys von Akula war Bix’ erstes Schiff, als er Captain in der Pankolonialen Flotte im Großen Sonnenkrieg war.",
+    "en": "This customized Akula Zmey was Bix's first ship when he was a Captain in the Pan Colonial Fleet during the Great Solar War.",
+    "es": "Este Zmey personalizado en Akula fue la primera nave de Bix cuando fue capitán en la Flota Pan Colonial durante la Gran Guerra Solar.",
+    "fr": "Ce Zmey d'Akula customisé fut le premier vaisseau de Bix lorsqu'il était encore capitaine de la Flotte pan-coloniale pendant la Grande guerre solaire.",
+    "pl": "Ten zmodyfikowany okręt klasy „Żmij” produkcji Akula Vektor był pierwszą jednostką Bixa, kiedy ten walczył dla Wspólnoty Wszechkolonialnej podczas wielkiej wojny solarnej.",
+    "ru": "Доработанный «Акулой» вариант «Змея» стал первым кораблем Бикса, когда тот служил капитаном в Панколониальном флоте во время Великой Солнечной войны.",
+    "zh-cn": "这艘定制的阿库拉紫魅号是太阳系大战时，比克斯在泛殖民地舰队当舰长时拥有的第一艘战舰。"
+   },
+   "image": "UI_DreadnoughtM_T5.png",
+   "name": {
+    "de": "Ravenswood",
+    "en": "Ravenswood",
+    "es": "Ravenswood",
+    "fr": "Ravenswood",
+    "pl": "Kruczy Las",
+    "ru": "Рейвенсвуд",
+    "zh-cn": "雷文斯伍德"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043334": {
+   "description": {
+    "de": "Die stark modifizierte „Aquila“ wurde berühmt als das Flaggschiff von Captain Blood Eagle, dem Anführer eines berüchtigten Todesschwadrons der Pankolonialen Flotte im Großen Sonnenkrieg.",
+    "en": "The highly-modded “Aquila” became infamous as the capital ship of Captain Blood Eagle, leader of a notorious Pan Colonial Fleet death-squad fleet in the Great Solar War.",
+    "es": "El modificado \"Aquila\" se volvió infame como la nave insignia del capitán Sangre de Águila, líder de un escuadrón letal de la Flota Pan Colonial en la Gran Guerra Solar.",
+    "fr": "\"L'Aquila\" est le vaisseau amiral du capitaine Aiglemort, chef de la fameuse escouade d'extermination de la Flotte pan-coloniale pendant la Grande guerre solaire.",
+    "pl": "Silnie zmodyfikowany okręt „Orzeł” zyskał sławę jako okręt flagowy niesławnego Krwawego Orła, dowódcy znienawidzonego szwadronu śmierci Floty Wszechkolonialnej z czasów wielkiej wojny solarnej.",
+    "ru": "Основательно переработанный корабль «Аквила» обрел дурную славу главного корабля капитана Кровавого Орла, лидера пресловутого эскадрона смерти Панколониального флота во время Великой Солнечной войны.",
+    "zh-cn": "血鹰舰长是太阳系大战中一支臭名昭著的泛殖民联盟舰队 - 死亡小队舰队的首领，他的领舰阿奎拉也因他而声名狼藉。"
+   },
+   "image": "UI_ScoutL_T4.png",
+   "name": {
+    "de": "Aquila",
+    "en": "Aquila",
+    "es": "Aquila",
+    "fr": "Aquila",
+    "pl": "Orzeł",
+    "ru": "Аквила",
+    "zh-cn": "天鹰号"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043335": {
+   "description": {
+    "de": "Auch bekannt als das „Schwarze Phantom“, versetzt diese extrem gut getarnte Korvette all jene in Angst und Schrecken, die sich in die ungesicherten Gebiete wagen müssen.",
+    "en": "Also known as the Black Phantom, this ultra-stealthy Corvette is feared by all who enter unpatrolled space.",
+    "es": "También conocida como el Fantasma Negro, esta furtiva corbeta es temida por todos los que entran en un espacio sin vigilancia.",
+    "fr": "Aussi connue sous le nom de Fantôme Noir, cette Corvette ultra discrète est crainte par tous ceux qui pénètrent dans un espace non surveillé.",
+    "pl": "Ta wyjątkowo dobrze zamaskowana korweta, znana również jako „Czarne Widmo”, jest postrachem wszystkich, którzy pojawią się w niepatrolowanej przestrzeni.",
+    "ru": "Этот сверхскрытный корвет по прозвищу «Черный призрак» наводит страх на всех, кто входит в непатрулируемое пространство.",
+    "zh-cn": "这艘隐身能力顶级的护卫舰又被称为黑色魅影，所有驶入无人巡视空间的船舰都会对它畏惧三分。"
+   },
+   "image": "UI_ScoutM_Outis.png",
+   "name": {
+    "de": "Outis – Vintage",
+    "en": "Outis - Vintage",
+    "es": "Outis - Clásico",
+    "fr": "Outis (rétro)",
+    "pl": "Klasyczny Outis",
+    "ru": "Отис — винтаж",
+    "zh-cn": "乌提斯 - 复古"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043336": {
+   "description": {
+    "de": "Ursprünglich war die „Eminent“ ein legendäres Schlachtschiff der Pankolonialen Flotte, das bekannt war für seine massiven Langstreckenbombardements. Nachdem das Schiff gegen Ende des Sonnenkrieges vom meuternden PKF-Captain Argyle Grim übernommen worden war, taufte er es in „Kore“ um. Der neue Name des Schiffes war der Name seines Heimatmondes, den er nie wiedersehen würde, dessen war er sich sicher. Die „Kore“ war die Vorhut für einen Konvoi von Meuterern und erkämpfte sich einen glorreichen Platz in den Geschichtsbüchern, indem sie mehrere PKF-Flotten mit Leichtigkeit ausradierte und so den Weg zum zukünftigen Standort von Sinley Bay sicherte.",
+    "en": "Originally a Pan Colonial Fleet battleship named “Eminent”, this legendary long-range ship was renamed the “Kore” at the end of the Solar War when it was captured by the mutinous ex-PCF Captain Argyle Grim and his crew. He renamed it after his home moon, which he knew he would never see again. The \"Kore\" was the vanguard for a mutineers' convoy, assuring its place in history by eliminating multiple PCF fleets and securing the path to the future location of Sinley Bay.",
+    "es": "Originalmente un buque de guerra de la Flota Pan Colonial, llamado el “Eminent”, este legendario buque de largo alcance fue renombrado el \"Kore\" al final de la Guerra Solar cuando fue capturado por el amotinado ex-capitán de la FPC Argyle Grim y su tripulación. Le puso el nombre de su luna natal, porque sabía que nunca la vería otra vez. El \"Kore\" fue la vanguardia de un convoy de los amotinados, asegurando su lugar en la historia por eliminar a las flotas múltiples de la FPC y asegurando el camino a la localización futura de la Bahía de Sinley.",
+    "fr": "À l'origine un vaisseau de la Flotte pan-coloniale nommé \"Eminent\", le vaisseau au long cours légendaire a été renommé \"Kore\" à la fin de la Guerre solaire, lorsqu'il fut capturé par le capitaine mutin Argyle Grim et son ancien équipage de la FPC. Il lui donna le nom de sa lune natale, car il savait qu'il ne la reverrait jamais. Le \"Kore\" était à l'avant-garde d'un convoi de mutins et entra dans l'histoire en éliminant de multiples flottes de la FPC et en sécurisant la voie vers le futur emplacement de Sinley Bay.",
+    "pl": "Ten legendarny okręt dalekosiężny służył niegdyś jako pancernik we Flocie Wszechkolonialnej pod nazwą „Nadzwyczajny”, ale pod koniec wojny solarnej wpadł w ręce zbuntowanego kapitana FWK Argyle’a Grima, który przemianował go na „Kora”. Kapitan nazwał go tak na cześć księżyca ze swojego świata macierzystego, którego już nigdy miał nie ujrzeć. „Kora” stanowiła awangardę konwoju buntowników i wsławiła się wyeliminowaniem wielu zgrupowań FWK oraz przetarciem szlaku do miejsca, w którym później powstało Sinley Bay.",
+    "ru": "Первоначально этот корабль принадлежал Панколониальному флоту и носил имя «Именитый», однако в конце Солнечной войны его захватила команда мятежного экс-капитана ПКФ Аргила Грима и дала ему новое имя: «Ядро» — в честь луны, откуда прибыла команда и куда, очевидно, не могла больше вернуться. «Ядро» был в авангарде конвоя мятежников и занял свое место в истории, уничтожив несколько эскадр ПКФ, что позволило открыть путь к будущему местоположению Синли-Бея.",
+    "zh-cn": "这艘传奇的远距离战舰前身是泛殖民舰队战列舰“艾米那特”，在太阳战争结束时被叛变的前泛殖民地舰长阿咖尔·格瑞姆和他的船员捕获，重新命名为科尔号。他以家乡的月亮为战舰命名，因为他知道再也没有机会见到家乡的月亮了。科尔号是叛军护航舰队的先锋，因为消灭多支泛殖民地舰队，扫清了通往未来的心裂湾的航道，确保了自身的历史地位。"
+   },
+   "image": "UI_SniperH_Kore.png",
+   "name": {
+    "de": "Kore",
+    "en": "Kore",
+    "es": "Kore",
+    "fr": "Kore",
+    "pl": "Kora",
+    "ru": "Ядро",
+    "zh-cn": "科尔"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043337": {
+   "description": {
+    "de": "Die Silesia ist das Flaggschiff eines abtrünnigen Sinley Bay-Captains, dessen Identität unklar bleibt, aber dennoch den Ruf einer furchterregenden, zerstörerischen Kraft erlangt hat.",
+    "en": "The Silesia is the flagship of a rogue Sinley Bay captain, whose identity remains hazy, but has gained a reputation as a fearsome destructive force.",
+    "es": "La Silesia es el buque insignia de un capitán canalla de la Bahía de Sinley, cuya identidad sigue siendo un misterio, pero se decía que tenía una fuerza destructiva temible.",
+    "fr": "Le Silesia est le vaisseau amiral d'un capitaine rebelle de Sinley Bay dont l'identité reste floue, mais qui a la réputation d'être incroyablement destructeur.",
+    "pl": "„Silesia” to okręt flagowy zbuntowanego kapitana z Sinley Bay, którego tożsamość owiana jest tajemnicą, ale który zyskał sobie reputację straszliwego i niszczycielskiego wroga.",
+    "ru": "«Силезия» — флагман загадочного капитана-дезертира с Синли-Бея, завоевавшего репутацию опасного противника.",
+    "zh-cn": "西里西亚是一位心裂湾叛变舰长的旗舰，这位舰长究竟是何方神圣至今不明，但他毁灭性的力量却无人不知。"
+   },
+   "image": "UI_SniperL_Silesia.png",
+   "name": {
+    "de": "Silesia – Vintage",
+    "en": "Silesia - Vintage",
+    "es": "Silesia - Clásico",
+    "fr": "Silesia (rétro)",
+    "pl": "Klasyczna Silesia",
+    "ru": "Силезия — винтаж",
+    "zh-cn": "西里西亚 - 复古"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043338": {
+   "description": {
+    "de": "Die „Junkyard Prince“ ist ein legendärer Artilleriekreuzer, der aus Schiffsschrott des Scum Belts gebaut wurde – ein gängiges Vorgehen der Scavenger-Fraktion bekannt als Rapparees. Befehligt von einer Deserteurin der Streitkräfte der Erdföderation, Admiral Marina Basura, war es das erste Schiff zur Stelle, als die Wilde Horde im Jahr 2440 ihren Angriff auf das Navigationssystem des Scum Belts begann. Wie alle Rapparees-Schiffe war Basuras Schiff dabei als treibender Weltraumschrott getarnt. Das verschaffte ihr in der Schlacht den Vorteil, unerkannt aus der Distanz angreifen zu können. Die „Junkyard Prince“ hatte die Hälfte der ersten Welle ausgeschaltet, bevor die Wilden Horde überhaupt wusste, was sie getroffen hatte. Zu diesem Zeitpunkt hatte Basuras Notruf bereits eine Schiffsflotte vor Ort gerufen, die den Rest der ersten Welle zerstörte.",
+    "en": "The Junkyard Prince is a legendary Artillery Cruiser built using battle debris scavenged throughout the Scum Belt, a practice common in the scavenger faction known as Rapparees. Captained by a deserter from the Federal Earth Navy, Admiral Marina Basura, it was the first ship on the scene when Dead Horde launched their attack on the Scum Belt's Navigation System in 2440 CE. Basura's ship, like all Rapparee ships, was camouflaged as floating debris. This gave her the edge in the battle by allowing her attack undetected from a distance. The \"Junkyard Prince\" had taken out to take out half of the first wave before the Dead Horde knew what had hit it and by this time Brasura's Mayday had attracted a fleet of local ship that eliminated the first wave.",
+    "es": "El Junkyard Prince es un crucero de artillería legendario construido de los escombros del cinturón de escoria, una práctica común entre los Rapparees, una facción de carroñeros. Bajo el mando de una desertora de la Flota Federal de la Tierra, la almirante Marina Basura, fue la primera nave en escena cuando la Horda Muerta atacó al sistema de navegación del cinturón de escoria en 2440. La nave de Basura, como todas las de los Rapparee, se camuflaba entre la chatarra espacial. Gracias a eso adquirió ventaja en la batalla, pudiendo atacar a distancia sin ser detectada. El \"Junkyard Prince\" logró acabar con la mitad de la primera oleada antes de que la Horda Muerta lo encontrara. Para entonces, la señal de peligro de Basura había atraído a una flota local que eliminó al resto de la oleada.",
+    "fr": "Le Junkyard Prince est un Croiseur d'artillerie légendaire bâti à l'aide des débris récupérés dans la Ceinture des rebuts, une pratique habituelle chez les récupérateurs Rapparees. Piloté par un déserteur de la Marine Fédérale Terrestre, l'amiral Marina Basura, ce fut le premier vaisseau sur place lorsque la Horde du Trépas lança son attaque contre le système de navigation de la Ceinture des rebuts en 2440 EC. Le vaisseau de Basura, comme tous les appareils Rapparees, était camouflé dans les débris flottants. Cela lui donna l'avantage au combat en lui permettant d'attaquer à distance sans être repéré. Le Junkyard Prince réussit à éliminer la moitié de la première vague avant que la Horde du Trépas comprenne ce qui lui arrivait. C'est à ce moment-là qu'une flotte de vaisseaux locaux, attirés par le signal de détresse de Basura, arriva pour éliminer le reste.",
+    "pl": "Książę Złomowiska to legendarny krążownik artyleryjski zbudowany ze szczątków bitewnych zebranych po całym Pasie Łotrów, co było powszechną praktyką frakcji zbieraczy zwanych Zbójcerzami. Dowodzony przez dezerterkę z marynarki Federacji Ziemskiej, admirał Marinę Basurę, okręt był pierwszy na miejscu, gdy Martwa Horda przypuściła atak na system nawigacyjny Pasa Łotrów w 2440 roku. Okręt Basury, jak wszystkie okręty Zbójcerzy, udawał kupę latających śmieci. To zapewniło jej przewagę w bitwie, bo pozwoliło zaatakować z dystansu bez niebezpieczeństwa wykrycia. „Książę Złomowiska” zdołał wyłączyć z bitwy połowę pierwszej fali ataku, zanim Martwa Horda zorientowała się, skąd jest ostrzeliwana. Do tego czasu sygnał SOS z okrętu Basury sprowadził sporo jednostek z okolicy, które ostatecznie wyeliminowały wroga.",
+    "ru": "«Принц мусорщик» — легендарный артиллерийский крейсер, построенный с использованием обломков кораблей, оставшихся после боев в Поясе отбросов, — так обычно действует группировка мусорщиков, известная как «Разбойники». Капитаном корабля была дезертировавшая из флота Земной Федерации адмирал Марина Басура. Когда Мертвая орда начала атаку на навигационную систему Пояса отбросов в 2440 г., первым бой принял именно «Принц мусорщик». Корабль Басура, как и все корабли «Разбойников», был замаскирован в виде свободно плавающих обломков. Это позволило получить преимущество в битве и незаметно провести атаку незаметно. Прежде чем Мертвая орда разобралась, что к чему, «Принц мусорщик» уничтожил половину первой волны. К этому времени сигнал бедствия Брасура привлек эскадрилью местных кораблей, которые добили первую волну.",
+    "zh-cn": "废品场王子是传说级炮击巡洋舰，使用浮渣行星带的战场残骸建造而成。这也是清道夫中爱尔兰海盗常用的一种做法。废品场王子由地球联邦舰队叛军玛丽娜·巴士拉上将指挥。纪元2440年，死亡部落进攻浮渣行星带导航系统时，作为登上舞台的第一艘船舰。巴士拉的战舰，像所有爱尔兰海盗战舰一样，伪装成宇宙中漂浮的残骸。她的进攻在远处无法被侦测，这让她在战斗中获得优势。当死亡部落察觉到时，“废品场王子”已经解决了第一波攻势中一半的力量，与此同时巴士拉消灭了剩下的另一半。"
+   },
+   "image": "UI_SniperM_Junker.png",
+   "name": {
+    "de": "Junkyard Prince",
+    "en": "Junkyard Prince",
+    "es": "Junkyard Prince",
+    "fr": "Prince des décharges",
+    "pl": "Książę Złomowiska",
+    "ru": "Принц мусорщик",
+    "zh-cn": "废品场王子"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043339": {
+   "description": {
+    "de": "Die Kali ist das Flaggschiff von Commodore Rajesh, seines Zeichens Sicherheitschef des Akula-Raffineriemondes Phoebe.",
+    "en": "The Kali is the Flagship of Commodore Rajesh, head of security at Akula’s refinery moon Phoebe.",
+    "es": "El Kali es el buque insignia del comodoro Rajesh, jefe de la seguridad de la refinería de Akula en la luna Febe.",
+    "fr": "Le Kali est le vaisseau amiral du commodore Rajesh, chef de la sécurité de la raffinerie lunaire d'Akula sur Phoebe.",
+    "pl": "„Kali” to okręt flagowy komandora Rajesha, szefa ochrony należącego do Akula Vektor księżyca-rafinerii Febe.",
+    "ru": "«Кали» — флагман капитана I ранга Раджиша, начальника службы безопасности перерабатывающего завода «Акулы» на луне Фебе.",
+    "zh-cn": "卡利是舰队准将，同时也是阿库拉的月球精炼基地菲比的安全主管拉杰什的旗舰。"
+   },
+   "image": "UI_SupportH_Kali.png",
+   "name": {
+    "de": "Kali – Vintage",
+    "en": "Kali - Vintage",
+    "es": "Kali - Clásico",
+    "fr": "Kali (rétro)",
+    "pl": "Klasyczna Kali",
+    "ru": "Кали — винтаж",
+    "zh-cn": "卡利 - 复古"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043340": {
+   "description": {
+    "de": "Die „Hactar“ war das Flaggschiff von General Arius Sykora des Wilden Horde-Regiments der Trojanischen Marine. Als pflichteifriger Transhumanhasser steckt General Sykoras Genie hinter dem ersten Angriff auf das Okeaniden-Navigationssystem im Scum Belt. Es heißt, er wurde vom Hass auf die unheimliche Technologie des Systems getrieben, da diese von den Transhumans erschaffen wurde, gegen die seine Vorfahren im Großen Sonnenkrieg gekämpft hatten. Er wurde dafür berühmt, dass er den Angriff der allerersten Flotte im Jahr 2440 anführte. Sykora und seine Wilde Horde konnten „Zeuxo“ ausschalten, eine der Baken in den Vesta-Asteroiden, bevor die lokalen Piratencaptains die Flotte vernichteten. Sykora überlebte, aber blieb verschollen. Es heißt, man könne die „Hactar“ immer noch im Scum Belt finden, angetrieben vom Wunsch des Captains, jeden Rest von Transhuman-Technologie zu zerstören.",
+    "en": "The \"Hactar\" was the Flagship of General Arius Sykora of the Dead Horde regiment of the Trojan Navy. A zealous anti-Transhumanist, General Sykora is credited with masterminding the first assault on the Okeanides navigation system of the Scum Belt. It is said he was motivated by his hatred of the system's uncanny tech, created as it was by the Transhumans his ancestors had fought against in the Great Solar War. He famously led the charge of the very first fleet of in 2440 CE. Sykora and his Dead Horde managed to take out \"Zeuxo\", one of the beacons located at the Vesta asteroid family, before local outlaw captains took out the fleet Sykora survived, but his whereabouts is unknown, but it is said that the \"Hactar\" can still be found prowling the Scum Belt, fueled by its Captain's desire to destroy every remnant of Transhuman technology that still remains in the Belt.",
+    "es": "El \"Hactar\" fue el buque insignia del General Arius Sykora, del regimiento Horda Muerta de la Marina Troyana. El General Sykora, un antitranshumanos radical, fue el causante del primer asalto al sistema de navegación de las Okeanides en el Cinturón de Escoria. Se dice que su motivación es su odio contra la avanzada tecnología del sistema, creada por los transhumanos a los que se enfrentaron sus ancestros en la Gran Guerra Solar. Lideró en persona la carga de la primera flota en 2440. Sykora y su Horda Muerta consiguieron tomar \"Zeuxo\", una de las balizas en la familia de asteroides de Vesta. Unos capitanes proscritos destruyeron la flota, pero Sykora sobrevivió. Ahora está en paradero desconocido, pero se dice que el \"Hactar\" aún circula en el cinturón de escoria, impulsado por el deseo de su capitán de eliminar toda tecnología transhumana.",
+    "fr": "Le \"Hactar\" était le vaisseau amiral du général Arius Sykora de la Horde du Trépas, un régiment de la Marine troyenne. Anti-transhumaniste convaincu, le général Sykora est à l'origine du premier assaut sur le système de navigation des Océanides de la Ceinture des rebuts. On dit qu'il était motivé par son aversion pour les technologies du système, créées par les transhumains que ses ancêtres avaient combattus lors de la Grande guerre solaire. Il est célèbre pour avoir mené la charge de la toute première flotte en 2440 EC. Sykora et sa Horde du Trépas sont parvenus à détruire \"Zeuxo\", l'une des balises installées sur les astéroïdes de la famille des Vesta, avant que des capitaines rebelles n'éliminent sa flotte. Sykora survécut, mais on a depuis perdu sa trace. On raconte qu'il rôde encore aux commandes du \"Hactar\" dans la Ceinture des rebuts, prêt à détruire le moindre reliquat de technologie transhumaine dans la Ceinture.",
+    "pl": "„Hactar” był flagowcem generała Ariusa Sykory z pułku „Martwa Horda” trojańskiej marynarki wojennej. Generał Sykora był zajadłym antysyntetykiem. Przypisuje się mu opracowanie planów pierwszego szturmu na system nawigacyjny Okeanid w Pasie Łotrów. Podobno motywowała go nienawiść do niezrównanej technologii tego systemu stworzonego przez tych, przeciwko którym walczyli jego przodkowie w wielkiej wojnie solarnej. Zasłynął z dowodzenia ofensywą pierwszej floty w 2440 r. Sykora i jego „Martwa Horda” zdołali zniszczyć „Zeukso”, jeden z sygnalizatorów umieszczonych w grupie asteroid Westy, zanim miejscowi wyjęci spod prawa kapitanowie zlikwidowali jego flotę. Sykora przeżył, ale jego miejsce pobytu pozostaje nieznane. Plotka głosi, że wciąż krąży „Hactarem” po Pasie Łotrów, pchany żądzą doszczętnego zniszczenia wszystkich pozostałości po syntetykach w Pasie Łotrów.",
+    "ru": "«Хактар» служил флагманом возглавлявшему в Троянском флоте полк «Мертвая орда» генералу Арию Сикоре. Именно ему, ярому врагу транслюдей, принадлежит план первого штурма навигационной системы Пояса отбросов «Океаниды». Считается, что генералом двигала ненависть к непонятной ему технологии, будто бы созданной теми самыми транслюдьми, с которыми его предки сражались в ходе Великой Солнечной войны. Он же предводительствовал первой атакой в 2440 г. н. э. «Мертвой орде» Сикоры удалось уничтожить «Зеуксо» — один из буев в семействе астероидов Веста — прежде, чем ее корабли, в свою очередь, были сбиты местными бандитами. Сикора выжил, однако его местонахождение с тех пор неизвестно. Говорят, будто «Хактар» по-прежнему рыщет по Поясу отбросов, а топливом ему служит страстное желание капитана искоренить любые остатки трансчеловеческих технологий.",
+    "zh-cn": "“哈克塔尔”是特洛伊军队死亡猎犬团的阿里乌·斯科拉将军的旗舰。斯科拉将军是一个狂热的反超人类主义者，他策划了对浮渣行星带奥神之海导航系统的第一次进攻行动。据说他对这个系统所使用的神秘技术的憎恨是他这次行动的动机，因为这个技术是由在太阳系大战中与他祖先战斗的超人类所创造的。2440年，他亲自率领了一场著名的舰队冲锋。斯科拉和他的死亡猎犬团设法攻取了“宙克索”，一个位于灶神星的信标，但他的舰队随后便被当地的一群强盗舰长消灭了。斯科拉幸存了下来，但没人知道他去了哪里。传说哈克塔尔号现在依旧飘荡在浮渣行星带中，在它舰长的仇恨的驱动下，消灭着浮渣行星带中所有超人类科技的遗物。"
+   },
+   "image": "UI_SupportL_Hactar.png",
+   "name": {
+    "de": "Hactar",
+    "en": "Hactar",
+    "es": "Hactar",
+    "fr": "Hactar",
+    "pl": "Hactar",
+    "ru": "Хактар",
+    "zh-cn": "哈克塔尔"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043341": {
+   "description": {
+    "de": "This Oberon Tactical Cruiser was Bix's second ship. Named after an ancient Earth trickster god, it has been heavily modified with the help of Bix's former Oberon Engineer friends.",
+    "en": "This House Oberon Tactical Cruiser was Bix's second ship. Named after an ancient Earth trickster god, it has been heavily modified with the help of Bix's former House Oberon Engineer friends.",
+    "es": "Este Crucero Táctico de Casa Oberon fue la segunda nave de Bix. Nombrada en honor a un antiguo dios embaucador terrícola, fue modificado en gran medida con la ayuda de ingenieros amigos de Bix que solían trabajar para Casa Oberon.",
+    "fr": "Ce Croiseur tactique du Oberon fut le deuxième vaisseau de Bix. Il porte le nom d'un ancien dieu trompeur. Il a été lourdement modifié grâce à l'aide de ses amis, anciens ingénieurs du Oberon.",
+    "pl": "Ten krążownik taktyczny Domu Oberon był drugim okrętem w karierze Bixa. Nazwany imieniem boga-oszusta z antycznych wierzeń ziemskich, został znacząco zmodyfikowany dzięki pomocy dawnych przyjaciół Bixa z Domu Oberon.",
+    "ru": "Этот тактический крейсер «Оберона» стал вторым кораблем Бикса. Корабль назвали в честь древнего земного бога хитрости. Судно было серьезно модифицировано при помощи бывших друзей Бикса — инженеров династии Оберон.",
+    "zh-cn": "这艘天卫四家族的战术巡洋舰是比克斯的备用战舰。以古代地球的欺诈者之神的名号命名，受到了比克斯的前天卫四家族工程师朋友们的大幅度改装。"
+   },
+   "image": "UI_SupportM_T4.png",
+   "name": {
+    "de": "Anansi",
+    "en": "Anansi",
+    "es": "Anansi",
+    "fr": "Anansi",
+    "pl": "Anansi",
+    "ru": "Ананси",
+    "zh-cn": "阿南西"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043342": {
+   "description": {
+    "de": "Die Jerina war das Führungsschlachtschiff in einer der unausgeglichensten Schlachten im Großen Solarkrieg, als eine Transhuman-Flotte von fast 120 Schlachtschiffen und 170 kleineren Schiffen von einer PKF -Flotte in der Nähe von Titan ausgemerzt wurde.",
+    "en": "The Jerina was the lead battleship in one of the most uneven battles in the Great Solar War, when a Transhuman fleet of nearly a 120 battleships and 170 smaller vessels was decimated by a PCC fleet near Titan.",
+    "es": "El Jerina fue el acorazado líder en una de las batallas más desiguales de la Gran Guerra Solar, cuando una flota transhumana de casi 120 acorazados y 170 buques más pequeños fue diezmada por una flota de la FPC cerca de Titán.",
+    "fr": "Le Jerina était le principal vaisseau de combat dans une des batailles les plus inégales de la Grande guerre solaire, lorsqu'une flotte transhumaine de près de 120 vaisseaux de combats et 170 navettes a été décimée par une flotte du CPC près de Titan.",
+    "pl": "„Jerina” odegrała główną rolę w jednej z najbardziej jednostronnych bitew wielkiej wojny solarnej, gdy flota syntetyków w sile 120 pancerników i 170 mniejszych jednostek została zdziesiątkowana przez zgrupowanie bojowe WWK w pobliżu Tytana.",
+    "ru": "«Йерина» — главный линкор, участвовавший в одном из самых неравных боев Великой Солнечной войны: флот транслюдей почти в 120 линкоров и 170 менее крупных кораблей был разбит флотом ПКС вблизи Титана.",
+    "zh-cn": "崔娜是太阳系大战中，经历过最残酷战斗的指挥战列舰。当时在泰坦星附近，一只坐拥120艘战列舰，170艘各类小型战舰的超人类舰队被泛殖民地联邦舰队杀得只剩一成战力。"
+   },
+   "name": {
+    "de": "Jerina",
+    "en": "Jerina",
+    "es": "Jerina",
+    "fr": "Jerina",
+    "pl": "Jerina",
+    "ru": "Йерина",
+    "zh-cn": "崔娜"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043343": {
+   "description": {
+    "de": "Die Nordlander wurde von Kommandantin Svetlana Kov kommandiert und konnte den Transhuman in den Gefechten im Asteroidengürtel schwere Verluste zufügen. In mehr als 12 Jahren voller Gefechte kämpften über 1400 Flotten der PKF gegen Flotten der Transhumans, um diese aus dem Asteroidengürtel zu verdrängen. Die PKF verlor in diesen Schlachten haushoch. Kommandantin Kov führte in den letzten Wochen der Gefechte eine Flotte von 42 Schiffen gegen eine Armada von Tausenden Transhuman-Schiffen. Anstatt frontal anzugreifen, befahl Kov ihrer ganzen Flotte, die Energie abzuschalten. So glitten sie durch Schlachtfeldtrümmer, die ihnen zusätzliche Deckung gewährten, hin zum feindlichen Kommandoschiff und starteten einen brutalen, alles entscheidenden Angriff. Dieser hochriskante Schachzug zahlte sich am Ende aus und zwang die Transhuman-Flotten, sich aus dem Asteroidengürtel zurückzuziehen.",
+    "en": "The Nordlander was captained by Commandant Svetlana Kov, inflicting severe losses on the Transhuman fleets during the Asteroid Belt Skirmishes. Lasting for 12 years towards the end of the Great Solar War, a total of 1,400 PCF fleets squared off against Transhuman fleets during these skirmishes, in an attempt to push them out of the Belt. The PCF lost overwhelmingly in the battles, but in the final weeks of the skirmishes, Commandant Kov led a 42-ship fleet against thousands of Transhuman ships. Instead of attacking outright, Kov powered down her entire fleet and drifted towards a main enemy command ship flotilla, using battlefield debris as cover to launch a final vicious assault. This hugely risky move ultimately paid off, forcing the Transhuman fleets out of the Asteroid Belt.",
+    "es": "El Nordlander fue dirigido por la comandante Svetlana Kov y provocó grandes pérdidas a las flotas transhumanas durante las escaramuzas del cinturón de asteroides. Durante 12 años, hacia el final de la Gran Guerra Solar, un total de 1400 flotas de la FPC se enfrentaron a las flotas transhumanas en numerosas escaramuzas, intentando expulsarlas del cinturón. La FPC sufrió bajas incontables pero, en las últimas semanas, la comandante Kov lideró una flota de 42 naves contra la armada transhumana. En lugar de atacar de frente, Kov desconectó los sistemas de sus naves y avanzó a la deriva hacia las naves de mando enemigas, usando los restos de las batallas anteriores como cobertura en un ataque final devastador. Su arriesgada decisión funcionó, obligando a las flotas transhumanas a abandonar el cinturón de asteroides.",
+    "fr": "Le Nordlander était dirigé par le commandant Svetlana Kov, qui a infligé des pertes sévères aux flottes transhumaines lors des escarmouches de la Ceinture d'astéroïdes. Pendant plus de douze ans, vers la fin de la Grande guerre solaire, plus de 1 400 flottes de la FPC ont tenu tête aux flottes transhumaines lors des ces escarmouches et tenté de les repousser au-delà de la Ceinture. La FPC était rarement sortie victorieuse de ces batailles, mais lors des escarmouches des dernières semaines, le commandant Kov a mené une flotte de 42 vaisseaux pour faire face à plusieurs milliers de vaisseaux transhumains. Plutôt que d'attaquer de front, Kov a dissimulé ses vaisseaux, moteurs éteints, dans des débris spatiaux en dérive vers une flottille de vaisseaux de commandement ennemis, et a lancé un assaut final sanglant. Ce coup de poker très risqué a payé et a contraint les flottes transhumaines à quitter la Ceinture d'astéroïdes.",
+    "pl": "Kapitanem „Nordlandera” była komendant Swietłana Kow, która zadała flotom syntetyków poważne straty podczas walk w pasie asteroid. W trwających 12 lat w końcowej fazie wielkiej wojny solarnej starciach łącznie 1400 flot FWK walczyło z flotami syntetyków, aby wyprzeć wroga z Pasa. Walki skończyły się druzgocącą porażką FWK, ale pod sam ich koniec komendant Kow poprowadziła liczącą 42 jednostki flotę przeciwko tysiącom okrętów syntetyków. Zamiast atakować wroga wprost, Kow kazała całej flocie wyłączyć reaktory i dryfować w stronę flotylli okrętu dowodzenia, wykorzystując szczątki zniszczonych statków za osłonę, by na koniec wyprowadzić ostatni zabójczy atak. Niesamowicie ryzykowny manewr ostatecznie się opłacił i zmusił floty syntetyków do opuszczenia pasa asteroid.",
+    "ru": "Капитаном корабля «Северянин» была командир Светлана Ков. Она нанесла большие потери эскадрам транслюдей в ходе столкновений в поясе астероидов, которые длились 12 лет и завершились вместе с Великой Солнечной войной. В сражениях, целью которых было вышвырнуть трансчеловеческие корабли за пределы Пояса, приняли участие в общей сложности 1400 эскадрилий ПКФ. Потери ПКФ были огромны, однако в последние недели столкновений командир Ков возглавила эскадрилью из 42 кораблей — против тысяч трансчеловеческих кораблей. Отказавшись от прямого нападения, Ков отключила двигатели всей эскадрильи и в дрейфе двигалась к основной флотилии командного корабля противника, прикрываясь находившимися на поле боя обломками кораблей. И только подойдя на достаточно расстояние, она начала яростную атаку. Такой чрезвычайно рискованный шаг в итоге окупился, итрансчеловеческий флот был выбит из пояса астероидов.",
+    "zh-cn": "小行星带冲突期间，由指挥官斯维特兰娜·科夫率领的诺德兰德号，给超人类舰队造成了严重损失。太阳系大战结束前的12年里，共有1400支泛殖民地舰队在冲突中与超人类舰队作战，试图将他们赶出行星带。虽然泛殖民地舰队在战斗中失去了压倒性优势，但在战斗的最后几周，指挥官科夫率领一支42艘战舰对抗了数千艘超人类战舰。科夫没有直接进攻，而是关闭了整个舰队的能量，向一支敌军主力指挥舰队移动，利用战场残骸作为掩护进行了突袭。正式这风险巨大的行动，迫使超人类舰队离开了小行星带。"
+   },
+   "image": "UI_AssaultH_Marzanna.png",
+   "name": {
+    "de": "Nordlander",
+    "en": "Nordlander",
+    "es": "Nordlander",
+    "fr": "Nordlander",
+    "pl": "Nordlander",
+    "ru": "Северянин",
+    "zh-cn": "北地人"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043344": {
+   "description": {
+    "de": "Während der Auseinandersetzungen mit den Transhumans im Großen Sonnenkrieg war Captain Cuibono der befehlshabende Offizier der Hasta, die sich an Einsätzen im Saturnsektor beteiligte.",
+    "en": "During the hostilities with the Transhumans during the Great Solar War, Captain Cuibono was the commanding officer of the Hasta, which participated in operations in the Cronian Sector.",
+    "es": "Durante las hostilidades con los transhumanos durante la Gran Guerra Solar, el capitán Cuibono fue el comandante del Hasta, participando en operaciones en el Sector Croniano.",
+    "fr": "Lors des affrontements contre les Transhumains lors de la Grande guerre solaire, le capitaine Cuibono commandait le Hasta, qui était déployé dans le secteur saturnien.",
+    "pl": "Podczas walk z syntetykami w trakcie wielkiej wojny solarnej kapitan Cuibono dowodził „Hastą” biorącą udział w operacjach prowadzonych w układzie Saturna.",
+    "ru": "Во время боевых действий против транслюдей в ходе Великой Солнечной войны старшим офицером «Асты», участвовавшей в операциях в секторе Сатурна, был капитан Квибоно.",
+    "zh-cn": "在太阳系大战期间与超人类的冲突中，崔波诺舰长是哈斯塔的指挥官，其参加了克罗宁区域的作战行动。"
+   },
+   "image": "UI_SniperL_Hasta.png",
+   "name": {
+    "de": "Hasta",
+    "en": "Hasta",
+    "es": "Hasta",
+    "fr": "Hasta",
+    "pl": "Hasta",
+    "ru": "Аста",
+    "zh-cn": "哈斯塔"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043345": {
+   "description": {
+    "de": "Die Samar wurde von Schiffsmeister Dispel Larrup befehligt, der das Schiff in eine der unausgeglichensten Schlachten des Großen Sonnenkrieges führte.",
+    "en": "The Samar, captained by Shiphead Dispel Larrup, was the commanding ship in one of the greatest fleet mismatches of the Great Solar War.",
+    "es": "El Samar, capitaneado por Dispel Larrup, fue la nave de mando en una de las batallas más desequilibradas de la flota de la Gran Guerra Solar.",
+    "fr": "Le Samar, commandé par le commodore Dispel Larrup, fut le vaisseau amiral d'une des plus grosses erreurs de disposition de flotte de toute la Grande guerre solaire.",
+    "pl": "„Samar” pod dowództwem szypra Dispela Larrupa był okrętem dowodzenia w jednym z najmniej wyrównanych starć wielkiej wojny solarnej.",
+    "ru": "«Самар» под управлением кормчего Диспела Ларрупа был флагманом в одном из самых неравных сражений Великой Солнечной войны.",
+    "zh-cn": "由头目迪思拜尔·拉鲁普所指挥的萨玛号是太阳系大战中最强舰队之一的旗舰。"
+   },
+   "image": "UI_AssaultM_T5.png",
+   "name": {
+    "de": "Samar",
+    "en": "Samar",
+    "es": "Samar",
+    "fr": "Samar",
+    "pl": "Samar",
+    "ru": "Самар",
+    "zh-cn": "萨玛"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043346": {
+   "description": {
+    "de": "Der Captain der Zaratan, Jin Ebisu, führte im Jahr 2390 eine Flotte von Rammschiffen in die letzte Kampagne des ersten Atlantisangriffs. Das Schiff ist das beste Beispiel von Oberons Errungenschaften in der Ramm-Technologie während des Krieges. Ursprünglich wurden Rammtaktiken von der PKF eingesetzt, um der Transhuman-Technologie zu schaden, der Kanonen nichts anhaben konnten. Im Verlauf des Krieges entwickelten Jupiter Arms und Akula Vektor jedoch eine Technologie, die dieses Problem überwand, sodass Rammmanöver hinfällig wurden. Doch da die Transhumans gegen Kriegsende immer intelligenter wurden und der Kampf schwerer, setzten verzweifelte Captains erneut auf Rammtaktiken. Dies führte zu Oberons neuer Generation von Ramm-Technologie.",
+    "en": "Captained by Jin Ebisu, the Zaratan lead a fleet of ramming battleships in the final campaign of the First Atlantian Assault in the 2390s. The ship is the finest example of Oberon's achievements in Ram tech during the War. Ramming tactics were originally used by the PCF when they started encountering Transhuman tech made out of materials which made the cannons on their ships obsolete.As the war went on, Jupiter Arms and Akula Vektor developed tech that was effective against Transhuman armor, making ramming maneuvers obsolete. But the Transhumans' intelligence grew exponentially towards the end of the War meant that desperate Captains began to employ ram tactics once again, leading to Oberon's new generation of ram technology.",
+    "es": "Capitaneado por Jin Ebisu, el Zaratan lideró una flota de naves ariete en la campaña final del primer asalto a Atlantis a finales de la década de 2390. La nave es el ejemplo perfecto de la tecnología de arietes de Oberon durante la guerra. Las tácticas de ariete fueron una idea de la FPC cuando encontraron tecnología transhumana hecha con materiales que dejaban obsoletos los cañones de sus naves. Según avanzó la guerra, Jupiter Arms y Akula Vektor desarrollaron armas viables contra la armadura transhumana, con lo que las maniobras de embestida quedaron obsoletas. Pero la inteligencia de los transhumanos aumentó exponencialmente hacia el final de la guerra y los capitanes desesperados, recurrieron una vez más a las embestidas, lo que llevó a la nueva generación de arietes de Oberon.",
+    "fr": "Commandé par Jin Ebisu, le Zaratan a mené au combat des vaisseaux-béliers lors de la dernière offensive du Premier Assaut Atlante, dans les années 2390. Ce vaisseau était doté des meilleures techniques de bélier développées par Oberon. Au début de la guerre, la FPC a été contrainte de faire usage de béliers face aux vaisseaux transhumains dotés de matériaux résistant à tous les calibres. Alors que la guerre poursuivait son cours, Jupiter Arms et Akula Vektor sont parvenus à développer des technologies efficaces contre les blindages transhumains, rendant les manœuvres de bélier trop risquées. Mais alors que le conflit touchait à sa fin, les forces transhumaines ont usé de tactiques de plus en plus créatives. Face à eux, des capitaines aux abois se sont réapproprié la technique du bélier et Oberon a donc proposé des manœuvres innovantes.",
+    "pl": "Zaratan pod dowództwem Jina Ebisu prowadził flotę taranujących okrętów liniowych w ostatniej kampanii pierwszej ofensywy atlantyjskiej w latach 90. XXIV wieku. Jest to najlepszy przykład osiągnięć oberonitów w technologii taranowania z czasu wojny. Taktyki taranowania były pierwotnie stosowane przez FWK, gdy jej jednostki zaczęły spotykać się z technologią syntetyków opartą na materiałach, które powodowały nieskuteczność dział pokładowych. W miarę postępów wojny Jupiter Arms i Akula Vektor opracowały uzbrojenie, która potrafiło przebić pancerze syntetyków, w związku z czym zarzucono manewry taranowania. Jednak pod koniec wojny inteligencja naukowców syntetyków rosła w tempie wykładniczym, co sprawiło, że zdesperowani kapitanowie ponownie uciekli się do taranowania, a to spowodowało powstanie nowej, oberońskiej generacji tej technologii.",
+    "ru": "Под командованием капитана Дзина Эбису «Заратан» возглавлял флот таранных кораблей в последнюю кампанию первого штурма Атлантиды в 2390-х годах. Этот корабль — лучший пример достижений «Оберона» в таранной технологии во время войны. Тактику тарана изначально применял ПКФ, когда столкнулся с техникой транслюдей, сделанной из материалов, которые были не по зубам корабельным пушкам флота. В ходе войны «Юпитер Армс» и «Акула Вектор» разработали технологии, эффективные против брони транслюдей, и таранные маневры устарели. Но ближе к концу войны интеллект транслюдей стал расти в геометрической прогрессии, и отчаянные капитаны снова стали применять тактику тарана. Так возникло новое поколение таранной технологии «Оберона».",
+    "zh-cn": "萨拉坦在金·恩百施的指挥下，于纪元2390年第一次亚特兰蒂斯突击战的最终决战中带领一支撞击战舰舰队。这艘战舰是战争期间天卫四撞击技术的最佳范例。泛殖民地舰队在初次遭遇到由超人类技术的强力材料制作的战舰时，发现他们的大炮变成了摆设，于是想出了撞击战术。随着战事的进展，木星武装和阿库拉·维克托开发出了能有效对抗超人护甲的技术，从此便不再使用撞击策略。但在战争末期，超人的智慧以指数的速度增强，绝望的舰长们再一次开始使用撞击战术，引起了天卫四撞击技术的继续更新。"
+   },
+   "image": "UI_AssaultL_Daggertooth.png",
+   "name": {
+    "de": "Zaratan – Vintage",
+    "en": "Zaratan - Vintage",
+    "es": "Zaratan - Clásico",
+    "fr": "Zaratan (rétro)",
+    "pl": "Klasyczny Zaratan",
+    "ru": "Заратан — винтаж",
+    "zh-cn": "萨拉坦 - 复古"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043352": {
+   "description": {
+    "de": "Die Hanuman wurde 2410 in Auftrag gegeben. Sie spielte in der Endphase des Großen Sonnenkrieges eine große Rolle. Benannt wurde es nach einem berühmten General aus der hinduistischen Mythologie. Es ist bekannt für seine Widerstandskraft, Stärke und unbeugsamen Dienste während des Krieges. Sie war unter Befehl von Admiral Kir Asaph das Führungsschiff der großen PKF-Flotte während der „Operation Themis“ zum Auftakt der langwierigen Atlantisschlacht. Die Operation brach den Rückhalt der Transhumans im Neptunsystem und wendete so das Blatt zugunsten der PKF. Nach Monaten von Gefechten und strategischer Planung wurde „Operation Themis“ beschlossen. Unter der Führung der „Hanuman“ drangen im Jahr 2412 Hunderte von Schiffsflotten in die Atmosphäre von Triton ein, um die Außenposten der Transhumans auszuschalten. Der in der Schlacht oftmals eingesetzte Dreadnought erlitt Schaden an den Schubdüsen und konnte nicht mehr manövrieren. Admiral Asaph wies seinen Chefingenieur an, die Schildenergie in den Antrieb umzuleiten, da er sich auf die superverstärkte Panzerung der Hanuman verließ. Er hatte Erfolg. Die Hanuman flog zurück in eine strategisch wichtige Position und schaltete die letzten 52 gegnerischen Schiffe aus. Darunter auch die „Vainglorious“, eines der stärksten Schlachtschiffe der Transhumans.",
+    "en": "The \"Hanuman\" was commissioned in 2410 CE and played a big part in the late stages of the Great Solar War. Named after a great general from Hindi mythology, it is known for its perseverance, strength and devoted service during the War. Captained by Admiral Kir Asaph, it was the lead ship of the PCF Grand Fleet during \"Operation Themis\" at the start of the long Atlantian Battle, an operation that turned the tide of the War by breaking the Transhuman hold on the Neptunian System. In 2412 CE, after months of skirmishes and strategic planning, \"Operation Themis\" was enacted with the Hanuman leading hundreds of fleets of battle ships into the atmosphere of Triton to take out Transhuman outposts. Heavily engaged during the battle, the Dreadnought suffered damage to its thrusters, rendering it inert. Admiral Asaph ordered his Chief Engineer to sacrifice shields for engine power, relying on the Hanuman's super-reinforced armor. The gambit paid off. The Hanuman maneuvered back into a strategically strong position and went on to take down the last 52 enemy ships including the \"Vainglorious\", a champion battleship of the Transhumans.",
+    "es": "El \"Hanuman\" fue construido en el 2410 y que desempeñó un papel esencial en los comienzos de la Gran Guerra Solar. Recibe su nombre de una gran figura de la mitología hindú, conocido por su perseverancia, su poder y su devoción durante la guerra. Capitaneado por el almirante Kir Asaph, fue la nave insignia de la unidad central de la FPC en la \"Operación Themis\" al principio de la batalla de Atlantis, la batalla que cambió el curso de la guerra y acabó con el dominio transhumano del sistema neptuniano. En el 2412, tras meses de escaramuzas y planificación estratégica, comenzó la \"Operación Themis\", con el Hanuman liderando cientos de flotas naves de guerra a la atmósfera de Tritón para aniquilar los puestos avanzados transhumanos. El Dreadnought sufrió daños en los propulsores durante la brutal batalla que lo inmovilizaron. El almirante Asaph ordenó a su ingeniero jefe que sacrificara los escudos para obtener potencia para los motores, confiando en el grueso blindaje del Hanuman. La apuesta funcionó. El Hanuman se colocó en una posición estratégica desde la que aniquiló las últimas 52 naves enemigas, incluyendo el \"Vainglorious\", una de las mayores naves transhumanas.",
+    "fr": "Le Hanuman entra en service en 2410 EC et joua un grand rôle à la fin de la Grande guerre solaire. Portant le nom d'un grand général de la mythologie hindoue, le vaisseau est réputé pour sa pugnacité, sa force et pour le rôle qu'il a joué dans la guerre. Dirigé par l'amiral Kir Asaph, ce fut le vaisseau principal de la grande flotte de la FPC durant \"l'Opération Themis\", au début de la bataille d'Atlantis, qui renversa le cours de la guerre en brisant l'emprise des transhumains sur le système neptunien. En 2412 EC, après des mois d'escarmouches et de planification stratégique, \"l'Opération Themis\" fut lancée. Le Hanuman mena des centaines de vaisseaux dans l'atmosphère de Triton afin d'anéantir les avant-postes transhumains. Engagé en plein cœur des combats, le Dreadnought subit des dégâts aux propulseurs qui l'immobilisèrent. L'amiral Asaph ordonna à son chef ingénieur de sacrifier ses boucliers en faveur de la puissance moteur, décidant de s'en remettre au blindage super renforcé du Hanuman. Ce fut un pari gagnant. Le Hanuman parvint à manœuvrer vers une position stratégique et élimina les 52 derniers vaisseaux, y compris le \"Vainglorious\", un vaisseau de guerre vedette des transhumains.",
+    "pl": "„Hanuman” wszedł do służby w 2410 r. i odegrał znaczącą rolę w końcowych fazach wielkiej wojny solarnej. Nazwany na cześć wielkiego generała z mitologii hinduskiej okręt słynie z wytrzymałości, siły i wiernej służby podczas wojny. Pod dowództwem admirała Kira Asapha był jednostką flagową Wielkiej Floty FWK podczas „Operacji Temida” na początku długiej bitwy o Atlantydę, która odmieniła losy wojny dzięki przełamaniu dominacji syntetyków w układzie Neptuna. W roku 2412, po wielu miesiącach drobnych potyczek i planowania strategii, rozpoczęto „Operację Temida”, podczas której Hanuman poprowadził niezliczone flotylle okrętów w atmosferę Trytona, aby zniszczyć posterunki syntetyków. Jako że bardzo angażował się w walki, drednot odniósł poważnie uszkodzenia, a zniszczone silniki manewrowe sprawiły, że całkowicie stracił sterowność. Admirał Asaph rozkazał starszemu mechanikowi poświęcić osłony, aby zyskać ciąg w silnikach, zdając się tym samym całkowicie na wyjątkowo mocny pancerz okrętu. Ten gambit się opłacił. Hanuman zdołał wycofać się na dogodną pozycję i kontynuował walkę. Do końca bitwy zestrzelił pozostałe 52 okręty wroga, w tym „Chełpliwego”, główny pancernik syntetyków.",
+    "ru": "«Хануман» был введен в эксплуатацию в 2410 г. и сыграл большую роль на поздних этапах Великой Солнечной войны. Корабль назвали в честь великого генерала из мифологии хинди. Во время войны экипаж зарекомендовал себя как стойкие, сильные и преданные солдаты. Капитаном корабля стал адмирал Кир Асаф. Судно было ведущим кораблем Великого флота ПКФ во время операции «Фемида» в начале долгой битвы за Атлантиду — эта операция переломила ход войны, ослабив позиции транслюдей в системе Нептуна. В 2412 г. после нескольких месяцев столкновений и стратегического планирования в рамках операции «Фемида» сотни боевых кораблей флота под началом «Ханумана» вошли в атмосферу Тритона с целью захватить аванпосты транслюдей. Получив в бою тяжелые повреждения двигателей, дредноут потерял способность двигаться. Адмирал Асаф решил положиться на сверхмощную броню \"Ханумана\" и приказал главному инженеру пожертвовать щитами и подать энергию на двигатели. И эта жертва окупилась. «Хануман» вернулся в стратегически сильное положение и расправился с 52 кораблями противника, в числе которых — «Зловещий», первоклассный линкор транслюдей.",
+    "zh-cn": "“哈努曼”服役于纪元2410年，在太阳系大战后期发挥了巨大作用。它以印度神话中一位伟大将军的名字命名，以其在战争期间的毅力、力量和奉献精神而闻名。“哈努曼”由基尔·阿萨帕上将率领，在漫长的亚特兰蒂斯战役初期，它是泛殖民地大舰队在“忒弥斯行动”中的主舰，这一行动打破了超人类对海王星系统的控制，扭转了战争的形势。纪元2412年，历经几个月的小规模战斗和战略规划后，“忒弥斯行动”开始实施，哈努曼率领数百舰队进入了特里同大气层，摧毁了超人类前哨站。无畏舰在战斗中投入大量兵力，导致推进器遭受破坏，使它变得迟钝。阿萨帕上将命令他的总工程师牺牲盾牌以换取引擎动力，失去护盾的哈努曼，只能依靠它的超级强化装甲。这种策略生效了。哈努曼设法回到战略优势位置，并继续击败剩余的52艘敌舰，其中包括超人类的冠军战列舰 - “虚荣”号。"
+   },
+   "image": "UI_DreadnoughtL_MadKing.png",
+   "name": {
+    "de": "Hanuman",
+    "en": "Hanuman",
+    "es": "Hanuman",
+    "fr": "Hanuman",
+    "pl": "Hanuman",
+    "ru": "Хануман",
+    "zh-cn": "哈努曼"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043355": {
+   "description": {
+    "de": "Die PKF Morningstar ist Bix’ legendäres Schlachtschiff und verfügt noch über die Originalkonfiguration der PKF. Er steuerte sie durch die Wirren des Großen Sonnenkrieges und gewann mit ihr zahlreiche bedeutende Schlachten für die PKF.",
+    "en": "The PCF Morningstar is Bix's legendary battleship and comes with the original configuration of the PCF. He captained her during the Great Solar War, winning many major battles for the PCF.",
+    "es": "El FPC Morningstar es el legendario acorazado de Bix y viene con la configuración original de la FPC. La capitaneó durante la Gran Guerra Solar, ganando batallas importantes para la FPC.",
+    "fr": "Le Morningstar est le légendaire vaisseau de combat de Bix, dans sa configuration originelle. Bix a remporté de nombreuses victoires avec ce vaisseau au nom de la FPC lors de la Grande guerre solaire.",
+    "pl": "„Gwiazda Zaranna” to legendarny okręt Bixa. Dostarczany w oryginalnej konfiguracji Floty Wszechkolonialnej. Dowodził nią podczas wielkiej wojny solarnej, odnosząc wiele zwycięstw dla FWK.",
+    "ru": "«ПКФ Утренняя звезда»  — легендарный линкор Бикса, поставляется с исходной конфигурацией ПКФ. Бикс был капитаном корабля во время Великой Солнечной войны и принес ПКФ победы во многих крупных сражениях.",
+    "zh-cn": "泛殖民地舰队启明星号是比克斯的传奇战舰，带有泛殖民地舰队的原装配置。他在太阳系大战中指挥她击败了无数敌人，为泛殖民地舰队赢得各种重大战役的胜利。"
+   },
+   "image": "UI_DreadnoughtM_Morningstar_New.png",
+   "name": {
+    "de": "Alte Morningstar",
+    "en": "Old Morningstar",
+    "es": "Morningstar - Antiguo",
+    "fr": "Ancien Morningstar",
+    "pl": "Stara „Gwiazda Zaranna”",
+    "ru": "Старая утренняя звезда",
+    "zh-cn": "旧启明星"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043356": {
+   "description": {
+    "de": "Die PKF Silesia kommt mit dem original-Lack und der original-Waffensystemkonfiguartion, die von Oberon auf Wunsch der PKF während des Großen Sonnenkrieges kreiert wurde.",
+    "en": "The PCF Silesia comes with the original coating and weapon system configuration built by House Oberon on behalf of the PCF during the Great Solar War.",
+    "es": "El FPC Silesia viene con el recubrimiento y la configuración original del sistema de armas construido por Casa Oberon en nombre de la FPC durante la Gran Guerra Solar.",
+    "fr": "Le Silesia, dans sa configuration FPC, est doté de son armement et de sa peinture d'origine. La FPC avait commandé le vaisseau auprès d'Oberon dans le cadre de la Grande guerre solaire.",
+    "pl": "Oryginalne poszycie i konfiguracja uzbrojenia FWK „Silesia” zostały zaprojektowane przez Dom Oberon na zlecenie FWK podczas wielkiej wojny solarnej.",
+    "ru": "«ПКФ Силезия» поставляется с исходными покрытием и конфигурацией орудийной системы, построенными династией Оберон от имени ПКФ во время Великой Солнечной войны.",
+    "zh-cn": "泛殖民地舰队西里西亚带有原始的涂装和武器系统配置，由天卫四家族在太阳系大战期间代表泛殖民地舰队建造。"
+   },
+   "image": "UI_SniperL_Silesia_New.png",
+   "name": {
+    "de": "PKF Silesia – Vintage",
+    "en": "PCF Silesia - Vintage",
+    "es": "FPC Silesia - Clásico",
+    "fr": "Silesia FPC (rétro)",
+    "pl": "Klasyczna Silesia FWK",
+    "ru": "ПКФ Силезия — винтаж",
+    "zh-cn": "泛殖民地舰西里西亚 - 复古"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043359": {
+   "description": {
+    "de": "Die ursprüngliche Akkoro, auch bekannt unter der Testbezeichnung THRK-T3 (Transhuman-Reparaturkreuzer, Typ 3), wurde 2358 von der PKF-Bergungseinheit ARIES-17 entdeckt, als sie nach einem Gefecht im Jupitersystem routinemäßig nach Überlebenden suchte. Die Überreste der Akkoro befanden sich inmitten der Überreste eines Schlachtfeld im Orbit um Callisto und wurden nach Qetesh geschleppt, einem PKF-Außenposten auf einem nahegelegenen Mond. Unter der Führung von Chefingenieur Tomasz Ryuu, einem enthusiastischen Transhuman-Technologieexperten, ging die Mannschaft der ARIES-17 an Bord des scheinbar aufgegebenen Transhuman-Schiffs. Sechs Tage später schnitten die Transhumans den Qetesh-Außenposten von jeglicher Kommunikation ab und belagerten ihn pausenlos. Ohne die Möglichkeit, Hilfe von Außen anzufordern, wendete sich die verzweifelte Bevölkerung von Qetesh an Ryuu und die Akkoro, um sie gegen die übermächtige Flotte der Transhumans zu verteidigen. Der Überfall eskalierte rasch und gerade, als alle Hoffnung verloren schien, gelang es Ryuu, auf den Hauptcomputer der Akkoro zuzugreifen und das Transhuman-Schiff unter seine Kontrolle zu bringen. Kurz bevor die Verteidigungslinien brachen, tauchte die Akkoro auf dem Schlachtfeld auf, lud die überlasteten Schilde der PKF-Flotte auf und schwächte die Biopanzerung der Transhumans. Nach zehn Tagen unerbittlicher Gefechte fiel Qetesh schließlich an die Transhumans. Einige glückliche PKF-Angehörige schafften es allerdings, dank der von Ryuu rückentwickelten Akkoro zu entkommen. Die PKF versuchte, die Akkoro von Ryuu zu konfiszieren, da sie angeblich ein trojanisches Pferd der Transhumans sei, das die Belagerung von Qetesh ermöglicht hatte. Doch Ryuu hat sich im Laufe der Zeit regelrecht in das Schiff verliebt. Vor die Wahl gestellt, ins Exil zu gehen oder die Akkoro zu verlieren, entschied er sich für das Exil und wurde 2359 als vermisst gemeldet. Am Ende fand er aber in Sinley Bay Zuflucht.",
+    "en": "The original Akkoro, also known as test subject THRV-T3 (Transhuman Repair Vessel - Type 3), was discovered in 2358 CE by PCF recovery unit \"ARIES-17\" during a routine search for survivors after a skirmish in the Jovian Sector. The remains of the Akkoro were located at the site of a massacre in the orbit of Callisto and taken to Qetesh, a PCF outpost on the nearby moon. Under the direction of chief engineer Tomasz Ryuu, a gifted Transhuman tech enthusiast, the crew of ARIES-17 successfully boarded the seemingly dead Transhuman vessel. However, six days later the Transhumans cut all communication channels at Qetesh and laid siege to the outpost. With no hope of calling for reinforcements, the population of Qetesh desperately turned to Ryuu and the Akkoro to defend against the overwhelming force of the Transhuman fleet. The assault on Qetesh quickly escalated and just as all hope was running out, Ryuu managed to crack the Akkoro's mainframe, taking command of the Transhuman vessel. As the last line of defense was about to break, the Akkoro rumbled onto the battlefield, replenishing the drained shields of the PCF defense flotilla while weakening the bioarmor of the Transhumans. After ten days of battle, Qetesh finally fell to the Transhumans; However, a few fortunate souls of the PCF fleet were able to retreat thanks to Ryuu and the reverse-engineered Akkoro. The PCF attempted to confiscate the Akkoro from Ryuu, claiming it was a Transhuman \"trojan horse\" that had enabled the siege of Qetesh. Ryuu had formed a deep attachment to the ship, however. Preferring exile over the loss of the Akkoro, he went AWOL in 2359 CE, eventually finding refuge at Sinley Bay.",
+    "es": "El Akkoro original, conocido también como Sujeto de pruebas NTHR-T3 (Nave Transhumana de Reparaciones, Tipo 3), fue descubierto en el 2358 por la unidad \"ARIES-17\" de la FPC en una busca rutinaria de sobrevivientes tras una pequeña batalla en el sistema joviano. Los restos del Akkoro fueron encontrados en el lugar de una masacre en la órbita de Calisto y trasladados a Qetesh, una base de la FPC en la luna cercana. Bajo el mando del ingeniero jefe, un experto con mucho interés en la tecnología transhumana, la tripulación de ARIES-17 abordó la nave transhumana, presuntamente desactivada. Seis días más tarde, los transhumanos bloquearon todas las comunicaciones de Qetesh y asediaron el lugar. Al no poder solicitar refuerzos, los habitantes de Qetesh acudieron a Ryuu y el Akkoro para que los protegieran contra la increíble fuerza de la flota transhumana. El asalto a Qetesh aumentó en intensidad y, cuando parecía que la esperanza iba a agotarse, Ryuu consiguió controlar el ordenador central del Akkoro y con él, la nave transhumana entera. Cuando las últimas defensas estaban a punto de fallar, el Akkoro entró en la batalla, restaurando los escudos de la flota de defensa de la FPC y debilitando la bioarmadura transhumana. Al terminar la batalla, que duró diez días, Qetesh cayó ante los transhumanos, pero varios miembros afortunados de la FPC lograron retirarse gracias a Ryuu y a la ingeniería inversa del Akkoro. La FPC quiso confiscar el Akkoro de manos de Ryuu, afirmando que era un \"caballo de Troya\" transhumano que había causado el asedio de Qetesh. Sin embargo, Ryuu apreciaba demasiado la nave para permitirlo. Prefirió el exilio a perder el Akkoro y desertó en el 2359, dirigiéndose eventualmente a la Bahía de Sinley.",
+    "fr": "L'Akkoro, aussi connu sous le nom de code THRV-N3 (\"Transhuman Repair Vessel - Niveau 3\"), fut découvert en 2358 EC par l'unité de secours ARIES-17 de la FPC lors d'une ronde de routine, après une escarmouche dans le secteur jovien. L'Akkoro avait été abandonné là où s'étaient déroulés de violents combats, dans l'orbite de Callisto. Il fut remorqué jusqu'à Qetesh, un avant-poste de la FPC sur ce satellite. Guidé par Tomasz Ryuu, un ingénieur fasciné par les technologies transhumaines, l'équipage d'ARIES-17 a pu monter à bord du vaisseau transhumain, visiblement abandonné. Cependant, six jours après le remorquage, les Transhumains brouillèrent toutes les communications de Qetesh et entamèrent le siège de l'avant-poste. Livrés à eux-mêmes, les habitants de Qetesh durent s'en remettre à Ryuu et son Akkoro pour faire face aux forces transhumaines, très supérieures en nombre. Alors que l'assaut sur Qetesh battait son plein et que les chances de victoire étaient nulles, Ryuu parvint enfin à pénétrer le système central de l'Akkoro et à en prendre le commandement. Les dernières lignes de défense cédaient lorsque l'Akkoro se jeta au combat et régénéra l'énergie des boucliers de la flottille de la FPC, tout en affaiblissant le blindage bionique des Transhumains. Après dix jours de combat acharné, Qetesh tomba finalement aux mains des Transhumains. Toutefois, quelques hommes de la FPC parvinrent à fuir l'avant-poste à bord de l'Akkoro que Ryuu était parvenu à maîtriser. Par la suite, la FPC réquisitionna l'Akkoro, arguant que c'était Ryuu, en remorquant ce \"cheval de Troie\" transhumain jusqu'à Qetesh, qui avait mis en péril l'avant-poste. Cependant, ce dernier s'était attaché au vaisseau. Préférant l'exil à la perte de l'Akkoro, il déserta en 2359 EC et trouva refuge à Sinley Bay.",
+    "pl": "Na pierwotnego „Akkoro”, funkcjonującego również pod nazwą obiekt testowy JNS-T3 (Jednostka Naprawcza Syntetyków – Typ 3), natrafiła w 2358 r. jednostka ratownicza FWK ARIES-17 prowadząca rutynowe poszukiwania rozbitków po potyczce w sektorze Jowisza. Pozostałości okrętu znajdowały się w rejonie masakry na orbicie Kalisto. Zostały zebrane i przetransportowane na Ketesz, placówkę badawczą FWK na pobliskim księżycu. Załoga ARIES-17 pod kierownictwem Tomasza Ryuu, uzdolnionego badacza technologii syntetyków, zdołała wejść na pokład na pozór nieaktywnego okrętu. Sześć dni później syntetycy zablokowali wszelką komunikację i oblegli placówkę. Bez możliwości wezwania pomocy załoga stacji zwróciła się do Ryuu z błaganiem o pomoc w obronie przed przeważającymi siłami wroga. Walki się nasilały i gdy obrońcy tracili już resztki nadziei na przetrwanie, naukowiec zdołał złamać zabezpieczenia komputera pokładowego Akkoro i uruchomić okręt. Kiedy już miała paść ostatnia linia obrony, statek wleciał w obszar zmagań, uzupełnił zanikające osłony flotylli obronnej FWK i jednocześnie osłabił pancerz organiczny jednostek syntetyków. Niestety to nie wystarczyło i po trwającej dziesięć dni bitwie Ketesz wpadł w ręce syntetyków. Jednak dzięki wysiłkom Ryuu i wykorzystaniu Akkoro kilku szczęśliwców z FWK zdołało się na nim ewakuować. Dowództwo floty chciało przejąć jednostkę z rąk Ryuu, twierdząc, że jest to „koń trojański” syntetyków i że to z powodu tego okrętu wróg zaatakował Ketesz, jednak kapitan zdołał się bardzo mocno przywiązać do tego statku. Od utraty Akkoro wolał wygnanie i w roku 2359 zbiegł razem z okrętem. Po okresie tułaczki znalazł azyl w Sinley Bay.",
+    "ru": "Исходный «Аккоро», также известный как «испытуемый объект ТРК-T3» (трансчеловеческий ремонтный корабль, тип 3), был обнаружен в 2358 г. эвакуационно-ремонтным подразделением ПКФ «ОВЕН-17» во время обычного поиска выживших после столкновений в секторе Юпитера. Найденные на месте массовой битвы на орбите Каллисто остатки «Аккоро» были доставлены в Кетеш — аванпост ПКФ на близлежащей луне. Под руководством главного инженера Томаша Рюу, талантливого специалиста, интересовавшегося трансчеловеческими технологиями, экипаж корабля «ОВЕН-17» успешно поднялся на борт вроде бы мертвого судна транслюдей. Однако через шесть дней транслюди отрезали все каналы связи в Кетеше и осадили аванпост. Не имея надежды вызвать подкрепление, население Кетеша в отчаянии обратилось к Рюу и его «Аккоро» с просьбой защитить от превосходящих сил трансчеловеческого флота. Нападение на Кетеш разворачивалось очень быстро, и когда все надежды уже иссякли, Рюу удалось взломать главный компьютер «Аккоро» и взять командованиетрансчеловеческим кораблем. Когда последняя линия обороны уже почти пала, на поле боя появился «Аккоро» и начал пополнять энергию истощенных щитов ПКФ, одновременно ослабляя биоброню транслюдей. После десяти дней битвы Кетеш все-таки поддался натиску транслюдей; однако несколько счастливчиков из ПКФ смогли отступить — благодаря Рюу и взятому под контроль «Аккоро». ПКФ попытался конфисковать «Аккоро» у Рюу, утверждая, что это был «троянский конь» от транслюдей, который дал им возможность осадить Кетеш. Однако Рюу сильно привязался к кораблю и утрате «Аккоро» предпочел изгнание: он дезертировал в 2359 г. и вскоре нашел убежище на Синли-Бее.",
+    "zh-cn": "一开始安卡柔也被成为测试对象THRV-T3（超人类修理船3型），在纪元2358年由泛殖民地舰队回收部队“白羊座-17”在木星星区的遭遇战结束后进行例常幸存者救援时发现。安卡柔的残骸发现于木卫四轨道上的战船坟场中，随后被拖曳至一座月亮附近的泛殖民地舰队“奎特”前哨站。在天才超人类科技狂热者，首席工程师托马斯·雨龙的领导下，白羊座-17的成员们成功登上这个了看似被废弃的的超人类设施。然而，六天之后超人类切断了奎特前哨站所有与外界的联系，并就此展开了围攻。救援无望，奎特前哨站中的众人乞求雨龙和安卡柔能给予他们足以击败超人类舰队的压倒性力量。就在对奎特的攻击进入白热化，希望越来越渺茫之时，雨龙设法破解了阿努伊的主机，成功接管了这艘超人类的飞船。就在最后一道防线也被突破的时候，安卡柔隆隆地飞入了战场，立即恢复了泛殖民地舰队的小型防御舰队的护盾，同时削弱了超人类的生化装甲。经过了十天的苦战，奎特还是陷落了，然而泛殖民地舰队中的一小部分幸运儿拜雨龙和逆向编程过的安卡柔所赐，最终得以逃出生天。泛殖民地舰队试图从雨龙手中没收安卡柔，声称它是导致奎特陷落的“特洛伊木马”。然而，雨龙已经对这艘船产生了深深的依恋。失去安卡柔的雨龙意志消沉，并于纪元2359年不告而别，最后被发现他是在心裂湾避难。"
+   },
+   "image": "UI_SupportM_Akkoro.png",
+   "name": {
+    "de": "Akkoro",
+    "en": "Akkoro",
+    "es": "Akkoro",
+    "fr": "Akkoro",
+    "pl": "Akkoro",
+    "ru": "Аккоро",
+    "zh-cn": "安卡柔"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043360": {
+   "description": {
+    "de": "Die Demeter stand zum Ende des Krieges hin während der Atlantisschlacht unter dem Kommando von Jun Prokofiev, der in ihr die erste Welle des Tengri-Korvetten-Regiments in der Neptuninvasion anführte. Und obwohl die Welle Teil der „Sturmtruppentaktik“ der PKF war, schaffte er es durchs Abfangen mehrerer Langstreckenraketen in der oberen Neptunatmosphäre, das Leben seiner halben Flotte zu retten. Als die Demeter auch den letzten Angriff überstand, wurde sie nach Kriegsende aus dem Verkehr gezogen. Doch als Prokofiev verschwand, nahm er auch sein geliebtes Schiff und ein paar ihm treu ergebene Crewmitglieder mit in den Scum Belt, um letztendlich auf Sinley Bay zu landen. Bei seiner Reise durch die Schlachtfeldtrümmer erwiesen sich die Navigationsmodifikationen an der Demeter als äußerst nützlich. Sein neues Leben auf Sinley Bay führte er als berüchtigter Scavenger, wobei sich die Demeter mal wieder als besonders anpassungsfähiges Schiff erwies.",
+    "en": "The Demeter was captained by Jun Prokofiev during the Atlantis Battle at the end of the War, where he lead the first wave of the Tengri corvette regiment in the assault on Neptune. Even though this wave was part of the PCF's \"Shock Troop\" tactic, he saved the lives of half his fleet by intercepting barrages of long range missiles in the upper atmosphere of Neptune. Having gone on to survive the Final Assault, the Demeter was earmarked decommission after the end of the War. However, Prokofiev went AWOL and took his beloved Demeter and a few of his loyal crew into the Scum Belt, eventually ending up on Sinley Bay, the modifications of the Demeter proving up to the task of navigating through the deep battlefield debris of the Belt. On Sinley Bay, he began a new life as a notorious scavenger and the Demeter once again proved itself to be an adaptable and formidable vessel.",
+    "es": "El Deméter fue la nave del capitán Jun Prokofiev durante la batalla de Atlantis al final de la guerra, en la que lideró el primer regimiento de corbetas de Tengri en el asalto a Neptuno. Aunque su unidad formaba parte de la táctica de \"tropas de choque\" de la FPC, logró salvar las vidas de la mitad de su flota interceptando misiles de largo alcance en las capas altas de la atmósfera del planeta. Tras sobrevivir al asalto final, el Deméter fue destinado al desguace al terminar la guerra. Sin embargo, Prokofiev desertó, llevándose el Deméter y refugiándose con tripulantes leales en el Cinturón de Escoria, donde acabó en la Bahía de Sinley. Las modificaciones del Deméter demostraron ser capaces de resistir a los restos de batalla presentes en el Cinturón. En la Bahía de Sinley empezó una nueva vida como carroñero y el Deméter demostró una vez más que es una nave formidable y adaptable.",
+    "fr": "Le Déméter fut dirigé par Jun Prokofiev pendant la bataille d'Atlantis à la fin de la guerre. Au cours de celle-ci, il mena la première vague du régiment de Corvettes Tengri dans l'assaut sur Neptune. Bien que cette vague eut fait partie de la tactique de \"troupes de choc\" de la FPC, il sauva la vie de la moitié de sa flotte en interceptant des missiles à longue portée dans l'atmosphère supérieure de Neptune. Ayant survécu à l'assaut final, le Déméter devait être déclassé après la fin de la guerre. Cependant, Prokofiev disparut dans la Ceinture des rebuts avec le Déméter et certains de ses équipiers les plus loyaux. Il finit par arriver à Sinley Bay, les modifications du Déméter lui ayant permis de naviguer sans encombre à travers les débris de la Ceinture des rebuts. À Sinley Bay, il débuta une nouvelle vie en tant que pillard et le Déméter prouva à nouveau qu'il était polyvalent et fantastique.",
+    "pl": "Podczas bitwy o Atlantydę pod sam koniec wojny kapitanem „Demeter” był Jun Prokofjew, który poprowadził pierwszą falę ataku dywizjonu korwet Tengri podczas szturmu na Neptuna. Chociaż atak ten był częścią taktyki „oddziałów szturmowych” FWK, zdołał ocalić połowę swojej jednostki poprzez przechwycenie ostrzału rakietami dalekiego zasięgu w górnych partiach atmosfery. Gdy ostateczny szturm dobiegł końca, „Demeter” została przeznaczona do pocięcia na żyletki po nastaniu pokoju. Prokofjew nie mógł się z tym jednak pogodzić – porwał swój ukochany okręt i z garstką lojalnej załogi zaprowadził go do Pasa Łotrów, gdzie ostatecznie zawędrował na Sinley Bay. Modyfikacje wprowadzone do „Demeter” okazały się doskonale sprawdzać w nawigacji przez niebezpieczne pola odłamków skalnych w Pasie. Już na Sinley Bay kapitan Prokofjew rozpoczął nowe życie jako „pozyskiwacz” części zamiennych do statków i „Demeter” ponownie okazała się być wszechstronnym i groźnym okrętem.",
+    "ru": "В конце войны, во время битвы за Атлантиду, капитаном «Деметры» был Юн Прокофьев. Именно он вел первую волну полка корветов «Тенгри» на штурм Нептуна. Хотя все это и происходило в рамках принятой в ПКФ тактики «ударных частей», Прокофьеву удалось спасти половину своего флота, перехватывая вражеские дальнобойные ракеты в верхних слоях атмосферы планеты. Затем «Деметра» пережила Последний штурм и по окончанию войны предназначалась к списанию. Однако Прокофьев дезертировал и с несколькими верными людьми из своей команды угнал корабль к Поясу отбросов, где в итоге осел на Синли-Бее: оборудование «Деметры» позволяло ей легко пробираться сквозь толщу космического мусора, оставшегося в Поясе после боев. Здесь капитан начал новую жизнь в качестве охотника за сокровищами, а «Деметра» вновь показала себя надежным и многофункциональным судном.",
+    "zh-cn": "得墨忒耳号在大战末期的亚特兰蒂斯战役中由舰长朱·普罗科菲耶夫指挥。他当时率领腾格里护卫舰团进行了突击海王星的第一波进攻。即使这波进攻是泛殖民地舰队的“突击部队”战术中的一部分，但在海王星的上层大气中，他通过火力网拦截敌方远程导弹而拯救了半数舰队。得墨忒耳号在最后突击中也幸存下来，太阳系大战结束后它被勒令退役。然而，普罗科菲耶夫却带着他挚爱的得墨忒耳号和一小部分忠于他的船员消失了。他们驶入了浮渣带，并最终来到了心裂湾。得墨忒耳号的改装被证明可以胜任穿过漫长碎片区域这一危险任务。在心裂湾，普罗科菲耶夫开始了作为一名声名狼藉的拾荒者的新生活，而得墨忒耳号也再次证明了自己是一艘适应力极强的可怖战舰。"
+   },
+   "image": "UI_ScoutH_Demeter.png",
+   "name": {
+    "de": "Demeter",
+    "en": "Demeter",
+    "es": "Deméter",
+    "fr": "Déméter",
+    "pl": "Demeter",
+    "ru": "Деметра",
+    "zh-cn": "得墨忒耳"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043362": {
+   "description": {
+    "de": "Die Phoenix ist das Schiff von Captain Mia Steele. Diese Korvette wurde kurz nach der Kündigung bei Oberon aufgrund eines bitteren Streits mit dem Mitgründer im Jahr 2411 von Steele entwickelt und wurde nach dem monströsen Kometen benannt, der während des Krieges erschaffen wurde. Sie setzte Kurs auf das Neptunsystem und begab sich auf eine wilde Quest nach Transhuman-Technologie, die den Transhumanismus wieder zurück ins Sonnensystem in einer Art von „phönixartigen“ Auferstehung bringen sollte.",
+    "en": "The Phoenix is the ship of Captain Mia Steele. Named after a monstrous comet created during the War this corvette specially built by Steele in 2411 CE upon quitting Oberon due to a bitter dispute with her co-founder. She set course for the Neptunian system on a wild quest to find Transhuman tech that could bring Transhumanity back to the Solar system in a Phoenix-like resurrection.",
+    "es": "El Fénix es la nave insignia de la capitana Mia Steele. Recibe su nombre de un enorme cometa que fue creado durante la Gran Guerra Solar. Esta corbeta fue construida por Steele en el 2411 cuando abandonó Oberon por una disputa con su cofundador. Fijó un rumbo al sistema de Neptuno en una alocada misión de encontrar tecnología transhumana para traer de vuelta a los transhumanos al sistema solar en una resurrección similar a la del ave fénix.",
+    "fr": "Le Phénix est le vaisseau du capitaine Mia Steele. Portant le nom de la comète constituée lors de la Guerre, cette Corvette a été conçue par Steele en 2411 EC lorsqu'elle a quitté Oberon, en raison de désaccords profonds avec son cofondateur. Elle est alors partie pour le système neptunien à la recherche d'anciennes technologies transhumaines dans le but de faire renaître leurs connaissances, tel un phénix.",
+    "pl": "Feniks to okręt kapitan Mii Steele. Swoją nazwę zawdzięcza olbrzymiej komecie powstałej podczas wojny. Ta korweta została zbudowana na specjalne zamówienie Steele w roku 2411, kiedy opuściła szeregi oberonitów wskutek poważnej różnicy zdań ze współzałożycielem zakonu. Wyruszyła w stronę układu Neptuna z zamiarem odszukania technologii syntetyków, dzięki której mogliby oni powrócić do układu słonecznego niczym mityczny feniks powstający z popiołów.",
+    "ru": "«Феникс» — корабль капитана Мии Стил. Назван в честь громадной кометы. Этот корвет Стил создала специально во время войны в 2411 г. н. э. после ухода из «Оберона» вследствие серьезного спора с соучредителем. Она взяла курс на систему Нептуна, чтобы там искать технологии, которые позволят транслюдям вернуться в Солнечную систему подобно тому, как воскресает Феникс.",
+    "zh-cn": "凤凰是舰长米娅·斯蒂尔的战舰。这艘护卫舰以战争期间一颗巨大的彗星命名，它是斯蒂尔在纪元2411年因与她的合伙人发生激烈争执而离开天卫四后特地制造的。为了完成一项狂野的任务，她前往海王星系，那就是寻找超人类的科技并将这种科技带回太阳系，就如同浴火重生的凤凰一样。"
+   },
+   "image": "UI_ScoutM_Phoenix.png",
+   "name": {
+    "de": "Phoenix",
+    "en": "Phoenix",
+    "es": "Fénix",
+    "fr": "Phoenix",
+    "pl": "Feniks",
+    "ru": "Феникс",
+    "zh-cn": "凤凰"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043363": {
+   "description": {
+    "de": "Die von Jupiter Arms als Artilleriekreuzer-Prototyp klassifizierte „Tunmen“ wurde kurz vor der offiziellen Veröffentlichung im Jahr 2440 von einer Gruppe professioneller Raumpiraten unter Yolanda Fudeng gestohlen. Eigentlich wollte Fudeng dieses wertvolle Schiff an den Höchstbietenden auf Sinley Bay verkaufen, doch sie machte einen Sinneswandel durch, als sie und ihre Mannschaft sich mitten in der ersten Angriffswelle durch die Marine Trojas befand, die im Scum Belt wütete – dem einzigen Ort, an dem sich Yolanda je heimisch gefühlt hatte. Die erste Hälfte der Trojanerflotte wurde fast eigenhändig von der Tunmen und der äußerst zornigen Yolanda erledigt, während der Rest den stolzen Captains von Sinley Bay zum Opfer fiel.",
+    "en": "Jupiter Arms’ classified Artillery Cruiser prototype named Tunmen was stolen just before her official release in 2440 CE by a group of professional hijackers under the command of Yolande Fudeng. Although stolen for the sole purpose of selling the precious ship to the highest bidder on Sinley Bay, Yolanda Fudeng had a change of heart after she and her crew arrived in the midst of the first attack wave of the Trojan Navy pushing into the Scum Belt to attack the only place where she ever felt at home. The Tunmen and the fury of Captain Yolanda Fudeng destroyed almost single handedly the first half of the Trojan fleet, the other half lost to the proud captains of Sinley Bay.",
+    "es": "El prototipo secreto de crucero de artillería de Jupiter Arms, llamado el Tunmen, fue robado antes de su lanzamiento en el 2440 por un grupo de profesionales al mando de Yolanda Fudeng. El robo tenía como objetivo vender la nave al mejor postor en la Bahía de Sinley, pero Yolanda Fudeng cambió de opinión cuando al llegar se encontró con la primera oleada del ataque de la flota de Troya al Cinturón de Escoria, el único sitio que consideraba su hogar. El Tunmen, con una furiosa capitana Captain Yolanda Fudeng al mando, destruyó la mitad de la primera flota de Troya sin casi ayuda, dejando la otra mitad a merced de los orgullos capitanes de la Bahía de Sinley.",
+    "fr": "EN 2440 EC, juste avant son baptême, un prototype de vaisseau jusqu'alors confidentiel et portant le nom de Tunmen a été volé à Jupiter Arms par des pirates commandés par Yolanda Fudeng. À l'origine, les pirates devaient revendre le Croiseur d'artillerie au plus offrant. Toutefois, Yolanda Fudeng changea d'avis lorsqu'ils arrivèrent à Sinley Bay, assiégée par la Marine troyenne au début de leur assaut sur la Ceinture des rebuts. Face à la puissance de feu du Tunmen et à la hargne du capitaine Yolanda Fudeng qui exalta les forces de Sinley Bay, la flotte troyenne n'eut d'autre choix que de reculer. Fudeng décida de conserver le vaisseau qui l'avait aidée à sauver le seul endroit où elle se sentait chez elle.",
+    "pl": "Tajny prototyp krążownika artyleryjskiego Jupiter Arms nazwany Tunmen został wykradziony tuż przed oficjalną prezentacją w roku 2440 przez grupę zawodowych porywaczy statków dowodzoną przez Yolandę Fudeng. Chociaż pierwotnie zamierzali sprzedać cenny okręt na Sinley Bay temu, kto da najwięcej, kapitan Fudeng zmieniła zdanie, gdy wleciała Tunmenem w sam środek pierwszej fali ataku trojańskiej marynarki wojennej na Pas Łotrów – jedyne miejsce, gdzie kiedykolwiek czuła się jak w domu. Fudeng niemal samodzielnie zniszczyła połowę atakującej floty, podczas gdy z drugą połową uporali się dumni kapitanowie z Sinley Bay.",
+    "ru": "Засекреченный артиллерийский крейсер «Туньмень» от «Юпитер Армс» украла прямо перед официальным выпуском в 2440 г. н. э. группа профессиональных угонщиков во главе с Иоландой Фуденг. Корабль угоняли лишь с целью продажи на Синли-Бее тому, кто больше заплатит. Но Иоланда Фуденг передумала, когда она со своей командой попала в гущу первой атакующей волны троянского флота, который рвался в Пояс отбросов, чтобы атаковать то единственное место, где она чувствовала себя как дома. Разъяренная капитан Иоланда Фуденг на корабле «Туньмень» практически в одиночку уничтожила первую половину троянского флота. Вторую половину одолели гордые капитаны Синли-Бея.",
+    "zh-cn": "木星武装的机密炮击巡洋舰原型图门号于纪元2440年正式服役前，被一群由尤兰达·弗登领导的专业劫船者盗走。最初偷走这艘珍贵的战舰是只是为了在心裂湾卖给竞价最高的买家，但是在闯入浮渣行星带的特洛伊军队第一次攻击了尤兰达·弗登和她的机组成员后，她变改变了主意。愤怒的尤兰达·弗登舰长驾驶图门号击毁了特洛伊舰队半数战舰，而另一半舰队则被心裂湾桀骜不驯的舰长们摧毁。"
+   },
+   "image": "UI_SniperH_Tunmen.png",
+   "name": {
+    "de": "Tunmen",
+    "en": "Tunmen",
+    "es": "Tunmen",
+    "fr": "Tunmen",
+    "pl": "Tunmen",
+    "ru": "Туньмень",
+    "zh-cn": "图门"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043364": {
+   "description": {
+    "de": "Leichter Späher (R3-Heldenschiff)",
+    "en": "Light Scout T3 Hero",
+    "es": "Explorador ligero héroe de categoría 3",
+    "fr": "Éclaireur léger Héros N3",
+    "pl": "Lekki zwiadowca poziomu 3. (bohater)",
+    "ru": "«Легкий скаут» (герой) T3",
+    "zh-cn": "轻型斥候T3英雄"
+   },
+   "image": "UI_ScoutL_Viper.png",
+   "name": {
+    "de": "Naga",
+    "en": "Naga",
+    "es": "Naga",
+    "fr": "Naga",
+    "pl": "Naga",
+    "ru": "Нага",
+    "zh-cn": "娜迦"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043365": {
+   "description": {
+    "de": "KrabbeNashornEinhorn",
+    "en": "CrabRhinocerosUnicorn",
+    "es": "CrabRhinocerosUnicorn",
+    "fr": "CrabeRhinocérosLicorne",
+    "pl": "CrabRhinocerosUnicorn",
+    "ru": "CrabRhinocerosUnicorn",
+    "zh-cn": "CrabRhinocerosUnicorn"
+   },
+   "image": "UI_SupportH_Indrik.png",
+   "name": {
+    "de": "Indrik",
+    "en": "Indrik",
+    "es": "Indrik",
+    "fr": "Indrik",
+    "pl": "Indrik",
+    "ru": "Индрик",
+    "zh-cn": "因德里克"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043366": {
+   "description": {
+    "de": "Das Flagschiff von Captain Oliver Yang, Anführerin der „Golden Arrows” des 18 Saturn Regiments der PKF. Während des Atlantisangriffs, als die Meuterei begann, versuchte sie Ordnung zu wahren indem sie ihren Flotten Befahl die Positionen der Deserteure an der Front einzunehmen. Ihre Flotten kämpften lang genug um sicherzustellen, dass der Angriff erfolgreich verläuft, aber die Golden Arrows wurden dezimiert. Yang beging Fahnenflucht und nahm die Reste ihrer Flotten zurück ins Saturnsystem, wo sie nun als Söldner mit der Hydra rivalisieren und oft ihre Pläne vereiteln.",
+    "en": "The flagship of Captain Olive Yang, leader of the PCF's 18th Cronian Regiment a.k.a \"Golden Arrows\". During the Atlantian Assault, she attempted to keep order when the mutiny began, rallying her fleets to take the place of the frontline deserters. Her fleets ran interference long enough to ensure the assault was a success, but the Golden Arrows were decimated. Yang went AWOL, taking her remaining fleets back to the Cronian system, where they now operate as rival mercenaries to Hydra, often foiling Hydra's plots.",
+    "es": "La nave insignia de la capitán Olive Yang, líder del regimiento 18 de Cronian, alias \"Golden Arrows\". Durante el asalto a Atlantis, intentó mantener el orden al inicio del motín, reuniendo sus flotas para tomar el lugar de los desertores en el frente. Sus flotas interfirieron el tiempo suficiente para asegurar el éxito del asalto, pero los Golden Arrows sufrieron numerosas bajas. Yang desertó, llevándose el resto de su flota al sistema Croniano, donde ahora operan como mercenarios rivales de Hydra, a menudo frustrando los planes de estos.",
+    "fr": "Le vaisseau amiral du capitaine Olive Yang, chef du 18e régiment saturnien de la FPC, alias les \"Flèches d'or\". Lorsque la mutinerie a éclaté durant l'Assaut Atlante, elle a essayé de maintenir l'ordre en rassemblant ses forces pour combler les lacunes laissées sur le front par les déserteurs. Sa flotte a semer le chaos suffisamment longtemps pour que l'assaut réussisse, mais les Flèches d'or ont été décimées. Yang a disparu en retournant avec le restant de ses unités vers le système saturnien, où ils opèrent dès lors comme mercenaires rivaux de Hydra, souvent en déjouant les complots de ces derniers.",
+    "pl": "Flagowiec kapitan Olive Yang, dowódczyni podlegającego FWK 18. pułku Saturna, znanego inaczej jako „Złote strzały”. Podczas wybuchu rebelii w czasie ofensywy atlantyjskiej, próbowała kontrolować sytuację, wyprowadzając swoją flotę w miejsca dezerterów na linii frontu. Jej flota stawiała opór na tyle długo, aby ofensywa zakończyła się sukcesem. „Złote strzały” poniosły jednak wielkie straty. Yang zniknęła, zabierając resztki swojej floty z powrotem do układu Saturna. Obecnie działają tam jako najemnicy. Rywalizują z Hydrą i często krzyżują jej plany.",
+    "ru": "Флагман капитана Оливии Янг, командира 18-го сатурнианского полка ПКФ, известного как «Золотые стрелы». Когда во время штурма Атлантиды начался мятеж, она попыталась сохранить порядок и собрала свои эскадрильи, чтобы занять место дезертиров на переднем крае. Ее корабли продержались достаточно долго, чтобы штурм успешно завершился, но «Золотые стрелы» понесли тяжелые потери. Янг дезертировала, забрав оставшиеся эскадрильи назад в систему Сатурна, где они теперь действуют как наемники — конкуренты «Гидры» и часто расстраивают планы этой группировки.",
+    "zh-cn": "泛殖民地舰队第18克罗宁军团a.k.a首长欧立夫·杨的旗舰“金箭”。在亚特兰蒂斯突击战期间，她试图在叛乱开始时维持秩序，集结她的舰队替上前线逃兵留下的空档。她的舰队骚扰了敌人足够长的时间，确保突袭取得成功，但金箭也被炸毁。杨擅自离队，把她剩余的舰队带回克罗宁星系，他们在那里成了与九头蛇作对的雇佣兵，经常挫败九头蛇的阴谋。"
+   },
+   "image": "UI_AssaultM_Autumn.png",
+   "name": {
+    "de": "Orion",
+    "en": "Orion",
+    "es": "Orion",
+    "fr": "Orion",
+    "pl": "Orion",
+    "ru": "Орион",
+    "zh-cn": "猎户座"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043368": {
+   "image": "UI_DreadnoughtM_Zilant.png",
+   "name": {
+    "de": "Zilant",
+    "en": "Zilant",
+    "es": "Zilant",
+    "fr": "Zilant",
+    "pl": "Zilant",
+    "ru": "Зилант",
+    "zh-cn": "泽兰特"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043369": {
+   "description": {
+    "de": "Mittleres Unterstützungsheldenschiff",
+    "en": "Medium Support Heroship",
+    "es": "Nave héroe mediana de apoyo",
+    "fr": "Vaisseau de héros intermédiaire de soutien",
+    "pl": "Średni okręt-bohater wsparcia",
+    "ru": "Средний героический корабль поддержки",
+    "zh-cn": "中型支援英雄舰"
+   },
+   "image": "UI_SupportM_Nereid.png",
+   "name": {
+    "de": "Nereid",
+    "en": "Nereid",
+    "es": "Nereida",
+    "fr": "Nereid",
+    "pl": "Nereida",
+    "ru": "Нереида",
+    "zh-cn": "海卫二"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043372": {
+   "description": {
+    "de": "Die Legende besagt das Arash, der mythische Held, bekannt für sein schnelles Denken, immer mit unerschütterlicher Hingabe bei der Sache war. Als der lange und blutige Krieg zwischen Iran und Turan endete, beschlossen beide Seiten unter einer Bedingung Frieden miteinander: man solle von iranischer Seite aus einen Pfeil in Richtung Turan schießen, welcher ab sofort die Grenze zwischen beiden Ländern definiert. Der iranische Schütze Arash, schoss eben diesen Pfeil mit ganzer Kraft. Dieser Aufwand, der sein Leben forderte, ließ den Pfeil in ungeahnte Höhen schießen. Die zahlreichen Überlieferungen geben zwar ungenaue Distanzen an, jedoch hat dieser heldenhafte Akt der Selbstaufopferung, den Bau des ersten Arash-Artilleriekreuzer inspiriert. Zur der Zeit als die Spannungen mit den Transhumans anstiegen, war die Arash eine der technisch fortgeschrittensten Schiffe der Pankolonialen Flotte zu Beginn des Großen Sonnenkriegs. Die Arash war aufgrunddessen eher auf technischen und ästhetischen Innovationen ausgelegt, als auf den Kampf. Ihre eher wuchtige Erscheinung war daher alles andere als subtil. Jedoch verzeichnete sie zahlreiche Tötungen an der Jupiterfront dank des brillanten PCF-Offiziers Teshi Aberra, der das Schiff mehrfach neu getarnt und umpositioniert hat, nur um den Feind überraschend zu bombardieren.",
+    "en": "Like other heroes of myth and legend, Arash was known for his quick thinking and unwavering devotion to a cause. A long and bloody war between Iran and Turan had ended, and both sides had agreed to peace. There was one condition: Iran was to fire an arrow toward Turan, and the arrow's landing site would define a new border between the two countries. The Iranian archer Arash shot that arrow, putting all of his extraordinary strength into the effort. The colossal effort cost him his life, but the arrow flew an epic distance. The exact distance varies in the tales, as does the arrow's ultimate landing site. Regardless, his heroic sacrifice inspired the original Arash artillery cruiser. Completed before tensions arose with the Transhumans, the Arash was one of the most technologically advanced ships of the Pan-Colonial Fleet in early days of the Great Solar War. However, thanks to that timing, the Arash's design was primarily motivated by engineering and aesthetic innovations rather than combat concerns. Its resulting bold profile was anything but subtle. Regardless, the Arash racked up hundreds of kills on the Jovian front due to the martial brilliance of PCF Captain Teshi Aberra, who repeatedly cloaked and repositioned the ship, only to bombard the enemy from a new angle.",
+    "es": "Como otros héroes del mito y la leyenda, Arash fue conocido por su rapidez mental y su inquebrantable devoción a una causa. Había terminado una larga y sangrienta guerra entre Irán y Turán, y ambos lados acordaron la paz. Hubo una condición: Irán debía disparar una flecha hacia Turán, y el sitio donde aterrizase la flecha definiría la nueva frontera entre los dos países. El arquero iraní Arash disparó esa flecha, poniendo toda su extraordinaria fuerza en el intento. El colosal esfuerzo le costó la vida, pero la flecha voló una distancia épica. La distancia exacta varía en los cuentos, tanto como el sitio de aterrizaje final de la flecha. A pesar de todo, su heroico sacrificio insipró el crucero de artillería Arash original. Completado antes de que las tensiones con los transhumanos incrementasen, el Arash fue una de las naves más avanzadas tecnológicamente de la Flota Pan Colonial en los comienzos de la Gran Guerra Solar. Sin embargo, debido al momento de su concepción, el diseño del Arash fue motivado principalmente por las innovaciones de ingeniería y estética en lugar de finalidades de combate. Su perfil audaz no era para nada sutil. A pesar de todo, el Arash acumuló cientos de muertes en el frente joviano debido a la brillantez marcial del capitán de la FPC Teshi Aberra, que repetidamente ocultaba y reposicionaba la nave, sólo para bombardear al enemigo desde un ángulo nuevo.",
+    "fr": "Comme d'autres héros du mythe et de légende, Arash était connu pour sa vivacité et son indéfectible dévouement à une cause. Une guerre longue et sanglante entre Iran et Touran avait pris fin, et les deux pays voulaient la paix. Il y avait une condition : l’Iran dut faire tirer une flèche vers Turan et le site d’atterrissage de la flèche définirait une nouvelle frontière entre les deux pays. L’archer iranien Arash tira cette flèche et mit toute sa force dans l’effort, qui lui coûta la vie. La flèche vola une distance épique, qui depuis varie dans les contes, à l’instar du site d’atterrissage ultime de la flèche. Quoi qu'il en soit, son sacrifice héroïque inspira la création du croiseur d’artillerie Arash. Achevé avant que des tensions ne surviennent avec les transhumains, l'Arash fut l’un des navires de la flotte de Pan-Colonial les plus technologiquement avancés dans les premiers jours de la grande guerre solaire. Cependant, dû à cette période, la conception de l'Arash était essentiellement motivée par des innovations techniques et esthétiques plutôt que guerrières. Son apparence arrogante en est le résultat. Malgré tout, l'Arash accumula des centaines de tués sur le front de Jupiter en raison de l’éclat martial du capitaine de la FPC Teshi Aberra, qui à plusieurs reprises, camouflait et repositionnait le vaisseau, afin de toujours bombarder l’ennemi sous un angle nouveau.",
+    "pl": "Arash, podobnie jak inni bohaterowie mitów i legend, znany był ze swojej błyskotliwości i niewzruszonego oddania sprawie. Długa i krwawa wojna między Iranem i Turanem zakończyła się i obie strony przystały na pokój. Był jeden warunek: Irańczycy wystrzelą strzałę w kierunku Turanu, a miejsce jej wylądowania stanie się nową granicą pomiędzy dwoma krajami. Irański łucznik Arash, wkładając w to całą swoją zdumiewającą siłę, wystrzelił strzałę. Ten niesłychany wysiłek kosztował go życie, ale strzała poszybowała na nadzwyczajną odległość. Miejsce lądowania strzały, jak i dokładny dystans, który przebyła, różni się w opowieściach. Tak czy inaczej, jego bohaterskie poświęcenie jest inspiracją dla krążownika artyleryjskiego „Arash”. Ukończony zanim narosły napięcia z syntetykami, „Arash” był jednym z najbardziej zaawansowanych technologicznie okrętów Floty Wszechkolonialnej w pierwszych dniach wielkiej wojny solarnej. Jednakże, z uwagi na okres, w którym powstał, projekt „Arasha” był motywowany przede wszystkim inżynieryjskimi i estetycznymi innowacjami, a nie zdolnością bojową. Tak czy inaczej, „Arash” zaliczył setki zabójstw na froncie jowiszowym dzięki świetnym umiejętnościom taktycznym kapitana FWK, Teshiego Aberry, który maskując się i zmieniając położenie statku, bombardował przeciwników z coraz to nowszych pozycji.",
+    "ru": "Как многие другие герои мифов, Араш прославился острым умом и непоколебимой преданностью делу. Долгая и кровопролитная война между Ираном и Тураном завершилась мирным договором на следующем условии: иранцы должны были пустить стрелу в сторону Турана, и место, где она упадет на землю, определило бы новую границу между странами. Стрелу эту пустил иранский лучник Араш, вложивший в выстрел всю свою огромную силу. Невероятное напряжение стоило ему жизни, но стрела улетела на небывалое расстояние. Точная дистанция, как и место падение стрелы, в разных рассказах варьируются. Однако спустя много лет в честь пожертвовавшего собою Араша назвали модель артиллерийского крейсера. Построенный незадолго до первых трений с транслюдьми, «Араш» вошел в число передовых с технологической точки зрения кораблей ПКФ начала Великой Солнечной войны. Впрочем, главным в его конструкции стали инженерные и эстетические инновации, а не боевые качества. В результате он отнюдь не отличался изяществом. Тем не менее, «Араш» записал на свой счет сотни побед на Юпитерианском фронте, прежде всего — благодаря искусству капитана ПКФ Теши Аберры: та раз за разом меняла местоположение корабля, прикрывшись маскировочным полем, и опять наносила удар с неожиданной для врага стороны.",
+    "zh-cn": "就如其他神话传说中的英雄一样，阿拉什以他敏捷的思维与坚定的信仰而闻名。伊朗与图兰之间发生了一场漫长又血腥的战争，战争结束后双方最终达成和平。只是有一个条件：伊朗要向图兰射一支箭，而这支箭的落点会决定两个国家的新边界。伊朗弓箭手阿拉什射出了这支箭，他将自己非凡的力量全都灌注到了这支箭中。这支箭的力量甚至耗尽了他的生命，但是箭终于飞出了非常远的距离。传说中对于具体的距离说法众多，对箭矢最终的落点也是如此。无论如何，他的牺牲精神启发了阿拉什炮击巡洋舰原型的设计师。它在与超人类间的局势变得紧张之前建造完成，阿拉什是太阳系战争初期泛殖民地舰队技术最先进的战舰之一。然而，由于时代因素，阿拉什的设计主要是从工程学和美学创新的角度出发的，而不是战斗角度。这就导致它夸张的外观一点也不灵活隐蔽。就算如此，泛殖民地舰长特斯·阿贝拉凭借着自己杰出的军事才能，反复隐蔽并机动自己的战舰，使阿拉什总能出其不意地攻击对方，从而在木星前线上生吞活剥了数以百计的敌人。"
+   },
+   "image": "UI_SniperM_Artemis.png",
+   "name": {
+    "de": "Arasch",
+    "en": "Arash",
+    "es": "Arash",
+    "fr": "Arash",
+    "pl": "Arash",
+    "ru": "Араш",
+    "zh-cn": "阿拉什"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043373": {
+   "description": {
+    "de": "Die Leviathan ist nicht wie andere Schiffe aus der Ära des Großen Sonnenkriegs. Franziska Oh von der Enyo-Navy entwickelte dieses Schiff und kommandierte es während der Nachkriegszeit. Die Leviathan ist auf Geschwindigkeit und aggressive Nahkampfmanöver ausgelegt, um Bedrohungen durch andere Menschen anstatt durch Transhumanen Herr werden zu können. Im Speziellen diente das Schiff zur Bekämpfung der Erdföderation-Navy in Scharmützeln um die Kolonien in der Nachkriegszeit, etwa 2422 CE. Oh führte die Flotten von der Brücke der Leviathan aus an und fügte dem Feind wiederholt solch schwere Verluste zu, dass sie die Enyo-Kolonie auf Europa monatelang halten konnte, bis die Erdföderation-Navy endlich aufgab, Fuß im Jupitersystem zu fassen. Oh wurde erst besiegt, als die Erdföderation im Jahre 2338 CE Freibeuter aus Sinlay Bay anheuerte, um Europa einzunehmen.",
+    "en": "The Leviathan is unlike any Great Solar War era ships. Designed and Captained by the engineer Franziska Oh of the Enyoan Navy during the postWar period, the Leviathan was built for speed and aggressive close combat required to fight other humans rather than Transhuman threats. Specifically, the Federal Earth Navy during the earliest postWar colonial skirmishes in 2422 CE. Leading her fleets in the Leviathan, Oh hammered on the attackers so succinctly that she managed to successfully defend Enyoan colony of Europa for months, until the Federal Earth navy gave up on its attempts to get a foothold in the Jovian system. Oh was only defeated when Federal Earth hired privateers from Sinley Bay in 2338 CE to take Europa.",
+    "es": "El Leviathan no se parece a ninguna otra nave de la época de la Gran Guerra Solar. Diseñado y comandado por la ingeniera Franziska Oh de la Marina de Enyoan durante el período de postguerra, el Leviathan fue construido para obtener velocidad y agresividad en el combate a corto alcance, requerido para luchar contra otros humanos, en lugar de la amenaza de los transhumanos. Específicamente, la Marina de la Tierra Federal durante las primeras contiendas coloniales de la postguerra en 2422 CE. Al mando de sus flotas en el Leviathan, Oh aplastó a los atacantes de manera tan sucinta que logró defender la colonia de Europa de Enyoan durante meses hasta que la Marina de la Tierra Federal desistió de sus intentos por pisar el sistema joviano. Oh solo fue derrotada cuando la Tierra Federal contrató a mercenarios de la Bahía de Sinley en 2338 CE para conquistar Europa.",
+    "fr": "Le Léviathan ne ressemble à aucun des autres vaisseaux de l'époque de la Grande guerre solaire. Conçu et dirigé par l'ingénieur Franziska Oh de la Marine ényonne pendant l'après-guerre, le Léviathan fut construit pour des combats rapprochés rapides contre des ennemis humains plutôt que des adversaires transhumains. Plus précisément, pour affronter la Marine Fédérale Terrestre au cours des escarmouches coloniales du début de l'après-guerre, en 2422 EC. Commandant sa flotte depuis le Leviathan, Oh pilonna les assaillants de manière répétée, si bien qu'elle parvint à défendre la colonie ényonne d'Europa pendant des mois, jusqu'à ce que la marine de la Fédération Terrestre abandonne ses tentatives de prendre le contrôle du système jovien. Oh ne fut vaincue qu'en 2338 EC, lorsque la Fédération Terrestre engagea des corsaires de Sinley Bay pour conquérir Europa.",
+    "pl": "„Lewiatan” znacząco różni się od okrętów z czasów wielkiej wojny solarnej. Został zaprojektowany już po zakończeniu tego konfliktu przez inżynier Franziskę Oh z Marynarki Eniońskiej, która później objęła nad nim dowodzenie. Tę wyjątkowo szybką jednostkę stworzono z myślą o brutalnej walce na krótkich dystansach. Jej przeciwnikami mieli być nie syntetycy, a inne frakcje ludzi. Konkretniej chodziło o siły ziemskie, z którymi toczono pierwsze powojenne starcia już w 2422 r. Oh, dowodząca swoimi flotami z pokładu „Lewiatana”, odnosiła olbrzymie sukcesy. Przez wiele miesięcy broniła eniońskiej kolonii na Europie, aż w końcu Ziemianie zrezygnowali z dalszych prób zdobycia kawałka systemu Jowisza. Kapitan Oh poniosła klęskę dopiero w 2338 r., gdy wojska Ziemi wynajęły korsarzy z Sinley Bay do zajęcia Europy.",
+    "ru": "«Левиафан» не похож на другие корабли времен Великой Солнечной войны. Он был спроектирован Франциской Ох — инженером флота Энио (она же стала его капитаном) в послевоенный период и предназначался для быстрых и жестких действий в ближнем бою, что требовалось для борьбы с людьми, но не с трансчеловеческой угрозой. В частности — с флотом Земной Федерации в ходе первых послевоенных столкновений в 2422 г. Ведя свои эскадры в бой на «Левиафане», Ох так быстро и четко отбивала атаки, что ей удалось на протяжении нескольких месяцев защищать колонию Энио, пока флот Земной Федерации не отказался от попыток закрепиться в системе Юпитера. Разбить капитана Ох удалось только тогда, когда Земная Федерация наняла каперов с Синли-Бея в 2338 г. для захвата Европы.",
+    "zh-cn": "利维坦号不同于太阳系大战时期的船舰。在战后时期，由恩佑舰队工程师弗朗兹卡·奥设计和指挥的利维坦号是一艘具有高速和侵略性的近距离作战战舰，它更专注于对抗人类舰队，而不是超人类。特别是在纪元2422年，在战后早期的殖民冲突中与地球联邦舰队的战斗。奥乘坐着利维坦号，率领舰队干净利落地解决了入侵者，成功保卫了恩佑的欧罗巴殖民地长达数月之久，直到地球联邦舰队放弃了争夺木星系统。纪元2338年，地球联邦雇佣心裂湾私人舰队攻击欧罗巴，是奥的唯一一次战败。"
+   },
+   "image": "UI_DreadnoughtL_Leviathan.png",
+   "name": {
+    "de": "Leviathan",
+    "en": "Leviathan",
+    "es": "Leviathan",
+    "fr": "Léviathan",
+    "pl": "Lewiatan",
+    "ru": "Левиафан",
+    "zh-cn": "利维坦"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043374": {
+   "image": "UI_AssaultM_Hammerhead.png",
+   "name": {
+    "de": "Hammerhead",
+    "en": "Hammerhead",
+    "es": "Hammerhead",
+    "fr": "Hammerhead",
+    "pl": "Młot",
+    "ru": "Молот",
+    "zh-cn": "锤头鲨"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043375": {
+   "description": {
+    "de": "Heldenschiffe haben historische, vorkonfigurierte Ausrüstungsoptionen und tragen direkt zu euren Matchbelohnungen in Form von zusätzlicher freier XP bei, die ihr wiederum auf allen anderen Schiffen verwenden könnt. Ihr könnt sie zwar selbst nicht anpassen, jedoch dürft ihr ihr Aussehen auf allen kompatiblen Schiffsklassen in Form von Retrofits verwenden. Gemäß der Mythologie der Alten Erde war Herja eine der Walküren: Übernatürliche Wesen, die die Seelen auserwählter Krieger ins Jenseits geleiteten. In einer ähnlichen Manier führte der ursprüngliche Kapitän der Herja viele Transhumane in den Tod, indem er die explosive Kraft seines Schiffes geschickt ausnutzte. Mit ihren Strahlenwaffen, Raketen und dem Sprengimpuls ist die Herja ein einzigartiger, offensiver taktischer Kreuzer, den man auf keinen Fall unterschätzen sollte.",
+    "es": "Las Naves héroe son cargas preconfiguradas de naves históricas que contribuyen directamente con tus recompensas de partidas como XP libre que se pueden utilizar para todas las otras naves. No se pueden personalizar pero te darán acceso a sus artículos de apariencia para utilizar en clases de naves compatibles. Según la mitología de la Vieja Tierra, el Herja fue una de las valquirias: seres supernaturales que eligieron a los guerreros más poderosos muertos en combate y guiaron sus almas al más allá. De forma similar, la capitana astuta del Herja original asesinó a muchos transhumanos al hacer un uso experto de la potencia explosiva de su nave. Con armamento de viga, misiles y capacidad de pulso, el Herja es un crucero táctico orientado a la ofensa que sus enemigos subestiman bajo su propia responsabilidad.",
+    "fr": "Les vaisseaux de héros ont des configurations déjà établis provenant directement de l'histoire de leurs vaisseaux et vous permettent de gagner davantage d'XP libre que vous pourrez ensuite utiliser sur n'importe lequel de vos vaisseaux. Ils ne peuvent être personnalisés, mais vous donnent accès à un panel d'objets de personnalisations pour vos autres vaisseaux de la même classe compatibles. Selon la mythologie de la Vieille Terre, Herja était l'une des valkyries : créatures fantastiques qui choisissaient les meilleurs guerriers morts au combat, et guidaient leurs âmes au paradis. De la même façon, le capitaine du Herja original conduisit de nombreux Transhumains à leurs morts en abusant de la puissance explosive de son vaisseau. Incluant un armement à rayon, des missiles, et une capacité d'impulsion explosive, le Herja est un croiseur tactique offensif unique que ses ennemis continuent à sous-estimer à leurs plus grands périls.",
+    "pl": "Okręty-bohaterowie to gotowe konfiguracje historycznych jednostek, które mają bezpośredni wpływ na Twoje nagrody za bitwy. Zdobyte z ich pomocą wolne PD można przeznaczyć na pozostałe okręty. Modyfikacja okrętów-bohaterów nie jest możliwa, ale elementy ich wyglądu można zastosować w jednostkach kompatybilnej klasy. Według mitologii Starej Ziemi, Herja była jedną z walkirii: nadprzyrodzonych istot, które wybierały najpotężniejszych wojowników poległych w walce i wprowadzały ich dusze w zaświaty. Sprytna kapitan oryginalnego okrętu Herja w podobny sposób odesłała w zaświaty wielu Syntetyków, wykorzystując do tego niezwykłą siłę swojej jednostki. Wyposażona w uzbrojenie wiązkowe, rakiety oraz impuls wysadzający Herja jest unikatowym, często niedocenianym przez wrogów okrętem do działań ofensywnych.",
+    "ru": "Корабли героев, это предварительно сконфигурированные боекомплекты исторических кораблей, которые непосредственно увеличат ваш свободный опыт за каждый матч. Вы сможете его использовать на всех других кораблях. Хотя они не подлежат кастомизации, их элементам внешнего вида можно использовать для улучшения внешнего вида других соответствующих классов кораблей. По мифологии Старой Земли, «Эрья» была одной из валькирий: сверхъестественных существ, которые избирали самых могущественных воинов, убитых в бою, и направляли их души в потусторонний мир. Подобным же образом, капитан «Эрьи» привел многих транслюдей к гибели, умело используя взрывную силу своего корабля. Имея лучевое оружие, ракеты и взрывной импульс импульсов, «Эрья» — уникальный тактический крейсер, оснащенный для наступления.",
+    "zh-cn": "英雄舰是拥有预配装置的历史性战舰, 直接将您的战斗奖励转化为自由XP, 可用于所有其他战舰。它们不能自定义, 但它们的外观物品您可以在其他级别兼容的战舰上使用。古地球神话中讲到, 掠夺是瓦尔基里的一员: 它们是超自然生物，挑选交战中战死的最强大的勇士, 引导他们的灵魂进入来世。原来的掠夺号诡计多端的舰长，以同样的方式，利用战舰的宏大爆发力，导致了不计其数的超人类的死亡。掠夺拥有光束武器、导弹和爆炸脉冲能力, 是一艘独特的、面向进攻的战术巡洋舰。它的敌人经常会低估它的危险。"
+   },
+   "image": "UI_SupportL_Strix.png",
+   "name": {
+    "de": "Herja",
+    "en": "Herja",
+    "es": "Herja",
+    "fr": "Herja",
+    "pl": "Herja",
+    "ru": "Эрья",
+    "zh-cn": "掠夺"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043377": {
+   "description": {
+    "de": "Der Captain der Zaratan, Jin Ebisu, führte im Jahr 2390 eine Flotte von Rammschiffen in die letzte Kampagne des ersten Atlantisangriffs. Das Schiff ist das beste Beispiel von Oberons Errungenschaften in der Ramm-Technologie während des Krieges. Ursprünglich wurden Rammtaktiken von der PKF eingesetzt, um der Transhuman-Technologie zu schaden, der Kanonen nichts anhaben konnten. Im Verlauf des Krieges entwickelten Jupiter Arms und Akula Vektor jedoch eine Technologie, die dieses Problem überwand, sodass Rammmanöver hinfällig wurden. Doch da die Transhumans gegen Kriegsende immer intelligenter wurden und der Kampf schwerer, setzten verzweifelte Captains erneut auf Rammtaktiken. Dies führte zu Oberons neuer Generation von Ramm-Technologie.",
+    "en": "Captained by Jin Ebisu, the Zaratan lead a fleet of ramming battleships in the final campaign of the First Atlantian Assault in the 2390s. The ship is the finest example of Oberon's achievements in Ram tech during the War. Ramming tactics were originally used by the PCF when they started encountering Transhuman tech made out of materials which made the cannons on their ships obsolete.As the war went on, Jupiter Arms and Akula Vektor developed tech that was effective against Transhuman armor, making ramming maneuvers obsolete. But the Transhumans' intelligence grew exponentially towards the end of the War meant that desperate Captains began to employ ram tactics once again, leading to Oberon's new generation of ram technology.",
+    "es": "Capitaneado por Jin Ebisu, el Zaratan lideró una flota de naves ariete en la campaña final del primer asalto a Atlantis a finales de la década de 2390. La nave es el ejemplo perfecto de la tecnología de arietes de Oberon durante la guerra. Las tácticas de ariete fueron una idea de la FPC cuando encontraron tecnología transhumana hecha con materiales que dejaban obsoletos los cañones de sus naves. Según avanzó la guerra, Jupiter Arms y Akula Vektor desarrollaron armas viables contra la armadura transhumana, con lo que las maniobras de embestida quedaron obsoletas. Pero la inteligencia de los transhumanos aumentó exponencialmente hacia el final de la guerra y los capitanes desesperados, recurrieron una vez más a las embestidas, lo que llevó a la nueva generación de arietes de Oberon.",
+    "fr": "Commandé par Jin Ebisu, le Zaratan a mené au combat des vaisseaux-béliers lors de la dernière offensive du Premier Assaut Atlante, dans les années 2390. Ce vaisseau était doté des meilleures techniques de bélier développées par Oberon. Au début de la guerre, la FPC a été contrainte de faire usage de béliers face aux vaisseaux transhumains dotés de matériaux résistant à tous les calibres. Alors que la guerre poursuivait son cours, Jupiter Arms et Akula Vektor sont parvenus à développer des technologies efficaces contre les blindages transhumains, rendant les manœuvres de bélier trop risquées. Mais alors que le conflit touchait à sa fin, les forces transhumaines ont usé de tactiques de plus en plus créatives. Face à eux, des capitaines aux abois se sont réapproprié la technique du bélier et Oberon a donc proposé des manœuvres innovantes.",
+    "pl": "Zaratan pod dowództwem Jina Ebisu prowadził flotę taranujących okrętów liniowych w ostatniej kampanii pierwszej ofensywy atlantyjskiej w latach 90. XXIV wieku. Jest to najlepszy przykład osiągnięć oberonitów w technologii taranowania z czasu wojny. Taktyki taranowania były pierwotnie stosowane przez FWK, gdy jej jednostki zaczęły spotykać się z technologią syntetyków opartą na materiałach, które powodowały nieskuteczność dział pokładowych. W miarę postępów wojny Jupiter Arms i Akula Vektor opracowały uzbrojenie, która potrafiło przebić pancerze syntetyków, w związku z czym zarzucono manewry taranowania. Jednak pod koniec wojny inteligencja naukowców syntetyków rosła w tempie wykładniczym, co sprawiło, że zdesperowani kapitanowie ponownie uciekli się do taranowania, a to spowodowało powstanie nowej, oberońskiej generacji tej technologii.",
+    "ru": "Под командованием капитана Дзина Эбису «Заратан» возглавлял флот таранных кораблей в последнюю кампанию первого штурма Атлантиды в 2390-х годах. Этот корабль — лучший пример достижений «Оберона» в таранной технологии во время войны. Тактику тарана изначально применял ПКФ, когда столкнулся с техникой транслюдей, сделанной из материалов, которые были не по зубам корабельным пушкам флота. В ходе войны «Юпитер Армс» и «Акула Вектор» разработали технологии, эффективные против брони транслюдей, и таранные маневры устарели. Но ближе к концу войны интеллект транслюдей стал расти в геометрической прогрессии, и отчаянные капитаны снова стали применять тактику тарана. Так возникло новое поколение таранной технологии «Оберона».",
+    "zh-cn": "萨拉坦在金·恩百施的指挥下，于纪元2390年第一次亚特兰蒂斯突击战的最终决战中带领一支撞击战舰舰队。这艘战舰是战争期间天卫四撞击技术的最佳范例。泛殖民地舰队在初次遭遇到由超人类技术的强力材料制作的战舰时，发现他们的大炮变成了摆设，于是想出了撞击战术。随着战事的进展，木星武装和阿库拉·维克托开发出了能有效对抗超人护甲的技术，从此便不再使用撞击策略。但在战争末期，超人的智慧以指数的速度增强，绝望的舰长们再一次开始使用撞击战术，引起了天卫四撞击技术的继续更新。"
+   },
+   "image": "UI_AssaultL_Daggertooth.png",
+   "name": {
+    "de": "Zaratan",
+    "en": "Zaratan",
+    "es": "Zaratan",
+    "fr": "Zaratan",
+    "pl": "Zaratan",
+    "ru": "Заратан",
+    "zh-cn": "萨拉坦"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043378": {
+   "description": {
+    "de": "Die Trident ist das Flaggschiff von Captain Melville Blanco, der im Großen Sonnenkrieg für die PKF kämpfte. Nach der Schlacht am Deimos wurde er nie wiedergesehen. Er war damals bekannt für seine obsessive Jagd nach dem weißen Transhuman-Dreadnought, der seine ganze Flotte ausgelöscht hatte.",
+    "en": "The Trident is the flagship of Captain Melville Blanco, who fought for the PCF during the Great Solar War. He went AWOL after the battle of Deimos, becoming notorious for his obsessive hunt for the pale transhuman dreadnought which had decimated his fleet in the battle.",
+    "es": "El Trident es el buque insignia del capitán Melville Blanco, que luchó por la FPC durante la Gran Guerra Solar. Desertó después de la batalla de Deimos, haciéndose notorio por su búsqueda obsesiva por el pálido Dreadnought transhumano que había diezmado a su flota en la batalla.",
+    "fr": "Le Trident est le vaisseau amiral du capitaine Melville Blanco, qui combattit pour la FPC durant la Grande guerre solaire. Il fut déclaré disparu au combat après la bataille de Deimos. Il était célèbre pour sa quête obsessive du Dreadnought transhumain pâle qui avait décimé sa flotte au combat.",
+    "pl": "„Trójząb” jest flagowcem kapitana Melville’a Blanco, który walczył w szeregach FWK podczas wielkiej wojny solarnej. Po bitwie o Dejmosa Blanco odleciał wbrew rozkazom i zasłynął z obsesyjnego polowania na białego drednota syntetyków, który zdziesiątkował jego flotę podczas bitwy.",
+    "ru": "«Трезубец» — флагман капитана Мелвилла Бланко, который сражался за ПКФ в ходе Великой Солнечной войны. После битвы за Деймос он ушел в самоволку и обрел дурную славу за навязчивую погоню за исчезающим дредноутом транслюдей, который уничтожил его флот в бою.",
+    "zh-cn": "三叉戟是梅尔维尔·布兰科舰长的旗舰，在太阳系大战期间为泛殖民地舰队效力。他在火卫二之战后擅自离开，由于沉迷于猎杀在战役中摧毁了他的舰队的超人类无畏舰而臭名昭著。"
+   },
+   "image": "UI_DreadnoughtH_Trident.png",
+   "name": {
+    "de": "Trident",
+    "en": "Trident",
+    "es": "Trident",
+    "fr": "Trident",
+    "pl": "Trójząb",
+    "ru": "Трезубец",
+    "zh-cn": "三叉戟"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043379": {
+   "description": {
+    "de": "Dies ist das Flaggschiff von Crom Gallant, dem ehemaligen Chef des Forschung- und Entwicklung-Sektor von Akula Inustries.",
+    "en": "This is the flagship of Crom Gallant, erstwhile head of R&D at Akula Industries.",
+    "es": "Este es el buque insignia de Crom Gallant, antiguo responsable de I+D de Akula Industries.",
+    "fr": "C'est le vaisseau amiral de Crom Gallant, ancien directeur de R&D chez Akula Vektor.",
+    "pl": "To okręt flagowy Croma Gallanta, dawnego naczelnika Wydziału Badań i Rozwoju w Akula Industries.",
+    "ru": "Это флагман Крома Галланта, бывшего руководителя отдела исследований и разработок в «Акуле Индастриз».",
+    "zh-cn": "这是前阿库拉工厂研发总监克罗姆·加兰特的旗舰。"
+   },
+   "image": "UI_AssaultH_Huscarl.png",
+   "name": {
+    "de": "Huscarl",
+    "en": "Huscarl",
+    "es": "Huscarl",
+    "fr": "Huscarl",
+    "pl": "Huskarl",
+    "ru": "Хускарл",
+    "zh-cn": "赫斯加尔"
+   },
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043380": {
+   "description": {
+    "de": "Auch bekannt als das „Schwarze Phantom“, versetzt diese extrem gut getarnte Korvette all jene in Angst und Schrecken, die sich in die ungesicherten Gebiete wagen müssen.",
+    "en": "Also known as the Black Phantom, this ultra-stealthy Corvette is feared by all who enter unpatrolled space.",
+    "es": "También conocida como el Fantasma Negro, esta furtiva corbeta es temida por todos los que entran en un espacio sin vigilancia.",
+    "fr": "Aussi connue sous le nom de Fantôme Noir, cette Corvette ultra discrète est crainte par tous ceux qui pénètrent dans un espace non surveillé.",
+    "pl": "Ta wyjątkowo dobrze zamaskowana korweta, znana również jako „Czarne Widmo”, jest postrachem wszystkich, którzy pojawią się w niepatrolowanej przestrzeni.",
+    "ru": "Этот сверхскрытный корвет по прозвищу «Черный призрак» наводит страх на всех, кто входит в непатрулируемое пространство.",
+    "zh-cn": "这艘隐身能力顶级的护卫舰又被称为黑色魅影，所有驶入无人巡视空间的船舰都会对它畏惧三分。"
+   },
+   "image": "UI_ScoutM_Outis.png",
+   "name": {
+    "de": "Outis",
+    "en": "Outis",
+    "es": "Outis",
+    "fr": "Outis",
+    "pl": "Outis",
+    "ru": "Отис",
+    "zh-cn": "乌提斯"
+   },
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043381": {
+   "description": {
+    "de": "Die Kali ist das Flaggschiff von Commodore Rajesh, seines Zeichens Sicherheitschef des Akula-Raffineriemondes Phoebe.",
+    "en": "The Kali is the Flagship of Commodore Rajesh, head of security at Akula’s refinery moon Phoebe.",
+    "es": "El Kali es el buque insignia del comodoro Rajesh, jefe de la seguridad de la refinería de Akula en la luna Febe.",
+    "fr": "Le Kali est le vaisseau amiral du commodore Rajesh, chef de la sécurité de la raffinerie lunaire d'Akula sur Phoebe.",
+    "pl": "„Kali” to okręt flagowy komandora Rajesha, szefa ochrony należącego do Akula Vektor księżyca-rafinerii Febe.",
+    "ru": "«Кали» — флагман капитана I ранга Раджиша, начальника службы безопасности перерабатывающего завода «Акулы» на луне Фебе.",
+    "zh-cn": "卡利是舰队准将，同时也是阿库拉的月球精炼基地菲比的安全主管拉杰什的旗舰。"
+   },
+   "image": "UI_SupportH_Kali.png",
+   "name": {
+    "de": "Kali",
+    "en": "Kali",
+    "es": "Kali",
+    "fr": "Kali",
+    "pl": "Kali",
+    "ru": "Кали",
+    "zh-cn": "卡利"
+   },
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043382": {
+   "description": {
+    "de": "Die Silesia ist das Flaggschiff eines abtrünnigen Sinley Bay-Captains, dessen Identität unklar bleibt, aber dennoch den Ruf einer furchterregenden, zerstörerischen Kraft erlangt hat.",
+    "en": "The Silesia is the flagship of a rogue Sinley Bay captain, whose identity remains hazy, but has gained a reputation as a fearsome destructive force.",
+    "es": "La Silesia es el buque insignia de un capitán canalla de la Bahía de Sinley, cuya identidad sigue siendo un misterio, pero se decía que tenía una fuerza destructiva temible.",
+    "fr": "Le Silesia est le vaisseau amiral d'un capitaine rebelle de Sinley Bay dont l'identité reste floue, mais qui a la réputation d'être incroyablement destructeur.",
+    "pl": "„Silesia” to okręt flagowy zbuntowanego kapitana z Sinley Bay, którego tożsamość owiana jest tajemnicą, ale który zyskał sobie reputację straszliwego i niszczycielskiego wroga.",
+    "ru": "«Силезия» — флагман загадочного капитана-дезертира с Синли-Бея, завоевавшего репутацию опасного противника.",
+    "zh-cn": "西里西亚是一位心裂湾叛变舰长的旗舰，这位舰长究竟是何方神圣至今不明，但他毁灭性的力量却无人不知。"
+   },
+   "image": "UI_SniperL_Silesia.png",
+   "name": {
+    "de": "Silesia",
+    "en": "Silesia",
+    "es": "Silesia",
+    "fr": "Silesia",
+    "pl": "Silesia",
+    "ru": "Силезия",
+    "zh-cn": "西里西亚"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043383": {
+   "description": {
+    "de": "Die Morningstar ist Bix’ legendäres Schlachtschiff, das er durch die Wirren des Großen Sonnenkrieges steuerte und mit dem er zahlreiche bedeutende Schlachten für die PKF gewann.",
+    "en": "The Morningstar is Bix's legendary battleship, which he captained during the Great Solar War, winning many major battles for the PCF.",
+    "es": "El Morningstar es el legendario acorazado de Bix, que capitaneó durante la Gran Guerra Solar, ganando muchas batallas importantes para la FPC.",
+    "fr": "Le Morningstar est le vaisseau de combat légendaire de Bix, aux commandes duquel il a remporté de nombreuses batailles pour la FPC durant la Grande guerre solaire.",
+    "pl": "„Gwiazda Zaranna” to legendarny okręt wojenny Bixa, którym dowodził podczas wielkiej wojny solarnej, wielokrotnie przechylając szale zwycięstwa na rzecz Floty Wszechkolonialnej.",
+    "ru": "«Утренняя звезда» — легендарный линкор Бикса. Он был его капитаном во время Великой Солнечной войны и принес ПКФ победы во многих крупных сражениях.",
+    "zh-cn": "启明星号是比克斯的传奇战舰：他在伟大的太阳系战争中担任启明星号舰长，为泛殖民地舰队赢得了许多重大战役。"
+   },
+   "image": "UI_DreadnoughtM_Morningstar.png",
+   "name": {
+    "de": "Morningstar",
+    "en": "Morningstar",
+    "es": "Morningstar",
+    "fr": "Morningstar",
+    "pl": "Gwiazda Zaranna",
+    "ru": "Утренняя звезда",
+    "zh-cn": "启明星"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043384": {
+   "description": {
+    "de": "Die PKF Silesia kommt mit dem original-Lack und der original-Waffensystemkonfiguartion, die von Oberon auf Wunsch der PKF während des Großen Sonnenkrieges kreiert wurde.",
+    "en": "The PCF Silesia comes with the original coating and weapon system configuration built by House Oberon on behalf of the PCF during the Great Solar War.",
+    "es": "El FPC Silesia viene con el recubrimiento y la configuración original del sistema de armas construido por Casa Oberon en nombre de la FPC durante la Gran Guerra Solar.",
+    "fr": "Le Silesia, dans sa configuration FPC, est doté de son armement et de sa peinture d'origine. La FPC avait commandé le vaisseau auprès d'Oberon dans le cadre de la Grande guerre solaire.",
+    "pl": "Oryginalne poszycie i konfiguracja uzbrojenia FWK „Silesia” zostały zaprojektowane przez Dom Oberon na zlecenie FWK podczas wielkiej wojny solarnej.",
+    "ru": "«ПКФ Силезия» поставляется с исходными покрытием и конфигурацией орудийной системы, построенными династией Оберон от имени ПКФ во время Великой Солнечной войны.",
+    "zh-cn": "泛殖民地舰队西里西亚带有原始的涂装和武器系统配置，由天卫四家族在太阳系大战期间代表泛殖民地舰队建造。"
+   },
+   "image": "UI_SniperL_Silesia_New.png",
+   "name": {
+    "de": "PKF-Silesia",
+    "en": "PCF Silesia",
+    "es": "FPC Silesia",
+    "fr": "Silesia de la FPC",
+    "pl": "FWK Silesia",
+    "ru": "ПКФ Силезия",
+    "zh-cn": "泛殖民地舰队西里西亚"
+   },
+   "subline": {
+    "de": "Artilleriekreuzer",
+    "en": "Artillery Cruiser",
+    "es": "Crucero de artillería",
+    "fr": "Croiseur d'artillerie",
+    "pl": "Krążownik artyleryjski",
+    "ru": "Артиллерийский крейсер",
+    "zh-cn": "炮击巡洋舰"
+   }
+  },
+  "67043385": {
+   "description": {
+    "de": "Die PKF Morningstar ist Bix’ legendäres Schlachtschiff und verfügt noch über die Originalkonfiguration der PKF. Er steuerte sie durch die Wirren des Großen Sonnenkrieges und gewann mit ihr zahlreiche bedeutende Schlachten für die PKF.",
+    "en": "The PCF Morningstar is Bix's legendary battleship and comes with the original configuration of the PCF. He captained her during the Great Solar War, winning many major battles for the PCF.",
+    "es": "El FPC Morningstar es el legendario acorazado de Bix y viene con la configuración original de la FPC. La capitaneó durante la Gran Guerra Solar, ganando batallas importantes para la FPC.",
+    "fr": "Le Morningstar est le légendaire vaisseau de combat de Bix, dans sa configuration originelle. Bix a remporté de nombreuses victoires avec ce vaisseau au nom de la FPC lors de la Grande guerre solaire.",
+    "pl": "„Gwiazda Zaranna” to legendarny okręt Bixa. Dostarczany w oryginalnej konfiguracji Floty Wszechkolonialnej. Dowodził nią podczas wielkiej wojny solarnej, odnosząc wiele zwycięstw dla FWK.",
+    "ru": "«ПКФ Утренняя звезда»  — легендарный линкор Бикса, поставляется с исходной конфигурацией ПКФ. Бикс был капитаном корабля во время Великой Солнечной войны и принес ПКФ победы во многих крупных сражениях.",
+    "zh-cn": "泛殖民地舰队启明星号是比克斯的传奇战舰，带有泛殖民地舰队的原装配置。他在太阳系大战中指挥她击败了无数敌人，为泛殖民地舰队赢得各种重大战役的胜利。"
+   },
+   "image": "UI_DreadnoughtM_Morningstar_New.png",
+   "name": {
+    "de": "PKF Morningstar",
+    "en": "PCF Morningstar",
+    "es": "FPC Morningstar",
+    "fr": "Morningstar - FPC",
+    "pl": "FWK „Gwiazda Zaranna”",
+    "ru": "ПКФ Утренняя звезда",
+    "zh-cn": "泛殖民地舰队启明星"
+   },
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  },
+  "67043390": {
+   "image": "UI_AssaultM_FTS.png",
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043391": {
+   "image": "UI_AssaultL_Fenrir.png",
+   "subline": {
+    "de": "Zerstörer",
+    "en": "Destroyer",
+    "es": "Destructor",
+    "fr": "Destroyer",
+    "pl": "Niszczyciel",
+    "ru": "Эсминец",
+    "zh-cn": "驱逐舰"
+   }
+  },
+  "67043392": {
+   "description": {
+    "de": "Leichter Späher (R3-Heldenschiff)",
+    "en": "Light Scout T3 Hero",
+    "es": "Explorador ligero héroe de categoría 3",
+    "fr": "Éclaireur léger Héros N3",
+    "pl": "Lekki zwiadowca poziomu 3. (bohater)",
+    "ru": "«Легкий скаут» (герой) T3",
+    "zh-cn": "轻型斥候T3英雄"
+   },
+   "image": "UI_ScoutL_Hermes.png",
+   "subline": {
+    "de": "Korvette",
+    "en": "Corvette",
+    "es": "Corbeta",
+    "fr": "Corvette",
+    "pl": "Korweta",
+    "ru": "Корвет",
+    "zh-cn": "护卫舰"
+   }
+  },
+  "67043393": {
+   "image": "UI_SupportL_Marauder.png",
+   "subline": {
+    "de": "Taktischer Kreuzer",
+    "en": "Tactical Cruiser",
+    "es": "Crucero táctico",
+    "fr": "Croiseur tactique",
+    "pl": "Krążownik taktyczny",
+    "ru": "Тактический крейсер",
+    "zh-cn": "战术巡洋舰"
+   }
+  },
+  "67043394": {
+   "image": "UI_DreadnoughtL_Dragon.png",
+   "subline": {
+    "de": "Dreadnought",
+    "en": "Dreadnought",
+    "es": "Dreadnought",
+    "fr": "Dreadnought",
+    "pl": "Dreadnought",
+    "ru": "Дредноут",
+    "zh-cn": "无畏战舰"
+   }
+  }
+ },
+ "strings": {
+  "VanguardBundleDescription": {
+   "de": "Beginne deine Karriere als Söldnercaptain. Komm schneller voran mit dem 7-tägigen Elitestatus und 1200 GP. Übernimm das Kommando über das mächtige Heldenschiff Silesia und erhalte 10.000 Credits, die du für den Tech-Baum deines Schiffs ausgeben kannst! Das Vorreiter-Bundle hat alles, was ein neuer Rekrut braucht, um zur Legende aufzusteigen.",
+   "en": "Kick-start your career as a mercenary captain. Progress faster with 7 days of Elite Status, command the powerful PCF Silesia Hero Ship, and get 10,000 Credits to spend within your ships’ tech trees! The Vanguard Bundle contains everything a new recruit needs to become a legend.",
+   "es": "Comienza tu carrera como capitán mercenario con una ayuda extra. ¡Progresa más rápido con 7 días de estado Élite, la poderosa nave héroe Silesia, y 10000 créditos que gastar en los árboles de tecnologías de tus naves! El paquete de vanguardia contiene todo lo necesario para que un recluta pase a ser leyenda.",
+   "fr": "Lancez votre carrière de capitaine mercenaire. Progressez plus rapidement avec 7 jours de statut Élite, le puissant vaisseau de héros Silesia, ainsi que 10 000 Crédits à dépenser dans l'arbre technologique de vos vaisseaux ! Le Lot Avant-garde contient tout ce dont une nouvelle recrue a besoin pour devenir une légende.",
+   "pl": "Zapewnij sobie lepszy start w roli najemnego kapitana. Rób postępy szybciej dzięki 7 dniom statusu elity. Stań za sterami potężnego okrętu Silesia i ulepsz go od razu dzięki 10 000 kredytów na dobry początek! Pakiet awangardy zawiera wszystko, czego nowy rekrut potrzebuje, by zostać legendą.",
+   "ru": "Начните карьеру в качестве наемного капитана. Элитный статус на 7 дней поможет продвигаться быстрее, вы получите под свое командование мощный корабль героя «ПКФ Силезия» и 10 000 кредитов, которые можно потратить на дерево технологий своих кораблей! В пакете \"Авангард\" есть все, что нужно новобранцу, чтобы стать легендой.",
+   "zh-cn": "马上开始你作为雇佣兵舰长的生涯吧！拥有7天的精英会员时进展更快，能指挥强泛殖民地舰队西里西亚英雄舰，并获得可以用在战舰科技树上的10000点资金！先驱捆绑包囊括了一个新人成为一代传奇所需的一切。"
+  }
+ }
+}

@@ -304,6 +304,7 @@ func loadPersistedShipLoadouts(database *sql.DB, playerPID string) (map[int32]mm
 		}
 		loadout.playerLoadoutID = loadoutID
 		loadout.ship = persistedShipByID(shipID)
+		loadout.loadoutName = heroLoadoutName(loadout.precastLoadoutID, shipID, loadout.loadoutName)
 		if starter, ok := starterLoadoutByPrecastID(loadout.precastLoadoutID); ok {
 			loadout.fleetShipID = starter.fleetShipID
 		} else if loadout.precastLoadoutID != 0 {
@@ -1436,6 +1437,7 @@ func grantUnlockedShipLoadout(tx *sql.Tx, playerPID string, precastLoadoutID int
 	if authoritative, ok := dreadconfig.AuthoritativeShipName(shipID); ok {
 		name = authoritative
 	}
+	name = heroLoadoutName(precastLoadoutID, shipID, name)
 	var nextPosition int32
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(position)+1,0) FROM player_ship_loadouts WHERE user_id=?`,
 		playerPID).Scan(&nextPosition); err != nil {
@@ -1649,4 +1651,28 @@ func researchedOrOwnedItemIDs(playerPID string) []int32 {
 		}
 	}
 	return ids
+}
+
+// heroLoadoutName is the name a hero loadout goes out with.
+//
+// A hero shares its pawn with a base hull -- the PCF Silesia flies the Furia's
+// pawn -- so naming a granted loadout after its PAWN (AuthoritativeShipName)
+// called 38 heroes on three accounts "Furia", "Nav", "Tugarin", "Orcus"...
+// The client shows the server's loadout name whenever it differs from the
+// blueprint's own, so those heroes were listed as base ships (operator,
+// 2026-10-01). A hero is named after its own blueprint (m_name); a stored name
+// that is exactly the pawn's base name is that mistake and is replaced, any
+// other stored name is kept.
+func heroLoadoutName(precastLoadoutID, shipID int32, stored string) string {
+	if (precastLoadoutID>>24)&0xff != mmogItemCategoryShipLoadoutHero {
+		return stored
+	}
+	own, ok := dreadconfig.CookedHeroName(precastLoadoutID)
+	if !ok || own == "" {
+		return stored
+	}
+	if base, ok := dreadconfig.AuthoritativeShipName(shipID); stored == "" || (ok && stored == base) {
+		return own
+	}
+	return stored
 }

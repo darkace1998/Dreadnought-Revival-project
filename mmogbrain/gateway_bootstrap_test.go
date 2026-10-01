@@ -156,7 +156,12 @@ func gatewayExpectedCatalogAliasCount(catalogKey string, alias string, entityCou
 		if alias == "Items" || alias == "ItemOffers" {
 			return entityCount
 		}
-	case gatewayKeyCurrencyReal, gatewayKeyCurrencyVC:
+	case gatewayKeyCurrencyVC:
+		// The virtual currency catalog is the Market's bundle listing: its
+		// entities are {entity_id} names of the bundles to show
+		// (gatewayBundleListing), not forex offers.
+		return 0
+	case gatewayKeyCurrencyReal:
 		if alias == "ForexOffers" {
 			return entityCount
 		}
@@ -407,8 +412,22 @@ func TestGatewayMarketEntitiesCarryBothNameFields(t *testing.T) {
 		if !ok || display == "" {
 			t.Fatalf("item %d has no display \"Name\"; the market renders it as <DNT>[[NotFound]]", seed.itemID)
 		}
-		if _, ok := entity["name"]; !ok {
-			t.Fatalf("item %d lost its lowercase localization \"name\"", seed.itemID)
+		// To the client "name" and "Name" are one key (FJsonObject compares
+		// field names case-insensitively, and "name" is written last), so an
+		// entry with no localization key must OMIT "name": an empty one erased
+		// the display name of every hero ship ("<DNT>EMPTY Name in json en").
+		if loc, ok := entity["name"].(dreadconfig.Localized); ok {
+			// The original store's localized object: it replaces "Name", so
+			// it must carry the same English text.
+			if loc["en"] == "" {
+				t.Fatalf("item %d sends a localized \"name\" with no English text", seed.itemID)
+			}
+		} else if key := gatewayMarketLocalizationName(seed); key != "" {
+			if entity["name"] != key {
+				t.Fatalf("item %d lost its lowercase localization \"name\"", seed.itemID)
+			}
+		} else if _, ok := entity["name"]; ok {
+			t.Fatalf("item %d sends an empty \"name\", which erases its \"Name\" %q", seed.itemID, display)
 		}
 	}
 }
@@ -490,8 +509,10 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 				}
 			}
 			if tc.requestedKey == gatewayKeyBundles {
-				if _, ok := payload["entities"]; ok {
-					t.Fatalf("unexpected top-level entities in %s payload", tc.name)
+				// The bundle index reads "entities" of the response filed
+				// under "bundles" (0x142a61be0), so it must carry the bundles.
+				if got, _ := payload["entities"].([]any); len(got) != len(gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles)) {
+					t.Fatalf("bundles payload entities = %d entries, want the bundles", len(got))
 				}
 				bundles := gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles)
 				if len(bundles) == 0 {
@@ -624,8 +645,17 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 
 			for _, bundle := range gatewayJSONArray(t, payload[gatewayFieldBundles], gatewayFieldBundles) {
 				bundleEntry := gatewayJSONMap(t, bundle, "bundle")
-				if got := len(gatewayJSONArray(t, bundleEntry["items"], "bundle items")); got != 0 {
-					t.Fatalf("bundle item count = %d, want 0 to avoid duplicate market item rows", got)
+				// items[] may only REFERENCE contents ({external_id,
+				// quantity}): whole item entities there caused duplicate
+				// FYItemData loads (#58), but the references are the bundle
+				// converter's only source of a bundle's item ids (0x142a81060).
+				for _, item := range gatewayJSONArray(t, bundleEntry["items"], "bundle items") {
+					ref := gatewayJSONMap(t, item, "bundle item")
+					for key := range ref {
+						if key != "external_id" && key != "quantity" {
+							t.Fatalf("bundle item carries %q: a whole entity, not a reference; it duplicates market item rows", key)
+						}
+					}
 				}
 			}
 		})

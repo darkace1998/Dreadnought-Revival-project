@@ -78,6 +78,9 @@ func startGatewayServer(ctx context.Context, log *logrus.Logger, addr, certFile,
 	mux.HandleFunc("/api/v1/play/lkg", makeGatewayHandler(log, secret, handleGWPlayLkg))
 	mux.HandleFunc("/api/v1/play", makeGatewayHandler(log, secret, handleGWPlay))
 	mux.HandleFunc("/api/v1/bundles", makeGatewayHandler(log, secret, handleGWBundles))
+	// Market pictures (market_images.go). No token: the client's image
+	// download is a plain GET of the URL the catalog gave it.
+	mux.HandleFunc(marketImagePath, handleMarketImage)
 	mux.HandleFunc("/api/v1/catalog/digital_items_vc", makeGatewayHandler(log, secret, handleGWCatalog))
 	mux.HandleFunc("/api/v1/catalog/currency_pack_vc", makeGatewayHandler(log, secret, handleGWCatalog))
 	mux.HandleFunc("/api/v1/catalog/digital_items_rmt", makeGatewayHandler(log, secret, handleGWCatalog))
@@ -446,7 +449,7 @@ func handleGWPlay(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) 
 // handleGWBundles handles GET /api/v1/bundles.
 func handleGWBundles(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
 	playerID := protocol.GatewayClaimsUserID(claims)
-	gwJSON(w, gatewayBootstrapPayload(playerID, "bundles", waitForGatewayBootstrapPlayerDataReady(playerID)))
+	gwJSON(w, gatewayAbsoluteImageURLs(gatewayBootstrapPayload(playerID, "bundles", waitForGatewayBootstrapPlayerDataReady(playerID)), r))
 }
 
 // handleGWCatalog handles catalog endpoints.
@@ -461,7 +464,7 @@ func handleGWBundles(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
 	playerID := protocol.GatewayClaimsUserID(claims)
 	ready := waitForGatewayBootstrapPlayerDataReady(playerID)
-	gwJSON(w, gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), ready))
+	gwJSON(w, gatewayAbsoluteImageURLs(gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), ready), r))
 }
 
 func gatewayCatalogResponseKey(path string) string {

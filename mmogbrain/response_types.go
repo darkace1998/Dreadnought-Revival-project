@@ -130,6 +130,16 @@ func (loadout mmogShipLoadoutSeed) displayInfo() string {
 	if os.Getenv("DN_NO_SHIP_VANITY") == "1" {
 		return noShipVanityDisplayInfo
 	}
+	// A hero ship is its own look, and cannot be customised ("They cannot be
+	// customised", the game's own hero description, all seven languages).
+	// Its blueprint's appearance therefore wins even over a saved one: heroes
+	// were sent their hull line's default until 2026-10-01, and the client
+	// saved that back, so a stored string can still be the base ship's.
+	if h, ok := heroByID(loadout.precastLoadoutID); ok {
+		if info, ok := dreadconfig.HeroShipDisplayInfo(h.loadoutID, h.hullLine, h.manufacturer); ok {
+			return info
+		}
+	}
 	// What the player actually chose wins over the computed default. Without
 	// this every customisation was answered with the stock appearance on the
 	// next load, so the ship the player built was never the ship they got back.

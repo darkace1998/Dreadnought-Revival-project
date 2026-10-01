@@ -407,6 +407,21 @@ func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, 
 	if err := flushPendingTechTree(log, conn, remote, appEncoder, encryptResponses, state); err != nil {
 		return err
 	}
+	// The owned items that did not fit YA_PlayerGet. DN_PUSH_INVENTORY=off
+	// disables it, =always sends it on every login.
+	if mode := os.Getenv("DN_PUSH_INVENTORY"); mode != "off" {
+		if _, cut := inventoryNeedsPush.LoadAndDelete(state.playerPID); cut || mode == "always" {
+			if pushID, err := uuid.NewRandom(); err == nil {
+				payload := buildMmogPushInventoryPayload(state.playerPID)
+				push := protocol.BuildResponseFrame(pushID, state.lastMsgType, payload)
+				if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_PushInventory", push,
+					appEncoder, encryptResponses, "inventory push failed", "sent YA_PushInventory"); err != nil {
+					return err
+				}
+				log.WithFields(logrus.Fields{"remote": remote, "player": state.playerPID, "bytes": len(payload)}).Warn("mmog: owned list delivered in YA_PushInventory")
+			}
+		}
+	}
 	armMatchPushForActiveMatch(log, remote, state)
 	log.WithFields(logrus.Fields{
 		"remote": remote,
