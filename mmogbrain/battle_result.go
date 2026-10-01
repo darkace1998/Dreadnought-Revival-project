@@ -458,16 +458,30 @@ func battleFleetShipIDs(pid string, fleetType int) []int32 {
 
 // battleFleetLoadouts is the fleet the player fought with: the active fleet
 // of the match's fleet type.
+//
+// Chosen among ALL the player's fleets, not the "active" ones: active marks
+// the single fleet selected in the hangar, so Veteran and Legendary fleets are
+// normally inactive (every account, measured 2026-10-01). Looking only at
+// active fleets found no fleet of type 2 or 3, fell back to the Recruit
+// fleet, and after every Veteran match the rewards were written for the
+// Recruit ships -- the client then reported "Ship XP pools were not gathered
+// correctly" for each Veteran ship it fielded (client reports, 2026-10-01),
+// and the unflown-ship XP went to ships that were not in the match.
 func battleFleetLoadouts(pid string, fleetType int) []mmogShipLoadoutSeed {
 	state := mmogPlayerStateForPID(pid)
-	fleet := state.activeFleet()
-	for _, f := range state.activeFleets() {
-		if int(f.fleetType) == fleetType {
-			fleet = f
-			break
+	var match *mmogFleetSeed
+	for i := range state.fleets {
+		if int(state.fleets[i].fleetType) != fleetType {
+			continue
+		}
+		if match == nil || state.fleets[i].active {
+			match = &state.fleets[i]
 		}
 	}
-	return fleet.shipLoadouts
+	if match != nil {
+		return match.shipLoadouts
+	}
+	return state.activeFleet().shipLoadouts
 }
 
 // unplayedFleetPawnIDs is the fleet's ships that were not flown, by pawn id
