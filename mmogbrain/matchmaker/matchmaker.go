@@ -1108,3 +1108,27 @@ func matchTeam(gameMode string, i int) int {
 	}
 	return i%2 + 1
 }
+
+// StopInstance asks the control plane to stop a battle server -- for a match
+// that was ended before anyone fought in it, whose host would otherwise keep
+// running with nobody coming (see the YA_LeaveMatchmaking path in mmogbrain).
+func (m *Matchmaker) StopInstance(instanceID string) error {
+	if instanceID == "" {
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodDelete,
+		fmt.Sprintf("%s/instances/%s", m.GameMgrURL, url.PathEscape(instanceID)), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Internal-Key", m.InternalKey)
+	resp, err := gameManagerHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("stop instance %s: control plane answered %d", instanceID, resp.StatusCode)
+	}
+	return nil
+}

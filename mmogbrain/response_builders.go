@@ -399,14 +399,54 @@ func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []by
 		if _, err := database.Exec(`DELETE FROM match_slots WHERE user_id=?`, pid); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
 		}
+		// The matches this leaves empty, and their battle servers: ending the
+		// match row alone left the host running with nobody coming -- a
+		// player who cancelled right after a match formed and queued again
+		// was seen with two hosts (operator, 2026-10-01). Read before the
+		// update, and outside any open rows (single connection).
+		var emptied []string
+		if rows, err := database.Query(`SELECT COALESCE(instance_id,'') FROM matches
+			WHERE status='active' AND id NOT IN (SELECT match_id FROM match_slots)`); err == nil {
+			for rows.Next() {
+				var id string
+				if rows.Scan(&id) == nil && id != "" {
+					emptied = append(emptied, id)
+				}
+			}
+			_ = rows.Close()
+		}
 		if _, err := database.Exec(`
 			UPDATE matches SET status='ended', ended_at=?
 			WHERE status='active' AND id NOT IN (SELECT match_id FROM match_slots)`,
 			time.Now().UTC().Format(time.RFC3339)); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
 		}
+		stopEmptiedBattleServers(emptied, pid)
 	}
 	return buildMmogMatchmakingPayload(requestName, mmogMatchmakingStatus{state: "left"})
+}
+
+// activeMatchmaker is the running matchmaker (set in main); nil in tests.
+var activeMatchmaker *matchmaker.Matchmaker
+
+// stopEmptiedBattleServers stops the battle servers of matches a queue leave
+// emptied, in the background so the reply is not held up by the control plane.
+func stopEmptiedBattleServers(instanceIDs []string, pid string) {
+	mm := activeMatchmaker
+	if mm == nil || len(instanceIDs) == 0 {
+		return
+	}
+	go func() {
+		for _, id := range instanceIDs {
+			err := mm.StopInstance(id)
+			entry := logrus.WithFields(logrus.Fields{"instance": id, "player": pid})
+			if err != nil {
+				entry.WithError(err).Warn("matchmaking: could not stop the battle server of a match left empty")
+				continue
+			}
+			entry.Warn("matchmaking: stopped the battle server of a match left empty by a queue leave")
+		}
+	}()
 }
 
 // buildMmogLeftQueuePayload is the push that actually takes the client out of

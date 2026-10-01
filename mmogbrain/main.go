@@ -86,6 +86,7 @@ func main() {
 		log.Warn("neither INTERNAL_API_KEY nor ADMIN_KEY is set; game-manager will reject match requests with 403")
 	}
 	mm := matchmaker.New(database, log, gameMgrURL, internalKey, playersPerMatch)
+	activeMatchmaker = mm
 	configureMatchAutoscale(mm, log)
 	mm.Start()
 	defer mm.Stop()
