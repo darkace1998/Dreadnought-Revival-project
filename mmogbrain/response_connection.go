@@ -1076,34 +1076,13 @@ func connectPushGateOpen(status mmogMatchmakingStatus) (bool, string) {
 }
 
 func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requestID [16]byte, requestName string, response []byte, appEncoder *protocol.StreamCipher, encryptResponses bool, warnMsg string, infoMsg string) error {
-	wire := response
-	if encryptResponses {
-		if appEncoder == nil {
-			log.WithField("request", fmt.Sprintf("%x", requestID)).Warn("mmog: encrypt requested but encoder is nil")
-			return fmt.Errorf("encrypt requested but encoder is nil")
-		}
-		wire = appEncoder.Encrypt(response)
+	if encryptResponses && appEncoder == nil {
+		log.WithField("request", fmt.Sprintf("%x", requestID)).Warn("mmog: encrypt requested but encoder is nil")
+		return fmt.Errorf("encrypt requested but encoder is nil")
 	}
-	// Frame-header correlation diagnostics: decode the outgoing frame header so we
-	// can confirm the client can actually match this response to its request.
 	// response is the full built frame: magic(2) size(2) type(2) reqID(16) payload.
-	// Key things this surfaces: (1) the 16-bit `size` header field overflows for
-	// payloads >~65513 bytes (e.g. YA_Tune), which would desync the client's frame
-	// reader for every following frame; (2) whether the embedded request ID matches
-	// the request we're answering.
-	if len(response) > 0xffff {
-		// The 16-bit frame size field cannot represent this length; sending it
-		// would desync the client's frame stream and corrupt every following
-		// response (this is exactly what an oversized YA_Tune did). Refuse rather
-		// than silently corrupt the connection.
-		log.WithFields(logrus.Fields{
-			"remote":     remote,
-			"name":       requestName,
-			"frame_size": len(response),
-			"max":        0xffff,
-		}).Error("mmog: response frame exceeds 16-bit size limit; not sending (would desync stream)")
-		return fmt.Errorf("mmog response %q too large for frame: %d bytes", requestName, len(response))
-	}
+	// Check the embedded request id: a mismatch means the client cannot match
+	// this response to its request.
 	if len(response) >= 22 {
 		embeddedID := response[6:22]
 		if !bytes.Equal(embeddedID, requestID[:]) {
@@ -1115,19 +1094,58 @@ func writeMmogAppResponse(log *logrus.Logger, conn net.Conn, remote string, requ
 			}).Warn("mmog: response frame request-id mismatch (client cannot correlate)")
 		}
 	}
-	if _, err := conn.Write(wire); err != nil {
-		log.WithError(err).WithField("remote", remote).Warn("mmog: " + warnMsg)
-		return err
+	// A response larger than one frame goes out as several (see
+	// protocol.SplitResponseFrame): the client reassembles frames that share a
+	// request id until one carries the last-frame flag. One frame must fit the
+	// client's 32 KB receive ring, which is why every large response used to be
+	// truncated or emptied to a budget. DN_FRAME_CHUNKING=0 restores the old
+	// single-frame behaviour, under which a frame over 0xffff bytes cannot even
+	// be represented and is refused rather than desyncing the stream.
+	parts := [][]byte{response}
+	if frameChunkingEnabled() {
+		parts = protocol.SplitResponseFrame(response, protocol.MaxChunkFrame)
+	} else if len(response) > 0xffff {
+		log.WithFields(logrus.Fields{
+			"remote":     remote,
+			"name":       requestName,
+			"frame_size": len(response),
+			"max":        0xffff,
+		}).Error("mmog: response frame exceeds 16-bit size limit; not sending (would desync stream)")
+		return fmt.Errorf("mmog response %q too large for frame: %d bytes", requestName, len(response))
 	}
-	log.WithFields(logrus.Fields{
+	cipherBytes := 0
+	for _, part := range parts {
+		wire := part
+		if encryptResponses {
+			wire = appEncoder.Encrypt(part)
+		}
+		if _, err := conn.Write(wire); err != nil {
+			log.WithError(err).WithField("remote", remote).Warn("mmog: " + warnMsg)
+			return err
+		}
+		cipherBytes += len(wire)
+	}
+	fields := logrus.Fields{
 		"remote":       remote,
 		"request":      hex.EncodeToString(requestID[:]),
 		"name":         requestName,
 		"plain_bytes":  len(response),
-		"cipher_bytes": len(wire),
+		"cipher_bytes": cipherBytes,
 		"cipher":       encryptResponses,
-	}).Info("mmog: " + infoMsg)
+	}
+	if len(parts) > 1 {
+		fields["frames"] = len(parts)
+		log.WithFields(fields).Warn("mmog: " + infoMsg + " (split into frames)")
+		return nil
+	}
+	log.WithFields(fields).Info("mmog: " + infoMsg)
 	return nil
+}
+
+// frameChunkingEnabled reports whether oversized responses are split into
+// several frames (DN_FRAME_CHUNKING=0 turns it off).
+func frameChunkingEnabled() bool {
+	return os.Getenv("DN_FRAME_CHUNKING") != "0"
 }
 
 func isMmogPlayerMutationRequest(requestName string) bool {

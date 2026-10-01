@@ -141,3 +141,69 @@ func BuildPingResponseFrame(requestID [16]byte, pingPayload byte) []byte {
 	frame = append(frame, pingPayload)
 	return frame
 }
+
+// Frame flags, the high byte of a frame's type word. Read by the client's
+// frame parser (0x142a64030):
+//
+//   - FrameFirst (0x100): the first frame of a response; the client frees
+//     whatever it had accumulated under that request id (0x142a61110).
+//   - FrameLast (0x200): the response is complete; only then is it handled.
+//
+// Frames in between carry neither, and the client APPENDS each frame's
+// payload to the request's buffer (0x142a5a5c0, 0x7ff8-byte pages, up to 256
+// of them). A single-frame response carries both -- which is all this server
+// ever sent, so every response had to fit one frame, and one frame has to fit
+// the client's 32 KB receive ring (allocated 0x8000 in 0x142a655a0; a frame
+// is parsed only once it is complete in the ring, so a larger one never is).
+const (
+	FrameFirst uint16 = 0x0100
+	FrameLast  uint16 = 0x0200
+)
+
+// MaxChunkFrame is the largest frame SplitResponseFrame emits: well inside
+// the 32 KB ring, and below the ~26 KB single frames already proven live.
+const MaxChunkFrame = 16 * 1024
+
+// SplitResponseFrame splits a complete single-frame response (FrameFirst and
+// FrameLast both set) whose size exceeds maxFrame into consecutive frames
+// under the same request id: the first flagged FrameFirst, the last FrameLast,
+// each at most maxFrame bytes. The client reassembles them into the original
+// payload. Anything else -- a frame that fits, or one that is not a whole
+// response -- is returned unchanged. The frame's own size field is ignored:
+// it cannot represent a payload over 65513 bytes, and the payload is
+// everything after the 22-byte header.
+func SplitResponseFrame(frame []byte, maxFrame int) [][]byte {
+	if len(frame) <= maxFrame || len(frame) < 22 || maxFrame <= 22 {
+		return [][]byte{frame}
+	}
+	frameType := binary.LittleEndian.Uint16(frame[4:6])
+	if frameType&(FrameFirst|FrameLast) != FrameFirst|FrameLast {
+		return [][]byte{frame}
+	}
+	base := frameType &^ (FrameFirst | FrameLast)
+	header := frame[:22]
+	payload := frame[22:]
+	chunk := maxFrame - 22
+	var frames [][]byte
+	for off := 0; off < len(payload); off += chunk {
+		end := off + chunk
+		if end > len(payload) {
+			end = len(payload)
+		}
+		flags := base
+		if off == 0 {
+			flags |= FrameFirst
+		}
+		if end == len(payload) {
+			flags |= FrameLast
+		}
+		out := make([]byte, 0, 22+end-off)
+		out = append(out, header[0], header[1])
+		out = binary.LittleEndian.AppendUint16(out, uint16(22+end-off))
+		out = binary.LittleEndian.AppendUint16(out, flags)
+		out = append(out, header[6:22]...)
+		out = append(out, payload[off:end]...)
+		frames = append(frames, out)
+	}
+	return frames
+}

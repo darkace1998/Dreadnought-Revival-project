@@ -14,6 +14,9 @@ import (
 // paints looked unowned in the hangar (operator, 2026-10-01).
 func TestOwnedItemsCutFromPlayerGetArriveInThePush(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
+	// The push is the fallback for single-frame responses; with frame
+	// chunking (the default) YA_PlayerGet carries everything itself.
+	t.Setenv("DN_FRAME_CHUNKING", "0")
 	const pid = "00000000000000000000000000000001"
 	var bought []int32
 	for _, v := range dreadconfig.VanityItems() {

@@ -1869,10 +1869,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
 	owned := ownedShipLoadoutsForPlayerData(state, playerPID)
 	for i, loadout := range owned {
-		if len(b) > playerDataFrameBudget-playerDataItemReserve {
+		if len(b) > responseBudget(playerDataFrameBudget)-playerDataItemReserve {
 			logrus.WithFields(logrus.Fields{
 				"player": playerPID, "sent": i, "owned": len(owned),
-				"bytes": len(b), "budget": playerDataFrameBudget,
+				"bytes": len(b), "budget": responseBudget(playerDataFrameBudget),
 			}).Error("mmog: owned ships truncated to fit the client's receive ring -- " +
 				"ships past this point will not appear in the owned-ships overview")
 			break
@@ -2300,13 +2300,13 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	// Never let the tree hang login. Modules are the part that grows, so if the
 	// frame would pass the budget the tree goes out WITHOUT them -- rails empty
 	// but the game playable -- and says so loudly.
-	if len(b)+len(blob) > techTreeFrameBudget && !techTreeNoModules {
+	if len(b)+len(blob) > responseBudget(techTreeFrameBudget) && !techTreeNoModules {
 		techTreeNoModules = true
 		stripped := compressMmogDocument(buildMmogTechTreeDocument())
 		techTreeNoModules = false
 		logrus.WithFields(logrus.Fields{
 			"player": pid, "with_modules": len(b) + len(blob), "without": len(b) + len(stripped),
-			"budget": techTreeFrameBudget,
+			"budget": responseBudget(techTreeFrameBudget),
 		}).Error("mmog: tech tree with modules exceeds the client's receive ring; sending it without modules")
 		blob = stripped
 	}
@@ -2317,6 +2317,24 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 // techTreeFrameBudget caps YA_GetTechTree. The ring is a hard-coded 0x8000
 // (0x142a65700); 28000 is where the tree has already shipped (27,578) and works.
 const techTreeFrameBudget = 28000
+
+// reassembledResponseBudget caps a response that goes out as several frames
+// (protocol.SplitResponseFrame). The client reassembles into 0x7ff8-byte
+// pages, at most 256 of them (0x142a61110 walks a 0x100-entry page table), so
+// ~8 MB; 2 MB leaves wide margin and is far above anything sent here.
+const reassembledResponseBudget = 2 << 20
+
+// responseBudget is the size cap for a response whose single-frame limit is
+// singleFrame: that limit when frame chunking is off, the reassembly cap when
+// it is on. Every budget below was the single-frame ring limit, which is why
+// large accounts were truncated (owned ships, owned items) and tuning tables
+// went out empty; the original service split large responses the same way.
+func responseBudget(singleFrame int) int {
+	if frameChunkingEnabled() {
+		return reassembledResponseBudget
+	}
+	return singleFrame
+}
 
 // buildMmogTechTreeDocument builds the document that goes inside the TechTrees
 // blob. It carries the same rows as the (ignored) plain fields above so the two
@@ -5637,10 +5655,10 @@ func tuneTablesInPriorityOrder() []tuneTable {
 	var accepted []byte
 	for _, candidate := range candidates {
 		trial := append(append([]byte{}, accepted...), candidate.json...)
-		if size := len(compressMmogDocument(trial)); size > tuneTableByteBudget {
+		if size := len(compressMmogDocument(trial)); size > responseBudget(tuneTableByteBudget) {
 			logrus.WithFields(logrus.Fields{
 				"table": candidate.name, "raw": len(candidate.json),
-				"compressed_total": size, "budget": tuneTableByteBudget,
+				"compressed_total": size, "budget": responseBudget(tuneTableByteBudget),
 			}).Warn("tune: table does not fit the budget, sending it empty")
 			kept = append(kept, tuneTable{candidate.name, `[]`})
 			continue
@@ -5650,7 +5668,7 @@ func tuneTablesInPriorityOrder() []tuneTable {
 	}
 	logrus.WithFields(logrus.Fields{
 		"compressed": len(compressMmogDocument(accepted)),
-		"budget":     tuneTableByteBudget,
+		"budget":     responseBudget(tuneTableByteBudget),
 	}).Info("tune: built override tables")
 	return kept
 }
@@ -7162,10 +7180,10 @@ func appendOwnedInventoryEntriesCounted(b []byte, stack []int, playerPID string)
 	// second is not -- so stop, and say so loudly.
 	sent := 0
 	for i, id := range ids {
-		if len(b) > playerDataFrameBudget {
+		if len(b) > responseBudget(playerDataFrameBudget) {
 			logrus.WithFields(logrus.Fields{
 				"player": playerPID, "sent": i, "owned": len(ids),
-				"bytes": len(b), "budget": playerDataFrameBudget,
+				"bytes": len(b), "budget": responseBudget(playerDataFrameBudget),
 			}).Warn("mmog: owned inventory truncated to fit this frame -- the rest follows in YA_PushInventory")
 			break
 		}

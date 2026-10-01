@@ -381,12 +381,15 @@ func TestTechTreeSlotsPreferTheNormalCurrentAsset(t *testing.T) {
 	}
 }
 
-// An account that owns everything must still be able to log in. YA_PlayerGet
-// carries one Items entry per owned item, and with every ship and module owned
-// it reached 62,150 bytes -- nearly twice the 32768-byte receive ring -- and the
-// client hung on "entering game" with no error. The frame must stay within
-// playerDataFrameBudget however much a player owns.
-func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
+// An account that owns everything must still be able to log in -- and get ALL
+// of it. YA_PlayerGet carries one Items entry per owned item; with every ship
+// and module owned it is ~85 KB. A single frame must fit the client's 32768-byte
+// receive ring (62,150 bytes in one frame hung "entering game" with no error),
+// and this server used to truncate the list to make it fit. The client
+// reassembles a response sent as several frames (protocol.SplitResponseFrame,
+// 0x142a64030), so: nothing may be cut, and every FRAME must fit the ring.
+// With DN_FRAME_CHUNKING=0 the old single-frame budget must still hold.
+func TestPlayerDataDeliversEverythingWhenEverythingIsOwned(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 	database := currentMmogPlayerStateDB()
 	pid := "0123456789abcdef0123456789abcdef"
@@ -400,8 +403,9 @@ func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if n := len(purchasedInventoryItemIDs(pid)); n < 600 {
-		t.Fatalf("only %d owned items seeded; the test would prove nothing", n)
+	owned := purchasedInventoryItemIDs(pid)
+	if len(owned) < 600 {
+		t.Fatalf("only %d owned items seeded; the test would prove nothing", len(owned))
 	}
 	// Every ship with XP: ShipXps carries one entry per ship since 2026-09-24
 	// (~40 bytes each), and it shares this frame.
@@ -415,15 +419,30 @@ func TestPlayerDataFitsTheRingWhenEverythingIsOwned(t *testing.T) {
 	if n := len(persistedPlayerShipXPs(pid)); n < 50 {
 		t.Fatalf("only %d ships with XP seeded", n)
 	}
+	var id [16]byte
 	for _, name := range []string{"YA_PlayerGet", "YA_RefreshPlayerProfile"} {
 		payload := buildMmogPlayerDataPayload(name, pid)
 		t.Logf("%s: %d bytes", name, len(payload))
-		// Against the RING, a fixed fact about the client -- not against
-		// playerDataFrameBudget, which would move with the thing under test.
-		if len(payload) > clientReceiveRingBytes-2048 {
-			t.Errorf("%s is %d bytes for a player owning %d items; budget %d, ring 32768",
-				name, len(payload), len(ships)+len(items), playerDataFrameBudget)
+		missing := 0
+		for _, item := range owned {
+			if countWireStringField(string(payload), "ItemID", strconv.Itoa(int(item))) == 0 {
+				missing++
+			}
 		}
+		if missing > 0 {
+			t.Errorf("%s leaves out %d of %d owned items", name, missing, len(owned))
+		}
+		// Against the RING, a fixed fact about the client.
+		for i, frame := range protocol.SplitResponseFrame(protocol.BuildResponseFrame(id, 0x41, payload), protocol.MaxChunkFrame) {
+			if len(frame) > clientReceiveRingBytes-2048 {
+				t.Errorf("%s frame %d is %d bytes; ring 32768", name, i, len(frame))
+			}
+		}
+	}
+
+	t.Setenv("DN_FRAME_CHUNKING", "0")
+	if payload := buildMmogPlayerDataPayload("YA_PlayerGet", pid); len(payload) > clientReceiveRingBytes-2048 {
+		t.Errorf("with chunking off, YA_PlayerGet is %d bytes, over the ring", len(payload))
 	}
 }
 
