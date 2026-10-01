@@ -14,7 +14,8 @@ Sources, in order of authority:
 
          dotnet tools/bpdump/bin/Debug/net8.0/bpdump.dll --loadouts \\
              DreadGame/Content/Generic/Abilities "*_BP.uasset"
-         (and the same for Generic/Weapons), keeping file/m_itemID/m_headline.
+         (and the same for Generic/Weapons and Generic/Officer/Perk -- the
+         officer briefings, "PRK_*_BP.uasset"), keeping file/m_itemID/m_headline.
 
      This is the key the game itself uses, tier included: the T0 Tempest
      Missiles blueprint names "Tempest Missiles N", where the older name-matched

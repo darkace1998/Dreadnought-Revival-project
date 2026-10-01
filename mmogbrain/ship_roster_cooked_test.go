@@ -305,7 +305,9 @@ func TestEveryOfferedItemIsARealCookedAsset(t *testing.T) {
 			// ids, module entries carry the per-ship one (inflatedItemID).
 			base := baseItemID(module.id)
 			item, _ := dreadconfig.ItemByID(base)
-			if got, want := (module.id>>16)&0xff, eyShipClassByKey[hull.hullLine]; got != want {
+			// Weapons and abilities are per ship (inflatedItemID); officer
+			// briefings are shared ids (0xFF) in every source.
+			if got, want := (module.id>>16)&0xff, eyShipClassByKey[hull.hullLine]; cat != 6 && got != want {
 				t.Errorf("%s: module %d (%s) belongs to ship class %d, not the hull's %d",
 					hull.name, module.id, item.AssetPath, got, want)
 			}
@@ -728,6 +730,11 @@ func TestTechTreeResearchIsWhatTheClientNamesForTheHull(t *testing.T) {
 			t.Errorf("%s: no research at all", hull.name)
 		}
 		for _, item := range research {
+			if isOfficerBriefing(item.id) {
+				// Briefings have no preview rows; their rule is tested in
+				// officer_briefings_test.go.
+				continue
+			}
 			if name := names(item.id); !hasWord(name, hull.name) {
 				t.Errorf("%s: researches %d %q, a row that does not name it", hull.name, item.id, name)
 			}

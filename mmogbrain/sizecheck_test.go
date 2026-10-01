@@ -190,7 +190,12 @@ var targetSizes = map[string]int{
 	// 11 line roots had none (2026-09-28). ~26KB is proven safe.
 	// 18884 for one evening (2026-09-29) while module entries carried Prereq;
 	// that crashed the client and is off by default (DN_TECHTREE_MODULE_PREREQ).
-	"YA_GetTechTree": 14296,
+	// 14296 -> 19014 (+4718): officer briefings join every tier III-V ship's
+	// tree -- 20 store-sold briefings minus the four each ship fits, ~700
+	// module-form entries (officer_briefings.go, 2026-10-01). The tree carried
+	// none, so officer slots could never be upgraded. One frame still; larger
+	// responses are split across frames anyway (protocol.SplitResponseFrame).
+	"YA_GetTechTree": 19014,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

@@ -868,6 +868,12 @@ func TestEveryResearchItemKnowsWhichShipPaysForIt(t *testing.T) {
 			continue
 		}
 		for _, item := range techTreeModuleItems(hull, 0) {
+			if isOfficerBriefing(item.id) {
+				// A briefing's id is the same on every ship, so no single ship
+				// is implied by it; the paying ship is chosen per request
+				// (officerResearchShip, tested in officer_briefings_test.go).
+				continue
+			}
 			got, ok := researchHullPawn(item.id)
 			if !ok || got != pawn {
 				t.Errorf("%s: research item %d is paid by ship %d, want %d", hull.name, item.id, got, pawn)

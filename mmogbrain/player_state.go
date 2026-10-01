@@ -1168,6 +1168,10 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 	// cost ship XP nothing on our side.
 	shipXP := firstMmogInt32Field(payload, "ShipXp", "shipXp", "ShipXP")
 	shipKey, shipID, shipKnown := researchShip(itemID)
+	if !shipKnown && isOfficerBriefing(itemID) {
+		// A briefing id is the same on every ship; see officerResearchShip.
+		shipKey, shipID, shipKnown = officerResearchShip(playerPID, shipXP)
+	}
 	if shipXP < 0 || !shipKnown {
 		shipXP = 0
 	}

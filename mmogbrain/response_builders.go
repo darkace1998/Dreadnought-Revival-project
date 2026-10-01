@@ -2570,7 +2570,9 @@ func techTreeModuleItems(hull baseShipLoadout, manufacturerID int32) []techTreeI
 			module:       true,
 		})
 	}
-	return items
+	// ...and its officer briefings (officer_briefings.go): every ship with
+	// officer slots researches them in its own tree, like modules.
+	return append(items, officerBriefingTechTreeItems(hull, manufacturerID, fitted, int32(len(items)))...)
 }
 
 // inflatedItemID is the PER-SHIP id of a weapon or module: the shared id with
@@ -6087,6 +6089,9 @@ func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 	if b, ok := marketBundleByID(itemID); ok {
 		return b.priceGP(), true
 	}
+	if isOfficerBriefing(itemID) {
+		return officerBriefingPrice, true
+	}
 	// Derive it exactly as the catalog entry did -- same itemType source, same
 	// tier source, same function -- so the two agree by construction rather
 	// than by two tables being kept in step by hand.
@@ -6303,7 +6308,9 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("bought", "ok", charged, balance)
 	}
 
-	if _, perShip := perShipResearchRow(itemID); perShip {
+	// Officer briefings too: researched in a ship's tech tree, then bought
+	// with credits (officer_briefings.go).
+	if _, perShip := perShipResearchRow(itemID); perShip || isOfficerBriefing(itemID) {
 		status, reason, charged := claimResearchedItem(playerPID, itemID)
 		var balance int32
 		_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
@@ -6475,6 +6482,9 @@ func itemIDFromPurchaseOffer(offer string) int32 {
 				return int32(id)
 			}
 			if _, ok := heroByID(int32(id)); ok {
+				return int32(id)
+			}
+			if isOfficerBriefing(int32(id)) {
 				return int32(id)
 			}
 		}
