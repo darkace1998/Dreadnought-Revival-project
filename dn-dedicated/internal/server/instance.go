@@ -870,9 +870,12 @@ type logWriter struct {
 	verbose    bool
 	onReady    func()
 	onPlayer   func(delta int)
-	playerKeys map[string]bool // see playerEvent; guarded by mu
-	mu         sync.Mutex
-	buf        []byte
+	// waitingSeen / gameModeSeen: see readiness. Guarded by mu.
+	waitingSeen  bool
+	gameModeSeen bool
+	playerKeys   map[string]bool // see playerEvent; guarded by mu
+	mu           sync.Mutex
+	buf          []byte
 
 	// Counters so a short log can say why it is short. A capture that ends
 	// after the header is indistinguishable from a healthy one that simply has
@@ -959,6 +962,49 @@ func playerEvent(line string) (delta int, key string) {
 	return -1, key + "/close/" + m[4]
 }
 
+// Readiness: when a joining player may travel in.
+//
+// The engine accepts connections at "WaitingToStart", but its game mode is not
+// set up yet then, and players who arrived that early often got a ship
+// selection with no ships. Measured 2026-10-02 over 383 joins: 19% of joins
+// before the game mode had started picked no ship, 13% within 3 s of it, 4%
+// 3-6 s after it. The game mode starts a median 2.6 s after WaitingToStart,
+// but up to 12 s. (The original game showed a loading screen after "match
+// found"; players never arrived this early.)
+//
+// So a host is ready gameModeSettle after its game mode has started -- the
+// battle-server mod's bots line, written from the game mode's first timer
+// tick -- or readyFallback after WaitingToStart if that line never comes (no
+// mod, or a mode it does not touch). InProgress still means ready at once.
+// DN_READY_AT_WAITING=1 restores the old rule.
+const gameModeStartedMarker = "m_enableSpawnAI 0 -> 1"
+
+var (
+	gameModeSettle = 4 * time.Second
+	readyFallback  = 15 * time.Second
+)
+
+func (w *logWriter) readiness(line string) {
+	switch {
+	case strings.Contains(line, readyMarkers[1]): // InProgress
+		w.onReady()
+	case strings.Contains(line, readyMarkers[0]): // WaitingToStart
+		if os.Getenv("DN_READY_AT_WAITING") == "1" {
+			w.onReady()
+			return
+		}
+		if !w.waitingSeen {
+			w.waitingSeen = true
+			time.AfterFunc(readyFallback, w.onReady)
+		}
+	case strings.Contains(line, gameModeStartedMarker):
+		if !w.gameModeSeen {
+			w.gameModeSeen = true
+			time.AfterFunc(gameModeSettle, w.onReady)
+		}
+	}
+}
+
 func isReadyLine(line string) bool {
 	for _, marker := range readyMarkers {
 		if strings.Contains(line, marker) {
@@ -988,8 +1034,8 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		if w.verbose || interesting(line) {
 			fmt.Fprintf(w.out, "[%s] %s\n", shortID(w.instanceID), line)
 		}
-		if w.onReady != nil && isReadyLine(line) {
-			w.onReady()
+		if w.onReady != nil {
+			w.readiness(line)
 		}
 		if w.onPlayer != nil {
 			if d, key := playerEvent(line); d != 0 {

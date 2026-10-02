@@ -59,14 +59,16 @@ func TestLogWriterDoesNotCountAnUnterminatedFragment(t *testing.T) {
 }
 
 // The readiness callback must still fire while counting -- the counters are
-// bookkeeping and must not change what Launch does.
+// bookkeeping and must not change what Launch does. (InProgress, which is
+// ready at once; WaitingToStart now waits for the game mode -- see
+// TestReadyWaitsForTheGameMode.)
 func TestLogWriterStillDetectsReadinessWhileCounting(t *testing.T) {
 	var file, out bytes.Buffer
 	fired := 0
 	w := newLogWriter(&out, &file, "abcdef01", false, func() { fired++ })
 
 	if _, err := w.Write([]byte(
-		"LogGameMode: Match State Changed from EnteringMap to WaitingToStart\n")); err != nil {
+		"LogGameMode: Match State Changed from WaitingToStart to InProgress\n")); err != nil {
 		t.Fatal(err)
 	}
 	if fired != 1 {
@@ -75,7 +77,7 @@ func TestLogWriterStillDetectsReadinessWhileCounting(t *testing.T) {
 	if lines, _ := w.stats(); lines != 1 {
 		t.Errorf("counted %d lines, want 1", lines)
 	}
-	if !strings.Contains(file.String(), "WaitingToStart") {
+	if !strings.Contains(file.String(), "InProgress") {
 		t.Errorf("the line did not reach the log file: %q", file.String())
 	}
 }
