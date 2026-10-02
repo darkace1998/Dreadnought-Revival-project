@@ -45,6 +45,7 @@ func startFirmamentServer(ctx context.Context, log *logrus.Logger, addr, certFil
 				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 			},
 		}
+		tlsCfg.GetConfigForClient = sha384FallbackConfig(tlsCfg, log)
 	}
 
 	ln, err := net.Listen("tcp", addr)
@@ -175,6 +176,7 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 	if tlsConn, ok := conn.(*tls.Conn); ok {
 		if err := tlsConn.Handshake(); err != nil {
 			log.WithError(err).WithField("remote", remote).Warn("firmament: TLS handshake failed")
+			noteHandshakeFailure(remote, err)
 			return
 		}
 		st := tlsConn.ConnectionState()
