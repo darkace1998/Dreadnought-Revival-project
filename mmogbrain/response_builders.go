@@ -2206,6 +2206,13 @@ func shipTierForIDChecked(itemID int32) (tier int32, derived bool) {
 	if t, ok := derivedShipTier(itemID); ok && t >= 1 {
 		return int32(t), true
 	}
+	// Hero loadouts (category 3) carry their tier in the hero roster (from the
+	// cooked hero blueprints' m_itemTier). Missing until 2026-10-02: every
+	// owned hero went out as tier 1 (394 fallback warnings in one day, 12
+	// heroes) and never counted toward the Veteran/Legendary fleet unlock.
+	if h, ok := heroByID(itemID); ok && h.tier >= 1 {
+		return h.tier, true
+	}
 	return 1, false
 }
 
