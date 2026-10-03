@@ -50,3 +50,25 @@ func strconvItoa(v int32) string {
 	}
 	return string(d)
 }
+
+// 1- and 2-byte integers are read, signed for 0x16/0x36, and fields after
+// them stay reachable.
+func TestExtractInt32FieldSmallWidths(t *testing.T) {
+	b := []byte{9}
+	b = append(b, "FleetType"...)
+	b = append(b, 0x16, 0x03)
+	b = append(b, 3)
+	b = append(b, "Neg"...)
+	b = append(b, 0x16, 0xff)
+	b = append(b, 5)
+	b = append(b, "Short"...)
+	b = append(b, 0x46, 0x34, 0x12)
+	b = append(b, 4)
+	b = append(b, "Last"...)
+	b = append(b, 0x56, 7, 0, 0, 0)
+	for name, want := range map[string]int32{"FleetType": 3, "Neg": -1, "Short": 0x1234, "Last": 7} {
+		if got, ok := ExtractInt32Field(b, name); !ok || got != want {
+			t.Errorf("%s = %d (found %v), want %d", name, got, ok, want)
+		}
+	}
+}

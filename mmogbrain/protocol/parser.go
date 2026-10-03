@@ -300,6 +300,36 @@ func ExtractInt32Field(payload []byte, target string) (int32, bool) {
 				return 0, false
 			}
 			i++
+		// 1- and 2-byte integers (widths from the client's tag-size function
+		// 0x142A62F00; 0x16/0x36 signed). YA_SquadEnterMatchmaking sends
+		// FleetType as 0x16 (captured live 2026-10-02: "FleetType 16 03");
+		// without these cases the scan stopped there, FleetType read as
+		// absent, and every squad queued as Recruit.
+		case 0x16, 0x26:
+			if i >= len(payload) {
+				return 0, false
+			}
+			value := int32(payload[i])
+			if fieldType == 0x16 {
+				value = int32(int8(payload[i]))
+			}
+			i++
+			if name == target {
+				return value, true
+			}
+		case 0x36, 0x46:
+			if i+2 > len(payload) {
+				return 0, false
+			}
+			raw := binary.LittleEndian.Uint16(payload[i : i+2])
+			value := int32(raw)
+			if fieldType == 0x36 {
+				value = int32(int16(raw))
+			}
+			i += 2
+			if name == target {
+				return value, true
+			}
 		case 0x56:
 			if i+4 > len(payload) {
 				return 0, false
