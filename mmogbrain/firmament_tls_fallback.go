@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"net"
 	"os"
 	"strings"
@@ -29,7 +30,9 @@ import (
 //
 // Every other client works with the SHA-256 suite, so it is not changed for
 // them: a client that failed with bad record MAC is remembered by address for
-// a day, and its next handshake (the game retries: "Unable to connect to the
+// a day -- on disk too (DN_TLS_SHA384_FILE, default tls-sha384-clients.json),
+// so a server restart does not cost those players another failed login (seen
+// 2026-10-02: one failed again after a deploy) -- and its next handshake (the game retries: "Unable to connect to the
 // server. Try again in a moment") is offered only the SHA-384 suites, if its
 // ClientHello lists one. DN_TLS_SHA384=off disables this, =all applies it to
 // every client.
@@ -59,8 +62,53 @@ func noteHandshakeFailure(remote string, err error) {
 		return
 	}
 	badMACMu.Lock()
+	loadBadMACClientsLocked()
 	badMACClients[remoteHost(remote)] = time.Now()
+	saveBadMACClientsLocked()
 	badMACMu.Unlock()
+}
+
+var badMACLoaded bool
+
+func badMACFile() string {
+	if f := os.Getenv("DN_TLS_SHA384_FILE"); f != "" {
+		return f
+	}
+	return "tls-sha384-clients.json"
+}
+
+// loadBadMACClientsLocked reads the remembered clients once (badMACMu held).
+func loadBadMACClientsLocked() {
+	if badMACLoaded {
+		return
+	}
+	badMACLoaded = true
+	raw, err := os.ReadFile(badMACFile())
+	if err != nil {
+		return
+	}
+	var stored map[string]time.Time
+	if json.Unmarshal(raw, &stored) != nil {
+		return
+	}
+	for host, at := range stored {
+		if time.Since(at) <= badMACMemory {
+			badMACClients[host] = at
+		}
+	}
+}
+
+// saveBadMACClientsLocked writes the remembered clients (badMACMu held).
+// Best effort: the file only saves a retry.
+func saveBadMACClientsLocked() {
+	raw, err := json.Marshal(badMACClients)
+	if err != nil {
+		return
+	}
+	tmp := badMACFile() + ".tmp"
+	if os.WriteFile(tmp, raw, 0o600) == nil {
+		_ = os.Rename(tmp, badMACFile())
+	}
 }
 
 func needsSHA384(remote string) bool {
@@ -72,6 +120,7 @@ func needsSHA384(remote string) bool {
 	}
 	badMACMu.Lock()
 	defer badMACMu.Unlock()
+	loadBadMACClientsLocked()
 	at, ok := badMACClients[remoteHost(remote)]
 	if ok && time.Since(at) > badMACMemory {
 		delete(badMACClients, remoteHost(remote))

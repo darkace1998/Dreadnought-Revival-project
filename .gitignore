@@ -69,3 +69,5 @@ __pycache__/
 backups/
 # rotated logs (scripts/install-log-rotation.sh)
 *.log.*
+tls-sha384-clients.json
+tls-sha384-clients.json.tmp

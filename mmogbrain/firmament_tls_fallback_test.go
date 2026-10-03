@@ -56,8 +56,10 @@ func TestBadMACClientGetsSHA384Next(t *testing.T) {
 		defer c.Close()
 		return c.ConnectionState().CipherSuite
 	}
+	t.Setenv("DN_TLS_SHA384_FILE", t.TempDir()+"/clients.json")
 	badMACMu.Lock()
 	badMACClients = map[string]time.Time{}
+	badMACLoaded = false
 	badMACMu.Unlock()
 
 	if got := suite(); got != tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 {
@@ -70,6 +72,14 @@ func TestBadMACClientGetsSHA384Next(t *testing.T) {
 	noteHandshakeFailure("127.0.0.1:5555", errors.New("local error: tls: bad record MAC"))
 	if got := suite(); got != tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 {
 		t.Fatalf("after bad record MAC the client got %s, want the SHA-384 suite", tls.CipherSuiteName(got))
+	}
+	// A restart forgets the in-memory list; the file brings it back.
+	badMACMu.Lock()
+	badMACClients = map[string]time.Time{}
+	badMACLoaded = false
+	badMACMu.Unlock()
+	if got := suite(); got != tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 {
+		t.Fatalf("after a restart the remembered client got %s", tls.CipherSuiteName(got))
 	}
 	t.Setenv("DN_TLS_SHA384", "off")
 	if got := suite(); got != tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 {
