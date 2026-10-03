@@ -346,7 +346,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     fill('matchRows', d.matches.map((m) => {
       let dur = '';
       if (m.started && m.ended) dur = Math.round((Date.parse(m.ended) - Date.parse(m.started)) / 60000) + ' min';
-      const res = m.results.length ? m.results.map((r) => `${r.name} (T${r.team}, ${r.outcome}, ${r.kills}/${r.deaths}, +${fmt(r.credits)} cr, +${fmt(r.xp)} xp)`).join(' · ') : 'no results reported';
+      const res = m.results.length ? m.results.map((r) => `${r.name} (team ${r.team}, ${r.outcome}, ${r.kills} kills / ${r.deaths} deaths, +${fmt(r.credits)} cr, +${fmt(r.xp)} xp)`).join(' · ') : 'no results reported';
       const chip = m.status === 'active' ? el('span', { class: 'chip good' }, 'active') : el('span', { class: 'chip' }, m.status);
       return el('tr', {}, el('td', {}, ago(m.started) + ' ago'), el('td', {}, m.mode), el('td', {}, ['?', 'Recruit', 'Veteran', 'Legendary'][m.fleet_type] || '?'), el('td', {}, m.map), el('td', {}, chip), el('td', {}, dur),
         el('td', { class: 'results' }, res));
