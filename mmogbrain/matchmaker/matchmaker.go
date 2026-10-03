@@ -181,6 +181,9 @@ type Matchmaker struct {
 	// have not queued: once the oldest queued player has waited this long, the
 	// match starts with whoever is queued.
 	MaxWait time.Duration
+	// BackfillWindow lets waiting players join a running match that started
+	// less than this ago instead of starting a new one (backfill.go). 0 = off.
+	BackfillWindow time.Duration
 	// seenInstance remembers which instance ids the control plane has ever
 	// answered a 200 for. Without it a 404 cannot be read: it means "the host
 	// is gone" on dn-dedicated and "there is no such route" on game-manager,
@@ -537,6 +540,13 @@ func (m *Matchmaker) tick() error {
 	}
 	now := time.Now().UTC()
 	for _, b := range buckets {
+		// A running match with room comes first (backfill.go). Whoever it
+		// placed is out of the queue; the rest are counted again next tick.
+		if placed, err := m.backfill(b.GameMode, b.TierMin, b.FleetType); err != nil {
+			m.Log.WithError(err).Warn("backfill failed")
+		} else if placed > 0 {
+			continue
+		}
 		size := m.PlayersPerMatch
 		if available >= 0 {
 			waited := time.Duration(0)
@@ -787,33 +797,35 @@ func (m *Matchmaker) formMatch(gameMode string, tierMin int, fleetType int) erro
 	return m.formMatchOfSize(gameMode, tierMin, fleetType, m.PlayersPerMatch)
 }
 
-func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int, size int) error {
-	// The waiting players for this mode, tier and fleet type, oldest first,
-	// grouped by party: a squad (party_id, see squads.go) is placed whole or
-	// not at all, and on one team.
+// queueEntry is one waiting player.
+type queueEntry struct {
+	ID     string
+	UserID string
+	Party  string
+}
+
+// waitingGroups is the waiting players for a mode, tier and fleet type, oldest
+// first, grouped by party: a squad (party_id, see squads.go) is placed whole
+// or not at all, and on one team.
+func (m *Matchmaker) waitingGroups(gameMode string, tierMin int, fleetType int) ([][]queueEntry, error) {
 	rows, err := m.DB.Query(`
 		SELECT id, user_id, party_id FROM queue_entries
 		WHERE status='waiting' AND game_mode=? AND tier_min=? AND fleet_type=?
 		ORDER BY queued_at ASC, id ASC
 	`, gameMode, tierMin, fleetType)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	type entry struct {
-		ID     string
-		UserID string
-		Party  string
-	}
-	var groups [][]entry
+	var groups [][]queueEntry
 	partyAt := map[string]int{}
 	for rows.Next() {
-		var e entry
+		var e queueEntry
 		if err := rows.Scan(&e.ID, &e.UserID, &e.Party); err != nil {
-			return fmt.Errorf("scan queue entries: %w", err)
+			return nil, fmt.Errorf("scan queue entries: %w", err)
 		}
 		if e.Party != "" {
 			if i, ok := partyAt[e.Party]; ok {
@@ -822,21 +834,28 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 			}
 			partyAt[e.Party] = len(groups)
 		}
-		groups = append(groups, []entry{e})
+		groups = append(groups, []queueEntry{e})
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate queue entries: %w", err)
+		return nil, fmt.Errorf("iterate queue entries: %w", err)
 	}
-	_ = rows.Close()
+	return groups, nil
+}
+
+func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int, size int) error {
+	groups, err := m.waitingGroups(gameMode, tierMin, fleetType)
+	if err != nil {
+		return err
+	}
 
 	// Fill the match group by group, oldest first, skipping a group that no
 	// longer fits. A party bigger than the match size may still start alone
 	// when it is the oldest -- it cannot be split.
-	var picked [][]entry
+	var picked [][]queueEntry
 	total := 0
 	for i, g := range groups {
 		if i == 0 && len(g) > size {
-			picked, total = [][]entry{g}, len(g)
+			picked, total = [][]queueEntry{g}, len(g)
 			break
 		}
 		if total+len(g) <= size {
@@ -853,7 +872,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	// Teams: PvP modes put each group on the smaller side (the old i%2+1
 	// alternation, for groups of one); co-op modes are all team 1.
 	pvp := matchTeam(gameMode, 1) == 2
-	var entries []entry
+	var entries []queueEntry
 	var teams []int
 	perTeam := map[int]int{}
 	for _, g := range picked {
