@@ -48,10 +48,16 @@ var (
 )
 
 func loadHeroAppearances() {
-	heroAppearances = map[int32]HeroAppearance{}
-	f, err := os.Open(filepath.Join(LoadoutsDir(), "HeroLoadouts_cooked.jsonl"))
+	heroAppearances = loadBlueprintAppearances("HeroLoadouts_cooked.jsonl")
+}
+
+// loadBlueprintAppearances reads the m_appereance of every loadout blueprint
+// in one of the cooked loadout dumps, keyed by the blueprint's item id.
+func loadBlueprintAppearances(file string) map[int32]HeroAppearance {
+	out := map[int32]HeroAppearance{}
+	f, err := os.Open(filepath.Join(LoadoutsDir(), file))
 	if err != nil {
-		return
+		return out
 	}
 	defer func() { _ = f.Close() }()
 	resolve := func(path string) int32 {
@@ -97,9 +103,33 @@ func loadHeroAppearances() {
 			}
 		}
 		if len(a.MeshParts) > 0 || a.Paint != 0 {
-			heroAppearances[row.SystemData.ItemID] = a
+			out[row.SystemData.ItemID] = a
 		}
 	}
+	return out
+}
+
+// Base ships have a look of their own too. A precast (base) loadout
+// blueprint's m_appereance names its hull parts and paint, and from tier III
+// up they are rarely the hull line's generic default: Onager (33489292) is
+// built from the VAN_H_SniperH_Kore_* parts, Chernobog (33489274) from
+// VAN_H_DreadM_*_Ravens_*, Aion (33489297) from VAN_H_SupportM_*_Bix_*,
+// Valcour (33489290) from its own VAN_H_ScoutL_*_Valcour_* -- asset folders
+// named after hero ships, but these are the base ships' own parts. 68 of the
+// 102 precast blueprints name parts. Owning the ship owns its look: the
+// loadout ownership check flagged honest players wearing exactly these
+// (2026-10-03, every "unowned cosmetic" warning of the day).
+var (
+	precastAppearanceOnce sync.Once
+	precastAppearances    map[int32]HeroAppearance
+)
+
+// ShipBlueprintAppearance is a base (precast) loadout's own appearance, as
+// its blueprint names it.
+func ShipBlueprintAppearance(loadoutID int32) (HeroAppearance, bool) {
+	precastAppearanceOnce.Do(func() { precastAppearances = loadBlueprintAppearances("PrecastLoadouts_cooked.jsonl") })
+	a, ok := precastAppearances[loadoutID]
+	return a, ok
 }
 
 // HeroShipAppearance is a hero loadout's own appearance.

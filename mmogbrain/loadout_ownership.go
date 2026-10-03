@@ -39,7 +39,7 @@ func loadoutOwnershipMode() string {
 
 // ownedItemSet is what the player owns for fitting purposes: purchases
 // (cosmetics included) plus every owned ship's fitted defaults, the same set
-// the client is told (clientOwnedItemIDs).
+// the client is told (clientOwnedItemIDs), plus every owned ship's own look.
 //
 // Weapons, abilities and perks are keyed by their SHARED form. Real stored fits
 // use both forms -- per-ship ids (middle byte = EYShipClass, see inflatedItemID)
@@ -59,6 +59,20 @@ func ownedItemSet(playerPID string) map[int32]bool {
 	}
 	for _, item := range starterOwnedInventorySeeds() {
 		add(item.itemID)
+	}
+	// Every owned ship's own look, as its blueprint names it -- hull parts,
+	// paint, emblem, pattern, decal (dreadconfig.ShipBlueprintAppearance /
+	// HeroShipAppearance). From tier III up a base ship's parts are its own
+	// (Onager wears the Kore parts), not the hull line's generic default, so
+	// without this every honest T3/T4 fit was flagged (2026-10-03).
+	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
+		for _, lookup := range []func(int32) (dreadconfig.HeroAppearance, bool){dreadconfig.ShipBlueprintAppearance, dreadconfig.HeroShipAppearance} {
+			if a, ok := lookup(l.precastLoadoutID); ok {
+				for _, id := range a.Items() {
+					add(id)
+				}
+			}
+		}
 	}
 	return set
 }
