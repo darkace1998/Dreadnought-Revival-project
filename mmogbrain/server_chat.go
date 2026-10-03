@@ -26,7 +26,8 @@ import (
 // both are answered for this GUID with the name "Server" (serverChatProfile,
 // and handleUserMethod's whois).
 //
-// DN_SERVER_CHAT=0 turns it off. DN_SERVER_CHAT_ONLINE_EVERY (default 10m)
+// DN_SERVER_CHAT=0 turns it off. DN_SERVER_CHAT_QUEUE_DELAY (default 8s)
+// holds a "queue started" line back so a queue filled at once is not posted. DN_SERVER_CHAT_ONLINE_EVERY (default 10m)
 // is the least time between two online counts; one is posted only when the
 // count changed. DN_SERVER_CHAT_QUEUE_COOLDOWN (default 2m) is the least time
 // between two "queue started" lines for the same mode and fleet.
@@ -108,12 +109,16 @@ func (h *socialHub) announce(text string) {
 // --- online count ----------------------------------------------------------------
 
 // serverChatOnlineLine is the online-count announcement.
-func serverChatOnlineLine(online, inBattle, searching int) string {
+func serverChatOnlineLine(online, inBattle, searching int, openQueues string) string {
 	players := "players"
 	if online == 1 {
 		players = "player"
 	}
-	return fmt.Sprintf("%d %s online -- %d in battle, %d searching for a match.", online, players, inBattle, searching)
+	line := fmt.Sprintf("%d %s online -- %d in battle, %d searching for a match.", online, players, inBattle, searching)
+	if openQueues != "" {
+		line += " Open queues: " + openQueues + "."
+	}
+	return line
 }
 
 // serverChatCounts counts players online, in a running match, and queued.
@@ -147,7 +152,7 @@ func startServerChatOnlineCount() {
 			if online == 0 || online == last {
 				continue
 			}
-			socialHubInstance.announce(serverChatOnlineLine(online, inBattle, searching))
+			socialHubInstance.announce(serverChatOnlineLine(online, inBattle, searching, serverChatOpenQueues()))
 			last, lastAt = online, time.Now()
 		}
 	}()
@@ -190,6 +195,14 @@ func serverChatQueueLine(gameMode string, fleetType int32, partySize int) string
 // announceQueueStarted posts a "queue started" line when a player or squad
 // just queued into an EMPTY queue for its mode and fleet -- the moment others
 // can join them. Called after the queue entries are written.
+//
+// Held back serverChatQueueDelay: a queue the matchmaker fills at once (no
+// other idle player online, so the match starts against bots) is not
+// announced, because nobody can join it any more. Of the first 44 lines
+// posted, most were such queues, and chat lines cannot be deleted -- the
+// client's chat protocol has no delete or edit (chat.channel.notice/info/
+// message and chat.user.message only) -- so they buried the ones that were
+// still open (operator, 2026-10-03).
 func announceQueueStarted(gameMode string, fleetType int32, partySize int) {
 	if !serverChatEnabled() {
 		return
@@ -198,23 +211,66 @@ func announceQueueStarted(gameMode string, fleetType int32, partySize int) {
 	if line == "" {
 		return
 	}
-	database := currentMmogPlayerStateDB()
-	if database == nil {
-		return
-	}
-	var waiting int
-	if database.QueryRow(`SELECT COUNT(*) FROM queue_entries WHERE status='waiting' AND game_mode=? AND fleet_type=?`,
-		gameMode, fleetType).Scan(&waiting) != nil || waiting > partySize {
+	if serverChatQueueWaiting(gameMode, fleetType) > partySize {
 		return // others were already waiting: the queue had started before
 	}
-	key := gameMode + "/" + strings.ToLower(fleetTypeName(fleetType))
-	cooldown := serverChatDuration("DN_SERVER_CHAT_QUEUE_COOLDOWN", 2*time.Minute)
-	serverChatQueueMu.Lock()
-	if last, ok := serverChatQueueLast[key]; ok && time.Since(last) < cooldown {
+	delay := serverChatDuration("DN_SERVER_CHAT_QUEUE_DELAY", 8*time.Second)
+	go func() {
+		time.Sleep(delay)
+		if serverChatQueueWaiting(gameMode, fleetType) == 0 {
+			return // the match started already: nothing to join
+		}
+		key := gameMode + "/" + strings.ToLower(fleetTypeName(fleetType))
+		cooldown := serverChatDuration("DN_SERVER_CHAT_QUEUE_COOLDOWN", 2*time.Minute)
+		serverChatQueueMu.Lock()
+		if last, ok := serverChatQueueLast[key]; ok && time.Since(last) < cooldown {
+			serverChatQueueMu.Unlock()
+			return
+		}
+		serverChatQueueLast[key] = time.Now()
 		serverChatQueueMu.Unlock()
-		return
+		socialHubInstance.announce(line)
+	}()
+}
+
+// serverChatQueueWaiting counts the players waiting in one queue.
+func serverChatQueueWaiting(gameMode string, fleetType int32) int {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return 0
 	}
-	serverChatQueueLast[key] = time.Now()
-	serverChatQueueMu.Unlock()
-	socialHubInstance.announce(line)
+	var waiting int
+	_ = database.QueryRow(`SELECT COUNT(*) FROM queue_entries WHERE status='waiting' AND game_mode=? AND fleet_type=?`,
+		gameMode, fleetType).Scan(&waiting)
+	return waiting
+}
+
+// serverChatOpenQueues describes the queues players are waiting in, e.g.
+// "Veteran Team Deathmatch (2 waiting)"; "" when there are none.
+func serverChatOpenQueues() string {
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return ""
+	}
+	rows, err := database.Query(`SELECT game_mode, fleet_type, COUNT(*) FROM queue_entries WHERE status='waiting'
+		GROUP BY game_mode, fleet_type ORDER BY fleet_type, game_mode`)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = rows.Close() }()
+	var parts []string
+	for rows.Next() {
+		var mode string
+		var fleet int32
+		var n int
+		if rows.Scan(&mode, &fleet, &n) != nil {
+			continue
+		}
+		name, ok := serverChatModeNames[mode]
+		if !ok {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %s (%d waiting)", fleetTypeName(fleet), name, n))
+	}
+	return strings.Join(parts, ", ")
 }
