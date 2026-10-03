@@ -207,7 +207,7 @@ func recordClientTelemetry(playerPID, rt string, payload []byte) {
 }
 
 // telemetryInvestCheck compares the free XP the client says is left after a
-// research with the server's balance. A mismatch means the two disagree about
+// research with the server's balance less what the research spends. A mismatch means the two disagree about
 // the player's XP -- a desync the player would see as a wrong balance or a
 // refused research. Returns a note for the summary ("" when there is nothing
 // to compare).
@@ -216,12 +216,19 @@ func telemetryInvestCheck(pid string, fields []telemetryField) string {
 	if !ok {
 		return ""
 	}
-	serverFree := int64(mmogPlayerStateForPID(pid).freeXP)
+	// The client sends this BEFORE the YA_UnlockItem it describes (live,
+	// 2026-10-03: InvestEvent then UnlockItem, three researches in a row), so
+	// the server has not charged it yet: its balance minus this research's
+	// free XP is what the client's remainder must be. The first version
+	// compared the balance as is and flagged every research that spent free
+	// XP.
+	spent, _ := telemetryNum(fields, "freeXp")
+	serverFree := int64(mmogPlayerStateForPID(pid).freeXP) - spent
 	if clientFree == serverFree {
 		return "matches the server's free XP"
 	}
 	logrus.WithFields(logrus.Fields{"player": pid, "item": telemetryStr(fields, "itemID"),
-		"client_free_xp": clientFree, "server_free_xp": serverFree}).
+		"client_free_xp": clientFree, "server_free_xp_after": serverFree}).
 		Warn("telemetry: the client's free XP after research differs from the server's")
-	return fmt.Sprintf("MISMATCH: server free XP %d", serverFree)
+	return fmt.Sprintf("MISMATCH: server free XP after this research %d", serverFree)
 }

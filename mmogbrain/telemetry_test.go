@@ -59,11 +59,11 @@ func TestTelemetryInvestCheck(t *testing.T) {
 	if err := seedMmogPlayerState(database, pid); err != nil {
 		t.Fatal(err)
 	}
-	// The capture says remainingFreeXp=1275.
+	// The capture says freeXp=0, remainingFreeXp=1275.
 	for _, c := range []struct {
 		serverFree int
 		want       string
-	}{{1275, "matches the server's free XP"}, {9999, "MISMATCH: server free XP 9999"}} {
+	}{{1275, "matches the server's free XP"}, {9999, "MISMATCH: server free XP after this research 9999"}} {
 		if _, err := database.Exec(`UPDATE player_state SET free_xp=? WHERE user_id=?`, c.serverFree, pid); err != nil {
 			t.Fatal(err)
 		}
@@ -75,5 +75,24 @@ func TestTelemetryInvestCheck(t *testing.T) {
 		if !strings.Contains(summary, "item 84804388: ship XP 1000, free XP 0; left ship XP 1450, free XP 1275") || !strings.HasSuffix(summary, c.want) {
 			t.Errorf("server free XP %d: summary %q, want it to end %q", c.serverFree, summary, c.want)
 		}
+	}
+}
+
+// The invest event arrives BEFORE its YA_UnlockItem: the server's balance
+// still includes the free XP being spent (live 2026-10-03: shipXp 1625,
+// freeXp 375, remainingFreeXp 6686 while the server held 7061).
+func TestTelemetryInvestCheckBeforeTheCharge(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=7061 WHERE user_id=?`, pid); err != nil {
+		t.Fatal(err)
+	}
+	fields := []telemetryField{{"itemID", int64(67502190)}, {"shipXp", int64(1625)}, {"freeXp", int64(375)},
+		{"remainingShipXp", int64(0)}, {"remainingFreeXp", int64(6686)}}
+	if note := telemetryInvestCheck(pid, fields); note != "matches the server's free XP" {
+		t.Errorf("note %q, want a match", note)
 	}
 }
