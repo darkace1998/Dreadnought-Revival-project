@@ -47,4 +47,21 @@ func TestReadyWaitsForTheGameMode(t *testing.T) {
 	if fired2.Load() == 0 {
 		t.Fatal("the fallback never made the host ready")
 	}
+
+	// The usual case: InProgress printed in the same instant as
+	// WaitingToStart. It must not make the host ready before the game mode.
+	var fired3 atomic.Int32
+	w3 := newLogWriter(&out, nil, "abcdef03", false, func() { fired3.Add(1) })
+	for _, line := range []string{
+		"LogGameMode:Display: Match State Changed from EnteringMap to WaitingToStart",
+		"LogGameMode:Display: Match State Changed from WaitingToStart to InProgress",
+	} {
+		if _, err := w3.Write([]byte(line + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	if fired3.Load() != 0 {
+		t.Fatal("ready at InProgress, before the game mode started")
+	}
 }

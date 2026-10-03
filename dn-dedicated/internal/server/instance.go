@@ -975,8 +975,15 @@ func playerEvent(line string) (delta int, key string) {
 // So a host is ready gameModeSettle after its game mode has started -- the
 // battle-server mod's bots line, written from the game mode's first timer
 // tick -- or readyFallback after WaitingToStart if that line never comes (no
-// mod, or a mode it does not touch). InProgress still means ready at once.
-// DN_READY_AT_WAITING=1 restores the old rule.
+// mod, or a mode it does not touch). DN_READY_AT_WAITING=1 restores the old
+// rule.
+//
+// InProgress is NOT readiness. The first version (2026-10-02) still treated it
+// as "ready at once", and in 32 of the 40 hosts measured that evening it is
+// printed in the SAME instant as WaitingToStart -- so the wait above never
+// applied, and players again joined ~2 s after the game mode started and got
+// no ships (a live Skybridge match, 21:56: InProgress 21:56:10, game mode
+// 21:56:15, joins 21:56:17). It only arms the fallback, like WaitingToStart.
 const gameModeStartedMarker = "m_enableSpawnAI 0 -> 1"
 
 var (
@@ -986,9 +993,7 @@ var (
 
 func (w *logWriter) readiness(line string) {
 	switch {
-	case strings.Contains(line, readyMarkers[1]): // InProgress
-		w.onReady()
-	case strings.Contains(line, readyMarkers[0]): // WaitingToStart
+	case strings.Contains(line, readyMarkers[0]), strings.Contains(line, readyMarkers[1]): // WaitingToStart / InProgress
 		if os.Getenv("DN_READY_AT_WAITING") == "1" {
 			w.onReady()
 			return
