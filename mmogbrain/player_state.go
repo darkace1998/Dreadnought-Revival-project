@@ -1599,9 +1599,11 @@ func missingHullPrerequisite(playerPID string, itemID int32) (int32, bool) {
 
 // hullUnlockShortfall reports whether a hull still lacks the parent-ship
 // modules the tech tree requires before it can be researched: have of need
-// bought, counting the same thing the client does (GetNumOfPurchasedTechTree
-// ItemsByShipId, 0x542730) -- owned purchases among the parent's tree modules.
-// Research-only rows do not count: the rule is "PURCHASE MODULES".
+// owned, counting the same thing the client does (GetNumOfPurchasedTechTree
+// ItemsByShipId, 0x542730) -- the parent's tree modules present in the owned
+// list we send, which includes the fitted defaults of every owned ship (not
+// only purchases: corrected 2026-10-02). Research-only rows do not count: the
+// rule is "PURCHASE MODULES".
 func hullUnlockShortfall(playerPID string, itemID int32) (have, need, parent int32, short bool) {
 	items := techTreeBaseItems()
 	for _, item := range items {
@@ -1620,7 +1622,14 @@ func hullUnlockShortfall(playerPID string, itemID int32) (have, need, parent int
 			modules[item.id] = true
 		}
 	}
-	for _, id := range ownedPurchaseItemIDs(playerPID) {
+	// Count what the CLIENT counts: every owned item of the parent's tree --
+	// the owned list we send (clientOwnedItemIDs: purchases plus the fitted
+	// defaults of every owned ship). Modules are owned per ship class, so a
+	// higher-tier ship or hero of the same class owns some of a lower ship's
+	// research items outright. Counting purchases only made the client offer
+	// research (it saw 8 of 9 on Trafalgar) while the server refused it (3 of
+	// 9), with no message: one player, 2026-10-02, 20 refused attempts.
+	for _, id := range clientOwnedItemIDs(playerPID) {
 		if modules[id] {
 			have++
 		}
