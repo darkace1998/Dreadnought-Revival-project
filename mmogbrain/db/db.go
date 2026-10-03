@@ -353,6 +353,19 @@ var migrations = []string{
 	// A squad queues as one party (squads.go): the matchmaker places a party
 	// whole, on one team. '' = queued alone.
 	`ALTER TABLE queue_entries ADD COLUMN party_id TEXT NOT NULL DEFAULT ''`,
+	// The client's telemetry (YA_Analytics*, YA_GameModeEvent; telemetry.go):
+	// every field as sent, a one-line summary, and the battle it belongs to.
+	`CREATE TABLE IF NOT EXISTS client_telemetry (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id    TEXT NOT NULL,
+		rt         TEXT NOT NULL,
+		battle_id  TEXT NOT NULL DEFAULT '',
+		summary    TEXT NOT NULL DEFAULT '',
+		fields     TEXT NOT NULL DEFAULT '[]',
+		created_at TEXT NOT NULL DEFAULT (datetime('now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS client_telemetry_created ON client_telemetry(created_at)`,
+	`CREATE INDEX IF NOT EXISTS client_telemetry_user ON client_telemetry(user_id, id)`,
 }
 
 func Open(path string) (*sql.DB, error) {

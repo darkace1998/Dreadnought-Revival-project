@@ -341,10 +341,14 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 	database := currentMmogPlayerStateDB()
 	if database != nil {
 		_, _ = database.Exec(`DELETE FROM queue_entries WHERE user_id=? AND status='waiting'`, pid)
+		fleetType := queuedFleetType(database, pid, payload)
 		if _, err := database.Exec(`INSERT INTO queue_entries(id,user_id,game_mode,tier_min,tier_max,fleet_type,status) VALUES(?,?,?,?,?,?,'waiting')`,
-			entryID, pid, gameMode, tierMin, tierMax, queuedFleetType(database, pid, payload)); err != nil {
+			entryID, pid, gameMode, tierMin, tierMax, fleetType); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue insert failed")
 		}
+		logrus.WithFields(logrus.Fields{"pid": pid, "mode": gameMode, "fleet_type": fleetType, "fleet": fleetTypeName(fleetType)}).
+			Info("matchmaking: player queued")
+		announceQueueStarted(gameMode, fleetType, 1)
 	}
 
 	return buildMmogMatchmakingPayload(requestName, mmogMatchmakingStatus{
@@ -352,6 +356,17 @@ func buildMmogEnterMatchmakingPayload(requestName string, playerPID string, payl
 		state:    "waiting",
 		gameMode: gameMode,
 	})
+}
+
+// fleetTypeName names an EYFleetType for logs and the dashboard.
+func fleetTypeName(fleetType int32) string {
+	switch fleetType {
+	case 2:
+		return "Veteran"
+	case 3:
+		return "Legendary"
+	}
+	return "Recruit"
 }
 
 // queuedFleetType is the EYFleetType (1 Recruit, 2 Veteran, 3 Legendary) a

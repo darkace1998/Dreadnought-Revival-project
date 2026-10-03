@@ -89,6 +89,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     <button data-tab="players">Players</button>
     <button data-tab="matches">Matches</button>
     <button data-tab="reports">Bug reports</button>
+    <button data-tab="telemetry">Telemetry</button>
     <button data-tab="logs">Logs</button>
   </nav>
   <span class="spacer"></span>
@@ -111,7 +112,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
   <div id="tab-players" class="hidden">
     <section style="margin-top:0"><h2>Online now</h2>
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th>In match</th><th>Queued</th><th>Squad</th><th>Player id</th></tr></thead><tbody id="onlineRows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th>In match</th><th>Queued</th><th>Fleet</th><th>Squad</th><th>Player id</th></tr></thead><tbody id="onlineRows"></tbody></table></div>
     </section>
     <div id="manage" class="manage hidden">
       <div class="row" style="justify-content:space-between;margin:0">
@@ -136,17 +137,26 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     </div>
     <section><h2>Accounts</h2>
       <div class="row"><input id="playerSearch" type="search" placeholder="Search name or player id"><button class="btn" id="playerSearchBtn">Search</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Name</th><th></th><th class="num">Rank</th><th class="num">XP</th><th class="num">Free XP</th><th class="num">Credits</th><th class="num">Premium</th><th class="num">Ships</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Kills</th><th>Last seen</th><th>Created</th></tr></thead><tbody id="playerRows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th></th><th class="num">Rank</th><th class="num">XP</th><th class="num">Free XP</th><th class="num">Credits</th><th class="num">Premium</th><th class="num">Ships</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Kills</th><th>Fleet</th><th>Last seen</th><th>Created</th></tr></thead><tbody id="playerRows"></tbody></table></div>
     </section>
   </div>
 
   <div id="tab-matches" class="hidden">
-    <div class="table-wrap"><table><thead><tr><th>Started</th><th>Mode</th><th>Map</th><th>Status</th><th>Duration</th><th>Results</th></tr></thead><tbody id="matchRows"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Started</th><th>Mode</th><th>Fleet</th><th>Map</th><th>Status</th><th>Duration</th><th>Results</th></tr></thead><tbody id="matchRows"></tbody></table></div>
   </div>
 
   <div id="tab-reports" class="hidden">
     <div class="row"><span class="muted">Reports the game clients send (YA_LogSpecial), newest first.</span></div>
     <div class="table-wrap"><table><thead><tr><th>When (UTC)</th><th>Player</th><th>Type</th><th>Report</th><th>Details</th></tr></thead><tbody id="reportRows"></tbody></table></div>
+  </div>
+
+  <div id="tab-telemetry" class="hidden">
+    <div class="row">
+      <select id="telType"><option value="">All types</option></select>
+      <input id="telSearch" type="search" placeholder="Player name or id">
+      <span class="muted">What the game clients report about themselves (YA_Analytics*, YA_GameModeEvent), newest first. Reward events show what the server paid beside what the client showed.</span>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>When (UTC)</th><th>Player</th><th>Type</th><th>Summary</th><th>Server paid</th><th>Fields</th></tr></thead><tbody id="telRows"></tbody></table></div>
   </div>
 
   <div id="tab-logs" class="hidden">
@@ -264,8 +274,8 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   async function loadOnline() {
     const d = await api('/online');
     fill('onlineRows', d.players.map((p) => el('tr', {}, el('td', {}, p.name || '?'), el('td', {}, p.status),
-      el('td', {}, p.match || '—'), el('td', {}, p.queued || '—'), el('td', {}, p.squad ? 'yes' : '—'),
-      el('td', { class: 'muted' }, p.pid))), 'Nobody is online.', 6);
+      el('td', {}, p.match || '—'), el('td', {}, p.queued || '—'), el('td', {}, p.fleet ? (p.queued ? el('span', { class: 'chip good' }, p.fleet) : p.fleet) : '—'), el('td', {}, p.squad ? 'yes' : '—'),
+      el('td', { class: 'muted' }, p.pid))), 'Nobody is online.', 7);
   }
 
   async function loadPlayers() {
@@ -274,7 +284,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     fill('playerRows', d.players.map((p) => el('tr', {}, el('td', {}, el('a', { class: 'link', onclick: () => openManage(p.pid) }, p.name || '?')),
       el('td', {}, p.online ? el('span', { class: 'chip good' }, 'online') : ''),
       ...[p.rank, p.xp, p.free_xp, p.credits, p.premium, p.ships, p.matches, p.wins, p.kills].map((v) => el('td', { class: 'num' }, fmt(v))),
-      el('td', {}, ago(p.updated)), el('td', { class: 'muted' }, (p.created || '').slice(0, 10)))), q ? 'No account matches.' : 'No accounts.', 13);
+      el('td', {}, p.fleet || '—'), el('td', {}, ago(p.updated)), el('td', { class: 'muted' }, (p.created || '').slice(0, 10)))), q ? 'No account matches.' : 'No accounts.', 14);
   }
 
   // --- player management -------------------------------------------------
@@ -338,10 +348,23 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
       if (m.started && m.ended) dur = Math.round((Date.parse(m.ended) - Date.parse(m.started)) / 60000) + ' min';
       const res = m.results.length ? m.results.map((r) => `${r.name} (T${r.team}, ${r.outcome}, ${r.kills}/${r.deaths}, +${fmt(r.credits)} cr, +${fmt(r.xp)} xp)`).join(' · ') : 'no results reported';
       const chip = m.status === 'active' ? el('span', { class: 'chip good' }, 'active') : el('span', { class: 'chip' }, m.status);
-      return el('tr', {}, el('td', {}, ago(m.started) + ' ago'), el('td', {}, m.mode), el('td', {}, m.map), el('td', {}, chip), el('td', {}, dur),
+      return el('tr', {}, el('td', {}, ago(m.started) + ' ago'), el('td', {}, m.mode), el('td', {}, ['?', 'Recruit', 'Veteran', 'Legendary'][m.fleet_type] || '?'), el('td', {}, m.map), el('td', {}, chip), el('td', {}, dur),
         el('td', { class: 'results' }, res));
-    }), 'No matches yet.', 6);
+    }), 'No matches yet.', 7);
   }
+
+  async function loadTelemetry() {
+    const sel = $('telType');
+    const d = await api('/telemetry?rt=' + encodeURIComponent(sel.value) + '&q=' + encodeURIComponent($('telSearch').value.trim()));
+    const keep = sel.value;
+    sel.replaceChildren(el('option', { value: '' }, 'All types'), ...d.types.map((t) => el('option', { value: t }, t.replace(/^YA_(Analytics)?/, ''))));
+    sel.value = keep;
+    const fieldText = (raw) => { try { return JSON.parse(raw).map((f) => `${f.n}=${f.v}`).join(' · '); } catch (e) { return raw; } };
+    fill('telRows', d.events.map((e) => el('tr', {}, el('td', {}, e.when), el('td', {}, e.player), el('td', {}, e.rt.replace(/^YA_(Analytics)?/, '')),
+      el('td', { class: 'results' }, e.summary), el('td', {}, e.server_paid || ''), el('td', { class: 'results muted' }, fieldText(e.fields)))), 'No telemetry yet.', 6);
+  }
+  $('telType').onchange = () => loadTelemetry();
+  $('telSearch').onchange = () => loadTelemetry();
 
   async function loadReports() {
     const d = await api('/reports');
@@ -373,7 +396,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
   const loaders = {
     overview: loadOverview, instances: loadInstances, players: () => Promise.all([loadOnline(), loadPlayers()]),
-    matches: loadMatches, reports: loadReports, logs: loadLog,
+    matches: loadMatches, reports: loadReports, telemetry: loadTelemetry, logs: loadLog,
   };
   async function refresh() {
     try { await loaders[tab](); $('updated').textContent = 'updated ' + new Date().toLocaleTimeString(); }
@@ -382,7 +405,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   function schedule() {
     clearInterval(timer);
     const live = tab === 'overview' || tab === 'instances' || (tab === 'players' && !$('playerSearch').value) || (tab === 'logs' && $('logFollow').checked);
-    if (live) timer = setInterval(refresh, tab === 'logs' ? 5000 : 10000);
+    if (live) timer = setInterval(refresh, tab === 'logs' || tab === 'players' ? 5000 : 10000);
   }
   function show(t) {
     tab = t;

@@ -80,13 +80,14 @@ func TestAdminAPIDoesNotDeadlockTheStore(t *testing.T) {
 		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,battle_match_id) VALUES('m1','TDM','Glacier','127.0.0.1',7777,'ended','2026-09-29T20:00:00Z','2026-09-29T20:00:00Z','bm1')`,
 		`INSERT INTO battle_results(match_id,user_id,outcome) VALUES('bm1','` + pid + `','win')`,
 		`INSERT INTO client_reports(user_id,type,name,desc) VALUES('` + pid + `','T','N','D')`,
+		`INSERT INTO client_telemetry(user_id,rt,battle_id,summary) VALUES('` + pid + `','YA_AnalyticsReceiveCreditsEvent','bm1','s')`,
 	} {
 		if _, err := database.Exec(q); err != nil {
 			t.Fatal(err)
 		}
 	}
 	r := adminTestRouter()
-	for _, path := range []string{"/admin/api/matches", "/admin/api/reports", "/admin/api/players?q=", "/admin/api/online", "/admin/api/overview"} {
+	for _, path := range []string{"/admin/api/matches", "/admin/api/reports", "/admin/api/telemetry", "/admin/api/telemetry?rt=YA_GameModeEvent&q=x", "/admin/api/players?q=", "/admin/api/online", "/admin/api/overview"} {
 		done := make(chan int, 1)
 		go func() { done <- adminGet(r, path, "test-admin-key").Code }()
 		select {

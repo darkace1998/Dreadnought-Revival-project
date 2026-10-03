@@ -99,6 +99,7 @@ func (h *squadHub) enterSquadMatchmaking(playerPID string, payload []byte) []byt
 	}
 	logrus.WithFields(logrus.Fields{"player": pid, "squad": record.id, "members": len(members),
 		"mode": gameMode, "fleet_type": fleetType}).Info("squad: queued for matchmaking")
+	announceQueueStarted(gameMode, fleetType, len(members))
 	return buildSquadEnterMatchmakingReply("ok")
 }
 

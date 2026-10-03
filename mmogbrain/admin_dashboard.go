@@ -72,6 +72,7 @@ func registerAdminDashboard(r *mux.Router, adminKey, controlPlaneURL, internalKe
 	api.HandleFunc("/matches", adminAPIMatches).Methods(http.MethodGet)
 	api.HandleFunc("/players", adminAPIPlayers).Methods(http.MethodGet)
 	api.HandleFunc("/reports", adminAPIReports).Methods(http.MethodGet)
+	api.HandleFunc("/telemetry", adminAPITelemetry).Methods(http.MethodGet)
 	api.HandleFunc("/logs", adminAPILogs).Methods(http.MethodGet)
 	api.HandleFunc("/battle-logs", adminAPIBattleLogs).Methods(http.MethodGet)
 	registerAdminPlayerManagement(api)
@@ -192,15 +193,25 @@ func adminAPIOnline(w http.ResponseWriter, _ *http.Request) {
 		Squad  string `json:"squad,omitempty"`
 		Match  string `json:"match,omitempty"`
 		Queued string `json:"queued,omitempty"`
+		// Fleet is the fleet of the player's queue, else of their running
+		// match (Recruit/Veteran/Legendary); "" when neither.
+		Fleet string `json:"fleet,omitempty"`
 	}
 	out := []row{}
 	database := currentMmogPlayerStateDB()
 	for _, p := range socialHubInstance.onlinePlayers() {
 		r := row{PID: p.PID, Name: p.Name, Status: p.Status, Squad: squadHubInstance.squadIDOf(p.PID)}
+		var queuedFleet, matchFleet int32
 		if database != nil {
-			_ = database.QueryRow(`SELECT m.game_mode||' / '||m.map FROM match_slots s JOIN matches m ON m.id=s.match_id
-				WHERE s.user_id=? AND m.status='active' LIMIT 1`, p.PID).Scan(&r.Match)
-			_ = database.QueryRow(`SELECT game_mode FROM queue_entries WHERE user_id=? AND status='waiting' LIMIT 1`, p.PID).Scan(&r.Queued)
+			_ = database.QueryRow(`SELECT m.game_mode||' / '||m.map, m.fleet_type FROM match_slots s JOIN matches m ON m.id=s.match_id
+				WHERE s.user_id=? AND m.status='active' LIMIT 1`, p.PID).Scan(&r.Match, &matchFleet)
+			_ = database.QueryRow(`SELECT game_mode, fleet_type FROM queue_entries WHERE user_id=? AND status='waiting' LIMIT 1`, p.PID).Scan(&r.Queued, &queuedFleet)
+		}
+		switch {
+		case queuedFleet > 0:
+			r.Fleet = fleetTypeName(queuedFleet)
+		case matchFleet > 0:
+			r.Fleet = fleetTypeName(matchFleet)
 		}
 		out = append(out, r)
 	}
@@ -225,7 +236,11 @@ func adminAPIPlayers(w http.ResponseWriter, r *http.Request) {
 			(SELECT COUNT(*) FROM player_ship_loadouts l WHERE l.user_id=p.user_id),
 			(SELECT COUNT(*) FROM battle_results b WHERE b.user_id=p.user_id),
 			(SELECT COUNT(*) FROM battle_results b WHERE b.user_id=p.user_id AND b.outcome='win'),
-			(SELECT COALESCE(SUM(kills),0) FROM battle_results b WHERE b.user_id=p.user_id)
+			(SELECT COALESCE(SUM(kills),0) FROM battle_results b WHERE b.user_id=p.user_id),
+			-- the fleet of the player's current queue, else of their last match
+			COALESCE((SELECT q.fleet_type FROM queue_entries q WHERE q.user_id=p.user_id AND q.status='waiting' LIMIT 1),
+				(SELECT m.fleet_type FROM match_slots s JOIN matches m ON m.id=s.match_id WHERE s.user_id=p.user_id
+					ORDER BY s.joined_at DESC LIMIT 1), 0)
 		FROM player_state p
 		WHERE (?='' OR p.display_name LIKE '%'||?||'%' OR p.user_id LIKE ?||'%')
 		ORDER BY p.updated_at DESC LIMIT 100`, q, q, strings.ToLower(strings.ReplaceAll(q, "-", "")))
@@ -249,13 +264,18 @@ func adminAPIPlayers(w http.ResponseWriter, r *http.Request) {
 		Wins     int    `json:"wins"`
 		Kills    int    `json:"kills"`
 		IsOnline bool   `json:"online"`
+		Fleet    string `json:"fleet,omitempty"` // queued, else last match; "" = never queued
 	}
 	out := []row{}
 	for rows.Next() {
 		var x row
+		var fleetType int32
 		if rows.Scan(&x.PID, &x.Name, &x.Rank, &x.XP, &x.FreeXP, &x.Credits, &x.Premium, &x.Created, &x.Updated,
-			&x.Ships, &x.Matches, &x.Wins, &x.Kills) == nil {
+			&x.Ships, &x.Matches, &x.Wins, &x.Kills, &fleetType) == nil {
 			x.IsOnline = online[x.PID]
+			if fleetType > 0 {
+				x.Fleet = fleetTypeName(fleetType)
+			}
 			out = append(out, x)
 		}
 	}
@@ -445,6 +465,78 @@ func adminAPIReports(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	writeAdminJSON(w, map[string]any{"reports": out})
+}
+
+// adminAPITelemetry lists the client's telemetry (telemetry.go), newest
+// first, optionally for one request type (rt) and/or player (q: name or id
+// prefix). A reward event shows, beside the client's breakdown, what the
+// server paid for the same battle (battle_results).
+func adminAPITelemetry(w http.ResponseWriter, r *http.Request) {
+	database := currentMmogPlayerStateDB()
+	type row struct {
+		ID         int    `json:"id"`
+		When       string `json:"when"`
+		Player     string `json:"player"`
+		RT         string `json:"rt"`
+		Summary    string `json:"summary"`
+		Fields     string `json:"fields"`
+		BattleID   string `json:"battle_id,omitempty"`
+		ServerPaid string `json:"server_paid,omitempty"`
+		pid        string
+	}
+	out := []*row{}
+	types := []string{}
+	if database == nil {
+		writeAdminJSON(w, map[string]any{"events": out, "types": types})
+		return
+	}
+	rt := strings.TrimSpace(r.URL.Query().Get("rt"))
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	pidFilter := ""
+	if q != "" {
+		pidFilter = strings.ToLower(strings.ReplaceAll(q, "-", ""))
+		var byName string
+		if database.QueryRow(`SELECT user_id FROM player_state WHERE display_name=? LIMIT 1`, q).Scan(&byName) == nil {
+			pidFilter = byName
+		}
+	}
+	rows, err := database.Query(`SELECT id, created_at, user_id, rt, summary, fields, battle_id FROM client_telemetry
+		WHERE (?='' OR rt=?) AND (?='' OR user_id LIKE ?||'%')
+		ORDER BY id DESC LIMIT 300`, rt, rt, pidFilter, pidFilter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		x := &row{}
+		if rows.Scan(&x.ID, &x.When, &x.pid, &x.RT, &x.Summary, &x.Fields, &x.BattleID) == nil {
+			out = append(out, x)
+		}
+	}
+	_ = rows.Close()
+	// After Close: one connection (see adminAPIMatches).
+	for _, x := range out {
+		x.Player = adminPlayerName(x.pid)
+		if x.BattleID == "" {
+			continue
+		}
+		var credits, xp int
+		if database.QueryRow(`SELECT credits, xp FROM battle_results WHERE match_id=? AND user_id=?`, x.BattleID, x.pid).Scan(&credits, &xp) == nil {
+			x.ServerPaid = fmt.Sprintf("%d credits, %d XP", credits, xp)
+		} else {
+			x.ServerPaid = "no result recorded"
+		}
+	}
+	if trows, err := database.Query(`SELECT DISTINCT rt FROM client_telemetry ORDER BY rt`); err == nil {
+		for trows.Next() {
+			var t string
+			if trows.Scan(&t) == nil {
+				types = append(types, t)
+			}
+		}
+		_ = trows.Close()
+	}
+	writeAdminJSON(w, map[string]any{"events": out, "types": types})
 }
 
 // --- logs ---------------------------------------------------------------------

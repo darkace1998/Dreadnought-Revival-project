@@ -6,6 +6,11 @@ import (
 )
 
 func buildMmogRequestResponsePayload(requestName string, playerPID string, payload []byte) []byte {
+	// The client's telemetry is kept (telemetry.go); the reply below is
+	// unchanged.
+	if telemetryRequests[requestName] {
+		recordClientTelemetry(playerPID, requestName, payload)
+	}
 	switch requestName {
 	// --- Progression & Career ---
 	case "YA_PlayerFleets":
@@ -165,10 +170,23 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	// YA_AnalyticsTutorialEvent / TutorialSummaryEvent / OnboardingMovie are
 	// only sent while a new player is going through onboarding, which is why
 	// they never showed up before the tutorial could be reached.
+	//
+	// YA_GameModeEvent (GameMode + Event "Started_Match"/"Completed_Match"),
+	// YA_AnalyticsInvestEvent (XP spent on research, sender 0x142A44830),
+	// YA_AnalyticsReceiveXPEvent (0x142A45580) and
+	// YA_AnalyticsReceiveCreditsEvent (0x142A44F20; the end-of-match reward
+	// breakdown) are fire-and-forget telemetry too: strxref finds each name
+	// only in its sender, never in the reply dispatcher
+	// (0x142A236C2-0x142A31A32), where e.g. YA_PurchaseItem has an arm. They
+	// fell to the default case -- ~1000 "unknown MMOG request" warnings a day
+	// and an "Unknown command" error reply the client never reads
+	// (2026-10-03).
 	case "YA_AnalyticsEvent", "YA_SaveCtAData", "YA_IncrementPlayerStatsCounter",
 		"YA_AnalyticsEndTransaction", "YA_AnalyticsUpdateTransaction",
 		"YA_AnalyticsTutorialEvent", "YA_AnalyticsTutorialSummaryEvent",
-		"YA_AnalyticsOnboardingMovie", "YA_AnalyticsButtonClicked":
+		"YA_AnalyticsOnboardingMovie", "YA_AnalyticsButtonClicked",
+		"YA_GameModeEvent", "YA_AnalyticsInvestEvent",
+		"YA_AnalyticsReceiveXPEvent", "YA_AnalyticsReceiveCreditsEvent":
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Client-owned save blobs ---

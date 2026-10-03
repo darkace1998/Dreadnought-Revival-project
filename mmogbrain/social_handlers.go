@@ -115,6 +115,13 @@ func handleUserMethod(r socialRequest) map[string]any {
 			requester = r.peer.playerID
 		}
 		for _, id := range stringListParam(r.params, "users", "user", "ids") {
+			if isServerChatID(id) { // the sender of server announcements (server_chat.go)
+				found = append(found, serverChatEntry())
+				if r.peer != nil {
+					_ = r.peer.send(serverChatProfile())
+				}
+				continue
+			}
 			pid := protocol.NormalizePlayerPID(id)
 			if pid == "" || !playerExists(pid) {
 				notFound = append(notFound, id)
