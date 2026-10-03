@@ -968,38 +968,59 @@ func persistRenameShipLoadout(database *sql.DB, playerPID string, payload []byte
 	return nil
 }
 
+// persistSetFleetFlagship stores a fleet's flagship. Every fleet has its own;
+// setting one never changes which fleet is active.
+//
+// The request (sender 0x142A496D0) is fleet (16-byte GUID), shipId (int32)
+// and loadoutindex (1-byte int). shipId is the ship's LOADOUT id -- the
+// precast id the fleet lists (33489264 = Cerberus), the same value a fleet's
+// flagship_ship_id holds -- not the pawn id in player_ship_loadouts.ship_id.
+// It was looked up as a pawn id, found nothing and returned without saving:
+// one live session set its flagship 14 times and the stored flagships never
+// moved from the 2026-09-29 seed (2026-10-03). It also made the fleet the
+// ACTIVE one, which only never happened because nothing was ever saved.
+//
+// flagship_loadout_index is the ship's 0-based place in the fleet as sent
+// (loadFleets numbers the ships 0..n in position order); the positions stored
+// in player_fleet_loadouts need not start at 0.
 func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte) error {
-	fleetID := fleetIDForRef(database, playerPID, fleetRefFromPayload(payload))
-	if fleetID == 0 {
-		fleetID = firstMmogInt32Field(payload, "fleet id", "FleetType", "m_fleetId")
-	}
-	loadoutID := firstMmogInt32Field(payload, "FlagShipLoadoutID", "flagshipLoadoutID", "LoadoutID", "loadoutID")
-	shipID := firstMmogInt32Field(payload, "FlagShipID", "shipID", "shipId", "ShipID")
-	if fleetID == 0 {
-		fleetID = starterFleetState().fleetID
-	}
-	if loadoutID == 0 && shipID != 0 {
-		if err := database.QueryRow(`SELECT loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? ORDER BY position LIMIT 1`, playerPID, shipID).Scan(&loadoutID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("lookup loadout for set fleet flagship: %w", err)
-		}
-	}
-	if loadoutID == 0 {
+	// The fleet the request's GUID names, resolved as for fleet edits.
+	fleetID := fleetEditTargetFleetID(database, playerPID, payload)
+	requested := firstMmogInt32Field(payload, "FlagShipLoadoutID", "flagshipLoadoutID", "LoadoutID", "loadoutID", "FlagShipID", "shipID", "shipId", "ShipID")
+	if requested == 0 {
 		return nil
 	}
-	var position int32
-	if err := database.QueryRow(`SELECT COALESCE(MIN(position),0) FROM player_fleet_loadouts WHERE user_id=? AND fleet_id=? AND loadout_id=?`, playerPID, fleetID, loadoutID).Scan(&position); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("lookup flagship index: %w", err)
+	// A pawn id (older client paths) names the same ship: map it to its
+	// loadout. Outside any open rows (one connection).
+	var byPawn int32
+	_ = database.QueryRow(`SELECT precast_loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? LIMIT 1`,
+		playerPID, requested).Scan(&byPawn)
+	// The fleet's ships in order; the flagship must be one of them.
+	rows, err := database.Query(`SELECT f.loadout_id, l.precast_loadout_id FROM player_fleet_loadouts f
+		JOIN player_ship_loadouts l ON l.user_id=f.user_id AND l.loadout_id=f.loadout_id
+		WHERE f.user_id=? AND f.fleet_id=? ORDER BY f.position`, playerPID, fleetID)
+	if err != nil {
+		return fmt.Errorf("list fleet for set fleet flagship: %w", err)
 	}
-	if shipID == 0 {
-		if err := database.QueryRow(`SELECT ship_id FROM player_ship_loadouts WHERE user_id=? AND loadout_id=?`, playerPID, loadoutID).Scan(&shipID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("lookup ship for set fleet flagship: %w", err)
+	var loadoutID, precastID int32
+	index := int32(-1)
+	for i := int32(0); rows.Next(); i++ {
+		var lo, pre int32
+		if rows.Scan(&lo, &pre) != nil {
+			continue
+		}
+		if index < 0 && (lo == requested || pre == requested || (byPawn != 0 && pre == byPawn)) {
+			loadoutID, precastID, index = lo, pre, i
 		}
 	}
-	if _, err := database.Exec(`UPDATE player_fleets SET active=0, updated_at=datetime('now') WHERE user_id=?`, playerPID); err != nil {
-		return fmt.Errorf("clear active fleets: %w", err)
+	_ = rows.Close()
+	if index < 0 {
+		logrus.WithFields(logrus.Fields{"player": playerPID, "fleet": fleetID, "ship": requested}).
+			Warn("fleet: flagship is not a ship of the fleet; not changed")
+		return nil
 	}
-	if _, err := database.Exec(`UPDATE player_fleets SET active=1, flagship_ship_id=?, flagship_loadout_id=?, flagship_loadout_index=?, updated_at=datetime('now') WHERE user_id=? AND fleet_id=?`,
-		shipID, loadoutID, position, playerPID, fleetID); err != nil {
+	if _, err := database.Exec(`UPDATE player_fleets SET flagship_ship_id=?, flagship_loadout_id=?, flagship_loadout_index=?, updated_at=datetime('now') WHERE user_id=? AND fleet_id=?`,
+		precastID, loadoutID, index, playerPID, fleetID); err != nil {
 		return fmt.Errorf("set fleet flagship: %w", err)
 	}
 	return nil

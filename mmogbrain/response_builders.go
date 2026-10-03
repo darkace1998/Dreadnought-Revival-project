@@ -192,6 +192,15 @@ func buildMmogFleetMutationPayload(requestName string, payload []byte) []byte {
 	if shipID := protocol.FirstInt32(payload, "shipId", "ShipID", "shipID"); shipID != 0 {
 		b = protocol.AppendStringField(b, "shipId", strconv.Itoa(int(shipID)))
 	}
+	// YA_SetFleetFlagship's arm reads the same result/fleet/shipId and then
+	// "loadoutindex" (0x142A2667C), and only on result "ok" applies the new
+	// flagship to the client's own fleet data (0x142A84DE0 with fleet, shipId,
+	// loadoutindex). It was answered with the generic envelope, so the client
+	// never applied it (2026-10-03). The request sends it as a 1-byte int
+	// (tag 0x16); it goes back as a numeric string like shipId.
+	if requestName == "YA_SetFleetFlagship" {
+		b = protocol.AppendStringField(b, "loadoutindex", strconv.Itoa(int(protocol.FirstInt32(payload, "loadoutindex", "loadoutIndex"))))
+	}
 	return b
 }
 
@@ -6510,6 +6519,9 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("failed", "purchase commit failed", 0, softCurrency)
 	}
 	committed = true
+	if isHero {
+		pushShipGrants(pid, []int32{itemID})
+	}
 	return reply("bought", "ok", price, creditsLeft)
 }
 

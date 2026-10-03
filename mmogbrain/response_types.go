@@ -444,14 +444,22 @@ type mmogFleetSeed struct {
 	flagshipLoadoutIndex int32
 }
 
+// flagshipIndex is the flagship's place in the fleet as sent. Found by id
+// first: the stored index goes stale when ships are added or removed after
+// the flagship was set.
 func (fleet mmogFleetSeed) flagshipIndex() int32 {
-	if fleet.flagshipLoadoutIndex > 0 {
-		return fleet.flagshipLoadoutIndex
-	}
 	for idx, loadout := range fleet.shipLoadouts {
 		if loadout.effectiveFleetShipID() == fleet.flagshipShipID && loadout.loadoutID() == fleet.flagshipLoadoutID {
 			return int32(idx)
 		}
+	}
+	for idx, loadout := range fleet.shipLoadouts {
+		if loadout.loadoutID() == fleet.flagshipLoadoutID || loadout.precastLoadoutID == fleet.flagshipShipID {
+			return int32(idx)
+		}
+	}
+	if fleet.flagshipLoadoutIndex > 0 && int(fleet.flagshipLoadoutIndex) < len(fleet.shipLoadouts) {
+		return fleet.flagshipLoadoutIndex
 	}
 	return 0
 }

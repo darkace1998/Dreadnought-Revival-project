@@ -338,15 +338,26 @@ func grantMarketBundle(database *sql.DB, pid string, b marketBundle) (charged in
 // each new ship (YA_ClaimItem addedLoadouts), the fleets they may unlock, and
 // the balances (credits were added).
 func pushBundleGrants(pid string, heroes []int32) {
-	for _, id := range heroes {
+	pushShipGrants(pid, heroes)
+	squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
+}
+
+// pushShipGrants hands the client ships it was just granted by a purchase:
+// each as a YA_ClaimItem addedLoadouts push (buildMmogShipClaimPush), then the
+// fleets, which a new ship may unlock. Without it a bought hero reached
+// neither the owned-ships screen nor the fleet roster until a relog: the
+// purchase reply does not carry loadouts, and the post-purchase fleet push in
+// the connection looks for an ItemID that a store purchase does not send (it
+// names the offer, "999<id>") -- live 2026-10-03, two heroes bought.
+func pushShipGrants(pid string, ships []int32) {
+	for _, id := range ships {
 		if payload, ok := buildMmogShipClaimPush(pid, id); ok {
 			squadHubInstance.push(pid, payload)
 		}
 	}
-	if len(heroes) > 0 {
+	if len(ships) > 0 {
 		squadHubInstance.push(pid, buildMmogFleetUpdatePush(pid))
 	}
-	squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
 }
 
 func (b marketBundle) String() string { return fmt.Sprintf("%s (%d)", b.name, b.id) }
