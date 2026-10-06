@@ -366,6 +366,11 @@ var migrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS client_telemetry_created ON client_telemetry(created_at)`,
 	`CREATE INDEX IF NOT EXISTS client_telemetry_user ON client_telemetry(user_id, id)`,
+	// flagship_loadout_index is the flagship ship's own loadout slot; the
+	// 2026-10-03 flagship fix stored the fleet place instead, which crashed
+	// clients (an unchecked array index). Reset it from the loadout.
+	`UPDATE player_fleets SET flagship_loadout_index = COALESCE((SELECT l.loadout_index FROM player_ship_loadouts l
+		WHERE l.user_id=player_fleets.user_id AND l.loadout_id=player_fleets.flagship_loadout_id), 0)`,
 }
 
 func Open(path string) (*sql.DB, error) {

@@ -980,9 +980,15 @@ func persistRenameShipLoadout(database *sql.DB, playerPID string, payload []byte
 // moved from the 2026-09-29 seed (2026-10-03). It also made the fleet the
 // ACTIVE one, which only never happened because nothing was ever saved.
 //
-// flagship_loadout_index is the ship's 0-based place in the fleet as sent
-// (loadFleets numbers the ships 0..n in position order); the positions stored
-// in player_fleet_loadouts need not start at 0.
+// flagship_loadout_index is WHICH LOADOUT OF THE FLAGSHIP SHIP is meant --
+// the ship's own loadout slot (player_ship_loadouts.loadout_index), NOT the
+// ship's place in the fleet. The client indexes the ship's loadout array with
+// it without a bounds check (FUN_140340050: loadouts[+0x48]). The 2026-10-03
+// version stored the fleet place (0-3); every ship has one loadout, so any
+// flagship in place 1-3 read past the array, took two item ids as a loadout
+// pointer and crashed the client -- in matchmaking (FindAMatch, 0xA9F92D) and
+// in UYLoadoutManager::ActivateLoadout (0x336DC4); two players' minidumps,
+// 2026-10-04/05.
 func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte) error {
 	// The fleet the request's GUID names, resolved as for fleet edits.
 	fleetID := fleetEditTargetFleetID(database, playerPID, payload)
@@ -996,25 +1002,25 @@ func persistSetFleetFlagship(database *sql.DB, playerPID string, payload []byte)
 	_ = database.QueryRow(`SELECT precast_loadout_id FROM player_ship_loadouts WHERE user_id=? AND ship_id=? LIMIT 1`,
 		playerPID, requested).Scan(&byPawn)
 	// The fleet's ships in order; the flagship must be one of them.
-	rows, err := database.Query(`SELECT f.loadout_id, l.precast_loadout_id FROM player_fleet_loadouts f
+	rows, err := database.Query(`SELECT f.loadout_id, l.precast_loadout_id, l.loadout_index FROM player_fleet_loadouts f
 		JOIN player_ship_loadouts l ON l.user_id=f.user_id AND l.loadout_id=f.loadout_id
 		WHERE f.user_id=? AND f.fleet_id=? ORDER BY f.position`, playerPID, fleetID)
 	if err != nil {
 		return fmt.Errorf("list fleet for set fleet flagship: %w", err)
 	}
-	var loadoutID, precastID int32
-	index := int32(-1)
-	for i := int32(0); rows.Next(); i++ {
-		var lo, pre int32
-		if rows.Scan(&lo, &pre) != nil {
+	var loadoutID, precastID, index int32
+	found := false
+	for rows.Next() {
+		var lo, pre, slot int32
+		if rows.Scan(&lo, &pre, &slot) != nil {
 			continue
 		}
-		if index < 0 && (lo == requested || pre == requested || (byPawn != 0 && pre == byPawn)) {
-			loadoutID, precastID, index = lo, pre, i
+		if !found && (lo == requested || pre == requested || (byPawn != 0 && pre == byPawn)) {
+			loadoutID, precastID, index, found = lo, pre, slot, true
 		}
 	}
 	_ = rows.Close()
-	if index < 0 {
+	if !found {
 		logrus.WithFields(logrus.Fields{"player": playerPID, "fleet": fleetID, "ship": requested}).
 			Warn("fleet: flagship is not a ship of the fleet; not changed")
 		return nil

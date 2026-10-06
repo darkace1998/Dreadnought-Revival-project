@@ -1033,7 +1033,7 @@ func appendMmogFleetRawFields(b []byte, stack []int, fleet mmogFleetSeed) ([]byt
 	b, stack = protocol.AppendBoolArrayField(b, stack, "ShipTechTreeComplete", fleet.shipTechTreeComplete())
 	b = protocol.AppendStringField(b, "FlagShipID", strconv.Itoa(int(fleet.flagshipShipID)))
 	b = protocol.AppendStringField(b, "FlagShipLoadoutID", strconv.Itoa(int(fleet.flagshipLoadoutID)))
-	b = protocol.AppendStringField(b, "FlagShipLoadoutIndex", strconv.Itoa(int(fleet.flagshipLoadoutIndex)))
+	b = protocol.AppendStringField(b, "FlagShipLoadoutIndex", strconv.Itoa(int(fleet.flagshipShipLoadoutSlot())))
 	return b, stack
 }
 
@@ -1886,9 +1886,9 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendInt32Field(b, "FlagShipID", starterFleet.flagshipShipID)
 	b = protocol.AppendInt32Field(b, "flagshipShipId", starterFleet.flagshipShipID)
 	b = protocol.AppendInt32Field(b, "FlagShipLoadoutID", starterFleet.flagshipLoadoutID)
-	b = protocol.AppendInt32Field(b, "FlagShipLoadoutIndex", starterFleet.flagshipLoadoutIndex)
+	b = protocol.AppendInt32Field(b, "FlagShipLoadoutIndex", starterFleet.flagshipShipLoadoutSlot())
 	b = protocol.AppendInt32Field(b, "selectedLoadoutID", starterFleet.flagshipLoadoutID)
-	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipLoadoutIndex)
+	b = protocol.AppendInt32Field(b, "selectedLoadoutIndex", starterFleet.flagshipShipLoadoutSlot())
 	b, stack = appendMmogFleetBackendFields(b, stack, playerPID, starterFleet)
 	// Adding a full "Fleets" array here was tested against the live client
 	// (2026-07-27) and changed nothing — the fleet array the client complained

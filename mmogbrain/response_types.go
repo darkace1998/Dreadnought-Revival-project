@@ -444,6 +444,27 @@ type mmogFleetSeed struct {
 	flagshipLoadoutIndex int32
 }
 
+// flagshipShipLoadoutSlot is FlagShipLoadoutIndex: which of the flagship
+// ship's own loadouts is meant (its loadoutIndex), taken from the loadout
+// itself so a bad stored value never reaches the client. The client indexes
+// the ship's loadout array with it unchecked (FUN_140340050) -- a fleet place
+// sent here crashed clients (see persistSetFleetFlagship). Every ship has one
+// loadout today, so this is 0.
+func (fleet mmogFleetSeed) flagshipShipLoadoutSlot() int32 {
+	if len(fleet.shipLoadouts) == 0 && fleet.flagshipLoadoutIndex < 0 {
+		return fleet.flagshipLoadoutIndex // an empty fleet's "no flagship"
+	}
+	for _, loadout := range fleet.shipLoadouts {
+		if loadout.loadoutID() == fleet.flagshipLoadoutID || loadout.precastLoadoutID == fleet.flagshipShipID {
+			if loadout.loadoutIndex >= 0 {
+				return loadout.loadoutIndex
+			}
+			break
+		}
+	}
+	return 0
+}
+
 // flagshipIndex is the flagship's place in the fleet as sent. Found by id
 // first: the stored index goes stale when ships are added or removed after
 // the flagship was set.
@@ -457,9 +478,6 @@ func (fleet mmogFleetSeed) flagshipIndex() int32 {
 		if loadout.loadoutID() == fleet.flagshipLoadoutID || loadout.precastLoadoutID == fleet.flagshipShipID {
 			return int32(idx)
 		}
-	}
-	if fleet.flagshipLoadoutIndex > 0 && int(fleet.flagshipLoadoutIndex) < len(fleet.shipLoadouts) {
-		return fleet.flagshipLoadoutIndex
 	}
 	return 0
 }

@@ -56,6 +56,26 @@ func TestSetFleetFlagship(t *testing.T) {
 		t.Errorf("flagship %d at index %d, want %d at index 2", after.flagshipShipID, after.flagshipIndex(), target.precastLoadoutID)
 	}
 
+	// FlagShipLoadoutIndex is the flagship SHIP's own loadout slot (0: every
+	// ship has one), never its fleet place: the client indexes the ship's
+	// loadout array with it unchecked (FUN_140340050), and the fleet place
+	// (2 here) crashed clients live (2026-10-04/05).
+	var stored int32
+	if err := database.QueryRow(`SELECT flagship_loadout_index FROM player_fleets WHERE user_id=? AND fleet_id=?`, pid, fleet.fleetID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != 0 || after.flagshipShipLoadoutSlot() != 0 {
+		t.Errorf("flagship loadout slot stored %d, sent %d; want 0 (the ship's only loadout)", stored, after.flagshipShipLoadoutSlot())
+	}
+	// A bad stored value (as the 2026-10-03 build wrote) never reaches the wire.
+	if _, err := database.Exec(`UPDATE player_fleets SET flagship_loadout_index=4 WHERE user_id=? AND fleet_id=?`, pid, fleet.fleetID); err != nil {
+		t.Fatal(err)
+	}
+	fleets := buildMmogPlayerFleetsPayload(pid)
+	if got := protocol.ExtractStringField(fleets, "FlagShipLoadoutIndex"); got != "0" {
+		t.Errorf("YA_PlayerFleets FlagShipLoadoutIndex = %q with 4 stored, want 0", got)
+	}
+
 	reply := buildMmogRequestResponsePayload("YA_SetFleetFlagship", pid, req)
 	for field, want := range map[string]string{"fleet": fleetFID(pid, fleet.fleetID), "loadoutindex": "0"} {
 		if got := protocol.ExtractStringField(reply, field); got != want {
