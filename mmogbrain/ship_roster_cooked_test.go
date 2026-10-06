@@ -811,13 +811,28 @@ func TestOwnedItemListsFitTheRingWhenEverythingIsOwned(t *testing.T) {
 	if len(owned) < 1000 {
 		t.Fatalf("only %d owned ids; the test would prove nothing", len(owned))
 	}
-	for name, payload := range map[string][]byte{
-		"YA_GetPlayerPurchases":   buildMmogPlayerPurchasesPayloadForPlayer(pid),
-		"YA_GetPlayerProgression": buildMmogPlayerProgressionPayload(pid),
-	} {
-		t.Logf("%s: %d bytes for %d ids", name, len(payload), len(owned))
-		if len(payload) > clientReceiveRingBytes-2048 {
-			t.Errorf("%s is %d bytes for %d owned ids; ring is 32768", name, len(payload), len(owned))
+	// The ring bounds a reply only when it must go out as ONE frame
+	// (DN_FRAME_CHUNKING=0). Chunked (the default, verified live 2026-10-01)
+	// the bound is the reassembly budget -- and PurchasesData then carries
+	// every owned cosmetic too (vanity_ownership.go).
+	for _, chunked := range []bool{false, true} {
+		if chunked {
+			t.Setenv("DN_FRAME_CHUNKING", "1")
+		} else {
+			t.Setenv("DN_FRAME_CHUNKING", "0")
+		}
+		limit := clientReceiveRingBytes - 2048
+		if chunked {
+			limit = reassembledResponseBudget
+		}
+		for name, payload := range map[string][]byte{
+			"YA_GetPlayerPurchases":   buildMmogPlayerPurchasesPayloadForPlayer(pid),
+			"YA_GetPlayerProgression": buildMmogPlayerProgressionPayload(pid),
+		} {
+			t.Logf("%s chunked=%v: %d bytes for %d ids", name, chunked, len(payload), len(owned))
+			if len(payload) > limit {
+				t.Errorf("%s (chunked=%v) is %d bytes for %d owned ids; limit %d", name, chunked, len(payload), len(owned), limit)
+			}
 		}
 	}
 }

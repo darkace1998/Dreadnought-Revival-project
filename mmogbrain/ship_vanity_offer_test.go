@@ -17,8 +17,12 @@ func TestShipCosmeticOffersReferenceTheirItem(t *testing.T) {
 		switch {
 		case c >= 20 && c <= 24 && !shipSeen:
 			shipSeen = true
-			if len(ids) != 1 || ids[0] != s.itemID {
-				t.Errorf("ship cosmetic %d: ItemIDs %v, want [%d]", s.itemID, ids, s.itemID)
+			// CHANGED 2026-10-06: offers are per-ship (vanity_store.go). The
+			// SHARED id comes first (the client resolves the section from
+			// it), then the offer's own id, each once.
+			shared := sharedGearID(s.itemID)
+			if len(ids) < 1 || ids[0] != shared || !containsAny(ids, s.itemID) || len(ids) != len(uniqueAny(ids)) {
+				t.Errorf("ship cosmetic %d: ItemIDs %v, want the shared %d first, its own id, no repeats", s.itemID, ids, shared)
 			}
 			if e["PromotionFlags"] != promotionFlagShipVanity {
 				t.Errorf("ship cosmetic %d: PromotionFlags %v, want ShipVanity (%d)", s.itemID, e["PromotionFlags"], promotionFlagShipVanity)
@@ -34,7 +38,7 @@ func TestShipCosmeticOffersReferenceTheirItem(t *testing.T) {
 		t.Fatalf("need both a ship and a captain cosmetic in the catalog (ship %v captain %v)", shipSeen, captainSeen)
 	}
 	t.Setenv("DN_SHIP_VANITY_OFFER_FIX", "0")
-	for _, s := range seeds {
+	for _, s := range vanityCatalogSeeds(map[int32]struct{}{}) {
 		if c := (s.itemID >> 24) & 0xff; c >= 20 && c <= 24 {
 			e := gatewayMarketEntity(s, true)
 			if ids, _ := e["ItemIDs"].([]any); len(ids) != 0 || e["PromotionFlags"] != 0 {
@@ -43,4 +47,21 @@ func TestShipCosmeticOffersReferenceTheirItem(t *testing.T) {
 			break
 		}
 	}
+}
+
+func containsAny(ids []any, id int32) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueAny(ids []any) map[any]bool {
+	out := map[any]bool{}
+	for _, x := range ids {
+		out[x] = true
+	}
+	return out
 }

@@ -574,6 +574,11 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		for _, id := range clientOwnedItemIDs(playerID) {
 			purchased[id] = struct{}{}
 		}
+		// Cosmetics: bought, free and the owned ships' own looks
+		// (vanity_ownership.go), so the store does not offer them again.
+		for _, id := range ownedVanityItemIDs(playerID) {
+			purchased[id] = struct{}{}
+		}
 	}
 
 	// Starter gear already carries the ship/loadout it belongs to. Catalog
@@ -1007,7 +1012,9 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		bundleItemIDs = append(bundleItemIDs, id)
 	}
 	if isShipVanityOffer(seed) {
-		bundleItemIDs = append(bundleItemIDs, seed.itemID)
+		if !containsInt32(seed.offerItemIDs, seed.itemID) {
+			bundleItemIDs = append(bundleItemIDs, seed.itemID)
+		}
 		promotionFlags |= promotionFlagShipVanity
 	}
 	entity := map[string]any{
@@ -1155,6 +1162,13 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	}
 	if len(seed.localizedDescription) > 0 {
 		entity["description"] = seed.localizedDescription
+	} else if seed.description == "" {
+		// Never empty: the offer converter (0x142A7D7E0) reads "Description"
+		// and shows "<DNT> Invalid Description Field in Json" for anything
+		// under two characters -- what every cosmetic showed until
+		// 2026-10-06. With no text of its own an offer is described by its
+		// name.
+		entity["Description"] = seed.displayName
 	}
 	// Pictures are URLs (full_image_url/thumbnail_image_url for the offer
 	// converter 0x142a7f520, ImgUrlS/M/L for FYItemData). The path is made
@@ -1451,4 +1465,13 @@ func gatewayBundleListing(playerDataReady bool) []any {
 		out = append(out, entity)
 	}
 	return out
+}
+
+func containsInt32(ids []int32, id int32) bool {
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }

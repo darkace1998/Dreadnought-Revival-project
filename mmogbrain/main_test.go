@@ -2824,12 +2824,23 @@ func TestMultiplePendingBootstrapRequestsFlushInOrder(t *testing.T) {
 	}}, nil, false, state); err != nil {
 		t.Fatalf("processMmogAppFrames PlayerGet: %v", err)
 	}
-	parsed, remaining := protocol.ParseAppFrames(conn.Bytes())
+	frames2, remaining := protocol.ParseAppFrames(conn.Bytes())
 	if len(remaining) != 0 {
 		t.Fatalf("unexpected remaining bytes after responses")
 	}
+	// One entry per RESPONSE: a large reply goes out as several chunked
+	// frames sharing its request id (protocol.SplitResponseFrame), and a new
+	// player's YA_PlayerGet passed 16 KB once every free cosmetic came with it
+	// (2026-10-06).
+	var parsed []protocol.AppFrame
+	for _, f := range frames2 {
+		if n := len(parsed); n > 0 && parsed[n-1].RequestID == f.RequestID {
+			continue
+		}
+		parsed = append(parsed, f)
+	}
 	if len(parsed) != 4 {
-		t.Fatalf("frame count = %d, want 4 (2 purchases answered immediately + YA_PlayerGet + its currency push)", len(parsed))
+		t.Fatalf("response count = %d, want 4 (2 purchases answered immediately + YA_PlayerGet + its currency push)", len(parsed))
 	}
 	// Both purchase responses are answered immediately in request order, ahead of
 	// the later YA_PlayerGet frame.

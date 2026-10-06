@@ -60,19 +60,12 @@ func ownedItemSet(playerPID string) map[int32]bool {
 	for _, item := range starterOwnedInventorySeeds() {
 		add(item.itemID)
 	}
-	// Every owned ship's own look, as its blueprint names it -- hull parts,
-	// paint, emblem, pattern, decal (dreadconfig.ShipBlueprintAppearance /
-	// HeroShipAppearance). From tier III up a base ship's parts are its own
-	// (Onager wears the Kore parts), not the hull line's generic default, so
-	// without this every honest T3/T4 fit was flagged (2026-10-03).
-	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
-		for _, lookup := range []func(int32) (dreadconfig.HeroAppearance, bool){dreadconfig.ShipBlueprintAppearance, dreadconfig.HeroShipAppearance} {
-			if a, ok := lookup(l.precastLoadoutID); ok {
-				for _, id := range a.Items() {
-					add(id)
-				}
-			}
-		}
+	// Cosmetics: bought, free, and every owned ship's own look as its
+	// blueprint names it -- from tier III up a base ship's parts are its own
+	// (Onager wears the Kore parts), not the hull line's generic default
+	// (2026-10-03). See vanity_ownership.go.
+	for _, id := range ownedVanityItemIDs(playerPID) {
+		add(id)
 	}
 	return set
 }

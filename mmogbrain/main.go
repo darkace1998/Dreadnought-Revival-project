@@ -68,6 +68,9 @@ func main() {
 		log.WithError(err).Fatal("open database")
 	}
 	setMmogPlayerStateDB(database)
+	if n := refundFreeCosmeticPurchases(database); n > 0 { // vanity_ownership.go
+		log.WithField("purchases", n).Info("cosmetics: refunded purchases of free cosmetics")
+	}
 	defer func() {
 		if err := database.Close(); err != nil {
 			log.WithError(err).Warn("close database")

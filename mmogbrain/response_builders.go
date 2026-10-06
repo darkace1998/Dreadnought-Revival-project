@@ -4536,10 +4536,18 @@ func buildMmogPlayerPurchasesPayloadForPlayer(playerPID string) []byte {
 	// the children and never looks one up by name, so the "0","1",... names
 	// only cost bytes -- ~3.5 per id, which for an account owning everything
 	// (1745 ids) is the difference between fitting the ring and not.
-	// Cosmetics are left out: this list is the tech tree's, it is budgeted
-	// against the receive ring, and cosmetics reach the client through the
-	// owned-item Items list (vanity_store.go).
-	b, _ = protocol.AppendStringArrayField(b, nil, "PurchasesData", int32SliceToStrings(withoutVanity(clientOwnedItemIDs(playerPID))))
+	// Cosmetics go in too, in the shared form. CHANGED 2026-10-06: they were
+	// left out ("this list is the tech tree's, budgeted against the receive
+	// ring"), but this list is where the customizer checks every cosmetic that
+	// is not a ship's (FUN_140548990, +0x3F90): no captain cosmetic was ever
+	// owned there, bought or not, and the client kept offering bought ones
+	// for sale ("item already owned", 9 times). Frames are chunked since
+	// 2026-10-01, so the ring no longer bounds the list. vanity_ownership.go.
+	owned := withoutVanity(clientOwnedItemIDs(playerPID))
+	if frameChunkingEnabled() { // single frames must fit the ring: as before
+		owned = append(owned, ownedVanityItemIDs(playerPID)...)
+	}
+	b, _ = protocol.AppendStringArrayField(b, nil, "PurchasesData", int32SliceToStrings(owned))
 	return b
 }
 
@@ -6382,6 +6390,25 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		return reply("failed", "database unavailable", 0, 0)
 	}
 
+	// Cosmetics. A ship cosmetic named in its per-ship form (the customizer's)
+	// is recorded as the shared item it is; one the player already owns --
+	// free, or part of an owned ship's own look -- is not sold again. Both
+	// were charged: 67 purchases of free cosmetics at 100 GP (2026-10-06,
+	// vanity_ownership.go).
+	if isVanity, _, _ := vanityOffer(itemID); isVanity {
+		if isShipVanityItemID(itemID) {
+			itemID = sharedGearID(itemID)
+		}
+		for _, id := range ownedVanityItemIDs(pid) {
+			if id == itemID {
+				currency = mmogCurrencyPremium
+				var balance int32
+				_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
+				return reply("failed", "item already owned", 0, balance)
+			}
+		}
+	}
+
 	// A per-ship weapon/module is bought only AFTER it is researched: research
 	// with XP first, then buy with credits (the original game, per the
 	// operator). That is the claim path, which also covers YA_ClaimItem.
@@ -7264,11 +7291,12 @@ func appendOwnedInventoryEntriesCounted(b []byte, stack []int, playerPID string)
 			ids, amounts = append(ids, itemID), append(amounts, 1)
 		}
 	}
-	// Cosmetics LAST and NEWEST FIRST: if the budget below ever cuts the list,
-	// it drops the oldest cosmetic, never a module (see vanity_store.go).
-	for i := len(purchased) - 1; i >= 0; i-- {
-		itemID := purchased[i]
-		if emitted[itemID] || !isVanityItemID(itemID) {
+	// Cosmetics LAST, so a budget cut drops a cosmetic, never a module: every
+	// owned one (bought, free, the owned ships' own looks), ship cosmetics also
+	// in their per-ship forms -- the form the customizer checks ownership in
+	// (FUN_140548860, an exact match on this list). See vanity_ownership.go.
+	for _, itemID := range clientVanityItemIDs(playerPID) {
+		if emitted[itemID] {
 			continue
 		}
 		emitted[itemID] = true

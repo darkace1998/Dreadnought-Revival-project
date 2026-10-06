@@ -216,7 +216,16 @@ var targetSizes = map[string]int{
 	// The client accepts a tier-2's prerequisite only from this list or
 	// ProgressionData (GetTechTreeItemState 0x543890 -> 0x548990), and the
 	// starters were in neither, so no tier-2 could be researched.
-	"YA_GetPlayerPurchases": 492,
+	// 492 -> 3267 (+2775): every cosmetic the player owns, shared form -- the
+	// free ones (~180) and the starters' own looks. The customizer checks a
+	// non-ship cosmetic against this list (FUN_140548990), and it carried none,
+	// so no captain cosmetic was ever owned there (vanity_ownership.go,
+	// 2026-10-06). Chunked frames, so no longer bounded by the ring.
+	// 3267 -> 2967 (-300): free captain MESHES count only when a captain can
+	// wear them (in a gender's captain template): the NPC heads and test hair
+	// are gone -- owned, they were empty options in the captain editor.
+	// Materials keep the old rule.
+	"YA_GetPlayerPurchases": 2967,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the
 	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,
@@ -331,7 +340,15 @@ var targetSizes = map[string]int{
 	// XP (the four starters, under both their loadout and pawn ids). The
 	// in-session XP push (buildMmogShipXPSyncPush) can only update a ship the
 	// client already has in this list.
-	"YA_PlayerGet": 7666,
+	// 7666 -> 21098 (+13432): the owned-item Items list carries every owned
+	// cosmetic -- the ~180 free ones and the starters' own looks -- and ship
+	// cosmetics also in their per-ship form for each class they fit (the form
+	// the customizer checks, FUN_140548860). Before, a new player owned no
+	// cosmetic at all and paid 100 GP for default eyes (2026-10-06). Over
+	// 16 KB it goes out as two chunked frames.
+	// 21098 -> 20178 (-920): the same template rule as PurchasesData (no NPC
+	// heads, test hair or other unwearable captain meshes).
+	"YA_PlayerGet": 20178,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which
@@ -452,8 +469,10 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 	}
 	minReductions := map[string]int{
 		"YA_RequestStaticFleetData": 30000,
-		"YA_PlayerGet":              44376,
-		"YA_PlayerFleets":           900,
+		// 44376 until 2026-10-06; the owned cosmetics added 13432 bytes of
+		// real content (see the YA_PlayerGet size note), not untrimmed bloat.
+		"YA_PlayerGet":    44376 - 13432,
+		"YA_PlayerFleets": 900,
 	}
 
 	for name, before := range preTrimTargetSizes {

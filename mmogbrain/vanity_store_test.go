@@ -11,6 +11,7 @@ import (
 const (
 	vanityPaidEmblem int32 = 369033217 // VAN_EMB_Bear_DA: public-ready, not a default
 	vanityFreeEyes   int32 = 855572482 // Mat_Eyes_Default: a body feature, free
+	vanityPaidBody   int32 = 872349708 // Body_Male_03: a captain outfit, not free
 	vanityTestBody   int32 = 872349906 // NewSet_Body_F: developers' Test folder
 )
 
@@ -105,40 +106,51 @@ func TestBuyingCosmetics(t *testing.T) {
 	}
 
 	// 50 premium left: not enough, even with plenty of credits.
-	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityFreeEyes)))
+	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityPaidBody)))
 	if !strings.Contains(reply, "insufficient premium currency") || premium(t, pid) != 150-vanityPrice || credits(t, pid) != 25000 {
 		t.Fatalf("short of premium: reply %q, premium %d, credits %d, want refused and nothing charged", reply, premium(t, pid), credits(t, pid))
 	}
 
 	setPremium(t, pid, vanityPrice)
-	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityFreeEyes)))
+	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityPaidBody)))
 	if countWireStringField(reply, "result", "bought") != 1 || premium(t, pid) != 0 {
-		t.Fatalf("default eyes: reply %q, premium %d, want bought for %d", reply, premium(t, pid), vanityPrice)
+		t.Fatalf("outfit: reply %q, premium %d, want bought for %d", reply, premium(t, pid), vanityPrice)
 	}
 
+	// CHANGED 2026-10-06: a free cosmetic is owned by everyone and never sold.
+	// It used to be: 67 purchases of free items at 100 GP, defaults included.
 	setPremium(t, pid, 1000)
+	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityFreeEyes)))
+	if !strings.Contains(reply, "item already owned") || premium(t, pid) != 1000 {
+		t.Fatalf("default eyes: reply %q, premium %d, want refused as owned and nothing charged", reply, premium(t, pid))
+	}
+
 	reply = string(buildMmogPurchasePayload("YA_PurchaseItem", pid, vanityPurchaseRequest(vanityTestBody)))
 	if !strings.Contains(reply, "not for sale") || premium(t, pid) != 1000 {
 		t.Fatalf("test item: reply %q, premium %d, want refused and nothing charged", reply, premium(t, pid))
 	}
 
-	// Owned now: in the Items list, and NOT in the tech tree's PurchasesData.
+	// Owned now: in the Items list (where the customizer checks a SHIP
+	// cosmetic) AND in PurchasesData (where it checks every other one,
+	// FUN_140548990) -- the free eyes too. CHANGED 2026-10-06: cosmetics were
+	// kept out of PurchasesData, so no captain cosmetic was ever owned there.
 	playerData := string(buildMmogPlayerGetPayload(pid))
-	for _, id := range []int32{vanityPaidEmblem, vanityFreeEyes} {
+	purchases := string(buildMmogPlayerPurchasesPayloadForPlayer(pid))
+	for _, id := range []int32{vanityPaidEmblem, vanityPaidBody, vanityFreeEyes} {
 		if countWireStringField(playerData, "ItemID", strconv.Itoa(int(id))) != 1 {
-			t.Errorf("cosmetic %d bought but not in the owned-item list", id)
+			t.Errorf("cosmetic %d owned but not in the owned-item list", id)
 		}
-	}
-	for _, id := range withoutVanity(clientOwnedItemIDs(pid)) {
-		if isVanityItemID(id) {
-			t.Errorf("cosmetic %d leaked into PurchasesData", id)
+		if !strings.Contains(purchases, strconv.Itoa(int(id))) {
+			t.Errorf("cosmetic %d owned but not in PurchasesData", id)
 		}
 	}
 }
 
-// Cosmetics go last and newest first, so a budget cut drops the oldest
-// cosmetic rather than a module.
-func TestCosmeticsComeLastNewestFirst(t *testing.T) {
+// Cosmetics go after the modules, so a budget cut drops a cosmetic rather
+// than a module. CHANGED 2026-10-06: they no longer come newest first -- the
+// owned set is far more than what was bought (free items, the ships' looks,
+// per-ship forms), and frames are chunked, so the cut is a fallback only.
+func TestCosmeticsComeAfterModules(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
 	setCredits(t, pid, 0) // the player row the purchases reference
@@ -146,7 +158,7 @@ func TestCosmeticsComeLastNewestFirst(t *testing.T) {
 	for _, row := range []struct {
 		id  int32
 		typ string
-	}{{vanityPaidEmblem, "vanity"}, {83820825, "weapon"}, {vanityFreeEyes, "vanity"}} {
+	}{{vanityPaidEmblem, "vanity"}, {83820825, "weapon"}} {
 		if _, err := database.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency) VALUES(?,?,?,?,?)`,
 			pid, row.id, row.typ, 0, "gp"); err != nil {
 			t.Fatal(err)
@@ -159,8 +171,8 @@ func TestCosmeticsComeLastNewestFirst(t *testing.T) {
 		return strings.Index(data, string(protocol.AppendStringField(nil, "ItemID", strconv.Itoa(int(id)))))
 	}
 	weapon, eyes, emblem := entry(83820825), entry(vanityFreeEyes), entry(vanityPaidEmblem)
-	if weapon < 0 || eyes < 0 || emblem < 0 || !(weapon < eyes && eyes < emblem) {
-		t.Errorf("order weapon=%d eyes=%d emblem=%d, want weapon < newest cosmetic (eyes) < oldest (emblem)", weapon, eyes, emblem)
+	if weapon < 0 || eyes < 0 || emblem < 0 || !(weapon < eyes && weapon < emblem) {
+		t.Errorf("order weapon=%d eyes=%d emblem=%d, want the weapon before both cosmetics", weapon, eyes, emblem)
 	}
 }
 

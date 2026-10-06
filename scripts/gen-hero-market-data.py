@@ -33,6 +33,11 @@ LOC = os.path.join(GAME, "Content", "Localization", "DreadGame")
 HEROES = os.path.join(REPO, "data", "loadouts", "HeroLoadouts_cooked.jsonl")
 OUT_JSON = os.path.join(REPO, "data", "assets", "HeroMarketData.json")
 OUT_IMG = os.path.join(REPO, "data", "market-images")
+VANITY = os.path.join(REPO, "data", "vanity", "VanityItems_cooked.jsonl")
+OUT_VANITY_TEXT = os.path.join(REPO, "data", "vanity", "VanityTexts.json")
+OUT_TEMPLATES = os.path.join(REPO, "data", "vanity", "CaptainTemplates.json")
+TEMPLATES = {g: os.path.join(GAME, "Content", "Generic", "Captain", "CharacterTemplates", "Captain_Template_%s_01.uasset" % g)
+             for g in ("Male", "Female")}
 
 
 # Market texts outside the hero blueprints, by localization key.
@@ -194,9 +199,58 @@ def main():
         heroes[str(item_id)] = entry
         print(item_id, entry.get("name", {}).get("en"), entry.get("image"))
     strings = {name: localized(key) for name, key in STRINGS.items() if localized(key)}
+    write_vanity(localized)
     with open(OUT_JSON, "w") as f:
         json.dump({"heroes": heroes, "strings": strings}, f, ensure_ascii=False, indent=1, sort_keys=True)
     print(len(heroes), "heroes ->", OUT_JSON)
+
+
+def write_vanity(localized):
+    """Cosmetics: their texts in every language, and which captain items each
+    gender's template (Captain_Template_<g>_01, a YCharacterTemplate with
+    m_meshes / m_materials) lets a captain wear.
+
+    VanityTexts.json: {"<item id>": {"name": {...}, "subline": {...},
+    "description": {...}}} from m_itemUIData's keys. CaptainTemplates.json:
+    {"Male": [ids], "Female": [ids]} -- the template's references are imports,
+    so its name table is matched against the cosmetics' export names.
+    """
+    rows = [json.loads(l) for l in open(VANITY)]
+    texts = {}
+    by_name = {}
+    for row in rows:
+        item_id = row.get("m_itemSystemData", {}).get("m_itemID")
+        if not item_id:
+            continue
+        by_name.setdefault(row["export"], []).append(item_id)
+        ui = row.get("m_itemUIData") or {}
+        entry = {}
+        for field, key in (("name", "m_headline"), ("subline", "m_subline"), ("description", "m_description")):
+            text = localized(ui.get(key, ""))
+            if text:
+                entry[field] = text
+        if entry:
+            texts[str(item_id)] = entry
+    with open(OUT_VANITY_TEXT, "w") as f:
+        json.dump(texts, f, ensure_ascii=False, sort_keys=True)
+    templates = {}
+    for gender, path in TEMPLATES.items():
+        data = open(path, "rb").read()
+        names = set()
+        word = bytearray()
+        for b in data:
+            if 32 < b < 127:
+                word.append(b)
+                continue
+            if len(word) > 3:
+                names.add(word.decode())
+            word = bytearray()
+        ids = sorted({i for n in names for i in by_name.get(n, []) if 50 <= (i >> 24) <= 55})
+        templates[gender] = ids
+    with open(OUT_TEMPLATES, "w") as f:
+        json.dump(templates, f, indent=1, sort_keys=True)
+    print(len(texts), "cosmetic texts ->", OUT_VANITY_TEXT)
+    print({g: len(v) for g, v in templates.items()}, "template items ->", OUT_TEMPLATES)
 
 
 if __name__ == "__main__":

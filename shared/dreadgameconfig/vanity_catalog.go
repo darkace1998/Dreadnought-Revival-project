@@ -129,10 +129,29 @@ func VanityItemIsFree(v VanityItem) bool {
 // display info, not as an owned item) -- and test assets (their Test folder,
 // Test_* and *_TEST names). Unreleased items may not have been finished by the
 // developers; they are the client's own cooked assets either way.
+//
+// CHANGED 2026-10-06: a captain MESH (category 51: heads, hair, bodies,
+// outfits, head attachments) must also be one a captain can wear -- listed by
+// a gender's template (InCaptainTemplate). Materials (50: eyes, tints,
+// tattoos, scars) are not held to it: 32 named ones, the PCF rank tints
+// among them, are in no template and were bought and worn; nothing reported
+// them broken. The male C00a/C00b/C01
+// heads, the seasonal "_Outfit" variants, the Explorer sets, Outfit_Base_
+// Military and 44 head attachments have names but are in no template, and
+// owned they appeared in the captain editor as options with no head or
+// nothing to wear.
 func VanityItemIsSold(v VanityItem) bool {
 	if v.HeadlineKey == "" || strings.Contains(v.File, "/Test/") ||
 		strings.HasPrefix(v.Name, "Test") || strings.HasSuffix(strings.ToUpper(v.Name), "_TEST") {
 		return false
 	}
+	if v.Category() == 51 && captainTemplatesLoaded() && !InCaptainTemplate(v.ItemID) {
+		return false
+	}
 	return true
 }
+
+// VanityItemIsPlayerFacing reports whether a cosmetic is one players get to
+// see and use at all: listed in the store (VanityItemIsSold). The free rule
+// only applies to these -- free NPC heads and test hair are not player items.
+func VanityItemIsPlayerFacing(v VanityItem) bool { return VanityItemIsSold(v) }
