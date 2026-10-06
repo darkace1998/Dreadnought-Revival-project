@@ -258,7 +258,11 @@ func (h *socialHub) join(peer *socialPeer) {
 		h.leave(previous)
 	}
 	for _, name := range defaultChatChannels {
-		h.joinChannel(peer, name)
+		// The player's own join notices go out from the Firmament handshake,
+		// after their profile (firmament.go); here the room is told.
+		if h.joinChannel(peer, name) {
+			h.announceChannel(name, "join", peer.playerID, peer)
+		}
 	}
 }
 
@@ -280,11 +284,19 @@ func (h *socialHub) leave(peer *socialPeer) {
 			h.broadcastFriendState(peer.playerID, false)
 		}
 	}()
+	var left []string
+	// Runs after the unlock below: tell each room the player left.
+	defer func() {
+		for _, name := range left {
+			h.announceChannel(name, "leave", peer.playerID, peer)
+		}
+	}()
 	defer h.mu.Unlock()
 	delete(h.peers, peer.playerID)
 	for name, members := range h.channels {
 		if members[peer.playerID] {
 			delete(members, peer.playerID)
+			left = append(left, name)
 			if len(members) == 0 {
 				delete(h.channels, name)
 			}
@@ -307,6 +319,59 @@ func (h *socialHub) joinChannel(peer *socialPeer, name string) bool {
 	peer.channels[name] = true
 	peer.mu.Unlock()
 	return true
+}
+
+// Channel membership changes are announced as chat.channel.notice events --
+// the only shape the client's dispatcher routes (see chatChannelNotice) --
+// to the player concerned and to everyone else in the room.
+//
+// Audit 2026-10-06: the server added and removed members silently. Joins at
+// login, the match and squad rooms, leaves on disconnect, squad departures
+// and disbands told nobody, and the client-initiated join/leave replies
+// broadcast a JSON-RPC {"method","params"} frame the client ignores. So no
+// room's member list ever changed after it was first read, and a player who
+// left a squad kept a squad tab pointing at a room they were no longer in:
+// the client clears a room's slot only on a "leave" naming ITSELF
+// (OnChatChannelLeave, 0x142A38060, compares the user with its own GUID at
+// +0x3A8), and on another's join or leave it updates the member list.
+
+// announceChannel tells every member of a room other than `except` that
+// playerID joined or left it.
+func (h *socialHub) announceChannel(name, event, playerID string, except *socialPeer) {
+	notice := chatChannelNotice(name, event, h.presenceEntry(playerID))
+	for _, p := range h.peersIn(name) {
+		if p != except {
+			_ = p.send(notice)
+		}
+	}
+}
+
+// joinChannelAnnounced puts a player in a room, names it for them (a join
+// notice naming the player itself is what fills the client's per-type slot)
+// and tells the room.
+func (h *socialHub) joinChannelAnnounced(peer *socialPeer, name string) bool {
+	if !h.joinChannel(peer, name) {
+		return false
+	}
+	_ = peer.send(chatJoinNotice(name, h.presenceEntry(peer.playerID)))
+	h.announceChannel(name, "join", peer.playerID, peer)
+	return true
+}
+
+// leaveChannelAnnounced takes a player out of a room, tells them (so the
+// client clears that room's slot) when notifySelf, and tells the room.
+func (h *socialHub) leaveChannelAnnounced(peer *socialPeer, name string, notifySelf bool) {
+	h.mu.RLock()
+	member := h.channels[name][peer.playerID]
+	h.mu.RUnlock()
+	if !member {
+		return
+	}
+	h.leaveChannel(peer, name)
+	if notifySelf {
+		_ = peer.send(chatChannelNotice(name, "leave", h.presenceEntry(peer.playerID)))
+	}
+	h.announceChannel(name, "leave", peer.playerID, peer)
 }
 
 func (h *socialHub) leaveChannel(peer *socialPeer, name string) {
@@ -1079,14 +1144,10 @@ func (h *socialHub) joinMatchChannels(playerID, matchID string, team int32) {
 	}
 	peer.mu.Unlock()
 	for _, name := range old {
-		h.leaveChannel(peer, name)
+		h.leaveChannelAnnounced(peer, name, true)
 	}
-
-	entry := h.presenceEntry(peer.playerID)
 	for _, name := range []string{all, teamRoom} {
-		if h.joinChannel(peer, name) {
-			_ = peer.send(chatJoinNotice(name, entry))
-		}
+		h.joinChannelAnnounced(peer, name)
 	}
 }
 
@@ -1099,10 +1160,7 @@ func (h *socialHub) joinSquadChannel(playerID, squadID string) {
 	if peer == nil || squadID == "" {
 		return
 	}
-	name := squadID + ".squad"
-	if h.joinChannel(peer, name) {
-		_ = peer.send(chatJoinNotice(name, h.presenceEntry(peer.playerID)))
-	}
+	h.joinChannelAnnounced(peer, squadID+".squad")
 }
 
 func (h *socialHub) leaveSquadChannel(playerID, squadID string) {
@@ -1110,5 +1168,5 @@ func (h *socialHub) leaveSquadChannel(playerID, squadID string) {
 	if peer == nil || squadID == "" {
 		return
 	}
-	h.leaveChannel(peer, squadID+".squad")
+	h.leaveChannelAnnounced(peer, squadID+".squad", true)
 }

@@ -1,0 +1,10 @@
+# Extra words for the chat profanity filter (mmogbrain/chat_filter.go), on top
+# of the built-in list. One entry per line, case-insensitive; lines starting
+# with '#' are comments.
+#
+#   word     matches only the whole word         ("ass" does not hit "class")
+#   root*    matches anywhere inside a word      ("fuck*" hits "fucking")
+#
+# Common substitutions are folded before matching (@ 4 -> a, 3 -> e, 1 ! -> i,
+# 0 -> o, $ 5 -> s, 7 + -> t). Restart mmogbrain to apply. A second file can be
+# named with DN_CHAT_PROFANITY_FILE; DN_CHAT_FILTER=0 turns the filter off.

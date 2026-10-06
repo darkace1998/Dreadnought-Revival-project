@@ -234,7 +234,19 @@ func handleChatMethod(r socialRequest) map[string]any {
 		return socialOK(map[string]any{"channels": channels, "listing": channels})
 
 	case "chat.channel.info":
-		return socialOK(map[string]any{"channel": r.hub.channelInfo(r.channelName())})
+		// Delivered as a typed event with the info in the ROOT "data": the
+		// client routes replies by their top-level "type" (0x142A52390), and
+		// chat.channel.info is one it routes -- to the channel-info handler
+		// (0x142A376A0, "Received channel info for %s"), which resolves every
+		// member. In the JSON-RPC "result" it was never delivered (1,299
+		// requests, 2026-10-06), the same defect user.whois had until
+		// 2026-09-28, so no room's member list was ever filled.
+		info := r.hub.channelInfo(r.channelName())
+		return socialOK(map[string]any{
+			"channel":         info,
+			firmamentRootData: info,
+			firmamentRootType: "chat.channel.info",
+		})
 
 	case "chat.channel.join", "chat.channel.admin.create", "chat.channel.admin.forcejoin":
 		name := r.channelName()
@@ -245,30 +257,16 @@ func handleChatMethod(r socialRequest) map[string]any {
 			return socialError("unknown channel type: " + name)
 		}
 		info := r.hub.channelInfo(name)
-		// Tell the room, so open clients update their user list without polling.
-		r.hub.broadcast(name, "", map[string]any{
-			"jsonrpc": "2.0",
-			"method":  "chat.channel.notice",
-			"params": map[string]any{
-				"channel": name,
-				"notice":  "join",
-				"user":    r.hub.presenceEntry(r.peer.playerID),
-			},
-		})
+		// Tell the room, so open clients update their member list (the event
+		// shape -- see announceChannel; the JSON-RPC frame sent here before
+		// was ignored).
+		r.hub.announceChannel(name, "join", r.peer.playerID, r.peer)
 		return socialOK(map[string]any{"channel": info, "channels": []any{info}})
 
 	case "chat.channel.leave", "chat.channel.admin.close":
 		name := r.channelName()
 		r.hub.leaveChannel(r.peer, name)
-		r.hub.broadcast(name, "", map[string]any{
-			"jsonrpc": "2.0",
-			"method":  "chat.channel.notice",
-			"params": map[string]any{
-				"channel": name,
-				"notice":  "leave",
-				"user":    r.hub.presenceEntry(r.peer.playerID),
-			},
-		})
+		r.hub.announceChannel(name, "leave", r.peer.playerID, r.peer)
 		return socialOK(map[string]any{"channel": name})
 
 	case "chat.channel.message", "chat.channel.notice":
@@ -279,26 +277,61 @@ func handleChatMethod(r socialRequest) map[string]any {
 		}
 		persistMmogChatMessage(r.peer.playerID, name, body)
 		notice := chatMessageNotice(r.method, name, r.hub.presenceEntry(r.peer.playerID), body)
-		r.hub.broadcast(name, r.peer.playerID, notice)
+		// Every copy carries the profanity filter's verdict; the sender's own
+		// copy also the warning when something was filtered (chat_filter.go).
+		others := withChatFilter(notice, body, false)
+		own := withChatFilter(notice, body, true)
+		for _, p := range r.hub.peersIn(name) {
+			if p == r.peer {
+				_ = p.send(own)
+				continue
+			}
+			if r.hub.ignores(p.playerID, r.peer.playerID) {
+				continue
+			}
+			_ = p.send(others)
+		}
 		return socialOK(map[string]any{"channel": name})
 
 	case "chat.user.message":
-		target := r.targetPlayer()
+		// A direct message: {"recipient": "<dashed GUID>", "text": ...}.
+		//
+		// FIXED 2026-10-06 (a player could open a direct chat with a friend
+		// but nothing was ever sent, operator): the recipient was looked up
+		// by the dashed GUID as sent, while connected players are keyed by
+		// the 32-hex id, so every direct message was answered "recipient is
+		// offline" -- the bug notifyFriendEvent had until 2026-09-28. And the
+		// event went to the recipient only, without "recipient":
+		// _OnChatUserMessage (0x142AA7730) reads data.sender and
+		// data.recipient (parser 0x142A52390 -> +0x570 / +0x5D8) and, when
+		// the sender is the player itself, files the line under the
+		// recipient's conversation -- the sender sees their own message only
+		// from that echo, as with channel messages.
+		target := socialID(r.targetPlayer())
 		body := r.str("message", "content", "text", "body", "Message")
 		if target == "" || body == "" {
 			return socialError("whisper needs a recipient and a message")
 		}
+		notice := chatMessageNotice(r.method, "", r.hub.presenceEntry(r.peer.playerID), body)
+		if data, ok := notice["data"].(map[string]any); ok {
+			data["recipient"] = dashedPlayerGUID(target)
+		}
+		own := withChatFilter(notice, body, true) // chat_filter.go
 		if r.hub.ignores(target, r.peer.playerID) {
-			// Reported as delivered. Telling the sender they are ignored is a
-			// harassment vector, and the real service does not.
+			// Reported as delivered, echo included. Telling the sender they
+			// are ignored is a harassment vector, and the real service does
+			// not.
+			_ = r.peer.send(own)
 			return socialOK(nil)
 		}
 		peer := r.hub.peerFor(target)
 		if peer == nil {
 			return socialError("recipient is offline")
 		}
-		notice := chatMessageNotice(r.method, "", r.hub.presenceEntry(r.peer.playerID), body)
-		_ = peer.send(notice)
+		if peer != r.peer {
+			_ = peer.send(withChatFilter(notice, body, false))
+		}
+		_ = r.peer.send(own)
 		return socialOK(nil)
 
 	case "chat.report":
@@ -424,7 +457,13 @@ func handlePresenceSocialMethod(r socialRequest) map[string]any {
 		for _, pid := range r.hub.ignoreList(r.peer.playerID) {
 			ignored = append(ignored, r.hub.presenceEntry(pid))
 		}
-		return socialOK(map[string]any{"listing": ignored, "ignores": ignored})
+		// Typed, with the list in the root data, like the friend listing
+		// above: the client routes replies by their top-level type.
+		return socialOK(map[string]any{
+			"listing": ignored, "ignores": ignored,
+			firmamentRootData: map[string]any{"listing": ignored, "ignores": ignored},
+			firmamentRootType: r.method,
+		})
 
 	case "presence.ignores.add":
 		if target := r.targetPlayer(); target != "" {

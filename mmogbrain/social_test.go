@@ -88,6 +88,20 @@ func readNotice(t *testing.T, r *bufio.Reader) (string, map[string]any) {
 	return method, data
 }
 
+// readNoticeSkippingRooms is readNotice past room membership events: since
+// 2026-10-06 a player's arrival and departure are announced to every room
+// they share (announceChannel), so those can come before the event a test
+// waits for.
+func readNoticeSkippingRooms(t *testing.T, r *bufio.Reader) (string, map[string]any) {
+	t.Helper()
+	for {
+		method, data := readNotice(t, r)
+		if method != "chat.channel.notice" {
+			return method, data
+		}
+	}
+}
+
 // A channel type the client's classifier does not know must be refused, not
 // created. UYMmogChat only registers all/team/squad/global/language/customroom
 // (FUN_142a1f6d0) and drops anything else, so a channel we invent here would
@@ -308,8 +322,8 @@ func TestMutualFriendRequestConfirmsBoth(t *testing.T) {
 		params: map[string]any{"user": dashedPlayerGUID(pa)},
 		peer:   b, hub: hub,
 	})
-	readNotice(t, aRead) // b's profile
-	method, data := readNotice(t, aRead)
+	readNoticeSkippingRooms(t, aRead) // b's profile
+	method, data := readNoticeSkippingRooms(t, aRead)
 	if method != "presence.friends.friendrequestconfirmed" || data["requestor"] != dashedPlayerGUID(pa) || data["target"] != dashedPlayerGUID(pb) {
 		t.Errorf("got %v requestor=%v target=%v, want friendrequestconfirmed %s / %s", method, data["requestor"], data["target"], dashedPlayerGUID(pa), dashedPlayerGUID(pb))
 	}
@@ -449,8 +463,8 @@ func TestReAddingAnAcceptedFriendNeverNamesYourself(t *testing.T) {
 		peer:   a, hub: hub,
 	})
 	for name, r := range map[string]*bufio.Reader{"target": bRead, "requester": aRead} {
-		readNotice(t, r) // profile
-		_, data := readNotice(t, r)
+		readNoticeSkippingRooms(t, r) // profile
+		_, data := readNoticeSkippingRooms(t, r)
 		if data["requestor"] != dashedPlayerGUID(pa) || data["target"] != dashedPlayerGUID(pb) {
 			t.Errorf("%s got requestor=%v target=%v, want %s / %s", name, data["requestor"], data["target"], dashedPlayerGUID(pa), dashedPlayerGUID(pb))
 		}
@@ -538,15 +552,15 @@ func TestFriendStateIsBroadcastOnlineAndOffline(t *testing.T) {
 	mePeer, _ := socialTestPeer(t, hub, me)
 
 	go hub.broadcastFriendState(me, true)
-	readNotice(t, friendRead) // profile
-	method, data := readNotice(t, friendRead)
+	readNoticeSkippingRooms(t, friendRead) // profile
+	method, data := readNoticeSkippingRooms(t, friendRead)
 	if method != "presence.friends.state" || data["friend"] != dashedPlayerGUID(me) || data["status"] != float64(1) {
 		t.Errorf("online push: %s %v, want presence.friends.state friend=%s status=1", method, data, dashedPlayerGUID(me))
 	}
 
 	go hub.leave(mePeer)
-	readNotice(t, friendRead) // profile
-	method, data = readNotice(t, friendRead)
+	readNoticeSkippingRooms(t, friendRead) // profile
+	method, data = readNoticeSkippingRooms(t, friendRead)
 	if method != "presence.friends.state" || data["status"] != float64(0) {
 		t.Errorf("offline push: %s %v, want status 0", method, data)
 	}

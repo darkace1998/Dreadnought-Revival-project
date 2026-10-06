@@ -195,7 +195,11 @@ func (h *squadHub) invite(inviter, rawTarget string) []byte {
 		return fail("user_offline")
 	}
 	h.mu.Lock()
-	if other := h.squadOf(target); other != nil {
+	// A squad of one does not count: it is the target's own, left over from
+	// an invite nobody answered (inviting creates the inviter's squad). It
+	// refused every invite to that player -- user_in_squad, 8 times one
+	// evening (2026-10-05) -- until they relogged. accept dissolves it.
+	if other := h.squadOf(target); other != nil && len(other.members) > 1 {
 		h.mu.Unlock()
 		return fail("user_in_squad")
 	}
@@ -256,9 +260,25 @@ func (h *squadHub) accept(target, rawInviter string) []byte {
 		h.mu.Unlock()
 		return fail("squad_gone")
 	}
-	if h.squadOf(target) != nil {
-		h.mu.Unlock()
-		return fail("already_in_squad")
+	// Leaving a squad of one of their own (see invite) to join this one.
+	solo := ""
+	if own := h.squadOf(target); own != nil {
+		if len(own.members) > 1 {
+			h.mu.Unlock()
+			return fail("already_in_squad")
+		}
+		solo = own.id
+		delete(h.squads, own.id)
+		delete(h.bySquad, target)
+		for invitee, list := range h.invites {
+			kept := list[:0]
+			for _, inv := range list {
+				if inv.squadID != solo {
+					kept = append(kept, inv)
+				}
+			}
+			h.invites[invitee] = kept
+		}
 	}
 	sq.members = append(sq.members, target)
 	h.bySquad[target] = sq.id
@@ -266,6 +286,10 @@ func (h *squadHub) accept(target, rawInviter string) []byte {
 	record.members = append([]string(nil), sq.members...)
 	h.mu.Unlock()
 
+	if solo != "" {
+		h.push(target, buildSquadLeavePayload(target, solo))
+		socialHubInstance.leaveSquadChannel(target, solo)
+	}
 	h.push(target, buildSquadJoinedPayload(&record))
 	for _, m := range record.members {
 		if m != target {
@@ -304,7 +328,8 @@ func (h *squadHub) leave(pid string) string {
 		sq.leader = kept[0]
 	}
 	var disbanded []string
-	if len(sq.members) <= 1 {
+	dissolved := len(sq.members) <= 1
+	if dissolved {
 		disbanded = append(disbanded, sq.members...)
 		for _, m := range sq.members {
 			delete(h.bySquad, m)
@@ -338,7 +363,7 @@ func (h *squadHub) leave(pid string) string {
 		h.push(m, buildSquadLeavePayload(pid, record.id))
 		h.push(m, buildSquadInfoPayloadCancelled(&record, canceller))
 	}
-	logrus.WithFields(logrus.Fields{"player": pid, "squad": record.id, "left": len(record.members), "disbanded": len(disbanded) > 0}).Info("squad: left")
+	logrus.WithFields(logrus.Fields{"player": pid, "squad": record.id, "left": len(record.members), "disbanded": dissolved}).Info("squad: left")
 	return record.id
 }
 
