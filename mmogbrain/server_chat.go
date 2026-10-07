@@ -166,9 +166,14 @@ var serverChatModeNames = map[string]string{
 	"PodTDM":    "Team Deathmatch",
 	"TurboTDM":  "Team Deathmatch",
 	"TE":        "Team Elimination",
-	"TER":       "Territory Control",
-	"Territory": "Territory Control",
-	"Onslaught": "Havoc",
+	"TER":       "Conquest",
+	"Territory": "Conquest",
+	// Onslaught is its own mode (host IVN: command ships, assault ships,
+	// fighters -- "Kill the enemy command ship in Onslaught"); Havoc is the
+	// separate PvE wave mode (YGameState_Havoc). Both names are the client's
+	// own (SID_MATCHMAKINGTYPE_ONSLAUGHT / _HAVOC). It said "Havoc" until
+	// 2026-10-07 (operator report).
+	"Onslaught": "Onslaught",
 }
 
 var (

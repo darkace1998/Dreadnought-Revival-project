@@ -127,9 +127,28 @@ func NormalizeGameMode(mode string) string {
 // It has to run on Highlands: that is the only map in the build shipping a TM
 // level variation (MP_Highlands_TM.umap). On other maps the orbit manager logs
 // "ActivateBattlePlayerStarts: no orbit spawn locations set!".
+//
+// Conquest (TER) needs the map's <Map>_Territory sublevel, which holds its
+// capture points; Glacier and Space01 have none (Content/Maps/MP). Verified
+// in the host logs (2026-10-07): every Conquest match on Glacier or Space01
+// logged 47,000-119,000 "Attempted to access index 0 from array
+// CapturePoints of length 0" and "Failed to find streaming level object
+// associated with '/Game/Maps/MP/Glacier/MP_Glacier_Territory'"; on
+// Highlands, Gorge and Skybridge, none. Ceres Awakens (PodTDM) needs a
+// <Map>_PodTDM sublevel (its pods), which only Space02 has. GUESS: Space02
+// hosts PodTDM (no PodTDM match has run there yet).
+var conquestMaps = []GameMap{
+	{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"},
+	{Name: "Gorge", Path: "/Game/Maps/MP/Gorge/MP_Gorge_P"},
+	{Name: "Skybridge", Path: "/Game/Maps/MP/Skybridge/MP_Skybridge_P"},
+}
+
 var mapsByGameMode = map[string][]GameMap{
-	"TM":      {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
-	"TMBasic": {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
+	"TM":        {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
+	"TMBasic":   {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
+	"TER":       conquestMaps,
+	"Territory": conquestMaps,
+	"PodTDM":    {{Name: "Space02", Path: "/Game/Maps/MP/Space02/MP_Space02_P"}},
 }
 
 var pveMaps = []GameMap{
