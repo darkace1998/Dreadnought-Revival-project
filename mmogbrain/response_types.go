@@ -49,6 +49,9 @@ type mmogShipLoadoutSeed struct {
 	// stored verbatim from YA_UpdateShipLoadout. Empty means the player has
 	// never customised it and the computed default applies.
 	savedDisplayInfo string
+	// variant is which of the ship's loadouts this is: 0 = LOADOUT A (the
+	// player_ship_loadouts row), 1 = LOADOUT B (loadout_variants.go).
+	variant int32
 }
 
 func (loadout mmogShipLoadoutSeed) loadoutID() int32 {
@@ -66,10 +69,11 @@ func (loadout mmogShipLoadoutSeed) effectiveFleetShipID() int32 {
 }
 
 func (loadout mmogShipLoadoutSeed) entryID() string {
-	if loadout.nativeLoadoutID != "" {
-		return loadout.nativeLoadoutID
+	id := loadout.nativeLoadoutID
+	if id == "" {
+		id = "Default__" + strings.ReplaceAll(loadout.loadoutName, " ", "") + "_" + strconv.FormatInt(int64(loadout.loadoutID()), 10) + "_C"
 	}
-	return "Default__" + strings.ReplaceAll(loadout.loadoutName, " ", "") + "_" + strconv.FormatInt(int64(loadout.loadoutID()), 10) + "_C"
+	return id + loadoutVariantSuffix(loadout.variant)
 }
 
 // noShipVanityDisplayInfo is a ship's cosmetic-customisation string with nothing

@@ -371,6 +371,28 @@ var migrations = []string{
 	// clients (an unchecked array index). Reset it from the loadout.
 	`UPDATE player_fleets SET flagship_loadout_index = COALESCE((SELECT l.loadout_index FROM player_ship_loadouts l
 		WHERE l.user_id=player_fleets.user_id AND l.loadout_id=player_fleets.flagship_loadout_id), 0)`,
+	// A ship's second loadout, "LOADOUT B" (loadout_variants.go): one row per
+	// ship once the player first saves it, keyed by the client's
+	// LoadoutSlotNum (2 = B). Loadout A stays in player_ship_loadouts.
+	`CREATE TABLE IF NOT EXISTS player_ship_loadout_variants (
+		user_id              TEXT NOT NULL,
+		loadout_id           INTEGER NOT NULL,
+		slot                 INTEGER NOT NULL,
+		loadout_name         TEXT NOT NULL DEFAULT '',
+		weapon_primary_id    INTEGER NOT NULL DEFAULT -1,
+		weapon_secondary_id  INTEGER NOT NULL DEFAULT -1,
+		ability_primary_id   INTEGER NOT NULL DEFAULT -1,
+		ability_secondary_id INTEGER NOT NULL DEFAULT -1,
+		ability_perimeter_id INTEGER NOT NULL DEFAULT -1,
+		ability_internal_id  INTEGER NOT NULL DEFAULT -1,
+		perk_com_id          INTEGER NOT NULL DEFAULT -1,
+		perk_weapon_id       INTEGER NOT NULL DEFAULT -1,
+		perk_navigation_id   INTEGER NOT NULL DEFAULT -1,
+		perk_engineer_id     INTEGER NOT NULL DEFAULT -1,
+		display_info         TEXT NOT NULL DEFAULT '',
+		updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+		PRIMARY KEY (user_id, loadout_id, slot)
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

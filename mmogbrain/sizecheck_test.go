@@ -348,7 +348,9 @@ var targetSizes = map[string]int{
 	// 16 KB it goes out as two chunked frames.
 	// 21098 -> 20178 (-920): the same template rule as PurchasesData (no NPC
 	// heads, test hair or other unwearable captain meshes).
-	"YA_PlayerGet": 20178,
+	// 20178 -> 21986 (+1808): each of the four starter ships' LOADOUT B
+	// (452 bytes each) right after its A in ShipLoadouts (loadout_variants.go).
+	"YA_PlayerGet": 21986,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which

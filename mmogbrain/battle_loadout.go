@@ -55,7 +55,7 @@ func battleLoadoutHandler(w http.ResponseWriter, r *http.Request) {
 // "ID" field of the YA_PlayerFleets entry) is id -- the list the client itself
 // received, so both sides resolve the same row.
 func battleLoadoutFor(pid, id string) (mmogShipLoadoutSeed, bool) {
-	for _, loadout := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(pid), pid) {
+	for _, loadout := range withLoadoutVariants(pid, ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(pid), pid)) {
 		if loadout.entryID() == id {
 			return loadout, true
 		}

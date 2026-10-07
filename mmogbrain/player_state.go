@@ -898,6 +898,28 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 	if loadoutID == 0 {
 		return nil
 	}
+	// LoadoutSlotNum is the loadout's place among the ship's loadouts (1 = A,
+	// 2 = B; loadout_variants.go). Anything past A is stored apart from it,
+	// so a save of B can never overwrite A.
+	table, key := "player_ship_loadouts", " WHERE user_id=? AND loadout_id=?"
+	keyArgs := []any{playerPID, loadoutID}
+	if slot := firstMmogInt32Field(payload, "LoadoutSlotNum"); slot >= 2 {
+		ok, err := ensureLoadoutVariantRow(database, playerPID, loadoutID, slot)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			logrus.WithFields(logrus.Fields{"player": playerPID, "loadout": loadoutID, "slot": slot}).
+				Warn("loadout: save for a ship the player has no loadout of; ignored")
+			return nil
+		}
+		table, key = "player_ship_loadout_variants", " WHERE user_id=? AND loadout_id=? AND slot=?"
+		keyArgs = append(keyArgs, slot)
+	}
+	update := func(column string, value any) error {
+		_, err := database.Exec("UPDATE "+table+" SET "+column+"=?, updated_at=datetime('now')"+key, append([]any{value}, keyArgs...)...)
+		return err
+	}
 	assignments := []struct {
 		column string
 		fields []string
@@ -928,7 +950,7 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 		if !allowLoadoutItem(mode, owned, playerPID, loadoutID, assignment.column, value) {
 			continue
 		}
-		if _, err := database.Exec("UPDATE player_ship_loadouts SET "+assignment.column+"=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?", value, playerPID, loadoutID); err != nil {
+		if err := update(assignment.column, value); err != nil {
 			return fmt.Errorf("update loadout %s: %w", assignment.column, err)
 		}
 	}
@@ -939,8 +961,7 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 	// shared/dreadgameconfig/ship_vanity.go.
 	if displayInfo := strings.TrimSpace(firstMmogStringField(payload, "DisplayInfo", "displayInfo", "m_displayInfo")); displayInfo != "" &&
 		allowAppearance(mode, owned, playerPID, loadoutID, displayInfo) {
-		if _, err := database.Exec(`UPDATE player_ship_loadouts SET display_info=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?`,
-			displayInfo, playerPID, loadoutID); err != nil {
+		if err := update("display_info", displayInfo); err != nil {
 			return fmt.Errorf("update loadout display_info: %w", err)
 		}
 	}
@@ -948,8 +969,7 @@ func persistUpdateShipLoadout(database *sql.DB, playerPID string, payload []byte
 	// The client also renames through this request, not only through
 	// YA_RenameShipLoadout.
 	if name := strings.TrimSpace(firstMmogStringField(payload, "Name", "name")); name != "" {
-		if _, err := database.Exec(`UPDATE player_ship_loadouts SET loadout_name=?, updated_at=datetime('now') WHERE user_id=? AND loadout_id=?`,
-			name, playerPID, loadoutID); err != nil {
+		if err := update("loadout_name", name); err != nil {
 			return fmt.Errorf("update loadout name: %w", err)
 		}
 	}

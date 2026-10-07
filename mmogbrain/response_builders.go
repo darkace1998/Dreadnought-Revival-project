@@ -1930,8 +1930,9 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	// hard-coded 0x8000 bytes (0x142a65700) and a message that cannot fit is
 	// never read. Ships go before Items: a ship missing from the overview is
 	// worse than a module that shows as locked.
+	// Each ship's LOADOUT B follows its A (loadout_variants.go).
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipLoadouts")
-	owned := ownedShipLoadoutsForPlayerData(state, playerPID)
+	owned := withLoadoutVariants(playerPID, ownedShipLoadoutsForPlayerData(state, playerPID))
 	for i, loadout := range owned {
 		if len(b) > responseBudget(playerDataFrameBudget)-playerDataItemReserve {
 			logrus.WithFields(logrus.Fields{
@@ -7687,8 +7688,13 @@ func buildMmogShipClaimPush(playerPID string, shipItemID int32) ([]byte, bool) {
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
 	b = protocol.AppendStringField(b, fieldStatus, "succeeded")
 	b = protocol.AppendStringField(b, "reason", "")
+	// The ship's LOADOUT B too, after A, so it works without a relog. Safe for
+	// fleets: the fleet manager's OnLoadoutAdded (0x35EFF0) only recounts fleet
+	// eligibility; it adds nothing to a fleet.
 	b, stack = protocol.AppendArrayStart(b, stack, "addedLoadouts")
-	b, stack = appendMmogShipLoadoutEntry(b, stack, playerPID, loadout, true)
+	for _, added := range withLoadoutVariants(playerPID, []mmogShipLoadoutSeed{loadout}) {
+		b, stack = appendMmogShipLoadoutEntry(b, stack, playerPID, added, true)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b, true
