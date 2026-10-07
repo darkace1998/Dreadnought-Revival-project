@@ -90,8 +90,11 @@ func TestNewPlayerOwnsTheFreeCosmetics(t *testing.T) {
 	}
 }
 
-// A ship's own look comes with the ship, in that ship's per-ship form: Onager
-// is built from the Kore parts (class SniperHeavy).
+// A ship's own HULL does not come with the ship as an owned item, in any
+// form, and is not for sale: the client owns hull parts per hull line, so it
+// would be selectable on every ship of the line (CHANGED 2026-10-07, operator
+// report: other makers' hulls on the Jutland). Onager is built from the Kore
+// parts (class SniperHeavy).
 func TestOwnedShipBringsItsLookPerShip(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
@@ -108,9 +111,24 @@ func TestOwnedShipBringsItsLookPerShip(t *testing.T) {
 	}
 	perShip := shipVanityClientID(vanityKoreHull, eyShipClassByKey["SniperHeavy"])
 	items := string(buildMmogPlayerGetPayload(pid))
-	if countWireStringField(items, "ItemID", strconv.Itoa(int(perShip))) != 1 {
-		t.Errorf("Onager's own hull part %d not owned in its per-ship form %d", vanityKoreHull, perShip)
+	for _, id := range []int32{vanityKoreHull, perShip} {
+		if countWireStringField(items, "ItemID", strconv.Itoa(int(id))) != 0 {
+			t.Errorf("Onager's own hull part %d is owned: selectable on every SniperHeavy", id)
+		}
+		if _, sold, _ := vanityOffer(id); sold {
+			t.Errorf("Onager's own hull part %d is for sale", id)
+		}
 	}
+	// Its line's free default hull stays owned.
+	for _, v := range dreadconfig.VanityItems() {
+		if v.Category() == 20 && dreadconfig.VanityItemIsFree(v) && strings.Contains(v.Name, "SniperH_") {
+			if countWireStringField(items, "ItemID", strconv.Itoa(int(shipVanityClientID(v.ItemID, eyShipClassByKey["SniperHeavy"])))) != 1 {
+				t.Errorf("free default %s not owned for SniperHeavy", v.Name)
+			}
+			return
+		}
+	}
+	t.Error("no free SniperHeavy default hull part found")
 }
 
 // A paint (fits every ship) bought once is owned on every class the player

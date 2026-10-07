@@ -4,10 +4,15 @@ import (
 	"testing"
 )
 
-// A base ship's own look -- named by its precast blueprint -- is owned with
-// the ship. Onager (33489292) is built from the VAN_H_SniperH_Kore_* parts;
+// A base ship's own look -- named by its precast blueprint -- is accepted on
+// that ship. Onager (33489292) is built from the VAN_H_SniperH_Kore_* parts;
 // these per-ship ids are exactly what a live player's Onager carried when the
 // ownership check flagged it (2026-10-03).
+//
+// CHANGED 2026-10-07: they are no longer OWNED items. The client can only own
+// a hull part per hull line, so owning Onager's hull made it selectable on
+// every SniperHeavy -- another ship's hull (operator report: Jutland showed
+// other makers' hulls). The look is accepted on Onager itself instead.
 func TestOwnedShipOwnsItsBlueprintLook(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
@@ -17,10 +22,6 @@ func TestOwnedShipOwnsItsBlueprintLook(t *testing.T) {
 	const onager int32 = 33489292
 	kore := []int32{336265338, 336265339, 336265337, 336265336}
 	onagerLook := "336265338#336265339#336265337#336265336;-1;-1;-1;-1"
-
-	if got := unownedAppearanceItems(ownedItemSet(pid), onagerLook); len(got) != 4 {
-		t.Fatalf("without Onager, unowned = %v; want all four parts", got)
-	}
 
 	tx, err := database.Begin()
 	if err != nil {
@@ -33,12 +34,21 @@ func TestOwnedShipOwnsItsBlueprintLook(t *testing.T) {
 		t.Fatal(err)
 	}
 	owned := ownedItemSet(pid)
-	if got := unownedAppearanceItems(owned, onagerLook); len(got) != 0 {
-		t.Errorf("owning Onager, its own parts are flagged: %v", got)
+	if !allowAppearance("enforce", owned, pid, onager, onagerLook) {
+		t.Error("Onager's own look is refused on Onager")
 	}
 	for _, id := range kore {
-		if !owned[sharedGearID(id)] {
-			t.Errorf("part %d (shared %d) not owned with Onager", id, sharedGearID(id))
+		if owned[sharedGearID(id)] {
+			t.Errorf("part %d (shared %d) is an owned item: it would be selectable on every SniperHeavy", id, sharedGearID(id))
+		}
+	}
+	// Onager's hull on another SniperHeavy is not accepted.
+	for _, b := range baseShipLoadouts {
+		if b.hullLine == "SniperHeavy" && b.loadoutID != onager {
+			if allowAppearance("enforce", owned, pid, b.loadoutID, onagerLook) {
+				t.Errorf("Onager's hull accepted on %s", b.name)
+			}
+			break
 		}
 	}
 	// Another ship's look is still not owned.

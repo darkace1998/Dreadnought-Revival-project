@@ -120,8 +120,13 @@ func allowAppearance(mode string, owned map[int32]bool, playerPID string, loadou
 	if mode == "off" {
 		return true
 	}
-	// A hero's own appearance comes with the hero.
-	if a, ok := dreadconfig.HeroShipAppearance(loadoutID); ok {
+	// A ship's own appearance comes with the ship, hero or not (its own hull
+	// is no longer an owned item; see ownedVanityItemIDs).
+	a, ok := dreadconfig.HeroShipAppearance(loadoutID)
+	if !ok {
+		a, ok = dreadconfig.ShipBlueprintAppearance(loadoutID)
+	}
+	if ok {
 		withHero := make(map[int32]bool, len(owned)+8)
 		for id, v := range owned {
 			withHero[id] = v

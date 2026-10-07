@@ -62,6 +62,13 @@ func vanityOffer(itemID int32) (isVanity, sold bool, price int32) {
 	if !dreadconfig.VanityItemIsSold(v) {
 		return true, false, 0
 	}
+	// A ship's own hull is not sold for other ships of its hull line (see
+	// isOtherShipsHull). GUESS: the original sold hull "retrofits" (the
+	// ThemedShips sets, e.g. the Vitra retrofit pack) and figureheads; no
+	// evidence it sold another ship's hull on its own.
+	if isOtherShipsHull(v.ItemID) {
+		return true, false, 0
+	}
 	// Every sold cosmetic, the former free defaults included, costs the same
 	// (operator, 2026-09-28) -- except ship coatings, whose original price is
 	// documented: "350" GP per coating, for one manufacturer and class line

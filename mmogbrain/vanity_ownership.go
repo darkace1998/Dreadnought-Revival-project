@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 	"github.com/sirupsen/logrus"
@@ -146,9 +147,56 @@ func isUnwearableCaptainItem(id int32) bool {
 	return ok && v.IsCaptain() && !dreadconfig.VanityItemIsPlayerFacing(v)
 }
 
+// shipOwnHullParts is every hull part (category 20) that some ship's
+// blueprint wears as its own hull, base or hero: within one hull line each
+// ship has its own set (DreadnoughtHeavy: Jutland the hull line's
+// "_Default" parts, Monarch the "Tyr" ones; AssaultHeavy: Blud "Marzanna",
+// Gora "Lion").
+var shipOwnHullParts = sync.OnceValue(func() map[int32]bool {
+	out := map[int32]bool{}
+	add := func(a dreadconfig.HeroAppearance) {
+		for _, id := range a.Items() {
+			if (id>>24)&0xff == 20 {
+				out[sharedGearID(id)] = true
+			}
+		}
+	}
+	for _, b := range baseShipLoadouts {
+		if a, ok := dreadconfig.ShipBlueprintAppearance(b.loadoutID); ok {
+			add(a)
+		}
+	}
+	for _, h := range heroShipLoadouts {
+		if a, ok := dreadconfig.HeroShipAppearance(h.loadoutID); ok {
+			add(a)
+		}
+	}
+	return out
+})
+
+// isOtherShipsHull reports a hull part that is some ship's own hull and not
+// free -- one a player may not take onto another ship of the hull line.
+func isOtherShipsHull(id int32) bool {
+	id = sharedGearID(id)
+	return shipOwnHullParts()[id] && !isFreeVanityItem(id)
+}
+
 // ownedVanityItemIDs is every cosmetic the player owns, in the shared form:
-// bought (store or bundle), free, and every owned ship's own look as its
-// blueprint names it (base and hero ships).
+// bought (store or bundle), free, and every owned ship's own finish (emblem,
+// paint, pattern, decal) as its blueprint names it (base and hero ships).
+//
+// NOT an owned ship's own HULL parts (changed 2026-10-07). The client can
+// only own a ship cosmetic per hull line: the customizer lists a hull line's
+// parts (0x140AA0260: the asset table, every blueprint of the line -- heroes
+// included -- and the store, all by the EYShipClass byte, never by maker)
+// and marks one usable iff its per-line id is in Items (0x140548860; a
+// loadout does not count -- 0x140340100 only checks ship ids). So granting
+// Monarch's own "Tyr" hull made it selectable on every DreadnoughtHeavy,
+// Jutland included -- another maker's hull (operator report 2026-10-07): 129
+// regular ships wore a hull part no one bought. A ship keeps showing its own
+// hull without it: the display-info importer (0x140421FE0) checks no
+// ownership, the customizer lists the fitted part (0x140347840), and hero
+// ships get no hull options at all (0x140547970 early-out in 0x140AA0260).
 func ownedVanityItemIDs(playerPID string) []int32 {
 	seen := map[int32]bool{}
 	var out []int32
@@ -169,7 +217,9 @@ func ownedVanityItemIDs(playerPID string) []int32 {
 		for _, lookup := range []func(int32) (dreadconfig.HeroAppearance, bool){dreadconfig.ShipBlueprintAppearance, dreadconfig.HeroShipAppearance} {
 			if a, ok := lookup(l.precastLoadoutID); ok {
 				for _, id := range a.Items() {
-					add(id)
+					if (id>>24)&0xff != 20 {
+						add(id)
+					}
 				}
 			}
 		}
