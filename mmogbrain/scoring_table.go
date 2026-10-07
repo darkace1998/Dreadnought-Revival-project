@@ -195,7 +195,13 @@ func scoringDocument() []byte {
 	var b []byte
 	var stack []int
 	b, stack = protocol.AppendArrayStart(b, stack, "ScoringTable")
+	if rows := originalScoringTable(); len(rows) > 0 {
+		b, stack = appendOriginalScoringRows(b, stack, rows)
+	}
 	for _, e := range pvpScoringTable {
+		if len(originalScoringTable()) > 0 {
+			break
+		}
 		id, ok := scoringEventOrdinal(e.Event)
 		if !ok || e.Points <= 0 || scoringEndOfMatchEvents[e.Event] {
 			continue
@@ -234,6 +240,51 @@ func scoringDocument() []byte {
 	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return protocol.AppendRootEnd(b)
+}
+
+// appendOriginalScoringRows writes the original table's rows (see
+// scoring_original.go). Each row keeps its EYScoringEventID name and ordinal,
+// the forms the host already scores live; the table's own name ("FighterKill")
+// survives only in the display text. Rows without modes are skipped (the
+// host's mode filter would drop them), and so are the end-of-match events
+// (scoringEndOfMatchEvents): mmogbrain pays their XP itself
+// (endOfMatchEventXP). Numbers go out as numeric strings, which the row
+// parser accepts for its int and bool fields (0x2A7A030: double, int64 or
+// string). GUESS: NotifyDuringMatch is not in the table; a visible event
+// notifies.
+func appendOriginalScoringRows(b []byte, stack []int, rows []originalScoringRow) ([]byte, []int) {
+	for _, r := range rows {
+		id, ok := scoringEventOrdinal(r.Enum)
+		if !ok || scoringEndOfMatchEvents[r.Enum] || strings.TrimSpace(r.GameModes) == "" {
+			continue
+		}
+		name := r.NameForPlayer
+		if name == "" {
+			name = scoringDisplayName(r.Enum)
+		}
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendInt32Field(b, "Id", int32(id))
+		b = protocol.AppendStringField(b, "EventName", r.Enum)
+		b = protocol.AppendStringField(b, "NameForPlayer", nsLocText("DNScoring", r.Enum, name))
+		b = protocol.AppendStringField(b, "GameModes", r.GameModes)
+		b = protocol.AppendStringField(b, "SummaryCategory", r.SummaryCategory)
+		b = protocol.AppendStringField(b, "EventVisibility", strconv.Itoa(r.EventVisibility))
+		b = protocol.AppendStringField(b, "Parameters", r.Parameters)
+		b = protocol.AppendStringField(b, "EventScore", r.EventScore)
+		b = protocol.AppendStringField(b, "EventXP", r.EventXP)
+		b = protocol.AppendStringField(b, "EventCredits", r.EventCredits)
+		b = protocol.AppendBoolField(b, "NotifyDuringMatch", r.EventVisibility > 0)
+		if r.RibbonName != "" {
+			b = protocol.AppendStringField(b, "RibbonName", nsLocText("DNScoringRibbon", r.Enum, r.RibbonName))
+			b = protocol.AppendStringField(b, "RibbonDesc", nsLocText("DNScoringRibbonDesc", r.Enum, r.RibbonDesc))
+		}
+		b = protocol.AppendStringField(b, "EventsForRibbon", strconv.Itoa(r.EventsForRibbon))
+		b = protocol.AppendStringField(b, "RibbonScore", r.RibbonScore)
+		b = protocol.AppendStringField(b, "RibbonXP", r.RibbonXP)
+		b = protocol.AppendStringField(b, "RibbonCredits", r.RibbonCredits)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
+	return b, stack
 }
 
 // scoringDisplayName turns an event id into readable text: "CaptainKill_SameTier"

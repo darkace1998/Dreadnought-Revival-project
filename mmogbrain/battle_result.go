@@ -73,6 +73,24 @@ type battleRewards struct {
 	// will earn Ship XP after you finish a match." GUESS: 10% is the
 	// operator's figure (2026-09-30); only flown ships earned anything before.
 	unplayedShipXPPct int32
+	// eventXP is the match's XP from the ORIGINAL scoring table when the
+	// battle server reported it (event_xp, summed by battle-server-mod from
+	// AssignScoringReward, plus the end-of-match awards from
+	// endOfMatchEventXP). It replaces the win/loss + per-kill XP base;
+	// credits keep the formula (the original credit payout, ScoringParamsTable
+	// CrBuckets, is not in the datamine). GUESS: the formula's bonus terms and
+	// fleet bonus still apply on top, as they did to the placeholder base.
+	eventXP    int32
+	useEventXP bool
+}
+
+// withEventXP is r paying xp as the match's XP base (see eventXP).
+func (r battleRewards) withEventXP(xp int32) battleRewards {
+	if xp < 0 {
+		xp = 0
+	}
+	r.eventXP, r.useEventXP = xp, true
+	return r
 }
 
 // fleetBonus is the fleet battle bonus of an EYFleetType (1 Recruit,
@@ -234,6 +252,12 @@ func (r battleRewards) poolsFor(outcome string, kills int32, fleetType int) (cre
 		baseCredits, baseXP = r.winCredits, r.winXP
 	}
 	credits = r.split(baseCredits, r.killCredits*kills, r.creditBonuses, fleetType)
+	if r.useEventXP {
+		// All of it as base: the event XP is not split into a win/loss base
+		// and a kill performance, and unplayedShipPools takes its share of
+		// the base.
+		return credits, r.split(r.eventXP, 0, r.xpBonuses, fleetType)
+	}
 	xp = r.split(baseXP, r.killXP*kills, r.xpBonuses, fleetType)
 	return credits, xp
 }
@@ -295,6 +319,13 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rewards := currentBattleRewards()
+	var eventXP, eomXP int32
+	scoringMode := ""
+	if v := strings.TrimSpace(q.Get("event_xp")); v != "" && os.Getenv("DN_REWARD_EVENT_XP") != "0" {
+		eventXP = int32(num("event_xp"))
+		eomXP, scoringMode = endOfMatchEventXP(currentMmogPlayerStateDB(), match)
+		rewards = rewards.withEventXP(eventXP + eomXP)
+	}
 	credits, xp, gains, fresh, err := recordBattleResult(res, rewards)
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{"match": match, "player": pid}).Error("battle result: not recorded")
@@ -314,7 +345,9 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		squadHubInstance.push(pid, buildMmogShipXPSyncPush(pid, gains))
 	}
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
-		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh}).Info("battle result")
+		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh,
+		"event_xp": eventXP, "eom_xp": eomXP, "scoring_mode": scoringMode, "events": q.Get("events"),
+		"event_credits": q.Get("event_credits")}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)
 	// The same payout split into pools, for the end-of-match screen: the mod

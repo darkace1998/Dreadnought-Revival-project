@@ -70,6 +70,7 @@ func TestScoringEventOrdinalsCoverTheEnum(t *testing.T) {
 }
 
 func TestScoringDocumentCarriesThePoints(t *testing.T) {
+	t.Setenv("DN_SCORING_ORIGINAL", "0") // the old operator table
 	doc := string(scoringDocument())
 	rows := 0
 	for _, e := range pvpScoringTable {
@@ -103,5 +104,56 @@ func TestBattleScoringIsLoopbackOnly(t *testing.T) {
 		if rec.Code != want {
 			t.Errorf("%s: %d, want %d", addr, rec.Code, want)
 		}
+	}
+}
+
+// The original table (data/scoring/ScoringTable.json, from the operator's
+// datamine) is what the host gets: every row an EYScoringEventID, the
+// per-mode strings verbatim, and still no end-of-match event.
+func TestScoringDocumentServesTheOriginalTable(t *testing.T) {
+	rows := originalScoringTable()
+	if len(rows) < 50 {
+		t.Fatalf("%d original rows; data/scoring/ScoringTable.json missing?", len(rows))
+	}
+	known := map[string]bool{}
+	for _, e := range knownScoringEvents {
+		known[e] = true
+	}
+	for _, r := range rows {
+		if !known[r.Enum] {
+			t.Errorf("%s maps to %q, not an EYScoringEventID", r.EventName, r.Enum)
+		}
+	}
+	doc := string(scoringDocument())
+	for _, want := range [][2]string{
+		{"EventName", "CaptainKill_SameTier"},
+		{"EventScore", "TDM(65) : TM (10) : TE(110): IVN(30) : POD_TDM(70) : BC(65) : TURBO_TDM(65)"},
+		{"EventName", "AITargetL"}, // the table's FighterKill
+		{"EventScore", "IVN(8)"},
+	} {
+		if countWireStringField(doc, want[0], want[1]) == 0 {
+			t.Errorf("document lacks %s %q", want[0], want[1])
+		}
+	}
+	for _, eom := range []string{"Winner", "MVP", "ManOfTheDay", "MatchEnd", "PlayTime"} {
+		if countWireStringField(doc, "EventName", eom) != 0 {
+			t.Errorf("%s is served; end-of-match events stay with mmogbrain", eom)
+		}
+	}
+	if !strings.Contains(doc, "TER(250)") {
+		t.Error("Conquest's 1.12.0 values (TerritoryCapturedPoint TER(250)) are missing")
+	}
+}
+
+// Read the way the host does (0x42DF40): spaces dropped, then "<MODE>(n)".
+func TestScoringValueFor(t *testing.T) {
+	const v = "TDM(65) : TM (10) : TE(110): IVN(30) : POD_TDM(70)"
+	for mode, want := range map[string]int{"TDM": 65, "TM": 10, "TE": 110, "IVN": 30, "POD_TDM": 70, "TER": 0} {
+		if got := scoringValueFor(v, mode); got != want {
+			t.Errorf("%s = %d, want %d", mode, got, want)
+		}
+	}
+	if scoringValueFor("T(30)", "T") != 30 {
+		t.Error("PlayTime's T(30) not read")
 	}
 }

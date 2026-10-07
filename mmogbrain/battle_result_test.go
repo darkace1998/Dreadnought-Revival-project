@@ -2,11 +2,13 @@ package main
 
 import (
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBattleOutcome(t *testing.T) {
@@ -306,5 +308,38 @@ func TestBattleResultPushesTheNewXP(t *testing.T) {
 		string(protocol.AppendStringField(nil, "ShipXp", "-4025"))
 	if !strings.Contains(string(push), entry) {
 		t.Errorf("no ShipXps entry {ShipID %d, ShipXp -4025} for the flown ship", fleetShipKey(flown))
+	}
+}
+
+// With the battle server's original event XP the XP base is that sum plus the
+// end-of-match awards; credits keep the formula.
+func TestEventXPReplacesTheXPBase(t *testing.T) {
+	r := currentBattleRewards()
+	plainCredits, _ := r.forOutcome("win", 5, 1)
+	ev := r.withEventXP(1200)
+	credits, xp := ev.forOutcome("win", 5, 1)
+	if credits != plainCredits {
+		t.Errorf("credits %d, want the formula's %d", credits, plainCredits)
+	}
+	if want := int32(math.Round(1200 * r.multiplier(r.xpBonuses, 1))); xp != want {
+		t.Errorf("xp %d, want 1200 x multiplier = %d", xp, want)
+	}
+	if got := ev.unplayedShipPools("win", 1).total(); got <= 0 {
+		t.Error("unflown ships earn nothing from event XP")
+	}
+}
+
+// The Match Finish ribbon plus PlayTime every 30 s, by the match's mode.
+func TestEndOfMatchEventXP(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	ready := time.Now().Add(-300 * time.Second).UTC().Format(time.RFC3339)
+	if _, err := database.Exec(`INSERT INTO matches(id, game_mode, map, battle_match_id, server_ready_at) VALUES('m1','TDM','Gorge','b1',?), ('m2','Onslaught','Gorge','b2',?)`, ready, ready); err != nil {
+		t.Fatal(err)
+	}
+	if xp, mode := endOfMatchEventXP(database, "b1"); mode != "TDM" || xp < 118 || xp > 122 {
+		t.Errorf("TDM: %d (%s), want 100 ribbon + 2 x 10 play-time ticks = 120", xp, mode)
+	}
+	if xp, mode := endOfMatchEventXP(database, "b2"); mode != "IVN" || xp < 108 || xp > 111 {
+		t.Errorf("Onslaught: %d (%s), want 100 + 1 x 10 = 110", xp, mode)
 	}
 }
