@@ -92,11 +92,21 @@ func extractStringFields(payload []byte, targets map[string]struct{}, values *[]
 				return false
 			}
 			i += 16
-		case 0x05:
+		// 1- and 2-byte integers (0x16/0x26, 0x36/0x46; see ExtractInt32Field).
+		// Skipped here too: without them this scan stopped at the squad
+		// request's FleetType (0x16) and never reached GameType, so every squad
+		// queued for the default mode (operator, 2026-10-07: "i got into TDM
+		// not onslaught").
+		case 0x05, 0x16, 0x26:
 			if i >= len(payload) {
 				return false
 			}
 			i++
+		case 0x36, 0x46:
+			if i+2 > len(payload) {
+				return false
+			}
+			i += 2
 		case 0x56:
 			if i+4 > len(payload) {
 				return false
@@ -189,11 +199,21 @@ func ExtractBytesField(payload []byte, target string) ([]byte, bool) {
 				return nil, false
 			}
 			i += 16
-		case 0x05:
+		// 1- and 2-byte integers (0x16/0x26, 0x36/0x46; see ExtractInt32Field).
+		// Skipped here too: without them this scan stopped at the squad
+		// request's FleetType (0x16) and never reached GameType, so every squad
+		// queued for the default mode (operator, 2026-10-07: "i got into TDM
+		// not onslaught").
+		case 0x05, 0x16, 0x26:
 			if i >= len(payload) {
 				return nil, false
 			}
 			i++
+		case 0x36, 0x46:
+			if i+2 > len(payload) {
+				return nil, false
+			}
+			i += 2
 		case 0x56:
 			if i+4 > len(payload) {
 				return nil, false
@@ -427,11 +447,21 @@ func ExtractRequestName(payload []byte) string {
 				return ""
 			}
 			i += 16
-		case 0x05:
+		// 1- and 2-byte integers (0x16/0x26, 0x36/0x46; see ExtractInt32Field).
+		// Skipped here too: without them this scan stopped at the squad
+		// request's FleetType (0x16) and never reached GameType, so every squad
+		// queued for the default mode (operator, 2026-10-07: "i got into TDM
+		// not onslaught").
+		case 0x05, 0x16, 0x26:
 			if i >= len(payload) {
 				return ""
 			}
 			i++
+		case 0x36, 0x46:
+			if i+2 > len(payload) {
+				return ""
+			}
+			i += 2
 		case 0x56:
 			if i+4 > len(payload) {
 				return ""
@@ -558,11 +588,21 @@ func ExtractGUIDField(payload []byte, target string) (string, bool) {
 				return "", false
 			}
 			i += valueLen
-		case 0x05:
+		// 1- and 2-byte integers (0x16/0x26, 0x36/0x46; see ExtractInt32Field).
+		// Skipped here too: without them this scan stopped at the squad
+		// request's FleetType (0x16) and never reached GameType, so every squad
+		// queued for the default mode (operator, 2026-10-07: "i got into TDM
+		// not onslaught").
+		case 0x05, 0x16, 0x26:
 			if i >= len(payload) {
 				return "", false
 			}
 			i++
+		case 0x36, 0x46:
+			if i+2 > len(payload) {
+				return "", false
+			}
+			i += 2
 		case 0x56:
 			if i+4 > len(payload) {
 				return "", false
