@@ -1618,6 +1618,8 @@ static bool g_botsBCOnly = false;
 
 static void FlushPendingEomStats();
 
+static void OnslaughtCreepTick(uint8_t *gm);
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
   if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
@@ -1667,8 +1669,847 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
     }
   }
   g_origGameModeTimer(gameMode);
+  OnslaughtCreepTick(gm);
   PlayersTick(gm);
   FlushPendingEomStats();
+}
+
+// ---------------------------------------------------------------------------
+// Onslaught match points (on by default; dn_host_no_onslaught_points.txt /
+// DN_HOST_NO_ONSLAUGHT_POINTS=1 turns it off)
+//
+// Operator report 2026-10-07: "the game should finish if 1 of the teams reaches
+// 300 points but now it finishes at around 248 points".
+//
+// Verified in the exe and the cooked assets (2026-10-07):
+//   - Onslaught is YGameMode_Invasion / YGameState_Invasion (host mode code
+//     "IVN", m_gameModeType 16). GameState_Onslaught_BP sets
+//     m_matchPointsForWinning 300 (+0x1E28) and the points per kill:
+//     m_playerkillPoints 7 (+0x1E2C), m_smallCreepkillPoints 1 (+0x1E30),
+//     m_midCreepkillPoints 2 (+0x1E34), m_bigCreepkillPoints 30 (+0x1E38); the
+//     replicated creep-kill counters sit at +0x1E3C.. (small/mid/big T1, then
+//     T2). GameInfo_Onslaught_BP sets m_killsForWinning 30.
+//   - NOTHING in this exe reads +0x1E28 or writes the creep counters (full
+//     scan of .text for those displacements). The points rule was server-build
+//     code, like Team Elimination's rounds.
+//   - What does end an Onslaught match here is the deathmatch rule: the kill
+//     handler 0x375F30 adds 1 to the killer's team (GameState +0x1DF0/+0x1DF4,
+//     only for victims whose vtable +0x7E0 is false -- not creeps) and calls
+//     vtable +0x8D0 = 0x3685C0, which ends the match when a team's kills reach
+//     the game mode's m_killsForWinning (+0x9DC = 30). 30 kills x 7 points plus
+//     creeps is the ~248 the operator saw.
+//   - The winner is the team with more KILLS (0x384C90 writes GameState
+//     +0x4E8: 1 team 1, 2 team 2, 3 draw).
+//
+// So for Onslaught the mod: lifts the kill limit (game mode +0x9DC only; the
+// GameState's copy the clients see stays), counts creep kills into the
+// GameState's own counters, ends the match through EndMatch (vtable +0x668,
+// as 0x3685C0 does) when a team reaches m_matchPointsForWinning, and makes the
+// winner the team with more points.
+//
+// Which creep is which: the AI ships are VH_ONS_AITarget{L,M,H}_Pawn_BP (H has
+// _V/_L tier variants). Their scoring events name them: AITargetL "Fighter",
+// AITargetM "Assault Ship", AITargetH "Command Ship" (ribbon names), and the
+// datamine's NPC Onslaught weapons list the same three. GUESS: L = small,
+// M = mid, H = big, which also matches the points (fighter 1, command ship 30).
+#define RVA_TDM_KILLED 0x375F30          // AYGameMode_TDM::Killed (vtable)
+#define RVA_TDM_DETERMINE_LEADER 0x384C90 // writes GameState +0x4E8 from kills
+#define YGMT_INVASION 16
+#define OFF_GM_KILLS_FOR_WINNING 0x9DC
+#define OFF_GS_KILLS_T1 0x1DF0
+#define OFF_GS_KILLS_T2 0x1DF4
+#define OFF_GS_WINNING_TEAM 0x4E8
+#define OFF_GS_ONS_POINTS_TO_WIN 0x1E28
+#define OFF_GS_ONS_PLAYER_POINTS 0x1E2C   // then small, mid, big (+4 each)
+#define OFF_GS_ONS_CREEP_KILLS 0x1E3C     // small, mid, big T1, then T2 (+4 each)
+#define OFF_CONTROLLER_PAWN 0x3C8         // as 0x375F30 reads the killer's ship
+#define OFF_SHIP_TEAM 0x8C0               // 0x57C100: a ship's EYTeam
+#define VT_GM_END_MATCH 0x668
+#define ONS_KILL_LIMIT_OFF 1000000
+#define OFF_GS_WINNING_TEAM_FINAL 0x56B // GameState final match result (0 while playing)
+#ifndef OFF_USTRUCT_SUPER
+#define OFF_USTRUCT_SUPER 0x30
+#endif
+
+typedef void(__fastcall *tTdmKilled)(void *gm, void *killer, void *victimCtrl,
+                                     void *victimPawn, void *damageType);
+static tTdmKilled g_origTdmKilled = nullptr;
+typedef void(__fastcall *tDetermineLeader)(void *gm);
+static tDetermineLeader g_origDetermineLeader = nullptr;
+
+struct OnslaughtMatch {
+  void *gm;
+  int creeps[2][3];    // [team-1][small, mid, big]
+  bool ended;
+};
+static OnslaughtMatch g_ons = {};
+
+static uint8_t *InvasionGameState(uint8_t *gm) {
+  if (!gm || !IsReadable(gm + OFF_GM_GAMESTATE, sizeof(void *)))
+    return nullptr;
+  uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+  if (!gs || !IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) ||
+      gs[OFF_GS_GAME_MODE_TYPE] != YGMT_INVASION ||
+      !IsReadable(gs + OFF_GS_KILLS_T1, OFF_GS_ONS_CREEP_KILLS + 24 - OFF_GS_KILLS_T1))
+    return nullptr;
+  return gs;
+}
+
+// The GameState's points per kill and target, or the cooked defaults when a
+// value is missing.
+static void OnslaughtRules(uint8_t *gs, int *perPlayer, int perCreep[3], int *target) {
+  const int def[4] = {7, 1, 2, 30};
+  int32_t *v = (int32_t *)(gs + OFF_GS_ONS_PLAYER_POINTS);
+  *perPlayer = v[0] > 0 ? v[0] : def[0];
+  for (int i = 0; i < 3; ++i)
+    perCreep[i] = v[1 + i] > 0 ? v[1 + i] : def[1 + i];
+  int32_t t = *(int32_t *)(gs + OFF_GS_ONS_POINTS_TO_WIN);
+  *target = t > 0 ? t : 300;
+}
+
+static int OnslaughtPoints(uint8_t *gs, int team /*1 or 2*/) {
+  int perPlayer, perCreep[3], target;
+  OnslaughtRules(gs, &perPlayer, perCreep, &target);
+  int kills = *(int32_t *)(gs + (team == 1 ? OFF_GS_KILLS_T1 : OFF_GS_KILLS_T2));
+  int pts = kills * perPlayer;
+  for (int i = 0; i < 3; ++i)
+    pts += g_ons.creeps[team - 1][i] * perCreep[i];
+  return pts;
+}
+
+// 0 small, 1 mid, 2 big; -1 not a creep. Walks the class chain so a tier
+// variant (VH_ONS_AITargetH_Pawn_V_BP) is found by its own name.
+static int CreepSize(void *pawn) {
+  UObjectMin *cls = IsReadable(pawn, sizeof(UObjectMin)) ? ((UObjectMin *)pawn)->Class : nullptr;
+  for (int depth = 0; cls && depth < 6 && IsReadable(cls, OFF_USTRUCT_SUPER + 8); ++depth) {
+    const char *n = NameText(cls->Name);
+    if (n) {
+      if (strstr(n, "AITargetH")) return 2;
+      if (strstr(n, "AITargetM")) return 1;
+      if (strstr(n, "AITargetL")) return 0;
+    }
+    cls = *(UObjectMin **)((uint8_t *)cls + OFF_USTRUCT_SUPER);
+  }
+  return -1;
+}
+
+static const char *ClassNameOf(void *obj) {
+  if (!IsReadable(obj, sizeof(UObjectMin)) || !IsReadable(((UObjectMin *)obj)->Class, sizeof(UObjectMin)))
+    return "?";
+  const char *n = NameText(((UObjectMin *)obj)->Class->Name);
+  return n ? n : "?";
+}
+
+static int ShipTeam(void *pawn) {
+  if (!pawn || !IsReadable((uint8_t *)pawn + OFF_SHIP_TEAM, 1))
+    return 0;
+  int t = ((uint8_t *)pawn)[OFF_SHIP_TEAM];
+  return (t == 1 || t == 2) ? t : 0;
+}
+
+// GameState +0x4E8 to the team with more points; false when a team has no
+// players (the original's own +0x4F8/+0x4FC branches decide those).
+static bool SetLeaderByPoints(uint8_t *gs, int p1, int p2) {
+  if (!IsReadable(gs + 0x4F8, 8) || *(int32_t *)(gs + 0x4F8) == 0 || *(int32_t *)(gs + 0x4FC) == 0)
+    return false;
+  gs[OFF_GS_WINNING_TEAM] = p1 > p2 ? 1 : p2 > p1 ? 2 : 3;
+  return true;
+}
+
+static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimCtrl,
+                                     void *victimPawn, void *damageType) {
+  uint8_t *gm = (uint8_t *)gameMode;
+  uint8_t *gs = nullptr;
+  __try {
+    gs = InvasionGameState(gm);
+    if (gs) {
+      if (g_ons.gm != gameMode) {
+        memset(&g_ons, 0, sizeof(g_ons));
+        g_ons.gm = gameMode;
+        Logf("onslaught: match %p -- points rule armed (kill limit %d lifted, "
+             "points to win %d)", gameMode, *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING),
+             *(int32_t *)(gs + OFF_GS_ONS_POINTS_TO_WIN));
+      }
+      // The deathmatch check runs inside the original call; keep it from
+      // ending Onslaught on kills.
+      *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING) = ONS_KILL_LIMIT_OFF;
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    gs = nullptr;
+  }
+
+  int32_t kills1 = 0, kills2 = 0;
+  if (gs) {
+    kills1 = *(int32_t *)(gs + OFF_GS_KILLS_T1);
+    kills2 = *(int32_t *)(gs + OFF_GS_KILLS_T2);
+  }
+
+  g_origTdmKilled(gameMode, killer, victimCtrl, victimPawn, damageType);
+
+  if (!gs)
+    return;
+  __try {
+    int size = CreepSize(victimPawn);
+    // The assault ship and command ship are not creeps (no vtable +0x7E0),
+    // so the deathmatch handler just counted them as a player kill. They
+    // score as creeps only.
+    if (size >= 0) {
+      if (*(int32_t *)(gs + OFF_GS_KILLS_T1) > kills1)
+        *(int32_t *)(gs + OFF_GS_KILLS_T1) = kills1;
+      if (*(int32_t *)(gs + OFF_GS_KILLS_T2) > kills2)
+        *(int32_t *)(gs + OFF_GS_KILLS_T2) = kills2;
+    }
+    int scorer = 0;
+    if (size >= 0) {
+      void *killerShip = (killer && IsReadable((uint8_t *)killer + OFF_CONTROLLER_PAWN, 8))
+                             ? *(void **)((uint8_t *)killer + OFF_CONTROLLER_PAWN) : nullptr;
+      scorer = ShipTeam(killerShip);
+      int victimTeam = ShipTeam(victimPawn);
+      if (scorer == 0 || scorer == victimTeam)
+        scorer = victimTeam == 1 ? 2 : victimTeam == 2 ? 1 : 0;
+      if (scorer) {
+        g_ons.creeps[scorer - 1][size]++;
+        *(int32_t *)(gs + OFF_GS_ONS_CREEP_KILLS + 4 * (3 * (scorer - 1) + size)) =
+            g_ons.creeps[scorer - 1][size];
+      }
+    }
+    int p1 = OnslaughtPoints(gs, 1), p2 = OnslaughtPoints(gs, 2);
+    int perPlayer, perCreep[3], target;
+    OnslaughtRules(gs, &perPlayer, perCreep, &target);
+    Logf("onslaught: %s %s -> team %d | points T1 %d (kills %d) T2 %d (kills %d) / %d",
+         size >= 0 ? (size == 0 ? "small creep" : size == 1 ? "mid creep" : "big creep") : "kill",
+         ClassNameOf(victimPawn), size >= 0 ? scorer : 0, p1,
+         *(int32_t *)(gs + OFF_GS_KILLS_T1), p2, *(int32_t *)(gs + OFF_GS_KILLS_T2), target);
+    if (!g_ons.ended && (p1 >= target || p2 >= target)) {
+      g_ons.ended = true;
+      SetLeaderByPoints(gs, p1, p2);
+      Logf("onslaught: team %d reached %d points (T1 %d, T2 %d) -- ending the match",
+           p1 >= p2 ? 1 : 2, target, p1, p2);
+      void **vt = *(void ***)gm;
+      ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("onslaught: EXCEPTION while counting a kill");
+  }
+}
+
+// The leader/winner by points, not kills, in Onslaught. The original's
+// "a team has no players" branches (+0x4F8/+0x4FC) are kept.
+static void __fastcall HookDetermineLeader(void *gameMode) {
+  g_origDetermineLeader(gameMode);
+  __try {
+    uint8_t *gs = InvasionGameState((uint8_t *)gameMode);
+    if (!gs || g_ons.gm != gameMode)
+      return;
+    uint8_t byKills = gs[OFF_GS_WINNING_TEAM];
+    int p1 = OnslaughtPoints(gs, 1), p2 = OnslaughtPoints(gs, 2);
+    if (SetLeaderByPoints(gs, p1, p2) && g_ons.ended && gs[OFF_GS_WINNING_TEAM] != byKills)
+      Logf("onslaught: leader by points %d (T1 %d, T2 %d), was %d by kills",
+           gs[OFF_GS_WINNING_TEAM], p1, p2, byKills);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Onslaught AI ships (on; dn_host_no_onslaught_creeps.txt turns it off)
+//
+// Onslaught's fighters, assault ships and command ship never spawned: every
+// kill in a live Onslaught match was a bot (2026-10-07). Verified in the exe
+// and the cooked content the same day:
+//   - The ships are VH_ONS_AITarget{L,M,H}_Pawn_BP (YCreepPawn). The map's
+//     _Onslaught sublevel (loaded on our hosts) holds YCreepNavigationSpawn
+//     actors ONS_AITarget{L,M,H}_InitialSpawn_T1/T2 and _Spawn_T1/T2:
+//     m_spawnClass +0x428, m_spawnTeam +0x430 (EYTeam), m_beginMatchSpawnDelay
+//     +0x434. Nothing in this exe reads them (only reflection refers to the
+//     class) and YGameMode_Invasion adds no code to the deathmatch mode: the
+//     spawner was server-build code.
+//   - The spawn itself is in the exe: AYAICombatSceneManager::SpawnCreep
+//     0x264B30 (this, UClass* creepClass, AActor* spawnAt -- its root
+//     component's location and rotation --, uint8* team); server only, needs
+//     a YCreepManager, respects the creep manager's per-team cap. The scene
+//     manager comes from 0x2529E0 (no arguments).
+//   - The rules are the game mode's own (GameInfo_Onslaught_BP): small creep
+//     class +0xA58, max +0xA60 (12), respawn +0xA64 (2 s); mid +0xA68 / +0xA70
+//     (6) / +0xA74 (8 s); big +0xA78, Veteran +0xA80, Legendary +0xA88, max
+//     +0xA90 (1), respawn +0xA94 (180 s). The 2018 launch notes give the same
+//     counts and the command ship's 180 s.
+// So once a second, on an Onslaught host, this spawns the initial ships at the
+// InitialSpawn points, then keeps each team at its maximum: a missing ship is
+// respawned at a Spawn point once it has been missing for the respawn time.
+// GUESS: the first wave goes out 20 s after the match starts (the per-point
+// m_beginMatchSpawnDelay is read but its use is not traced); alive ships are
+// counted from GObjects (class + team, not pending kill).
+#define RVA_SPAWN_CREEP 0x264B30
+#define RVA_COMBAT_SCENE_MANAGER 0x2529E0
+#define RVA_GS_FLEET_TYPE 0x396C50        // as GetAISpawnTier reads it
+#define OFF_CLASSPTR_CREEP_NAV_SPAWN 0x3E12298 // YCreepNavigationSpawn UClass*, once registered
+#define OFF_CLASSPTR_CREEP_NAV 0x3E11A58       // YCreepNavigation UClass* (registration 0x6007C0)
+#define OFF_SPAWN_CLASS 0x428
+#define OFF_SPAWN_TEAM 0x430
+#define OFF_GM_ONS_SMALL_CLASS 0xA58
+#define OFF_GM_ONS_MID_CLASS 0xA68
+#define OFF_GM_ONS_BIG_CLASS 0xA78
+#define ONS_FIRST_WAVE_DELAY_MS 20000
+#define RF_CDO_OR_ARCHETYPE 0x30
+#define OBJ_PENDING_KILL (1 << 29)
+
+typedef void *(__fastcall *tSpawnCreep)(void *sceneMgr, void *cls, void *spawnAt, uint8_t *team);
+typedef void *(__fastcall *tGetSceneManager)();
+typedef uint8_t(__fastcall *tGsFleetType)(void *gs);
+
+struct OnsSpawnPoint {
+  void *actor;
+  int size;  // 0 small, 1 mid, 2 big
+  int team;  // 1 or 2
+  bool initial;
+};
+struct OnsCreepState {
+  void *gm;
+  DWORD firstSeen;
+  bool firstWave;
+  int nPoints;
+  OnsSpawnPoint points[256];
+  DWORD missingSince[2][3];
+  DWORD lastScan;
+  int spawned, failed;
+};
+static OnsCreepState g_onsCreeps = {};
+static void *g_onsBigShip[2] = {}; // last seen command ship per team, for the position log
+static void *g_onsMidShip[2] = {}; // last seen assault ship per team, likewise
+static void *g_onsBigNav = nullptr; // the map's ONS_AITargetH_Navigation node, if any
+
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+static bool OnslaughtCreepsEnabled() {
+  return !SwitchOn("DN_HOST_NO_ONSLAUGHT_CREEPS", "dn_host_no_onslaught_creeps.txt");
+}
+
+static int SizeFromName(const char *n) {
+  if (!n) return -1;
+  if (strstr(n, "AITargetH")) return 2;
+  if (strstr(n, "AITargetM")) return 1;
+  if (strstr(n, "AITargetL")) return 0;
+  return -1;
+}
+
+// The map's Onslaught spawn points, by their own names.
+static void FindOnslaughtSpawnPoints() {
+  OnsCreepState &st = g_onsCreeps;
+  st.nPoints = 0;
+  UObjectMin *cls = *(UObjectMin **)(g_base + OFF_CLASSPTR_CREEP_NAV_SPAWN);
+  if (!cls)
+    return;
+  FUObjectArrayMin *arr = GObjects();
+  if (!arr || !arr->Objects)
+    return;
+  UObjectMin *navCls = *(UObjectMin **)(g_base + OFF_CLASSPTR_CREEP_NAV);
+  g_onsBigNav = nullptr;
+  for (int i = 0; i < arr->NumElements && st.nPoints < 256; ++i) {
+    UObjectMin *o = arr->Objects[i].Object;
+    if (o && navCls && o->Class == navCls && !(o->Flags & RF_CDO_OR_ARCHETYPE) && !g_onsBigNav &&
+        !(arr->Objects[i].Flags & OBJ_PENDING_KILL)) {
+      const char *nn = NameText(o->Name);
+      if (nn && strstr(nn, "AITargetH_Navigation"))
+        g_onsBigNav = o;
+      continue;
+    }
+    if (!o || o->Class != cls || (o->Flags & RF_CDO_OR_ARCHETYPE) ||
+        (arr->Objects[i].Flags & OBJ_PENDING_KILL))
+      continue;
+    const char *n = NameText(o->Name);
+    int size = SizeFromName(n);
+    int team = ((uint8_t *)o)[OFF_SPAWN_TEAM];
+    if (size < 0 || (team != 1 && team != 2))
+      continue;
+    OnsSpawnPoint &p = st.points[st.nPoints++];
+    p.actor = o;
+    p.size = size;
+    p.team = team;
+    p.initial = n && strstr(n, "Initial");
+  }
+}
+
+// The class the game mode spawns for a size; the big one by fleet tier.
+static void *OnslaughtCreepClass(uint8_t *gm, uint8_t *gs, int size, void *pointClass) {
+  void *cls = nullptr;
+  if (size == 0)
+    cls = *(void **)(gm + OFF_GM_ONS_SMALL_CLASS);
+  else if (size == 1)
+    cls = *(void **)(gm + OFF_GM_ONS_MID_CLASS);
+  else {
+    uint8_t fleet = ((tGsFleetType)(g_base + RVA_GS_FLEET_TYPE))(gs);
+    int off = fleet == 3 ? 0x10 : fleet == 2 ? 0x08 : 0;
+    cls = *(void **)(gm + OFF_GM_ONS_BIG_CLASS + off);
+    if (!cls)
+      cls = *(void **)(gm + OFF_GM_ONS_BIG_CLASS);
+  }
+  return cls ? cls : pointClass;
+}
+
+// Alive Onslaught ships by team and size: instances of the creep classes the
+// game mode and the spawn points name, not pending kill. Compared by class
+// pointer: a name lookup per object costs syscalls (IsReadable), and a
+// GObjects scan doing that per object once froze a host for 90 s (README).
+static void CountOnslaughtCreeps(uint8_t *gm, uint8_t *gs, int alive[2][3]) {
+  memset(alive, 0, sizeof(int) * 6);
+  void *cls[16];
+  int csize[16], nc = 0;
+  auto add = [&](void *c, int size) {
+    if (!c || nc >= 16) return;
+    for (int i = 0; i < nc; ++i)
+      if (cls[i] == c) return;
+    cls[nc] = c;
+    csize[nc++] = size;
+  };
+  add(*(void **)(gm + OFF_GM_ONS_SMALL_CLASS), 0);
+  add(*(void **)(gm + OFF_GM_ONS_MID_CLASS), 1);
+  for (int v = 0; v < 3; ++v)
+    add(*(void **)(gm + OFF_GM_ONS_BIG_CLASS + 8 * v), 2);
+  for (int i = 0; i < g_onsCreeps.nPoints; ++i)
+    add(*(void **)((uint8_t *)g_onsCreeps.points[i].actor + OFF_SPAWN_CLASS), g_onsCreeps.points[i].size);
+  (void)gs;
+  FUObjectArrayMin *arr = GObjects();
+  if (!arr || !arr->Objects || nc == 0)
+    return;
+  for (int i = 0; i < arr->NumElements; ++i) {
+    UObjectMin *o = arr->Objects[i].Object;
+    if (!o || (o->Flags & RF_CDO_OR_ARCHETYPE) || (arr->Objects[i].Flags & OBJ_PENDING_KILL))
+      continue;
+    for (int c = 0; c < nc; ++c) {
+      if (o->Class == cls[c]) {
+        int team = ((uint8_t *)o)[OFF_SHIP_TEAM];
+        if (team == 1 || team == 2) {
+          alive[team - 1][csize[c]]++;
+          if (csize[c] == 2)
+            g_onsBigShip[team - 1] = o;
+          else if (csize[c] == 1)
+            g_onsMidShip[team - 1] = o;
+        }
+        break;
+      }
+    }
+  }
+}
+
+// The fault address of a caught exception, for the log.
+static int CaptureFault(EXCEPTION_POINTERS *ep, uintptr_t *at) {
+  *at = ep && ep->ExceptionRecord ? (uintptr_t)ep->ExceptionRecord->ExceptionAddress : 0;
+  return EXCEPTION_EXECUTE_HANDLER;
+}
+
+// AActor::SpawnCollisionHandlingMethod (+0x179, registration 0x141D57F40) on
+// the class default object, which SpawnCreep's default spawn parameters fall
+// back to. The assault ships were refused at their spawn points ("Couldn't
+// spawn Pawn of type VH_ONS_AITargetM_Pawn_BP_C at ONS_AITargetM_Spawn_T2_n",
+// host 2026-10-07 23:41) -- the engine's answer when a spawn collides and the
+// method says not to. 2 = AdjustIfPossibleButAlwaysSpawn. GUESS: the original
+// server spawned them with its own parameters; this is the CDO-side
+// equivalent. Once per class.
+#define OFF_ACTOR_SPAWN_COLLISION 0x179
+#define SPAWN_ADJUST_BUT_ALWAYS 2
+static void AllowCreepSpawnWhenColliding(void *cls) {
+  static void *s_done[16];
+  static int s_n = 0;
+  for (int i = 0; i < s_n; ++i)
+    if (s_done[i] == cls)
+      return;
+  if (s_n >= 16)
+    return;
+  s_done[s_n++] = cls;
+  FUObjectArrayMin *arr = GObjects();
+  if (!arr || !arr->Objects)
+    return;
+  for (int i = 0; i < arr->NumElements; ++i) {
+    UObjectMin *o = arr->Objects[i].Object;
+    if (o && o->Class == cls && (o->Flags & 0x10)) { // RF_ClassDefaultObject
+      uint8_t was = ((uint8_t *)o)[OFF_ACTOR_SPAWN_COLLISION];
+      ((uint8_t *)o)[OFF_ACTOR_SPAWN_COLLISION] = SPAWN_ADJUST_BUT_ALWAYS;
+      const char *n = NameText(((UObjectMin *)cls)->Name);
+      Logf("onslaught creeps: %s spawn collision handling %d -> %d", n ? n : "?", was, SPAWN_ADJUST_BUT_ALWAYS);
+      return;
+    }
+  }
+}
+
+// The assault ship and command ship are NOT creeps. VH_ONS_AITargetL (the
+// fighter) is a YCreepPawn with m_creepAIController; AITargetM/H are ordinary
+// AI ships with APawn::AIControllerClass (+0x3D8, ..._Behavior_YAICtrl_BP), and
+// SpawnCreep faulted on every one of them at 0x264E4C, walking the class chain
+// of creep-only field +0xCB8 (host 2026-10-07 23:50): the actor was left half
+// made -- an icon and a hitbox, no ship (operator). For them this does what
+// SpawnCreep does without the creep part: UWorld::SpawnActor 0x1A0C8D0 at the
+// spawn point's transform (root component +0x198: rotation quat +0x150,
+// location +0x160, quat -> rotator 0xC40250), SetTeam 0x5961C0, then the
+// pawn's own APawn::SpawnDefaultController (vtable +0x6B0; exec thunk
+// 0x1EB9560 jumps there), and a net update (+0x580), as SpawnCreep ends.
+#define RVA_WORLD_SPAWN_ACTOR 0x1A0C8D0
+#define RVA_SPAWN_PARAMS_CTOR 0x1CD1780
+#define RVA_PAWN_SET_TEAM 0x5961C0
+#define RVA_QUAT_TO_ROTATOR 0xC40250
+#define OFF_ACTOR_ROOT_COMPONENT 0x198
+#define OFF_COMP_WORLD_ROT 0x150
+#define OFF_COMP_WORLD_LOC 0x160
+#define VT_ACTOR_GET_WORLD 0x108
+#define VT_PAWN_SPAWN_DEFAULT_CONTROLLER 0x6B0
+#define OFF_PAWN_CONTROLLER 0x3F8            // APawn::Controller
+#define OFF_PAWN_IS_AI_TARGET 0x950          // YPawn: what vtable +0x7E0 returns
+#define OFF_PAWN_AI_CONTROLLER_CLASS 0x3D8   // APawn::AIControllerClass
+#define OFF_NPC_BEHAVIOUR_STATE 0xA38        // EYCombatSceneBehavior the scene spawn resets
+#define YCSB_NONE 0x14
+#define VT_CONTROLLER_POSSESS 0x640          // AController::Possess (as 0x26A096 / SpawnCreep)
+#define VT_CONTROLLER_POSSESS2 0x668         // called right after it in both
+typedef void(__fastcall *tPossess)(void *ctrl, void *pawn);
+#define OFF_CLASSPTR_NPC_AI_CONTROLLER 0x3E18DE0 // UClass* owning m_spawnActor
+#define OFF_NPC_SPAWN_ACTOR 0x9EC            // TWeakObjectPtr<AActor> m_spawnActor
+#define OFF_NAV_NEXT_ARRAY 0x3E8             // YCreepNavigation next points (weak)
+#define OFF_NAV_NEXT_COUNT 0x3F0
+#define RVA_WEAK_PTR_SET 0xD64B60            // TWeakObjectPtr = UObject*
+#define RVA_WEAK_PTR_GET 0xD6AD50            // TWeakObjectPtr -> UObject*
+typedef void(__fastcall *tWeakSet)(void *weak, void *obj);
+typedef void *(__fastcall *tWeakGet)(void *weak);
+typedef void *(__fastcall *tSpawnActor)(void *world, void *cls, const float *loc, const float *rot, void *params);
+typedef void *(__fastcall *tSpawnParamsCtor)(void *params);
+typedef void(__fastcall *tPawnSetTeam)(void *pawn, uint8_t *team);
+typedef float *(__fastcall *tQuatToRot)(const float *quat, float *rot);
+typedef void *(__fastcall *tGetWorld)(void *actor);
+typedef void(__fastcall *tActorVoidFn)(void *actor);
+
+// Why the assault and command ships sat still (verified 2026-10-08 from the
+// cooked Blueprints and the exe; not yet verified live):
+//   - Their controllers (VH_ONS_AITarget{M,H}_Behavior_YAICtrl_BP, decoded from
+//     the Kismet bytecode) move the ship ONLY through the combat scene manager:
+//     TickBehavior -> RouteStart = cast<YCreepNavigation>(m_spawnActor) ->
+//     combatManager.ReplacePawnNPCBehaviours(pawn, [{m_behaviorTime -1,
+//     m_behaviorType ROUTE (16), m_newControlValues RouteController (None),
+//     m_location RouteStart, m_targetActor GetNPCId(pawn)}], false). The
+//     combat manager is GetPlayerController(0).GetCombatManager() (thunk
+//     0x74FFA0 -> the scene manager singleton 0x2529E0).
+//   - And only when m_runBehaviourTree is set; otherwise it draws "Behavior
+//     Tree Disabled". m_runBehaviourTree is the controller byte +0x780 (its
+//     reflection setter 0x786BE0), which the scene manager sets when it spawns
+//     an NPC (0x2693A0: = !entry+0xA0) and nothing else did for ours.
+//   - ReplacePawnNPCBehaviours (exec 0x76F2D0 -> 0x2600E0) does nothing unless
+//     GetNPCId (0x254360) finds the pawn in the scene manager's NPC table
+//     (+0x3C0 data, +0x3C8 count, 0xA8-byte entries, weak pawn at +0x8C):
+//     ours were never in it, so it returned -1.
+// So this registers the ship the way the scene manager's own NPC spawn does
+// (0x2693A0 ~0x26A096): AddNPCSpawn (0x23A280, the native behind the
+// AddNPCSpawn UFunction) with the pawn class (+0x20), spawn point (+0x30) and
+// team (+0x38); then the instanced flag (+0x88 = 1, so the scene manager's own
+// tick never spawns the entry again) and the weak pawn (+0x8C), the
+// controller's scene index (+0xAAC) and +0xAB0 (= entry+0x10), behaviour state
+// YCSB_NONE (+0xA38), m_runBehaviourTree; then the ROUTE behaviour the
+// Blueprint itself asks for, through ReplaceNPCBehaviours (0x25FE80: stores
+// the behaviours, sets +0x780, NextBehaviour 0x28E340, register 0x254990).
+// NOT done (left for evidence): the scene manager also spawns an NPC
+// PlayerState, calls the level script's OnNPCSpawned (0x572220) and the game
+// mode's vtable +0x978.
+#define RVA_SCENE_ADD_NPC_SPAWN 0x23A280     // (sceneMgr, FYNPCSpawn*) -> id
+#define RVA_SCENE_REPLACE_NPC_BEHAVIOURS 0x25FE80 // (sceneMgr, id, TArray* by value, bool)
+#define RVA_FMEMORY_MALLOC 0xC06B70          // (size, align); GMalloc vtable +0x10
+#define OFF_SCENE_NPCS 0x3C0                 // TArray<FYNPCSpawn> data; count +0x3C8
+#define OFF_SCENE_NPCS_COUNT 0x3C8
+#define OFF_SCENE_RANDOM_CLASS 0x418         // AddNPCSpawn replaces +0x20 with a random class when set
+#define NPC_SPAWN_SIZE 0xA8
+#define OFF_NPCSPAWN_TYPE 0x10               // int, AddNPCSpawn's default 5; copied to ctrl +0xAB0
+#define OFF_NPCSPAWN_PAWN_CLASS 0x20
+#define OFF_NPCSPAWN_SPAWN_POINT 0x30
+#define OFF_NPCSPAWN_TEAM 0x38
+#define OFF_NPCSPAWN_INSTANCED 0x88
+#define OFF_NPCSPAWN_PAWN 0x8C               // TWeakObjectPtr<APawn>
+#define OFF_NPC_RUN_BEHAVIOUR_TREE 0x780
+#define OFF_NPC_SCENE_INDEX 0xAAC
+#define OFF_NPC_SCENE_TYPE 0xAB0
+#define YCSB_ROUTE 16
+#define BEHAVIOUR_DATA_SIZE 0x28             // FYCombatSceneBehaviorData (0x702345)
+typedef int(__fastcall *tSceneAddNpcSpawn)(void *scene, void *spawn);
+typedef void(__fastcall *tSceneReplaceBehaviours)(void *scene, int id, void *behaviours, uint8_t keepTree);
+typedef void *(__fastcall *tFMemoryMalloc)(size_t size, uint32_t align);
+struct TArrayRaw {
+  void *data;
+  int32_t num, max;
+};
+
+static bool ClassIsA(UObjectMin *c, void *ancestor) {
+  for (; c && ancestor; c = *(UObjectMin **)((uint8_t *)c + OFF_USTRUCT_SUPER))
+    if (c == ancestor)
+      return true;
+  return false;
+}
+
+// Returns the scene NPC id, or -1.
+static int RegisterOnslaughtNPC(void *pawn, void *ctrl, void *cls, void *routeStart, int team) {
+  uint8_t *scene = (uint8_t *)((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+  if (!scene)
+    return -1;
+  // AddNPCSpawn's own defaults (exec thunk 0x73FAE0).
+  alignas(16) uint8_t spawn[NPC_SPAWN_SIZE] = {};
+  *(float *)(spawn + 0x5C) = 10.0f;
+  *(float *)(spawn + 0x9C) = -1.0f;
+  *(int32_t *)(spawn + 0x8C) = -1; // weak pointers: index -1 = null
+  *(int32_t *)(spawn + 0x94) = -1;
+  *(int32_t *)(spawn + OFF_NPCSPAWN_TYPE) = 5;
+  *(void **)(spawn + OFF_NPCSPAWN_PAWN_CLASS) = cls;
+  *(void **)(spawn + OFF_NPCSPAWN_SPAWN_POINT) = routeStart;
+  spawn[OFF_NPCSPAWN_TEAM] = (uint8_t)team;
+  uint8_t randomClass = scene[OFF_SCENE_RANDOM_CLASS];
+  scene[OFF_SCENE_RANDOM_CLASS] = 0;
+  int id = ((tSceneAddNpcSpawn)(g_base + RVA_SCENE_ADD_NPC_SPAWN))(scene, spawn);
+  scene[OFF_SCENE_RANDOM_CLASS] = randomClass;
+  if (id < 0 || id >= *(int32_t *)(scene + OFF_SCENE_NPCS_COUNT))
+    return -1;
+  uint8_t *entry = *(uint8_t **)(scene + OFF_SCENE_NPCS) + (size_t)id * NPC_SPAWN_SIZE;
+  entry[OFF_NPCSPAWN_INSTANCED] = 1;
+  ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))(entry + OFF_NPCSPAWN_PAWN, pawn);
+  uint8_t *c = (uint8_t *)ctrl;
+  *(int32_t *)(c + OFF_NPC_SCENE_INDEX) = id;
+  *(int32_t *)(c + OFF_NPC_SCENE_TYPE) = *(int32_t *)(entry + OFF_NPCSPAWN_TYPE);
+  c[OFF_NPC_BEHAVIOUR_STATE] = YCSB_NONE;
+  c[OFF_NPC_RUN_BEHAVIOUR_TREE] = 1;
+  // The Blueprint's ROUTE, now, so the ship moves even if its BeginPlay found
+  // no player controller to take the combat manager from. The callee takes
+  // the array by value and frees it (FMemory::Free 0xBFC9C0).
+  uint8_t *b = (uint8_t *)((tFMemoryMalloc)(g_base + RVA_FMEMORY_MALLOC))(BEHAVIOUR_DATA_SIZE, 0);
+  if (b) {
+    memset(b, 0, BEHAVIOUR_DATA_SIZE);
+    *(float *)(b + 0x00) = -1.0f;              // m_behaviorTime
+    b[0x08] = YCSB_ROUTE;                      // m_behaviorType
+    *(void **)(b + 0x10) = nullptr;            // m_newControlValues (RouteController, unset in the BP)
+    *(void **)(b + 0x18) = routeStart;         // m_location
+    *(int32_t *)(b + 0x20) = id;               // m_targetActor (the BP passes GetNPCId(pawn))
+    TArrayRaw arr = {b, 1, 1};
+    ((tSceneReplaceBehaviours)(g_base + RVA_SCENE_REPLACE_NPC_BEHAVIOURS))(scene, id, &arr, 0);
+  }
+  return id;
+}
+
+static void *SpawnOnslaughtAIShip(uint8_t *gm, void *cls, void *at, int team, bool bigShip) {
+  uint8_t *comp = *(uint8_t **)((uint8_t *)at + OFF_ACTOR_ROOT_COMPONENT);
+  if (!comp)
+    return nullptr;
+  float quat[4], loc[3], rot[3] = {0, 0, 0};
+  memcpy(quat, comp + OFF_COMP_WORLD_ROT, sizeof(quat));
+  memcpy(loc, comp + OFF_COMP_WORLD_LOC, sizeof(loc));
+  ((tQuatToRot)(g_base + RVA_QUAT_TO_ROTATOR))(quat, rot);
+  void *world = ((tGetWorld)(*(void ***)gm)[VT_ACTOR_GET_WORLD / 8])(gm);
+  if (!world)
+    return nullptr;
+  alignas(16) uint8_t params[0x80] = {};
+  ((tSpawnParamsCtor)(g_base + RVA_SPAWN_PARAMS_CTOR))(params);
+  void *pawn = ((tSpawnActor)(g_base + RVA_WORLD_SPAWN_ACTOR))(world, cls, loc, rot, params);
+  if (!pawn)
+    return nullptr;
+  uint8_t t = (uint8_t)team;
+  ((tPawnSetTeam)(g_base + RVA_PAWN_SET_TEAM))(pawn, &t);
+  // Mark it an AI target. The kill handler (0x375850) sends a kill to the
+  // game mode's AI-ship scoring -- scoring manager vtable +0x208 -> the
+  // Invasion handler 0x415AF0 ("Invasion ScoringEvent - Kill AI!!!"), which
+  // picks AITargetH/M/L by the victim's class against the game mode's own
+  // creep classes (+0xA78/+0xA80/+0xA88, +0xA68, +0xA58) -- only when the
+  // victim's YPawn vtable +0x7E0 is true, and that is just the byte at
+  // +0x950 (0x57FD70). Fighters have it; the assault ship and command ship
+  // Blueprints do not, so destroying them scored nothing (operator,
+  // 2026-10-08) although the handler names their classes: the server that
+  // spawned them set it.
+  ((uint8_t *)pawn)[OFF_PAWN_IS_AI_TARGET] = 1;
+  void **vt = *(void ***)pawn;
+  // The controller, set up the way the combat scene manager sets up the NPC
+  // ships it spawns (0x2693A0, around 0x26A096): spawn the pawn's
+  // AIControllerClass (+0x3D8), set its m_spawnActor (TWeakObjectPtr +0x9EC)
+  // and m_runBehaviourTree, possess (vtable +0x640, then +0x668), then
+  // register it with the scene manager (RegisterOnslaughtNPC above). Two
+  // earlier versions skipped the registration ("these ships belong to no
+  // scene") and every assault ship and command ship sat still (host
+  // 2026-10-08 00:51, operator): the Blueprint's only move order goes through
+  // the scene manager's NPC table.
+  // m_spawnActor is the spawn point itself, as the scene manager sets it
+  // (entry +0x30), when it is a YCreepNavigation -- the Blueprint casts it to
+  // one to start its ROUTE from; else the spawn point's first next-navigation
+  // point (+0x3E8 weak array, count +0x3F0).
+  void *ctrl = *(void **)((uint8_t *)pawn + OFF_PAWN_CONTROLLER);
+  bool hadController = ctrl != nullptr;
+  if (!ctrl) {
+    void *ctrlCls = *(void **)((uint8_t *)pawn + OFF_PAWN_AI_CONTROLLER_CLASS);
+    if (ctrlCls) {
+      alignas(16) uint8_t cparams[0x80] = {};
+      ((tSpawnParamsCtor)(g_base + RVA_SPAWN_PARAMS_CTOR))(cparams);
+      ctrl = ((tSpawnActor)(g_base + RVA_WORLD_SPAWN_ACTOR))(world, ctrlCls, loc, rot, cparams);
+    }
+  }
+  if (!ctrl) {
+    Logf("onslaught creeps: %p got no controller (no AIControllerClass, or its spawn failed)", pawn);
+  } else {
+    bool isNpc = ClassIsA(((UObjectMin *)ctrl)->Class, *(void **)(g_base + OFF_CLASSPTR_NPC_AI_CONTROLLER));
+    void *navCls = *(void **)(g_base + OFF_CLASSPTR_CREEP_NAV);
+    void *nav = nullptr;
+    int next = *(int32_t *)((uint8_t *)at + OFF_NAV_NEXT_COUNT);
+    if (ClassIsA(((UObjectMin *)at)->Class, navCls))
+      nav = at;
+    else if (next > 0)
+      nav = ((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(*(void **)((uint8_t *)at + OFF_NAV_NEXT_ARRAY));
+    else if (bigShip && g_onsBigNav)
+      // GUESS: a command ship spawn point that is no navigation point and has
+      // no next point; the map's command-ship route node is where it heads.
+      nav = g_onsBigNav;
+    if (isNpc) {
+      ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))((uint8_t *)ctrl + OFF_NPC_SPAWN_ACTOR, nav ? nav : at);
+      ((uint8_t *)ctrl)[OFF_NPC_BEHAVIOUR_STATE] = YCSB_NONE;
+      ((uint8_t *)ctrl)[OFF_NPC_RUN_BEHAVIOUR_TREE] = 1;
+    }
+    void **cvt = *(void ***)ctrl;
+    ((tPossess)cvt[VT_CONTROLLER_POSSESS / 8])(ctrl, pawn);
+    ((tPossess)cvt[VT_CONTROLLER_POSSESS2 / 8])(ctrl, pawn);
+    int npcId = -1;
+    if (isNpc && nav)
+      npcId = RegisterOnslaughtNPC(pawn, ctrl, cls, nav, team);
+    const char *an = NameText(((UObjectMin *)at)->Name);
+    const char *nn = nav ? NameText(((UObjectMin *)nav)->Name) : nullptr;
+    const char *cn = NameText(((UObjectMin *)ctrl)->Class->Name);
+    Logf("onslaught creeps: %p controller %s (%s, %s), spawn point %s (%d next); route start %s; "
+         "scene NPC id %d, behaviour %d, run tree %d",
+         pawn, cn ? cn : "?", hadController ? "auto-possessed" : "spawned here",
+         isNpc ? "NPC" : "NOT an NPC controller", an ? an : "?", next, nav ? (nn ? nn : "?") : "NONE", npcId,
+         ((uint8_t *)ctrl)[OFF_NPC_BEHAVIOUR_STATE], ((uint8_t *)ctrl)[OFF_NPC_RUN_BEHAVIOUR_TREE]);
+  }
+  ((tActorVoidFn)vt[0x580 / 8])(pawn); // AActor::ForceNetUpdate (VT_ACTOR_FORCE_NET_UPDATE)
+  return pawn;
+}
+
+static bool SpawnOnslaughtCreep(uint8_t *gm, uint8_t *gs, int team, int size, bool initialOnly) {
+  OnsCreepState &st = g_onsCreeps;
+  int cand[256], nc = 0;
+  for (int i = 0; i < st.nPoints; ++i) {
+    OnsSpawnPoint &p = st.points[i];
+    if (p.team == team && p.size == size && p.initial == initialOnly)
+      cand[nc++] = i;
+  }
+  if (nc == 0)
+    for (int i = 0; i < st.nPoints; ++i)
+      if (st.points[i].team == team && st.points[i].size == size)
+        cand[nc++] = i;
+  if (nc == 0)
+    return false;
+  OnsSpawnPoint &p = st.points[cand[rand() % nc]];
+  void *scene = ((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+  if (!scene) {
+    if (st.failed++ < 3)
+      Logf("onslaught creeps: no AYAICombatSceneManager in the world; cannot spawn");
+    return false;
+  }
+  void *cls = OnslaughtCreepClass(gm, gs, size, *(void **)((uint8_t *)p.actor + OFF_SPAWN_CLASS));
+  if (!cls)
+    return false;
+  uint8_t t = (uint8_t)team;
+  const char *cn = NameText(((UObjectMin *)cls)->Name);
+  const char *pn = NameText(((UObjectMin *)p.actor)->Name);
+  AllowCreepSpawnWhenColliding(cls);
+  void *pawn = nullptr;
+  uintptr_t faultAt = 0;
+  __try {
+    pawn = size == 0 ? ((tSpawnCreep)(g_base + RVA_SPAWN_CREEP))(scene, cls, p.actor, &t)
+                     : SpawnOnslaughtAIShip(gm, cls, p.actor, team, size == 2);
+  } __except (CaptureFault(GetExceptionInformation(), &faultAt)) {
+    if (st.failed++ < 40)
+      Logf("onslaught creeps: EXCEPTION at exe+0x%llX spawning %s for team %d at %s",
+           (unsigned long long)(faultAt - g_base), cn ? cn : "?", team, pn ? pn : "?");
+    return false;
+  }
+  if (pawn) {
+    st.spawned++;
+    Logf("onslaught creeps: spawned %s for team %d at %s -> %p", cn ? cn : "?", team, pn ? pn : "?", pawn);
+  } else if (st.failed++ < 20) {
+    Logf("onslaught creeps: SpawnCreep returned null (%s, team %d, at %s)", cn ? cn : "?", team, pn ? pn : "?");
+  }
+  return pawn != nullptr;
+}
+
+static void OnslaughtCreepTick(uint8_t *gm) {
+  static int s_enabled = -1;
+  if (s_enabled < 0)
+    s_enabled = OnslaughtCreepsEnabled() ? 1 : 0;
+  if (!s_enabled)
+    return;
+  __try {
+    uint8_t *gs = InvasionGameState(gm);
+    if (!gs)
+      return;
+    OnsCreepState &st = g_onsCreeps;
+    DWORD now = GetTickCount();
+    if (st.gm != gm) {
+      memset(&st, 0, sizeof(st));
+      st.gm = gm;
+      st.firstSeen = now;
+    }
+    if (g_ons.gm == gm && g_ons.ended)
+      return;
+    if (IsReadable(gs + OFF_GS_WINNING_TEAM_FINAL, 1) && gs[OFF_GS_WINNING_TEAM_FINAL] != 0)
+      return; // the match has a result
+    if (now - st.firstSeen < ONS_FIRST_WAVE_DELAY_MS)
+      return;
+    if (st.nPoints == 0 || now - st.lastScan > 30000) {
+      st.lastScan = now;
+      int before = st.nPoints;
+      FindOnslaughtSpawnPoints();
+      if (st.nPoints != before)
+        Logf("onslaught creeps: %d spawn points on this map", st.nPoints);
+      if (st.nPoints == 0)
+        return;
+    }
+    int maxN[3] = {*(int32_t *)(gm + 0xA60), *(int32_t *)(gm + 0xA70), *(int32_t *)(gm + 0xA90)};
+    int every[3] = {*(int32_t *)(gm + 0xA64), *(int32_t *)(gm + 0xA74), *(int32_t *)(gm + 0xA94)};
+    const int defMax[3] = {12, 6, 1}, defEvery[3] = {2, 8, 180};
+    for (int k = 0; k < 3; ++k) {
+      if (maxN[k] <= 0 || maxN[k] > 64) maxN[k] = defMax[k];
+      if (every[k] <= 0 || every[k] > 600) every[k] = defEvery[k];
+    }
+    int alive[2][3];
+    CountOnslaughtCreeps(gm, gs, alive);
+    static DWORD s_lastCountLog = 0;
+    if (now - s_lastCountLog > 15000) {
+      s_lastCountLog = now;
+      Logf("onslaught creeps: alive T1 %d/%d/%d T2 %d/%d/%d (small/mid/big); spawned %d, failed %d",
+           alive[0][0], alive[0][1], alive[0][2], alive[1][0], alive[1][1], alive[1][2], st.spawned, st.failed);
+      for (int i = 0; i < 4; ++i) {
+        int t = i & 1, big = i < 2;
+        uint8_t *ship = (uint8_t *)(big ? g_onsBigShip[t] : g_onsMidShip[t]);
+        uint8_t *comp = (ship && alive[t][big ? 2 : 1] > 0) ? *(uint8_t **)(ship + 0x198) : nullptr;
+        uint8_t *ctrl = ship ? *(uint8_t **)(ship + OFF_PAWN_CONTROLLER) : nullptr;
+        int behaviour = ctrl && IsReadable(ctrl + OFF_NPC_BEHAVIOUR_STATE, 1) ? ctrl[OFF_NPC_BEHAVIOUR_STATE] : -1;
+        if (comp && IsReadable(comp + 0x160, 12))
+          Logf("onslaught creeps: %s T%d %p at (%.0f, %.0f, %.0f), behaviour %d", big ? "command ship" : "assault ship",
+               t + 1, ship,
+               *(float *)(comp + 0x160), *(float *)(comp + 0x164), *(float *)(comp + 0x168), behaviour);
+      }
+    }
+    if (!st.firstWave) {
+      st.firstWave = true;
+      Logf("onslaught creeps: first wave (max small %d / mid %d / big %d per team)", maxN[0], maxN[1], maxN[2]);
+      for (int t = 1; t <= 2; ++t)
+        for (int k = 0; k < 3; ++k)
+          for (int n = alive[t - 1][k]; n < maxN[k]; ++n)
+            if (!SpawnOnslaughtCreep(gm, gs, t, k, true))
+              break;
+      return;
+    }
+    for (int t = 1; t <= 2; ++t)
+      for (int k = 0; k < 3; ++k) {
+        DWORD &since = st.missingSince[t - 1][k];
+        if (alive[t - 1][k] >= maxN[k]) {
+          since = 0;
+          continue;
+        }
+        if (!since) {
+          since = now;
+          continue;
+        }
+        if (now - since >= (DWORD)every[k] * 1000) {
+          SpawnOnslaughtCreep(gm, gs, t, k, false);
+          since = now; // the next missing one waits its own respawn time
+        }
+      }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("onslaught creeps: EXCEPTION 0x%08X in the spawner tick", GetExceptionCode());
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2197,6 +3038,78 @@ static int s_round = 0;
 static void WriteEomRewards(uint8_t *pri, const char *body, const char *match);
 static bool RewardsScreenEnabled();
 
+// ---------------------------------------------------------------------------
+// Original match XP (on; dn_host_no_event_xp.txt turns it off)
+//
+// mmogbrain now serves the ORIGINAL scoring table (the operator's datamine of
+// the 1.11.1 / 1.12.0 tables, data/scoring/ScoringTable.json), XP and credits
+// per event included. The host awards them itself, verified 2026-10-07:
+// AYPlayerReplicationInfo::AssignScoringReward 0x5AD140 (one caller,
+// 0x5B3170: rcx = the PRI, rdx = the event's reward record) runs on the
+// server (role +0x148 == 3) and adds
+//   score   rec[3] + rec[4]   to the PRI's score
+//   XP      rec[5] + rec[6]   to the XP manager (AddMatchShipXP 0x3EB680 /
+//                             AddMatchShipXPToAllShips 0x3EBA00)
+//   credits rec[7] + rec[8]   (0x5ABDC0)
+// with rec[0] the EYScoringEventID. Summing the XP from the XP manager would
+// count "to all ships" events once per ship, so the record is summed here,
+// per player, and reported with the match result (event_xp / event_credits);
+// mmogbrain pays its XP from it instead of the placeholder formula.
+#define RVA_ASSIGN_SCORING_REWARD 0x5AD140
+typedef void(__fastcall *tAssignScoringReward)(void *pri, int32_t *reward);
+static tAssignScoringReward g_origAssignScoringReward = nullptr;
+
+struct EventTotals {
+  void *pri;
+  int64_t xp, credits;
+  int events;
+};
+static EventTotals g_eventTotals[128] = {};
+static SRWLOCK g_eventTotalsLock = SRWLOCK_INIT;
+
+static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
+  g_origAssignScoringReward(pri, reward);
+  __try {
+    if (!pri || !IsReadable(reward, 9 * sizeof(int32_t)) ||
+        !IsReadable((uint8_t *)pri + 0x148, 1) || ((uint8_t *)pri)[0x148] != 3)
+      return;
+    int32_t xp = reward[5] + reward[6], cr = reward[7] + reward[8];
+    if (xp <= 0 && cr <= 0)
+      return;
+    AcquireSRWLockExclusive(&g_eventTotalsLock);
+    EventTotals *slot = nullptr;
+    for (auto &t : g_eventTotals) {
+      if (t.pri == pri) { slot = &t; break; }
+      if (!slot && !t.pri) slot = &t;
+    }
+    if (slot) {
+      slot->pri = pri;
+      slot->xp += xp > 0 ? xp : 0;
+      slot->credits += cr > 0 ? cr : 0;
+      slot->events++;
+    }
+    ReleaseSRWLockExclusive(&g_eventTotalsLock);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+
+// The player's summed event XP and credits; false when the host awarded none
+// (hook off, or an older mmogbrain without XP in its table).
+static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *events) {
+  bool found = false;
+  AcquireSRWLockExclusive(&g_eventTotalsLock);
+  for (auto &t : g_eventTotals) {
+    if (t.pri == pri) {
+      *xp = t.xp; *credits = t.credits; *events = t.events;
+      t = EventTotals{};
+      found = true;
+      break;
+    }
+  }
+  ReleaseSRWLockExclusive(&g_eventTotalsLock);
+  return found;
+}
+
 static void ReportMatchResult(void *orbitComp) {
   char pid[80], match[96], path[1536], body[2048];
   uint8_t *priOut = nullptr;
@@ -2272,14 +3185,25 @@ static void ReportMatchResult(void *orbitComp) {
               "/battle/result?match=%s&pid=%s&team=%d&final=%d&kills=%d&deaths=%d"
               "&assists=%d&damage=%d&ships=%s",
               match, pid, team, result, kills, deaths, assists, (int)damage, ships);
+  // The original table's XP and credits the host awarded this player (see
+  // HookAssignScoringReward). Absent when none were awarded: mmogbrain then
+  // pays its formula, as before.
+  int64_t evXp = 0, evCr = 0;
+  int evN = 0;
+  if (priOut && TakeEventTotals(priOut, &evXp, &evCr, &evN)) {
+    size_t pl = strlen(path);
+    _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&event_xp=%lld&event_credits=%lld&events=%d",
+                (long long)evXp, (long long)evCr, evN);
+  }
   bool ok = HttpGetLoopback(path, body, sizeof(body));
   if (ok && priOut && RewardsScreenEnabled())
     WriteEomRewards(priOut, body, match);
   for (char *c = body; *c; ++c)
     if (*c == '\n') *c = ' ';
   Logf("match result: %s team %d (%s) final %d kills %d deaths %d assists %d damage %d "
-       "ships [%s] -> %s%s",
-       pid, team, teamSource, result, kills, deaths, assists, (int)damage, FlownShipsFor(pid),
+       "event xp %lld credits %lld (%d events) ships [%s] -> %s%s",
+       pid, team, teamSource, result, kills, deaths, assists, (int)damage,
+       (long long)evXp, (long long)evCr, evN, FlownShipsFor(pid),
        ok ? "mmogbrain: " : "FAILED (mmogbrain unreachable or refused)", ok ? body : "");
   if (ok)
     ClearFlownShips(pid);
@@ -3383,6 +4307,24 @@ static DWORD WINAPI Startup(LPVOID) {
     InstallSwitchedHook("game-mode timer (bc ai, teams, names, bot balance)",
                         RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
                         (void **)&g_origGameModeTimer);
+
+  if (!SwitchOn("DN_HOST_NO_EVENT_XP", "dn_host_no_event_xp.txt"))
+    InstallSwitchedHook("original match xp (AssignScoringReward)", RVA_ASSIGN_SCORING_REWARD,
+                        (void *)&HookAssignScoringReward, (void **)&g_origAssignScoringReward);
+  else
+    Logf("event xp: OFF (dn_host_no_event_xp.txt / DN_HOST_NO_EVENT_XP=1). mmogbrain "
+         "pays its formula XP.");
+
+  Logf("onslaught creeps: %s", OnslaughtCreepsEnabled() ? "ON (game-mode timer; Onslaught hosts only)"
+       : "OFF (dn_host_no_onslaught_creeps.txt / DN_HOST_NO_ONSLAUGHT_CREEPS=1)");
+  if (!SwitchOn("DN_HOST_NO_ONSLAUGHT_POINTS", "dn_host_no_onslaught_points.txt")) {
+    InstallSwitchedHook("onslaught points (TDM Killed)", RVA_TDM_KILLED,
+                        (void *)&HookTdmKilled, (void **)&g_origTdmKilled);
+    InstallSwitchedHook("onslaught winner by points (TDM leader)", RVA_TDM_DETERMINE_LEADER,
+                        (void *)&HookDetermineLeader, (void **)&g_origDetermineLeader);
+  } else
+    Logf("onslaught points: OFF (dn_host_no_onslaught_points.txt / "
+         "DN_HOST_NO_ONSLAUGHT_POINTS=1). Onslaught ends at 30 kills.");
 
   if (ShipPhysicsEnabled())
     InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",

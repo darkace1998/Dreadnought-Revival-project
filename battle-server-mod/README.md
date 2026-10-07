@@ -303,6 +303,87 @@ alias, and the last line shows which name the host really uses. Not verified
 live yet: `NOT loaded` or an `EXCEPTION` line means the decode path is wrong;
 `root has 0 fields` means the document did not decode.
 
+## Onslaught points (on; `dn_host_no_onslaught_points.txt` turns it off)
+
+Onslaught (`YGameMode_Invasion`, host mode code `IVN`, `m_gameModeType` 16)
+should end when a team reaches **300 points** (`GameState_Onslaught_BP`:
+`m_matchPointsForWinning` 300; a player kill 7, small/mid/big creep 1/2/30).
+Nothing in this exe reads that target or counts creep kills; the points rule
+was server-build code. What ended matches was the deathmatch rule: the kill
+handler `0x375F30` counts player kills and `0x3685C0` ends the match at the
+game mode's `m_killsForWinning` (30) -- 30 x 7 points plus creeps, the ~248 the
+operator saw. The winner was the team with more kills (`0x384C90`).
+
+The mod hooks `0x375F30`: for Onslaught it lifts the kill limit (game mode
+`+0x9DC`), counts creep kills (`VH_ONS_AITarget{L,M,H}`, small/mid/big -- a
+GUESS from the scoring events' Fighter / Assault Ship / Command Ship names)
+into the GameState's own replicated counters (`+0x1E3C..`), and ends the
+match through EndMatch (vtable `+0x668`) once a team has 300 points. It hooks
+`0x384C90` so the leader and winner are the team with more points.
+
+Every counted kill is logged: `onslaught: small creep VH_ONS_... -> team 1 |
+points T1 .. (kills ..) T2 .. / 300`, and the end as `onslaught: team N
+reached 300 points`. If no `onslaught:` line appears in an Onslaught match, the
+mode's kills do not go through `0x375F30` and the hook does nothing.
+
+## Onslaught AI ships (on; `dn_host_no_onslaught_creeps.txt` turns it off)
+
+Onslaught's fighters, assault ships and command ship
+(`VH_ONS_AITarget{L,M,H}_Pawn_BP`, YCreepPawn) never spawned: the spawner was
+server-build code. The map's `_Onslaught` sublevel (loaded on our hosts) holds
+their spawn points (`YCreepNavigationSpawn` `ONS_AITarget*_InitialSpawn_T1/T2`
+and `_Spawn_T1/T2`), and the exe still has the spawn call,
+`AYAICombatSceneManager::SpawnCreep` (`0x264B30`; scene manager from
+`0x2529E0`). Nothing in the exe reads the spawn points.
+
+From the game-mode timer, on Onslaught hosts only: 20 s after the match starts
+(GUESS) the first wave goes out at the InitialSpawn points, then each team is
+kept at the game mode's own maximum (`GameInfo_Onslaught_BP`: 12 fighters, 6
+assault ships, 1 command ship), a missing ship respawning at a Spawn point
+after its respawn time (2 / 8 / 180 s). The command ship is the fleet tier's
+variant (`m_bigCreepClassVet/Leg`). Alive ships are counted from GObjects by
+class pointer, once a second. Log: `onslaught creeps: N spawn points`,
+`first wave`, `spawned VH_ONS_... for team N at ONS_...`, and any failure.
+
+Fighters are creeps (`SpawnCreep`). Assault ships and command ships are not:
+they are normal AI ships. The mod spawns them with `UWorld::SpawnActor` and
+gives them their `AIControllerClass`, and they get the AI-target byte
+(`+0x950`) so kills on them score. Their controllers
+(`VH_ONS_AITarget{M,H}_Behavior_YAICtrl_BP`, decoded from the bytecode) move
+the ship in only one way: they ask the combat scene manager for a ROUTE from
+their spawn navigation point (`ReplacePawnNPCBehaviours`). They do that only
+when `m_runBehaviourTree` (`+0x780`) is set and the scene manager's NPC table
+(`+0x3C0`) has the pawn. Without both, they sat still. So the mod also
+registers each ship the way the scene manager registers its own NPCs:
+
+- `AddNPCSpawn` `0x23A280`, with the entry marked instanced and holding the pawn.
+- On the controller: scene index `+0xAAC`, `m_runBehaviourTree`, and behaviour
+  state `YCSB_NONE`.
+- The ROUTE itself, through `ReplaceNPCBehaviours` `0x25FE80`.
+
+Log: `scene NPC id N, behaviour 16, run tree 1` per ship. Every 15 s:
+`command ship` / `assault ship T1/T2 at (x, y, z), behaviour N`. The position
+should change between lines. Behaviour 16 is ROUTE and 20 is NONE.
+
+Not done yet: the NPC PlayerState, the level script's `OnNPCSpawned`, and the
+game mode's vtable `+0x978`, which the scene manager's own spawn also calls.
+`WP_ONS_AITargetH_weapon02/03_BP` have no row in the cooked `DN_Weapons_OTS_DT`
+table ("Weapon Data ... Couldn't be found"). The command ship's main gun
+(`weapon01`) does have one.
+
+## Original match XP (on; `dn_host_no_event_xp.txt` turns it off)
+
+mmogbrain serves the ORIGINAL scoring table (the datamine's 1.11.1 / 1.12.0
+tables, `data/scoring/ScoringTable.json`), XP and credits per event included.
+The host awards them itself: `AYPlayerReplicationInfo::AssignScoringReward`
+(`0x5AD140`, rcx = PRI, rdx = the event's reward record; score `rec[3]+rec[4]`,
+XP `rec[5]+rec[6]`, credits `rec[7]+rec[8]`). The mod sums each player's XP and
+credits there (summing the XP manager would count "to all ships" events once
+per ship) and adds `event_xp` / `event_credits` / `events` to the
+`/battle/result` report; mmogbrain then pays its XP from that instead of the
+placeholder formula (credits keep the formula). The `match result:` log line
+shows `event xp N credits N (N events)`.
+
 ## Researched ships: any precast on demand
 
 Part of the loadout fix, no switch of its own. The four T1 mediums are only the
