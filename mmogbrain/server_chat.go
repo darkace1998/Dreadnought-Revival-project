@@ -162,8 +162,10 @@ func startServerChatOnlineCount() {
 
 // serverChatModeNames are the player-facing names of the queueable modes.
 var serverChatModeNames = map[string]string{
-	"TDM":       "Team Deathmatch",
-	"PodTDM":    "Team Deathmatch",
+	"TDM": "Team Deathmatch",
+	// Ceres Awakens: the client's own name for PodTDM (GlobalUI
+	// UI_GameMode_CeresWakes; played on Space02 "Ryugu Haven", buff pods).
+	"PodTDM":    "Ceres Awakens",
 	"TurboTDM":  "Team Deathmatch",
 	"TE":        "Team Elimination",
 	"TER":       "Conquest",
