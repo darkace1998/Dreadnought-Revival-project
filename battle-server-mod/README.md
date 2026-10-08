@@ -365,11 +365,69 @@ Log: `scene NPC id N, behaviour 16, run tree 1` per ship. Every 15 s:
 `command ship` / `assault ship T1/T2 at (x, y, z), behaviour N`. The position
 should change between lines. Behaviour 16 is ROUTE and 20 is NONE.
 
+The registration alone was not enough. On 2026-10-08 at 08:44 every ship
+logged behaviour 16 and still sat still, though kills on them now scored. An
+NPC controller is born halted: its constructor sets `+0xAFA` to 1, and its tick
+and AI think timer do nothing until `0x288AE0` clears it and starts the timer.
+The game's own spawner and the game mode's NPC-spawned handler call it once the
+match runs. So once a second, while the match runs, the mod calls it for any
+assault/command ship whose controller is still halted. Log:
+`... controller ... AI started`.
+
 Not done yet: the NPC PlayerState, the level script's `OnNPCSpawned`, and the
 game mode's vtable `+0x978`, which the scene manager's own spawn also calls.
 `WP_ONS_AITargetH_weapon02/03_BP` have no row in the cooked `DN_Weapons_OTS_DT`
 table ("Weapon Data ... Couldn't be found"). The command ship's main gun
 (`weapon01`) does have one.
+
+## Conquest score (on; `dn_host_no_conquest_score.txt` turns it off)
+
+No Conquest (TER) match ever ended on our hosts. All of them ran until the reaper
+killed them. The rule, from Grey Box's 2018 preview: every 10 s each team adds
+the percentage of the map's territory it controls to its score, and the first
+to 2,500 wins. The cooked `GameMode_TER_BP` agrees: `m_scoreForWinning` 2500 and
+`m_scoringTerritorySecuredUpdateTime` 10. The exe computes the territory itself
+(the GameState's per-tile influence map `+0x1EF8`, rebuilt by its tick
+`0x3AAB90`). Nothing in it writes the team scores (`+0x1E08/+0x1E0C`), the
+score target (`+0x1E10`) or the territory % (`+0x1E80/+0x1E84`) that the HUD
+reads. The raw scan includes leaf functions; only constructors touch them. That
+part was server-build code.
+
+Once a second the mod:
+
+- counts the map's tiles per team the way the exe's own per-ship pass
+  (`0x394A30`) does;
+- writes each team's % of the grid;
+- every 10 s, adds that % to the team's score;
+- at 2500, sets the winner and calls EndMatch.
+
+Log: `conquest: match ... score rule armed` (with the grid size), then
+`conquest: territory T1 x% T2 y% (... tiles ...) -> score T1 a T2 b / 2500`
+every 10 s, and `... ending the match`. A `0 in the map` line means the
+GameState's influence map is empty on the host.
+
+That is what the first live test showed (2026-10-08 10:24): `0 in the map` all
+match, and players could not capture. The capture points are never set up
+either. Every map's `_Territory` places A, B and the two team bases (locked,
+with an initial owner). In this exe they stay inactive (`m_isActive`,
+`+0x4B0`) with no station index (`+0x3E4`). Their tick only captures when
+active. The GameState's own point setup (`0x39F750`), which fills its influence
+sources and builds the tile map, skips unindexed points and has no caller. So
+once the match runs, the mod:
+
+- gives every point an index;
+- gives the bases their initial owner (`SetCapturePoint` `0x558CD0`);
+- calls `Activate` (`0x533420`) on every point;
+- runs `0x39F750`.
+
+Log: `conquest: capture point CapturePoint_TER_A -- index 0, owner 0 ...
+active 1` per point, then `N capture points set up; ... tile map N tiles`.
+
+A team's territory is its tiles in that map plus its ships' claimed tiles. Those
+come from the GameState's own per-ship pass, pawn `+0x858`. The every-10-s line
+shows both. `GameMode_TER_BP` sets no `m_maxMatchTime` (`+0x884`), unlike the
+other modes, which set 20 minutes. Its value is logged, and the mod leaves it
+alone.
 
 ## Original match XP (on; `dn_host_no_event_xp.txt` turns it off)
 

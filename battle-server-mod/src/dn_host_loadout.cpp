@@ -1619,6 +1619,7 @@ static bool g_botsBCOnly = false;
 static void FlushPendingEomStats();
 
 static void OnslaughtCreepTick(uint8_t *gm);
+static void ConquestTick(uint8_t *gm);
 
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
@@ -1670,6 +1671,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   }
   g_origGameModeTimer(gameMode);
   OnslaughtCreepTick(gm);
+  ConquestTick(gm);
   PlayersTick(gm);
   FlushPendingEomStats();
 }
@@ -2046,6 +2048,30 @@ static void *OnslaughtCreepClass(uint8_t *gm, uint8_t *gs, int size, void *point
   return cls ? cls : pointClass;
 }
 
+// The NPC AI switch (verified 2026-10-08 in the exe; not yet verified live).
+// The AYNPCAIController constructor (0x276EA0) sets byte +0xAFA to 1, and while
+// it is set the controller's tick (0x2BA2A0) and its AI think timer callback
+// (0x2B23B0) both return at once: no TickBehavior, no behaviour, no movement,
+// no firing. Only 0x288AE0 clears it. That function also starts the think
+// timer (+0xAD0, interval +0x830). The game calls it from its own NPC
+// spawner (0x2693A0, at 0x26A36C) and from the game mode's NPC-spawned
+// handler (vtable +0x978 = 0x378DE0), and only while the match runs
+// (GameState +0x569). Our assault and command ships never got it. They were
+// registered with behaviour ROUTE and sat still (host 2026-10-08 08:44). So
+// once a second, while the match runs, any M/H ship whose controller is
+// still halted gets it.
+#define OFF_NPC_AI_HALTED 0xAFA
+#define RVA_NPC_START_AI 0x288AE0
+#define OFF_GS_MATCH_RUNNING 0x569
+#define OFF_GS_MATCH_OVER 0x56A
+typedef void(__fastcall *tNpcStartAI)(void *ctrl);
+static bool ClassIsAncestor(UObjectMin *c, void *ancestor) {
+  for (int depth = 0; c && ancestor && depth < 32; ++depth, c = *(UObjectMin **)((uint8_t *)c + 0x30))
+    if (c == ancestor)
+      return true;
+  return false;
+}
+
 // Alive Onslaught ships by team and size: instances of the creep classes the
 // game mode and the spawn points name, not pending kill. Compared by class
 // pointer: a name lookup per object costs syscalls (IsReadable), and a
@@ -2067,7 +2093,6 @@ static void CountOnslaughtCreeps(uint8_t *gm, uint8_t *gs, int alive[2][3]) {
     add(*(void **)(gm + OFF_GM_ONS_BIG_CLASS + 8 * v), 2);
   for (int i = 0; i < g_onsCreeps.nPoints; ++i)
     add(*(void **)((uint8_t *)g_onsCreeps.points[i].actor + OFF_SPAWN_CLASS), g_onsCreeps.points[i].size);
-  (void)gs;
   FUObjectArrayMin *arr = GObjects();
   if (!arr || !arr->Objects || nc == 0)
     return;
@@ -2080,6 +2105,15 @@ static void CountOnslaughtCreeps(uint8_t *gm, uint8_t *gs, int alive[2][3]) {
         int team = ((uint8_t *)o)[OFF_SHIP_TEAM];
         if (team == 1 || team == 2) {
           alive[team - 1][csize[c]]++;
+          if (csize[c] >= 1 && gs && gs[OFF_GS_MATCH_RUNNING] && !gs[OFF_GS_MATCH_OVER]) {
+            uint8_t *ctrl = *(uint8_t **)((uint8_t *)o + 0x3F8); // APawn::Controller
+            if (ctrl && IsReadable(ctrl + OFF_NPC_AI_HALTED, 1) && ctrl[OFF_NPC_AI_HALTED] &&
+                ClassIsAncestor(((UObjectMin *)ctrl)->Class, *(void **)(g_base + 0x3E18DE0))) {
+              ((tNpcStartAI)(g_base + RVA_NPC_START_AI))(ctrl);
+              Logf("onslaught creeps: %s %p -- controller %p AI started (+0xAFA %d)",
+                   csize[c] == 2 ? "command ship" : "assault ship", o, ctrl, ctrl[OFF_NPC_AI_HALTED]);
+            }
+          }
           if (csize[c] == 2)
             g_onsBigShip[team - 1] = o;
           else if (csize[c] == 1)
@@ -2509,6 +2543,317 @@ static void OnslaughtCreepTick(uint8_t *gm) {
       }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("onslaught creeps: EXCEPTION 0x%08X in the spawner tick", GetExceptionCode());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Conquest score (on; dn_host_no_conquest_score.txt / DN_HOST_NO_CONQUEST_SCORE=1
+// turns it off)
+//
+// No Conquest match on our hosts ever ended: all 10 TER host logs up to
+// 2026-10-08 ran until the reaper killed them (one 25 min), none reached
+// ClientStartEndOfMatchTransition.
+//
+// The rules (Grey Box, "Game Update Preview: Conquest Mode", 2018-04-13):
+// "Every 10 seconds the percentage of overall territory each team controls is
+// added to their Score ... The first team to 2,500 points wins!" The cooked
+// GameMode_TER_BP agrees: m_scoreForWinning 2500, and the Territory mode's own
+// m_scoringTerritorySecuredUpdateTime 10.
+//
+// Verified 2026-10-08 (raw .text scan, leaf functions included):
+//   - GameMode_TER_BP is YGameMode_Territory (size 0xA30) <- the capture-points
+//     mode (0xA10): m_scoreForWinning +0x9F0 (int), m_territoryScoreMultiplier
+//     +0x9F4 (float), m_territoryScoreThreshold +0x9F8 (int),
+//     m_scoreUpdateInterval +0xA0C (int, 9), m_scoringTerritorySecuredUpdateTime
+//     +0xA10 (float, 10). Territory overrides nothing but its destructor.
+//   - GameState_TER_BP is YGameState_TER <- YGameState_CapturePointsGame:
+//     the team scores m_currentTicketCountT1/T2 +0x1E08/+0x1E0C (int, the HUD's
+//     scores and voice lines read them), m_scoreForWinning +0x1E10 (int),
+//     m_currentTerritoryT1/T2 +0x1E80/+0x1E84 (int, the HUD's % bar;
+//     getters 0x3968C0/0x3968D0, OnRep 0x38F4F0).
+//   - NOTHING writes those five GameState fields but the constructors, and
+//     nothing reads the game mode's score target or intervals: the scoring was
+//     server-build code, like Onslaught's.
+//   - What the exe DOES do server-side is the territory itself: the GameState
+//     tick (0x3AAB90, GameState_TER vtable slot 122, runs while gs+0x569 &&
+//     !gs+0x56A) rebuilds a per-tile influence map from its influence sources
+//     (0x3ACB60: gs+0x1FE8, 0x40-byte entries -> AYTerritoryVolume query
+//     0x5AEC50 -> merge 0x38DFE0) into gs+0x1EF8, a TMap<uint32 tile,
+//     {float T1, float T2}> (0x18-byte set elements; sparse-array Num +0x08,
+//     NumFree +0x34, allocation bits inline +0x10 / heap +0x20). Its per-ship
+//     pass (0x394A30) gives a tile to team 2 when T1 <= T2 (and T1+T2 > 0),
+//     else team 1, and divides by the volume's grid size (m_gameVolume
+//     gs+0x2030, floats +0x40C x +0x410).
+// So once a second this counts the map's tiles per team the way 0x394A30
+// does, writes each team's percentage of the whole grid to the GameState, and
+// every m_scoringTerritorySecuredUpdateTime seconds adds it to the team's
+// score; at m_scoreForWinning it sets the winner (+0x4E8) and calls EndMatch
+// (vtable +0x668), as the Onslaught rule does.
+// GUESS: a team's territory is its tiles in the capture-point map plus its
+// ships' claimed tiles (pawn +0x858, see CountShipTiles); the original's own
+// team sum is not in this exe.
+// GUESS: the multiplier is applied when the designers set one (> 0), else 1;
+// the threshold is "a team must hold more than this % to score"; percentages
+// round to nearest. m_scoreUpdateInterval (9) is not used: the preview's 10 s
+// is the Territory mode's own field.
+#define YGMT_TER 6                        // host log "type 6" on ?game=TER
+#define OFF_GM_TER_SCORE_FOR_WINNING 0x9F0
+#define OFF_GM_TER_SCORE_MULTIPLIER 0x9F4
+#define OFF_GM_TER_SCORE_THRESHOLD 0x9F8
+#define OFF_GM_TER_SCORE_INTERVAL 0xA10
+#define OFF_GS_TER_SCORE_T1 0x1E08
+#define OFF_GS_TER_SCORE_T2 0x1E0C
+#define OFF_GS_TER_SCORE_FOR_WINNING 0x1E10
+#define OFF_GS_TER_TERRITORY_T1 0x1E80
+#define OFF_GS_TER_TERRITORY_T2 0x1E84
+#define OFF_GS_TER_TILE_MAP 0x1EF8
+#define OFF_GS_TER_VOLUME 0x2030
+#define OFF_TER_VOLUME_GRID 0x40C
+#define TER_TILE_ELEMENT 0x18
+
+static bool ConquestScoreEnabled() {
+  return !SwitchOn("DN_HOST_NO_CONQUEST_SCORE", "dn_host_no_conquest_score.txt");
+}
+
+// Tiles per team in the GameState's influence map; false if unreadable.
+static bool CountTerritoryTiles(uint8_t *gs, int *t1, int *t2, int *mapTiles) {
+  *t1 = *t2 = *mapTiles = 0;
+  uint8_t *map = gs + OFF_GS_TER_TILE_MAP;
+  uint8_t *data = *(uint8_t **)map;
+  int num = *(int32_t *)(map + 0x08);
+  int numFree = *(int32_t *)(map + 0x34);
+  if (num <= 0)
+    return true;
+  if (!data || num > 4 * 1024 * 1024 || !IsReadable(data, (size_t)num * TER_TILE_ELEMENT))
+    return false;
+  uint32_t *bits = *(uint32_t **)(map + 0x20) ? *(uint32_t **)(map + 0x20) : (uint32_t *)(map + 0x10);
+  if (numFree > 0 && !IsReadable(bits, ((size_t)num + 31) / 32 * 4))
+    return false;
+  for (int i = 0; i < num; ++i) {
+    if (numFree > 0 && !(bits[i >> 5] & (1u << (i & 31))))
+      continue;
+    float a = *(float *)(data + (size_t)i * TER_TILE_ELEMENT + 4);
+    float b = *(float *)(data + (size_t)i * TER_TILE_ELEMENT + 8);
+    ++*mapTiles;
+    if (a + b > 0.0f) {
+      if (a <= b) ++*t2;
+      else ++*t1;
+    }
+  }
+  return true;
+}
+
+struct ConquestMatch {
+  void *gm;
+  DWORD lastScore, lastLog, lastPointScan;
+  bool ended, pointsReady;
+};
+static ConquestMatch g_ter = {};
+
+// The capture points (verified 2026-10-08 in the exe and MP_Gorge_Territory;
+// not yet verified live). Operator test 10:24: "no capture indicator, and I
+// couldn't capture them", and the score rule above logged "0 in the map" all
+// match. Each _Territory sublevel places CapturePoint_TER_BP actors -- A and B
+// (capturable, m_timeToOwn 20) and the two team bases (m_bIsLocked,
+// m_initialOwningTeam) -- and NOTHING in this exe sets them up:
+//   - YCapturePoint_TER (UClass* at 0x3E11FA0, size 0x500; ctor 0x52CF40)
+//     starts with m_isActive (+0x4B0) false, m_ownedByTeam (+0x450) none and
+//     m_stationIndex (+0x3E4) unset.
+//   - Its tick (0x55F030, vtable slot 122) runs the capture logic (0x5583F0)
+//     only when m_isActive is set (and +0x400, which the TER ctor sets, and the
+//     match runs). Activate (exec 0x73CC40 -> 0x533420) sets it.
+//   - The GameState's capture-point setup 0x39F750 -- the one that fills the
+//     influence sources (gs+0x1FE8, one 0x40-byte entry per m_stationIndex:
+//     owner team, location, radius +0x4FC, linkable points) and builds the
+//     tile map (0x3ACB60) -- skips points whose index is below 0 ("Tried
+//     initializing a capture point with an invalid index") and has no caller
+//     in this exe at all. Captures call the GameState back (owner change ->
+//     vtable +0x838 = 0x3A2610 -> rebuild) once it has run.
+//   - SetCapturePoint (exec 0x7761C0 -> 0x558CD0, arg EYTeam) sets the owner.
+// So once a second until it has happened, this gives every capture point an
+// index (by name -- GUESS: the original order is not known; only uniqueness
+// matters to the code above), the team bases their m_initialOwningTeam, calls
+// Activate on each, then runs 0x39F750.
+#define OFF_CLASSPTR_CAPTURE_POINT_TER 0x3E11FA0
+#define OFF_CP_STATION_INDEX 0x3E4
+#define OFF_CP_LOCKED 0x401
+#define OFF_CP_INITIAL_OWNER 0x402
+#define OFF_CP_OWNER 0x450
+#define OFF_CP_ACTIVE 0x4B0
+#define RVA_CP_SET_OWNER 0x558CD0
+#define RVA_CP_ACTIVATE 0x533420
+#define RVA_GS_TER_SETUP_CAPTURE_POINTS 0x39F750
+// The GameState's own ship pass (0x394A30, from its tick 0x3AAB90) leaves each
+// ship's claimed tile count at pawn +0x858 -- tiles where neither the
+// capture-point map already gives them to the ship's team nor a stronger
+// influence wins, and not tiles an ally already claimed -- over the ships it
+// gathered at gs+0x1E88 (TArray<TWeakObjectPtr<APawn>>, count +0x1E90).
+#define OFF_GS_TER_SHIPS 0x1E88
+#define OFF_PAWN_TER_TILES 0x858
+typedef void(__fastcall *tCpSetOwner)(void *cp, uint8_t team);
+typedef void(__fastcall *tCpActivate)(void *cp);
+typedef void(__fastcall *tGsSetupCapturePoints)(void *gs);
+
+static bool SetUpCapturePoints(uint8_t *gs) {
+  void *cpCls = *(void **)(g_base + OFF_CLASSPTR_CAPTURE_POINT_TER);
+  FUObjectArrayMin *arr = GObjects();
+  if (!cpCls || !arr || !arr->Objects)
+    return false;
+  uint8_t *cps[16];
+  const char *names[16];
+  int n = 0;
+  for (int i = 0; i < arr->NumElements && n < 16; ++i) {
+    UObjectMin *o = arr->Objects[i].Object;
+    if (!o || (o->Flags & RF_CDO_OR_ARCHETYPE) || (arr->Objects[i].Flags & OBJ_PENDING_KILL))
+      continue;
+    UObjectMin *c = o->Class;
+    bool is = false;
+    for (int d = 0; c && d < 3; ++d, c = *(UObjectMin **)((uint8_t *)c + OFF_USTRUCT_SUPER))
+      if (c == cpCls) { is = true; break; }
+    if (!is)
+      continue;
+    names[n] = NameText(o->Name);
+    cps[n++] = (uint8_t *)o;
+  }
+  if (n == 0)
+    return false;
+  for (int a = 1; a < n; ++a) // by name: A, B, ..., Team1Base, Team2Base
+    for (int b = a; b > 0 && names[b - 1] && names[b] && strcmp(names[b - 1], names[b]) > 0; --b) {
+      uint8_t *t = cps[b]; cps[b] = cps[b - 1]; cps[b - 1] = t;
+      const char *tn = names[b]; names[b] = names[b - 1]; names[b - 1] = tn;
+    }
+  for (int i = 0; i < n; ++i) {
+    uint8_t *cp = cps[i];
+    if (*(int32_t *)(cp + OFF_CP_STATION_INDEX) < 0 || *(int32_t *)(cp + OFF_CP_STATION_INDEX) >= n)
+      *(int32_t *)(cp + OFF_CP_STATION_INDEX) = i;
+    uint8_t initial = cp[OFF_CP_INITIAL_OWNER];
+    if ((initial == 1 || initial == 2) && cp[OFF_CP_OWNER] != initial)
+      ((tCpSetOwner)(g_base + RVA_CP_SET_OWNER))(cp, initial);
+    if (!cp[OFF_CP_ACTIVE])
+      ((tCpActivate)(g_base + RVA_CP_ACTIVATE))(cp);
+    Logf("conquest: capture point %s -- index %d, owner %d (initial %d), locked %d, active %d", names[i] ? names[i] : "?",
+         *(int32_t *)(cp + OFF_CP_STATION_INDEX), cp[OFF_CP_OWNER], initial, cp[OFF_CP_LOCKED], cp[OFF_CP_ACTIVE]);
+  }
+  ((tGsSetupCapturePoints)(g_base + RVA_GS_TER_SETUP_CAPTURE_POINTS))(gs);
+  Logf("conquest: %d capture points set up; influence sources %d, tile map %d tiles", n,
+       *(int32_t *)(gs + 0x1FF0), *(int32_t *)(gs + OFF_GS_TER_TILE_MAP + 8));
+  return true;
+}
+
+// Tiles each team's ships claimed (the GameState's own per-ship counts).
+static void CountShipTiles(uint8_t *gs, int *t1, int *t2, int *ships) {
+  *t1 = *t2 = *ships = 0;
+  uint8_t *data = *(uint8_t **)(gs + OFF_GS_TER_SHIPS);
+  int num = *(int32_t *)(gs + OFF_GS_TER_SHIPS + 8);
+  if (!data || num <= 0 || num > 256 || !IsReadable(data, (size_t)num * 8))
+    return;
+  for (int i = 0; i < num; ++i) {
+    uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * 8);
+    if (!pawn || !IsReadable(pawn + OFF_PAWN_TER_TILES, 4))
+      continue;
+    int tiles = *(int32_t *)(pawn + OFF_PAWN_TER_TILES);
+    int team = ShipTeam(pawn);
+    if (tiles <= 0 || !team)
+      continue;
+    ++*ships;
+    (team == 1 ? *t1 : *t2) += tiles;
+  }
+}
+
+static void ConquestTick(uint8_t *gm) {
+  static int s_enabled = -1;
+  if (s_enabled < 0)
+    s_enabled = ConquestScoreEnabled() ? 1 : 0;
+  if (!s_enabled)
+    return;
+  __try {
+    if (!IsReadable(gm + OFF_GM_GAMESTATE, 8) || !IsReadable(gm + OFF_GM_TER_SCORE_INTERVAL, 4))
+      return;
+    uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+    if (!gs || !IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) || gs[OFF_GS_GAME_MODE_TYPE] != YGMT_TER ||
+        !IsReadable(gs + OFF_GS_TER_SCORE_T1, OFF_GS_TER_VOLUME + 8 - OFF_GS_TER_SCORE_T1))
+      return;
+    DWORD now = GetTickCount();
+    int target = *(int32_t *)(gm + OFF_GM_TER_SCORE_FOR_WINNING);
+    if (target <= 0 || target > 1000000)
+      target = 2500; // GameMode_TER_BP
+    float every = *(float *)(gm + OFF_GM_TER_SCORE_INTERVAL);
+    if (!(every >= 1.0f && every <= 600.0f))
+      every = 10.0f; // GameMode_TER_BP
+    float mult = *(float *)(gm + OFF_GM_TER_SCORE_MULTIPLIER);
+    float useMult = (mult > 0.0f && mult <= 100.0f) ? mult : 1.0f;
+    int threshold = *(int32_t *)(gm + OFF_GM_TER_SCORE_THRESHOLD);
+    uint8_t *vol = *(uint8_t **)(gs + OFF_GS_TER_VOLUME);
+    float gw = 0, gh = 0;
+    if (vol && IsReadable(vol + OFF_TER_VOLUME_GRID, 8)) {
+      gw = *(float *)(vol + OFF_TER_VOLUME_GRID);
+      gh = *(float *)(vol + OFF_TER_VOLUME_GRID + 4);
+    }
+    if (g_ter.gm != gm) {
+      memset(&g_ter, 0, sizeof(g_ter));
+      g_ter.gm = gm;
+      g_ter.lastScore = now;
+      *(int32_t *)(gs + OFF_GS_TER_SCORE_FOR_WINNING) = target;
+      Logf("conquest: match %p -- score rule armed: %d to win, every %.1f s, multiplier %.3f (using %.3f), "
+           "threshold %d; territory volume %p grid %.0f x %.0f; m_maxMatchTime %.2f min (+0x884; GameMode_TER_BP "
+           "sets none, the other modes 20)",
+           gm, target, every, mult, useMult, threshold, vol, gw, gh, *(float *)(gm + 0x884));
+    }
+    if (g_ter.ended)
+      return;
+    if (!gs[OFF_GS_MATCH_RUNNING] || gs[OFF_GS_MATCH_OVER]) {
+      g_ter.lastScore = now; // the score clock runs only while the match does
+      return;
+    }
+    if (!g_ter.pointsReady && now - g_ter.lastPointScan >= 1000) {
+      g_ter.lastPointScan = now;
+      g_ter.pointsReady = SetUpCapturePoints(gs);
+    }
+    int t1 = 0, t2 = 0, mapTiles = 0, s1 = 0, s2 = 0, ships = 0;
+    bool ok = CountTerritoryTiles(gs, &t1, &t2, &mapTiles);
+    CountShipTiles(gs, &s1, &s2, &ships);
+    t1 += s1;
+    t2 += s2;
+    float total = gw * gh;
+    int pct1 = 0, pct2 = 0;
+    if (ok && total >= 1.0f) {
+      pct1 = (int)(100.0f * t1 / total + 0.5f);
+      pct2 = (int)(100.0f * t2 / total + 0.5f);
+      if (pct1 > 100) pct1 = 100;
+      if (pct2 > 100) pct2 = 100;
+    }
+    int32_t *terr = (int32_t *)(gs + OFF_GS_TER_TERRITORY_T1);
+    bool changed = terr[0] != pct1 || terr[1] != pct2;
+    terr[0] = pct1;
+    terr[1] = pct2;
+    int32_t *score = (int32_t *)(gs + OFF_GS_TER_SCORE_T1);
+    if (now - g_ter.lastScore >= (DWORD)(every * 1000.0f)) {
+      g_ter.lastScore = now;
+      if (pct1 > threshold)
+        score[0] += (int)(pct1 * useMult + 0.5f);
+      if (pct2 > threshold)
+        score[1] += (int)(pct2 * useMult + 0.5f);
+      changed = true;
+      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f: %d in the point map, ships %d/%d from %d) "
+           "-> score T1 %d T2 %d / %d",
+           pct1, pct2, t1, t2, total, mapTiles, s1, s2, ships, score[0], score[1], target);
+    } else if (now - g_ter.lastLog > 30000) {
+      g_ter.lastLog = now;
+      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f, %d in the map%s)", pct1, pct2, t1, t2,
+           total, mapTiles, ok ? "" : ", map UNREADABLE");
+    }
+    if (changed)
+      ((tActorVoidFn)(*(void ***)gs)[0x580 / 8])(gs); // AActor::ForceNetUpdate
+    if (score[0] >= target || score[1] >= target) {
+      g_ter.ended = true;
+      gs[OFF_GS_WINNING_TEAM] = score[0] > score[1] ? 1 : score[1] > score[0] ? 2 : 3;
+      Logf("conquest: team %d reached %d (T1 %d, T2 %d) -- ending the match", gs[OFF_GS_WINNING_TEAM], target,
+           score[0], score[1]);
+      void **vt = *(void ***)gm;
+      ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("conquest: EXCEPTION 0x%08X in the score tick", GetExceptionCode());
   }
 }
 
