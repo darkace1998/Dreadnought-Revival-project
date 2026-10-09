@@ -111,9 +111,10 @@ func TestOwnedShipBringsItsLookPerShip(t *testing.T) {
 	}
 	perShip := shipVanityClientID(vanityKoreHull, eyShipClassByKey["SniperHeavy"])
 	items := string(buildMmogPlayerGetPayload(pid))
+	// Owned on its line (the original rule, restored 2026-10-09), never sold.
 	for _, id := range []int32{vanityKoreHull, perShip} {
-		if countWireStringField(items, "ItemID", strconv.Itoa(int(id))) != 0 {
-			t.Errorf("Onager's own hull part %d is owned: selectable on every SniperHeavy", id)
+		if countWireStringField(items, "ItemID", strconv.Itoa(int(id))) != 1 {
+			t.Errorf("Onager's own hull part %d is not owned on SniperHeavy", id)
 		}
 		if _, sold, _ := vanityOffer(id); sold {
 			t.Errorf("Onager's own hull part %d is for sale", id)
@@ -271,6 +272,84 @@ func TestOnlyWearableCaptainItems(t *testing.T) {
 			if len(s.localizedName) < 2 {
 				t.Errorf("head A02 name in %d language(s) only", len(s.localizedName))
 			}
+		}
+	}
+}
+
+// An owned hero lends its parts -- figurehead, forecastle, bridge, hull,
+// stern -- to the player's other ships of its line ("You can also use the
+// Trident's parts on any of your Jupiter Arms dreadnoughts", Grey Box), but a
+// hero of another manufacturer than its line's has no ship to lend them to.
+func TestHeroShipLendsItsPartsToItsLine(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000002"
+	setCredits(t, pid, 0)
+	hero := func(name string) heroShipLoadout {
+		for _, h := range heroShipLoadouts {
+			if h.name == name {
+				return h
+			}
+		}
+		t.Fatalf("no hero %s", name)
+		return heroShipLoadout{}
+	}
+	trident, kore := hero("Trident"), hero("Kore")
+	if n := len(heroShipPartIDs()[kore.loadoutID]); n != 0 {
+		t.Errorf("Kore (Oberon, on the Jupiter Arms SniperHeavy line) lends %d parts", n)
+	}
+	parts := heroShipPartIDs()[trident.loadoutID]
+	if len(parts) < 5 {
+		t.Fatalf("Trident lends %d parts, want its forecastle, figurehead, bridge, hull and stern", len(parts))
+	}
+	line := eyShipClassByKey["DreadnoughtHeavy"]
+	owned := func() string { return string(buildMmogPlayerGetPayload(pid)) }
+	before := owned()
+	for _, id := range parts {
+		if countWireStringField(before, "ItemID", strconv.Itoa(int(shipVanityClientID(id, line)))) != 0 {
+			t.Fatalf("part %d owned before buying the Trident", id)
+		}
+	}
+	if err := adminGrantShip(database, pid, trident.loadoutID); err != nil {
+		t.Fatal(err)
+	}
+	after := owned()
+	for _, id := range parts {
+		if countWireStringField(after, "ItemID", strconv.Itoa(int(shipVanityClientID(id, line)))) != 1 {
+			v, _ := dreadconfig.VanityItemByID(id)
+			t.Errorf("Trident owner does not own %s on DreadnoughtHeavy", v.Name)
+		}
+	}
+	if !ownedItemSet(pid)[parts[0]] {
+		t.Error("a Trident part on a Jutland would be flagged as unowned")
+	}
+}
+
+// A base ship nobody customised is sent its blueprint's own look, not its
+// hull line's generic default (Trafalgar is built from the Wedge parts).
+func TestUncustomisedBaseShipWearsItsOwnLook(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000003"
+	setCredits(t, pid, 0)
+	const trafalgar = 33489265
+	a, ok := dreadconfig.ShipBlueprintAppearance(trafalgar)
+	if !ok || len(a.MeshParts) == 0 {
+		t.Fatal("no blueprint appearance for Trafalgar")
+	}
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := grantUnlockedShipLoadout(tx, pid, trafalgar); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	payload := string(buildMmogPlayerGetPayload(pid))
+	for _, id := range a.MeshParts {
+		if !strings.Contains(payload, strconv.Itoa(int(id))) {
+			v, _ := dreadconfig.VanityItemByID(sharedGearID(id))
+			t.Errorf("Trafalgar is not sent its own part %s", v.Name)
 		}
 	}
 }

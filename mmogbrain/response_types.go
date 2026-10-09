@@ -154,6 +154,11 @@ func (loadout mmogShipLoadoutSeed) displayInfo() string {
 	if !ok {
 		return noShipVanityDisplayInfo
 	}
+	// A base ship's own look, as its blueprint names it (from tier II up
+	// rarely the hull line's generic default: Trafalgar's Wedge parts).
+	if info, ok := dreadconfig.ShipBlueprintDisplayInfo(loadout.precastLoadoutID, hullLine, shipManufacturer(loadout.ship)); ok {
+		return info
+	}
 	return dreadconfig.DefaultShipDisplayInfo(hullLine, shipManufacturer(loadout.ship))
 }
 

@@ -174,6 +174,73 @@ var shipOwnHullParts = sync.OnceValue(func() map[int32]bool {
 	return out
 })
 
+// heroShipPartIDs maps a hero ship to the hull parts (category 20, shared
+// form) it lends to the player's other ships of its line.
+//
+// The original rule, in Grey Box's own words: hero ships "have custom ship
+// parts that are usable on any other ship of the same manufacturer and ship
+// class (any tier)" ("Introducing Retrofits", 2018-06-29); the Trident DLC:
+// "You can also use the Trident's parts on any of your Jupiter Arms
+// dreadnoughts"; the Herja: "the figurehead, forecastle, bridge, hull, and
+// stern ... on any of your Jupiter Arms tactical cruisers" (Steam, Outlaw
+// Hoard). Until now no hero lent anything: since 2026-10-07 no ship's own
+// hull is an owned item, heroes included, so a Trident owner could not put
+// a single Trident part on a Jutland.
+//
+// The parts are every player-facing part in the asset folders of the parts
+// the hero wears, so a hero lends the variants it does not wear too (the
+// plain forecastle beside its figurehead). The client checks ownership per
+// hull LINE (the EYShipClass byte, see ownedVanityItemIDs), and a base line
+// is built by one manufacturer (baseShipManufacturerByClassSize), so a hero
+// of the line's manufacturer lends to the whole line. A hero of another
+// manufacturer (Kore, Oberon, on the Jupiter Arms SniperHeavy line; Outis,
+// Jupiter Arms, on the Oberon ScoutMedium line) has no ship to lend to: hero
+// ships themselves cannot be customised.
+var heroShipPartIDs = sync.OnceValue(func() map[int32][]int32 {
+	dir := func(v dreadconfig.VanityItem) string {
+		if i := strings.LastIndex(v.File, "/"); i >= 0 {
+			return v.File[:i]
+		}
+		return v.File
+	}
+	byDir := map[string][]int32{}
+	for _, v := range dreadconfig.VanityItems() {
+		if v.Category() == 20 && dreadconfig.VanityItemIsPlayerFacing(v) && !dreadconfig.VanityItemIsFree(v) {
+			byDir[dir(v)] = append(byDir[dir(v)], v.ItemID)
+		}
+	}
+	out := map[int32][]int32{}
+	for _, h := range heroShipLoadouts {
+		if h.manufacturer != baseShipManufacturerByClassSize[h.hullLine] {
+			continue
+		}
+		a, ok := dreadconfig.HeroShipAppearance(h.loadoutID)
+		if !ok {
+			continue
+		}
+		dirs := map[string]bool{}
+		for _, id := range a.Items() {
+			if (id>>24)&0xff != 20 {
+				continue
+			}
+			if v, ok := dreadconfig.VanityItemByID(sharedGearID(id)); ok && !dreadconfig.VanityItemIsFree(v) {
+				dirs[dir(v)] = true
+			}
+		}
+		seen := map[int32]bool{}
+		for d := range dirs {
+			for _, id := range byDir[d] {
+				if !seen[id] {
+					seen[id] = true
+					out[h.loadoutID] = append(out[h.loadoutID], id)
+				}
+			}
+		}
+		sort.Slice(out[h.loadoutID], func(i, j int) bool { return out[h.loadoutID][i] < out[h.loadoutID][j] })
+	}
+	return out
+})
+
 // isOtherShipsHull reports a hull part that is some ship's own hull and not
 // free -- one a player may not take onto another ship of the hull line.
 func isOtherShipsHull(id int32) bool {
@@ -185,18 +252,25 @@ func isOtherShipsHull(id int32) bool {
 // bought (store or bundle), free, and every owned ship's own finish (emblem,
 // paint, pattern, decal) as its blueprint names it (base and hero ships).
 //
-// NOT an owned ship's own HULL parts (changed 2026-10-07). The client can
-// only own a ship cosmetic per hull line: the customizer lists a hull line's
-// parts (0x140AA0260: the asset table, every blueprint of the line -- heroes
-// included -- and the store, all by the EYShipClass byte, never by maker)
-// and marks one usable iff its per-line id is in Items (0x140548860; a
-// loadout does not count -- 0x140340100 only checks ship ids). So granting
-// Monarch's own "Tyr" hull made it selectable on every DreadnoughtHeavy,
-// Jutland included -- another maker's hull (operator report 2026-10-07): 129
-// regular ships wore a hull part no one bought. A ship keeps showing its own
-// hull without it: the display-info importer (0x140421FE0) checks no
-// ownership, the customizer lists the fitted part (0x140347840), and hero
-// ships get no hull options at all (0x140547970 early-out in 0x140AA0260).
+// And an owned HERO ship's hull parts, which it lends to its whole line
+// (heroShipPartIDs; changed 2026-10-09).
+//
+// And an owned REGULAR ship's own hull parts, on its whole line (restored
+// 2026-10-09, operator decision). The client can only own a ship cosmetic per
+// hull line: the customizer lists a hull line's parts (0x140AA0260: the asset
+// table, every blueprint of the line -- heroes included -- and the store, all
+// by the EYShipClass byte, never by maker) and marks one usable iff its
+// per-line id is in Items (0x140548860; a loadout does not count). From
+// 2026-10-07 to 10-09 these were withheld (Monarch's "Tyr" hull on a Jutland
+// was reported as another maker's), so a ship's own hull, once swapped away,
+// could never be chosen again. The original allowed it: retrofit parts are
+// selected "just as you would the bridge, hull, stern or forecastle of
+// vessels in your fleet (Hero Ships and regular progression ships)" (Grey
+// Box, "Introducing Retrofits"), parts go on ships "of the same manufacturer
+// and ship class", and a base hull line is built by one manufacturer
+// (baseShipManufacturerByClassSize) -- Jutland and Monarch are both Jupiter
+// Arms dreadnoughts. Exactly the parts the blueprint wears; a hero's are
+// heroShipPartIDs (a hero of another maker than its line lends none).
 func ownedVanityItemIDs(playerPID string) []int32 {
 	seen := map[int32]bool{}
 	var out []int32
@@ -214,12 +288,19 @@ func ownedVanityItemIDs(playerPID string) []int32 {
 		add(id)
 	}
 	for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
-		for _, lookup := range []func(int32) (dreadconfig.HeroAppearance, bool){dreadconfig.ShipBlueprintAppearance, dreadconfig.HeroShipAppearance} {
-			if a, ok := lookup(l.precastLoadoutID); ok {
-				for _, id := range a.Items() {
-					if (id>>24)&0xff != 20 {
-						add(id)
-					}
+		// An owned hero's parts, for the player's other ships of its line.
+		for _, id := range heroShipPartIDs()[l.precastLoadoutID] {
+			add(id)
+		}
+		if a, ok := dreadconfig.ShipBlueprintAppearance(l.precastLoadoutID); ok {
+			for _, id := range a.Items() {
+				add(id) // hull parts included: see above
+			}
+		}
+		if a, ok := dreadconfig.HeroShipAppearance(l.precastLoadoutID); ok {
+			for _, id := range a.Items() {
+				if (id>>24)&0xff != 20 { // a hero's parts: heroShipPartIDs
+					add(id)
 				}
 			}
 		}

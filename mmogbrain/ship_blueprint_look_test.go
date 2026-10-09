@@ -9,10 +9,9 @@ import (
 // these per-ship ids are exactly what a live player's Onager carried when the
 // ownership check flagged it (2026-10-03).
 //
-// CHANGED 2026-10-07: they are no longer OWNED items. The client can only own
-// a hull part per hull line, so owning Onager's hull made it selectable on
-// every SniperHeavy -- another ship's hull (operator report: Jutland showed
-// other makers' hulls). The look is accepted on Onager itself instead.
+// They are owned items, on the whole hull line: the original let a player
+// put the parts of any ship in their fleet on the other ships of its
+// manufacturer and class (withheld 2026-10-07, restored 2026-10-09).
 func TestOwnedShipOwnsItsBlueprintLook(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
@@ -38,15 +37,15 @@ func TestOwnedShipOwnsItsBlueprintLook(t *testing.T) {
 		t.Error("Onager's own look is refused on Onager")
 	}
 	for _, id := range kore {
-		if owned[sharedGearID(id)] {
-			t.Errorf("part %d (shared %d) is an owned item: it would be selectable on every SniperHeavy", id, sharedGearID(id))
+		if !owned[sharedGearID(id)] {
+			t.Errorf("part %d (shared %d) is not owned", id, sharedGearID(id))
 		}
 	}
-	// Onager's hull on another SniperHeavy is not accepted.
+	// Onager's hull on another SniperHeavy is accepted.
 	for _, b := range baseShipLoadouts {
 		if b.hullLine == "SniperHeavy" && b.loadoutID != onager {
-			if allowAppearance("enforce", owned, pid, b.loadoutID, onagerLook) {
-				t.Errorf("Onager's hull accepted on %s", b.name)
+			if !allowAppearance("enforce", owned, pid, b.loadoutID, onagerLook) {
+				t.Errorf("Onager's hull refused on %s", b.name)
 			}
 			break
 		}

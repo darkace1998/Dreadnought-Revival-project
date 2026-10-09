@@ -147,6 +147,27 @@ func HeroShipDisplayInfo(loadoutID int32, hullLine, manufacturer string) (string
 	if !ok {
 		return "", false
 	}
+	return appearanceDisplayInfo(a, hullLine, manufacturer), true
+}
+
+// ShipBlueprintDisplayInfo is a base ship's own look as a display info, the
+// same way: its blueprint's parts and finish, any slot it does not name from
+// the hull line's default. Until 2026-10-09 a base ship nobody had customised
+// was sent its hull line's default instead -- a Trafalgar without its Wedge
+// parts, a Nav without its own forecastle and bridge -- and the client saved
+// that back on the first edit (122 of 152 customised base ships with a look
+// of their own had lost it).
+func ShipBlueprintDisplayInfo(loadoutID int32, hullLine, manufacturer string) (string, bool) {
+	a, ok := ShipBlueprintAppearance(loadoutID)
+	if !ok {
+		return "", false
+	}
+	return appearanceDisplayInfo(a, hullLine, manufacturer), true
+}
+
+// appearanceDisplayInfo writes an appearance as "m#m#m#m;emblem;paint;
+// pattern;decal", any slot it does not name from the hull line's default.
+func appearanceDisplayInfo(a HeroAppearance, hullLine, manufacturer string) string {
 	emblem, pattern, decal := DefaultShipVanityItemIDs(hullLine)
 	pick := func(own, fallback int32) string {
 		if own != 0 {
@@ -177,5 +198,5 @@ func HeroShipDisplayInfo(loadoutID int32, hullLine, manufacturer string) (string
 		pick(a.Paint, DefaultShipPaintID(manufacturer)),
 		pick(a.Pattern, pattern),
 		pick(a.Decal, decal),
-	}, ";"), true
+	}, ";")
 }
