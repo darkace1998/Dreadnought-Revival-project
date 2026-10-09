@@ -357,6 +357,9 @@ func pushShipGrants(pid string, ships []int32) {
 	}
 	if len(ships) > 0 {
 		squadHubInstance.push(pid, buildMmogFleetUpdatePush(pid))
+		// A ship brings owned-list items with it: its own look's parts and,
+		// from T3, officer briefings (client_refresh.go).
+		pushInventoryRefresh(pid)
 	}
 }
 

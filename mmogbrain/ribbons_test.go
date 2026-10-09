@@ -1,145 +1,83 @@
 package main
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
-func TestLoadPlayerRibbons(t *testing.T) {
-	pid := defaultMmogPlayerPID
-
-	// Initially should have no ribbons
-	ribbons := loadPlayerRibbons(pid)
-	if len(ribbons) != 0 {
-		t.Fatalf("expected 0 ribbons initially, got %d", len(ribbons))
+// Ribbons come from the original scoring table: one per EventsForRibbon
+// occurrences of the event in a match, plus Match Finish for every match.
+func TestMatchRibbonsFromEventCounts(t *testing.T) {
+	dominator, _ := scoringEventOrdinal("Dominator") // EventsForRibbon 2
+	assist, _ := scoringEventOrdinal("Assist")       // EventsForRibbon 10
+	kill, _ := scoringEventOrdinal("CaptainKill_SameTier")
+	counts := parseScoringEventCounts(strconv.Itoa(dominator) + ".5," + strconv.Itoa(assist) + ".9," +
+		strconv.Itoa(kill) + ".12,999.4,bad")
+	ribbons, xp := matchRibbons(counts, "TDM")
+	if ribbons["Dominator"] != 2 {
+		t.Errorf("5 dominations earned %d Domination ribbons, want 2", ribbons["Dominator"])
 	}
-
-	// Manually insert some ribbons for testing
-	db := currentMmogPlayerStateDB()
-	if db == nil {
-		t.Skip("no database available")
+	if _, ok := ribbons["Assist"]; ok {
+		t.Error("9 assists earned a Combat Assistance ribbon (needs 10)")
 	}
-
-	// Insert test ribbons directly
-	_, _ = db.Exec(`INSERT OR REPLACE INTO player_ribbons(user_id, ribbon_type, count) VALUES(?, ?, ?)`, pid, "first_blood", 1)
-	_, _ = db.Exec(`INSERT OR REPLACE INTO player_ribbons(user_id, ribbon_type, count) VALUES(?, ?, ?)`, pid, "combat_efficiency", 2)
-
-	ribbons = loadPlayerRibbons(pid)
-	if len(ribbons) != 2 {
-		t.Fatalf("expected 2 ribbons, got %d", len(ribbons))
+	if _, ok := ribbons["CaptainKill_SameTier"]; ok {
+		t.Error("a ribbon for an event that has none")
 	}
-
-	// Verify the ribbons were loaded correctly
-	ribbonMap := make(map[string]int32)
-	for _, r := range ribbons {
-		ribbonMap[r.ribbonType] = r.count
+	if ribbons["MatchEnd"] != 1 {
+		t.Errorf("Match Finish %d, want 1", ribbons["MatchEnd"])
 	}
-
-	if ribbonMap["first_blood"] != 1 {
-		t.Errorf("expected first_blood count=1, got %d", ribbonMap["first_blood"])
-	}
-	if ribbonMap["combat_efficiency"] != 2 {
-		t.Errorf("expected combat_efficiency count=2, got %d", ribbonMap["combat_efficiency"])
+	if xp != 2*50 { // Dominator RibbonXP TDM(50); MatchEnd's XP is paid elsewhere
+		t.Errorf("ribbon XP %d, want 100", xp)
 	}
 }
 
-func TestBuildMmogRibbonsPayload(t *testing.T) {
-	pid := defaultMmogPlayerPID
-
-	// Insert test ribbons
-	db := currentMmogPlayerStateDB()
-	if db != nil {
-		_, _ = db.Exec(`INSERT OR REPLACE INTO player_ribbons(user_id, ribbon_type, count) VALUES(?, ?, ?)`, pid, "kill_streak", 3)
+// The client reads ID as an int (_wtoi): the EYScoringEventID ordinal. A name
+// read as 0, so every ribbon was "ribbon 0".
+func TestRibbonEntriesCarryTheEventOrdinal(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
 	}
-
+	recordRibbons(database, pid, map[string]int32{"Dominator": 2, "MatchEnd": 1})
+	recordRibbons(database, pid, map[string]int32{"Dominator": 1})
+	if _, err := database.Exec(`INSERT INTO player_ribbons(user_id,ribbon_type,count) VALUES(?,?,?)`, pid, "first_blood", 4); err != nil {
+		t.Fatal(err)
+	}
 	payload := buildMmogRibbonsPayload(pid)
-	if len(payload) == 0 {
-		t.Fatal("expected non-empty ribbons payload")
+	dominator, _ := scoringEventOrdinal("Dominator")
+	want := append(protocol.AppendStringField(nil, "ID", strconv.Itoa(dominator)), protocol.AppendStringField(nil, "amt", "3")...)
+	if !bytes.Contains(payload, want) {
+		t.Errorf("no Dominator entry with amt 3 in %x", payload)
 	}
-
-	// Verify RT field is present
-	rt := protocol.ExtractStringField(payload, "RT")
-	if rt != "YA_GetRibbons" {
-		t.Errorf("expected RT=YA_GetRibbons, got %s", rt)
-	}
-}
-
-func TestAppendMmogRibbonEntry(t *testing.T) {
-	ribbon := playerRibbon{
-		ribbonType: "combat_efficiency",
-		count:      5,
-	}
-
-	var b []byte
-	var stack []int
-	b, _ = appendMmogRibbonEntry(b, stack, ribbon)
-
-	if len(b) == 0 {
-		t.Fatal("expected non-empty ribbon entry")
-	}
-
-	// Verify the ribbon type is in the payload
-	ribbonType := protocol.ExtractStringField(b, "Type")
-	if ribbonType != "combat_efficiency" {
-		t.Errorf("expected Type=combat_efficiency, got %s", ribbonType)
-	}
-
-	// Verify count field is present by checking for the field marker
-	// (field name "Count" followed by type 0x56 for int32)
-	countMarker := appendFieldMarker("Count", 0x56)
-	if !bytesContains(b, countMarker) {
-		t.Error("expected Count field (int32) to be present in payload")
-	}
-
-	// Verify name is included from ribbonThresholds
-	name := protocol.ExtractStringField(b, "Name")
-	if name != "Combat Efficiency" {
-		t.Errorf("expected Name='Combat Efficiency', got %s", name)
+	if bytes.Contains(payload, []byte("first_blood")) || bytes.Count(payload, []byte("amt")) != 2 {
+		t.Error("an invented ribbon was sent")
 	}
 }
 
-func bytesContains(haystack, needle []byte) bool {
-	for i := 0; i <= len(haystack)-len(needle); i++ {
-		if string(haystack[i:i+len(needle)]) == string(needle) {
-			return true
-		}
+// The battle server's event counts reach the player's ribbons once per match.
+func TestBattleResultRecordsRibbonsOnce(t *testing.T) {
+	t.Setenv("DN_DAILY_CONTRACTS", "0")
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "0123456789abcdef0123456789abcdef"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
 	}
-	return false
-}
-
-func TestRibbonThresholds(t *testing.T) {
-	// Verify all 12 ribbon types are defined
-	if len(ribbonThresholds) != 12 {
-		t.Errorf("expected 12 ribbon types, got %d", len(ribbonThresholds))
+	rampage, _ := scoringEventOrdinal("Rampage") // EventsForRibbon 2
+	url := "/battle/result?match=R1&pid=" + pid + "&team=1&final=1&kills=10&ev=" + strconv.Itoa(rampage) + ".2"
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.RemoteAddr = "127.0.0.1:5000"
+		battleResultHandler(httptest.NewRecorder(), req)
 	}
-
-	// Verify specific ribbons exist
-	expectedRibbons := []string{
-		"combat_efficiency",
-		"kill_streak",
-		"unstoppable",
-		"survivor",
-		"first_blood",
-		"avenger",
-		"team_player",
-		"marksman",
-		"close_quarters",
-		"support_star",
-		"defender",
-		"berserker",
-	}
-
-	for _, expected := range expectedRibbons {
-		if _, ok := ribbonThresholds[expected]; !ok {
-			t.Errorf("expected ribbon type %q to be defined", expected)
-		}
-	}
-
-	// Verify each ribbon has a name
-	for key, ribbon := range ribbonThresholds {
-		if ribbon.name == "" {
-			t.Errorf("ribbon %q has empty name", key)
-		}
+	var n int32
+	_ = database.QueryRow(`SELECT count FROM player_ribbons WHERE user_id=? AND ribbon_type='Rampage'`, pid).Scan(&n)
+	if n != 1 {
+		t.Errorf("Rampage ribbons %d after one match reported twice, want 1", n)
 	}
 }

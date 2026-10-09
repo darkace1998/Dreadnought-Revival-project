@@ -322,11 +322,14 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	rewards := currentBattleRewards()
 	var eventXP, eomXP int32
-	scoringMode := ""
+	matchMode, _ := matchModeAndStart(currentMmogPlayerStateDB(), match)
+	scoringMode := scoringModeCode(matchMode)
+	// The ribbons the match's event counts earn (ribbons.go), and their XP.
+	ribbons, ribbonXP := matchRibbons(parseScoringEventCounts(q.Get("ev")), scoringMode)
 	if v := strings.TrimSpace(q.Get("event_xp")); v != "" && os.Getenv("DN_REWARD_EVENT_XP") != "0" {
 		eventXP = int32(num("event_xp"))
 		eomXP, scoringMode = endOfMatchEventXP(currentMmogPlayerStateDB(), match)
-		rewards = rewards.withEventXP(eventXP + eomXP)
+		rewards = rewards.withEventXP(eventXP + eomXP + ribbonXP)
 	}
 	credits, xp, gains, fresh, err := recordBattleResult(res, rewards)
 	if err != nil {
@@ -335,6 +338,9 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fresh {
+		if database := currentMmogPlayerStateDB(); database != nil {
+			recordRibbons(database, pid, ribbons)
+		}
 		// Daily contracts: this match's progress, and the credits of any it
 		// completes -- before the currencies push below, which then carries
 		// them (daily_contracts.go).
@@ -356,7 +362,7 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh,
 		"event_xp": eventXP, "eom_xp": eomXP, "scoring_mode": scoringMode, "events": q.Get("events"),
-		"event_credits": q.Get("event_credits")}).Info("battle result")
+		"event_credits": q.Get("event_credits"), "ribbons": ribbons, "ribbon_xp": ribbonXP}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)
 	// The same payout split into pools, for the end-of-match screen: the mod

@@ -502,6 +502,13 @@ per ship) and adds `event_xp` / `event_credits` / `events` to the
 placeholder formula (credits keep the formula). The `match result:` log line
 shows `event xp N credits N (N events)`.
 
+The same hook counts how often each scoring event fired per player (rewarded or
+not) and reports it as `ev=<EYScoringEventID>.<count>,...`. mmogbrain turns
+those counts into the player's **ribbons** (one per `EventsForRibbon`
+occurrences): the host never awards a ribbon itself -- its reward path
+`0x426DC0` applies only a row's event half and builds only type-1 (event)
+achievements -- so that was the missing backend's job.
+
 ## Researched ships: any precast on demand
 
 Part of the loadout fix, no switch of its own. The four T1 mediums are only the

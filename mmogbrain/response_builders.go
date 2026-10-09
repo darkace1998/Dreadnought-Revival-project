@@ -5873,16 +5873,79 @@ func buildMmogTuneDocument() []byte {
 	return protocol.AppendRootEnd(b)
 }
 
-func buildMmogPlayerStatisticsPayload() []byte {
+// buildMmogPlayerStatisticsPayload answers the Statistics screen.
+//
+// The reply's handler (dispatcher, 0x2A27ED4) reads ROOT "pids" and ROOT
+// "stats", logs "YA_GetPlayerStatistics: Pids count does not match..." when
+// the counts differ -- and then reads stats[i] for every pid anyway. We sent
+// an empty "stats" inside "result" and no "pids": every pid indexed past the
+// end of an empty array, and the client crashed opening Statistics (operator
+// 2026-10-09). Now: the requested pids (16-byte GUIDs in the request), echoed
+// as 32-hex strings, and one stats entry per pid, in the same order.
+//
+// Per entry it reads WinNum, LoseNum, ScoreSum, KillNum, DeathNum, HealPoints,
+// AssistNum, DoubleKillNum, FirstStrikeNum, DestroyerTimeSec,
+// ArtilleryCruiserTimeSec, DreadnoughtTimeSec, TacticalCruiserTimeSec,
+// CorvetteTimeSec, TotalGameTimeSec, through the scalar reader (0x238000):
+// numeric strings. Filled from the match results this server records; what
+// it does not record (score, healing, double kills, first strikes, time per
+// ship class) is 0.
+func buildMmogPlayerStatisticsPayload(playerPID string, payload []byte) []byte {
+	var pids []string
+	for _, sc := range protocol.Scalars(payload) {
+		if sc.Tag == 0x02 || (sc.IsStr && sc.Name == "") {
+			if pid := protocol.NormalizePlayerPID(sc.Str); pid != "" {
+				pids = append(pids, pid)
+			}
+		}
+	}
+	if len(pids) == 0 {
+		pids = []string{normalizedPlayerStatePID(playerPID)}
+	}
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerStatistics")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
+	b, stack = protocol.AppendStringArrayField(b, stack, "pids", pids)
 	b, stack = protocol.AppendArrayStart(b, stack, "stats")
+	for _, pid := range pids {
+		st := playerMatchStatistics(pid)
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		for _, f := range []struct {
+			name  string
+			value int64
+		}{
+			{"WinNum", st.wins}, {"LoseNum", st.losses}, {"ScoreSum", 0}, {"KillNum", st.kills},
+			{"DeathNum", st.deaths}, {"HealPoints", 0}, {"AssistNum", st.assists}, {"DoubleKillNum", 0},
+			{"FirstStrikeNum", 0}, {"DestroyerTimeSec", 0}, {"ArtilleryCruiserTimeSec", 0},
+			{"DreadnoughtTimeSec", 0}, {"TacticalCruiserTimeSec", 0}, {"CorvetteTimeSec", 0},
+			{"TotalGameTimeSec", st.seconds},
+		} {
+			b = protocol.AppendStringField(b, f.name, strconv.FormatInt(f.value, 10))
+		}
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
+}
+
+type matchStatistics struct{ wins, losses, kills, deaths, assists, seconds int64 }
+
+// playerMatchStatistics totals a player's recorded match results.
+func playerMatchStatistics(pid string) matchStatistics {
+	var st matchStatistics
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		return st
+	}
+	_ = database.QueryRow(`SELECT COALESCE(SUM(outcome='win'),0), COALESCE(SUM(outcome='loss'),0), COALESCE(SUM(kills),0),
+		COALESCE(SUM(deaths),0), COALESCE(SUM(assists),0) FROM battle_results WHERE user_id=?`, pid).
+		Scan(&st.wins, &st.losses, &st.kills, &st.deaths, &st.assists)
+	// Time played: the matches' own start and end (battle_results.match_id is
+	// the battle server's id).
+	_ = database.QueryRow(`SELECT COALESCE(SUM(CAST((julianday(m.ended_at)-julianday(m.started_at))*86400 AS INTEGER)),0)
+		FROM battle_results b JOIN matches m ON m.battle_match_id=b.match_id
+		WHERE b.user_id=? AND b.match_id<>'' AND m.started_at IS NOT NULL AND m.ended_at IS NOT NULL`, pid).Scan(&st.seconds)
+	return st
 }
 
 func buildMmogUserOnlinePayload() []byte {
@@ -6319,6 +6382,9 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 			return reply("failed", reason, 0, balance)
 		}
 		pushBundleGrants(pid, heroes)
+		if bundle.eliteDays > 0 {
+			pushMembershipChanged(pid)
+		}
 		return reply("bought", "ok", charged, balance)
 	}
 
@@ -6566,6 +6632,7 @@ func buildMmogElitePurchasePayload(requestName string, playerPID string, payload
 	if err := tx.Commit(); err != nil {
 		return buildMmogErrorPayload(requestName, "commit failed")
 	}
+	pushMembershipChanged(pid)
 
 	var b []byte
 	var stack []int
@@ -6675,26 +6742,6 @@ func convertXPToPremiumCredits(db *sql.DB, pid string, xpAmount int32) (premiumC
 	return premiumCreditsGained, true
 }
 
-// ribbonThresholds defines the 12 ribbon types and their unlock conditions
-var ribbonThresholds = map[string]struct {
-	name      string
-	minKills  int32
-	minDeaths int32
-}{
-	"combat_efficiency": {"Combat Efficiency", 3, 0},
-	"kill_streak":       {"Kill Streak", 5, 0},
-	"unstoppable":       {"Unstoppable", 10, 0},
-	"survivor":          {"Survivor", 0, 0},
-	"first_blood":       {"First Blood", 1, 0},
-	"avenger":           {"Avenger", 1, 1},
-	"team_player":       {"Team Player", 2, 0},
-	"marksman":          {"Marksman", 4, 0},
-	"close_quarters":    {"Close Quarters", 3, 0},
-	"support_star":      {"Support Star", 1, 0},
-	"defender":          {"Defender", 2, 0},
-	"berserker":         {"Berserker", 6, 0},
-}
-
 type playerRibbon struct {
 	ribbonType string
 	count      int32
@@ -6721,25 +6768,19 @@ func loadPlayerRibbons(playerPID string) []playerRibbon {
 	return ribbons
 }
 
+// appendMmogRibbonEntry writes one Ribbons entry: ID, the event's
+// EYScoringEventID ordinal, and amt, both numeric strings (parser 0x2A73070
+// reads each through _wtoi; see ribbons.go). Rows of the old invented
+// ribbons, or of events the table does not know, are skipped.
 func appendMmogRibbonEntry(b []byte, stack []int, ribbon playerRibbon) ([]byte, []int) {
-	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-	// The client's actual Ribbons-array entry parser (FUN_142a73070 in the
-	// decompile) reads fields named "ID" and "amt" — confirmed against the
-	// literal UTF-16 strings in the shipping binary's .rdata — not "Type"/
-	// "Count". It reads them through the same restrictive double/int64/
-	// string-only tagged union as the Fleets/ShipLoadouts array parsers
-	// (see int32SliceToStrings' doc comment), so amt must be a numeric
-	// string too. Keep Type/Count/Name as well in case anything else still
-	// keys off them; ID/amt are the ones that actually make it client-side.
-	b = protocol.AppendStringField(b, "ID", ribbon.ribbonType)
-	b = protocol.AppendStringField(b, "amt", strconv.Itoa(int(ribbon.count)))
-	b = protocol.AppendStringField(b, "Type", ribbon.ribbonType)
-	b = protocol.AppendInt32Field(b, "Count", ribbon.count)
-	if info, ok := ribbonThresholds[ribbon.ribbonType]; ok {
-		b = protocol.AppendStringField(b, "Name", info.name)
+	id, ok := scoringEventOrdinal(ribbon.ribbonType)
+	if !ok {
+		return b, stack
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	return b, stack
+	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	b = protocol.AppendStringField(b, "ID", strconv.Itoa(id))
+	b = protocol.AppendStringField(b, "amt", strconv.Itoa(int(ribbon.count)))
+	return protocol.AppendObjectEnd(b, stack)
 }
 
 func buildMmogRibbonsPayload(playerPID string) []byte {

@@ -349,7 +349,6 @@ func (h *Handler) UpdateProgression(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	awardRibbons(h.DB, pid, req.Kills, req.Deaths)
 	awardSeasonXP(h.DB, pid, req.XP)
 	awardFleetShipXP(h.DB, pid, req.XP)
 	awardMatchCredits(h.DB, pid, req.XP)
@@ -413,37 +412,6 @@ func RankXPThreshold(rank int32) int32 {
 		return 10000
 	}
 	return 15000
-}
-
-var ribbonThresholds = map[string]struct {
-	name      string
-	minKills  int32
-	minDeaths int32
-}{
-	"combat_efficiency": {"Combat Efficiency", 3, 0},
-	"kill_streak":       {"Kill Streak", 5, 0},
-	"unstoppable":       {"Unstoppable", 10, 0},
-	"survivor":          {"Survivor", 0, 0},
-	"first_blood":       {"First Blood", 1, 0},
-	"avenger":           {"Avenger", 1, 1},
-	"team_player":       {"Team Player", 2, 0},
-	"marksman":          {"Marksman", 4, 0},
-	"close_quarters":    {"Close Quarters", 3, 0},
-	"support_star":      {"Support Star", 1, 0},
-	"defender":          {"Defender", 2, 0},
-	"berserker":         {"Berserker", 6, 0},
-}
-
-func awardRibbons(db *sql.DB, pid string, kills, deaths int32) {
-	for key, ribbon := range ribbonThresholds {
-		if ribbon.minDeaths > 0 && deaths >= ribbon.minDeaths {
-			continue
-		}
-		if kills >= ribbon.minKills && ribbon.minKills > 0 {
-			_, _ = db.Exec(`INSERT INTO player_ribbons(user_id,ribbon_type,count,updated_at) VALUES(?,?,1,datetime('now'))
-				ON CONFLICT(user_id,ribbon_type) DO UPDATE SET count=count+1, updated_at=datetime('now')`, pid, key)
-		}
-	}
 }
 
 func awardSeasonXP(db *sql.DB, pid string, xp int32) {

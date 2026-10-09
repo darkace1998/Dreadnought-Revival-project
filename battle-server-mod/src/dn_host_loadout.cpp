@@ -968,7 +968,7 @@ static bool HttpGetLoopbackRaw(const char *pathAndQuery, char *buf, int bufLen,
     closesocket(s);
     return false;
   }
-  char req[2048];
+  char req[4096];
   int rl = _snprintf_s(req, sizeof(req), _TRUNCATE,
                        "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n",
                        pathAndQuery, host);
@@ -3747,10 +3747,17 @@ static bool RewardsScreenEnabled();
 typedef void(__fastcall *tAssignScoringReward)(void *pri, int32_t *reward);
 static tAssignScoringReward g_origAssignScoringReward = nullptr;
 
+// EYScoringEventID ordinals (Invalid = 75); see mmogbrain scoringEventIDs.
+#define SCORING_EVENT_COUNT 76
 struct EventTotals {
   void *pri;
   int64_t xp, credits;
   int events;
+  // How often each scoring event fired for this player, rewarded or not, for
+  // mmogbrain's ribbons (one per EventsForRibbon occurrences). The host
+  // counts events too (0x431660) but never awards a ribbon itself: its reward
+  // path builds only event achievements (0x5A9D30 type 1).
+  uint16_t counts[SCORING_EVENT_COUNT];
 };
 static EventTotals g_eventTotals[128] = {};
 static SRWLOCK g_eventTotalsLock = SRWLOCK_INIT;
@@ -3762,8 +3769,7 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
         !IsReadable((uint8_t *)pri + 0x148, 1) || ((uint8_t *)pri)[0x148] != 3)
       return;
     int32_t xp = reward[5] + reward[6], cr = reward[7] + reward[8];
-    if (xp <= 0 && cr <= 0)
-      return;
+    uint32_t event = (uint32_t)reward[0] & 0xff; // record +0x00: the row's Id byte
     AcquireSRWLockExclusive(&g_eventTotalsLock);
     EventTotals *slot = nullptr;
     for (auto &t : g_eventTotals) {
@@ -3772,9 +3778,13 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
     }
     if (slot) {
       slot->pri = pri;
-      slot->xp += xp > 0 ? xp : 0;
-      slot->credits += cr > 0 ? cr : 0;
-      slot->events++;
+      if (event < SCORING_EVENT_COUNT && slot->counts[event] < 0xFFFF)
+        slot->counts[event]++;
+      if (xp > 0 || cr > 0) {
+        slot->xp += xp > 0 ? xp : 0;
+        slot->credits += cr > 0 ? cr : 0;
+        slot->events++;
+      }
     }
     ReleaseSRWLockExclusive(&g_eventTotalsLock);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -3783,12 +3793,20 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
 
 // The player's summed event XP and credits; false when the host awarded none
 // (hook off, or an older mmogbrain without XP in its table).
-static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *events) {
+static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *events,
+                            char *ev = nullptr, size_t evSize = 0) {
   bool found = false;
+  if (ev && evSize)
+    ev[0] = 0;
   AcquireSRWLockExclusive(&g_eventTotalsLock);
   for (auto &t : g_eventTotals) {
     if (t.pri == pri) {
       *xp = t.xp; *credits = t.credits; *events = t.events;
+      // "ordinal.count,..." for mmogbrain's ribbons (the "ev" parameter).
+      size_t o = 0;
+      for (int i = 0; ev && i < SCORING_EVENT_COUNT && o + 16 < evSize; ++i)
+        if (t.counts[i])
+          o += _snprintf_s(ev + o, evSize - o, _TRUNCATE, "%s%d.%u", o ? "," : "", i, (unsigned)t.counts[i]);
       t = EventTotals{};
       found = true;
       break;
@@ -3799,7 +3817,7 @@ static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *event
 }
 
 static void ReportMatchResult(void *orbitComp) {
-  char pid[80], match[96], path[2560], body[2048];
+  char pid[80], match[96], path[3584], body[2048];
   uint8_t *priOut = nullptr;
   int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
   const char *teamSource = "none";
@@ -3878,10 +3896,17 @@ static void ReportMatchResult(void *orbitComp) {
   // pays its formula, as before.
   int64_t evXp = 0, evCr = 0;
   int evN = 0;
-  if (priOut && TakeEventTotals(priOut, &evXp, &evCr, &evN)) {
+  char evCounts[SCORING_EVENT_COUNT * 10 + 8];
+  if (priOut && TakeEventTotals(priOut, &evXp, &evCr, &evN, evCounts, sizeof(evCounts))) {
     size_t pl = strlen(path);
-    _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&event_xp=%lld&event_credits=%lld&events=%d",
-                (long long)evXp, (long long)evCr, evN);
+    // event_xp only when something paid XP or credits: its presence switches
+    // mmogbrain from its formula to the table's figures.
+    if (evN > 0)
+      _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&event_xp=%lld&event_credits=%lld&events=%d",
+                  (long long)evXp, (long long)evCr, evN);
+    pl = strlen(path);
+    if (evCounts[0])
+      _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&ev=%s", evCounts);
   }
   // The kills by class, for mmogbrain's daily contracts (see RecordKill).
   char kl[KILL_LOG_MAX * 8 + 8];

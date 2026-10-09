@@ -38,7 +38,7 @@ func TestAllSimplePayloadsHaveNoFNameCollisions(t *testing.T) {
 		"YA_GetPlayerScores":       buildMmogPlayerScoresPayload,
 		"YA_FleetEligibility":      buildMmogFleetEligibilityPayload,
 		"YA_Tune":                  buildMmogTunePayload,
-		"YA_GetPlayerStatistics":   buildMmogPlayerStatisticsPayload,
+		"YA_GetPlayerStatistics":   func() []byte { return buildMmogPlayerStatisticsPayload(defaultMmogPlayerPID, nil) },
 		"YA_UserOnline":            buildMmogUserOnlinePayload,
 		"YA_CheckReturn":           buildMmogCheckReturnPayload,
 		"YA_UserLogin":             func() []byte { return buildMmogLoginSuccessPayload(pid) },

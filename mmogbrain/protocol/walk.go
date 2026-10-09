@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"math"
 )
 
@@ -65,8 +66,14 @@ func Scalars(payload []byte) []Scalar {
 		case 0x01:
 			out = append(out, Scalar{Name: name, Tag: tag})
 		case 0x02, 0x03, 0x04:
-			if _, ok := fixed(16); !ok {
+			v, ok := fixed(16)
+			if !ok {
 				return out
+			}
+			// A GUID (0x02) reads as its 32 hex digits -- the form player ids
+			// take everywhere else (YA_GetPlayerStatistics sends its pids so).
+			if tag == 0x02 {
+				out = append(out, Scalar{Name: name, Tag: tag, Str: hex.EncodeToString(v), IsStr: true})
 			}
 		case 0x05, 0x16, 0x26:
 			v, ok := fixed(1)

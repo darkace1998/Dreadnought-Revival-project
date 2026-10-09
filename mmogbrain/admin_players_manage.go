@@ -258,12 +258,9 @@ func adminAPIPlayerGrantShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminAudit(database, r, "grant ship", pid, map[string]any{"ship_id": req.ShipID, "name": adminShipName(req.ShipID)})
-	// Online: the ship itself (YA_ClaimItem addedLoadouts), then the fleets,
-	// which a hero ship can unlock.
-	if payload, ok := buildMmogShipClaimPush(pid, req.ShipID); ok {
-		squadHubInstance.push(pid, payload)
-	}
-	squadHubInstance.push(pid, buildMmogFleetUpdatePush(pid))
+	// Online: the ship itself (YA_ClaimItem addedLoadouts), the fleets, which
+	// a hero ship can unlock, and the owned list (pushShipGrants).
+	pushShipGrants(pid, []int32{req.ShipID})
 	adminAPIPlayerDetail(w, r)
 }
 

@@ -717,6 +717,16 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 							}
 						}
 					}
+					// The ship's own look and, from T3, its officer briefings
+					// are owned-list items the UnlockItem reply does not carry;
+					// without this they read unowned until a relog
+					// (client_refresh.go).
+					if pushID, err := uuid.NewRandom(); err == nil {
+						push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogPushInventoryPayload(state.playerPID))
+						if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_PushInventory", push, appEncoder, encryptResponses, "inventory push failed", "sent YA_PushInventory after a ship claim"); err != nil {
+							return err
+						}
+					}
 				}
 			}
 			// A ship just researched (claimed) or bought can unlock a fleet

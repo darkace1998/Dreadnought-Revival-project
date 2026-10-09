@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -111,16 +112,16 @@ func TestAppendMmogEventScoreEntry(t *testing.T) {
 	}
 
 	scoreMarker := appendFieldMarker("Score", 0x56)
-	if !bytesContains(b, scoreMarker) {
+	if !bytes.Contains(b, scoreMarker) {
 		t.Error("expected Score field (int32) to be present in payload")
 	}
 
 	fleetTypeMarker := appendFieldMarker("FleetType", 0x56)
-	if !bytesContains(b, fleetTypeMarker) {
+	if !bytes.Contains(b, fleetTypeMarker) {
 		t.Error("expected FleetType field (int32) to be present in payload")
 	}
 
-	if bytesContains(b, appendFieldMarker("Level", 0x56)) {
+	if bytes.Contains(b, appendFieldMarker("Level", 0x56)) {
 		t.Error("Level should not be sent — the client parser never reads it")
 	}
 }
@@ -148,13 +149,13 @@ func TestAppendMmogSeasonProgressEntry(t *testing.T) {
 
 	// Verify XP field is present (numeric string — see appendMmogSeasonProgressEntry)
 	xpMarker := appendFieldMarker("XP", 0x09)
-	if !bytesContains(b, xpMarker) {
+	if !bytes.Contains(b, xpMarker) {
 		t.Error("expected XP field (string) to be present in payload")
 	}
 
 	// Verify level field is present (numeric string — see appendMmogSeasonProgressEntry)
 	levelMarker := appendFieldMarker("Level", 0x09)
-	if !bytesContains(b, levelMarker) {
+	if !bytes.Contains(b, levelMarker) {
 		t.Error("expected Level field (string) to be present in payload")
 	}
 }
@@ -176,7 +177,7 @@ func TestSeasonProgressInPlayerGet(t *testing.T) {
 
 	// Verify SeasonProgress array is present
 	seasonProgressMarker := appendFieldMarker("SeasonProgress", 0x0d) // 0x0d = array type
-	if !bytesContains(payload, seasonProgressMarker) {
+	if !bytes.Contains(payload, seasonProgressMarker) {
 		t.Error("expected SeasonProgress array to be present in YA_PlayerGet payload")
 	}
 }
