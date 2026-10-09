@@ -143,7 +143,19 @@ var conquestMaps = []GameMap{
 	{Name: "Skybridge", Path: "/Game/Maps/MP/Skybridge/MP_Skybridge_P"},
 }
 
+// onslaughtMaps: Onslaught ran only on Amirani and Derelict ("Site 23"),
+// and a tester recognised Site 23 as the Turbo TDM map (2026-10-08). Every
+// map in the build ships a complete <Map>_Onslaught sublevel (12 initial
+// fighters, assault and command ship spawn points per team, counted from the
+// cooked .umap files), and the Streaming_DT of each loads it for Onslaught.
+// So Onslaught uses the regular rotation plus Amirani (a regular PvP map since
+// update 1.9.0). GUESS: which maps the original Onslaught queue used is not
+// in the client; Derelict is left out on the tester's word.
+var onslaughtMaps = append(append([]GameMap{}, availableMaps...),
+	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"})
+
 var mapsByGameMode = map[string][]GameMap{
+	"Onslaught": onslaughtMaps,
 	"TM":        {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
 	"TMBasic":   {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
 	"TER":       conquestMaps,

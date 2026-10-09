@@ -223,9 +223,17 @@ func telemetryInvestCheck(pid string, fields []telemetryField) string {
 	// compared the balance as is and flagged every research that spent free
 	// XP.
 	spent, _ := telemetryNum(fields, "freeXp")
-	serverFree := int64(mmogPlayerStateForPID(pid).freeXP) - spent
+	balance := int64(mmogPlayerStateForPID(pid).freeXP)
+	serverFree := balance - spent
 	if clientFree == serverFree {
 		return "matches the server's free XP"
+	}
+	// The order is not guaranteed: 45 of 1,426 researches (to 2026-10-09)
+	// were reported after the server had already charged them, each "off"
+	// by exactly the research's free XP while the next one matched again.
+	// The balance itself already being the client's remainder is a match.
+	if spent > 0 && clientFree == balance {
+		return "matches the server's free XP (reported after the charge)"
 	}
 	logrus.WithFields(logrus.Fields{"player": pid, "item": telemetryStr(fields, "itemID"),
 		"client_free_xp": clientFree, "server_free_xp_after": serverFree}).

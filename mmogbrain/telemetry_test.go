@@ -96,3 +96,26 @@ func TestTelemetryInvestCheckBeforeTheCharge(t *testing.T) {
 		t.Errorf("note %q, want a match", note)
 	}
 }
+
+// The invest event can also arrive AFTER its YA_UnlockItem was charged
+// (45 of 1,426 researches to 2026-10-09, each off by exactly its free XP):
+// the server's balance then already is the client's remainder.
+func TestTelemetryInvestCheckAfterTheCharge(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET free_xp=3699 WHERE user_id=?`, pid); err != nil {
+		t.Fatal(err)
+	}
+	fields := []telemetryField{{"itemID", int64(67637900)}, {"shipXp", int64(0)}, {"freeXp", int64(3000)},
+		{"remainingShipXp", int64(0)}, {"remainingFreeXp", int64(3699)}}
+	if note := telemetryInvestCheck(pid, fields); !strings.HasPrefix(note, "matches the server's free XP") {
+		t.Errorf("note %q, want a match", note)
+	}
+	fields[4] = telemetryField{"remainingFreeXp", int64(5000)}
+	if note := telemetryInvestCheck(pid, fields); !strings.HasPrefix(note, "MISMATCH") {
+		t.Errorf("note %q, want a mismatch", note)
+	}
+}
