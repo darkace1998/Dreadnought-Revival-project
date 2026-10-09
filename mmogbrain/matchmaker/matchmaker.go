@@ -77,7 +77,8 @@ var gameModeAliases = map[string]string{
 var validGameModes = buildValidGameModes()
 
 func buildValidGameModes() map[string]bool {
-	modes := make(map[string]bool, len(clientGameModeConfigs)+len(gameModeAliases))
+	modes := make(map[string]bool, len(clientGameModeConfigs)+len(gameModeAliases)+1)
+	modes[PvEGameMode] = true
 	for _, mode := range clientGameModeConfigs {
 		modes[mode.Name] = true
 	}
@@ -182,9 +183,46 @@ func GameModeList() []string {
 	return modes
 }
 
-// GameModeConfigs returns the deterministic client-facing game mode rows.
+// GameModeConfigs returns the deterministic client-facing game mode rows,
+// plus "PVE" while a PvE season event is running.
 func GameModeConfigs() []GameModeConfig {
-	return append([]GameModeConfig(nil), clientGameModeConfigs...)
+	out := append([]GameModeConfig(nil), clientGameModeConfigs...)
+	if _, ok := ActivePvEEvent(); ok {
+		out = append(out, GameModeConfig{Name: PvEGameMode, TeamSize: pveTeamSize})
+	}
+	return out
+}
+
+// PvE season events (mmogbrain's pve_seasons.go).
+//
+// The client queues for the running event as GameType "PVE": its own mode
+// list (GlobalUI m_gameModeList) has a "PVE" entry of type YGMT_PVE, unlocked
+// when the server lists the mode and titled by AYPVEEventManager::
+// ActivatePVEEvent (0x4D9C60) from YA_GetSeasonData's ActiveEvent. The battle
+// server runs the event's own map in its own game mode (Horde or Escort);
+// the match records the event id as its map.
+const PvEGameMode = "PVE"
+
+// pveTeamSize: the episodes are cooperative, one team. GUESS: 5, the team
+// size of every other 5v5 mode; the event data names none.
+const pveTeamSize = 5
+
+// PvEEvent is the event a PvE match is played in.
+type PvEEvent struct {
+	ID       string // DN_Events_DT row, e.g. PVE_S1E1
+	MapPath  string // package path, /Game/Maps/PVE/Season1/Episode1/PVE_S1E1_P
+	HostMode string // battle server game mode: Horde or Escort
+}
+
+// PvEEventSource reports the running event; set by main. Nil = none.
+var PvEEventSource func() (PvEEvent, bool)
+
+// ActivePvEEvent is the running PvE event, if any.
+func ActivePvEEvent() (PvEEvent, bool) {
+	if PvEEventSource == nil {
+		return PvEEvent{}, false
+	}
+	return PvEEventSource()
 }
 
 // Matchmaker polls the queue and fires match creation when enough players are present.
@@ -578,13 +616,17 @@ func (m *Matchmaker) tick() error {
 		} else if placed > 0 {
 			continue
 		}
-		size := m.PlayersPerMatch
+		maxSize := m.PlayersPerMatch
+		if b.GameMode == PvEGameMode && maxSize > pveTeamSize {
+			maxSize = pveTeamSize // one cooperative team
+		}
+		size := maxSize
 		if available >= 0 {
 			waited := time.Duration(0)
 			if t, ok := parseQueuedAt(b.Oldest); ok {
 				waited = now.Sub(t)
 			}
-			size = requiredMatchSize(b.Count, available, m.PlayersPerMatch, waited, m.MaxWait)
+			size = requiredMatchSize(b.Count, available, maxSize, waited, m.MaxWait)
 		}
 		if size < 1 || b.Count < size {
 			continue
@@ -936,6 +978,22 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	}
 	gameMode = runMode
 
+	// A PvE event match runs the event's own map in its own game mode, and is
+	// recorded as mode "PVE" with the event id as its map.
+	launchMode := gameMode
+	var pveMap *GameMap
+	if gameMode == PvEGameMode {
+		ev, ok := ActivePvEEvent()
+		if !ok {
+			for _, e := range entries {
+				_, _ = m.DB.Exec(`UPDATE queue_entries SET status='waiting' WHERE id=?`, e.ID)
+			}
+			return fmt.Errorf("no PvE event is running")
+		}
+		pveMap = &GameMap{Name: ev.ID, Path: ev.MapPath}
+		launchMode = ev.HostMode
+	}
+
 	// Pick a map
 	maps := availableMaps
 	if modeMaps, ok := mapsByGameMode[gameMode]; ok {
@@ -949,6 +1007,9 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 		}
 	}
 	chosen := maps[time.Now().UnixNano()%int64(len(maps))]
+	if pveMap != nil {
+		chosen = *pveMap
+	}
 	mapName := chosen.Name
 
 	// Request a game instance from the game manager
@@ -956,7 +1017,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	for i, e := range entries {
 		playerIDs[i] = e.UserID
 	}
-	serverIP, serverPort, instanceID, battleMatchID, err := m.requestGameInstance(gameMode, mapName, chosen.Path, playerIDs, fleetTierURLValue(fleetType))
+	serverIP, serverPort, instanceID, battleMatchID, err := m.requestGameInstance(launchMode, mapName, chosen.Path, playerIDs, fleetTierURLValue(fleetType))
 	if err != nil {
 		// Rollback queue entries on failure
 		for _, e := range entries {
@@ -971,20 +1032,33 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 	// Record match in DB
 	matchID := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := m.DB.Exec(
+	// The match and its slots in ONE transaction: an active match with no
+	// slots reads as "everyone left", and a queue leave ends such a match and
+	// stops its battle server -- so another player's leave landing between the
+	// two inserts could kill a match that had just formed.
+	tx, err := m.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("record match: %w", err)
+	}
+	if _, err := tx.Exec(
 		`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,instance_id,battle_match_id,fleet_type) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
 		matchID, gameMode, mapName, serverIP, serverPort, "active", now, now, instanceID, battleMatchID, fleetType,
 	); err != nil {
+		_ = tx.Rollback()
 		return fmt.Errorf("insert match %s: %w", matchID, err)
 	}
 	for i, e := range entries {
 		team := teams[i]
-		if _, err := m.DB.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO match_slots(match_id,user_id,team) VALUES(?,?,?)`,
 			matchID, e.UserID, team,
 		); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("insert match slot for user %s: %w", e.UserID, err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("record match %s: %w", matchID, err)
 	}
 
 	// Remove matched queue entries
@@ -1153,7 +1227,7 @@ func battleServerIPv4(host string, log *logrus.Logger) string {
 // alternate 1, 2.
 func matchTeam(gameMode string, i int) int {
 	switch gameMode {
-	case "BC", "Onslaught", "TM":
+	case "BC", "Onslaught", "TM", PvEGameMode:
 		return 1
 	}
 	return i%2 + 1

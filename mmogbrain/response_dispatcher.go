@@ -154,10 +154,12 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogConvertShipXPPayload(playerPID, payload)
 	case "YA_ConvertXPToCredits", "YA_ExchangeXP":
 		return buildMmogXPConversionPayload(requestName, playerPID, payload)
-	case "YA_CompleteContract", "YA_ClaimContract":
-		return buildMmogContractCompletionPayload(requestName, playerPID, payload)
-	case "YA_RerollContract", "YA_RefreshContract":
-		return buildMmogContractRerollPayload(requestName, playerPID, payload)
+	// Daily contracts (daily_contracts.go): reroll and acknowledge, the only
+	// contract requests the client sends.
+	case "YA_ContractReplace":
+		return buildMmogContractReplacePayload(playerPID, payload)
+	case "YA_ContractRemove":
+		return buildMmogContractRemovePayload(playerPID, payload)
 
 	// --- Navigation ---
 	case "YA_CheckReturn":
@@ -226,8 +228,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogUnlockItemPayload(playerPID, payload)
 	case "YA_ClaimItem":
 		return buildMmogClaimItemPayload(playerPID, payload)
-	case "YA_AddItems", "YA_RemoveItems",
-		"YA_ContractReplace", "YA_ContractRemove":
+	case "YA_AddItems", "YA_RemoveItems":
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Server→Client Notifications ---

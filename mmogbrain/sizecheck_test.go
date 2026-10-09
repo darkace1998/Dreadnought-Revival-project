@@ -40,7 +40,9 @@ var targetSizes = map[string]int{
 	// 967 -> 1038 (+71): root "XpConversion" {HardCurrency, ShipXp, FreeXp}, the
 	// free XP converter's rate (parser 0x142A2EEFA). Without it the client's
 	// ship-XP increment was 0 and it never converted anything.
-	"YA_GetGameConfigData": 1038,
+	// 1038 -> 1116 (+78): "PVE" in both GameModes lists while a season event
+	// runs -- the client's mode list unlocks its PVE entry by that name.
+	"YA_GetGameConfigData": 1116,
 	// Was 2153. +594: goal m_title/m_description now go out as NSLOCTEXT(...)
 	// macros -- the FText import the client uses left bare strings blank.
 	"YA_GetStaticCareerData": 2747,
@@ -54,7 +56,10 @@ var targetSizes = map[string]int{
 	// MPQuestCollection rows, ContractConfigTable, ContractNextResetTime) --
 	// the fields the client's parser for this reply (0x2A6B7F0) actually reads.
 	// Without them its quest cycle recursed on hangar entry (mpquest_contracts.go).
-	"YA_GetDailyContractsData": 4505,
+	// 4505 -> 4448 (-57): the old empty "Contracts" arrays (root and under
+	// "result") are gone -- this reply's parser (0x2A6B7F0) reads neither --
+	// and the contract state fields are strings like on the player object.
+	"YA_GetDailyContractsData": 4448,
 	"YA_GetBoosterData":        1856,
 	"YA_GetCareerProgression":  382,
 	"YA_GetPlayerScores":       277,
@@ -280,8 +285,12 @@ var targetSizes = map[string]int{
 	// and no resolvable tables, replacing its working backup weapon tables with
 	// nothing -- no projectile could spawn in the first match that reached the
 	// arena (2026-09-24). Now only RT goes out and the client keeps its own.
-	"YA_Tune":          49,
-	"YA_GetSeasonData": 650,
+	"YA_Tune": 49,
+	// 650 -> 15693 (+15043): a PvE season runs (pve_seasons.go): Season 1's
+	// four events with their texts, maps, images and 9 reward levels each,
+	// the season with its own reward levels, CurrentSeason and ActiveEvent.
+	// Was a single inert row each. Chunked frames carry it.
+	"YA_GetSeasonData": 15693,
 	// YA_PlayerGet's Officers array schema was fixed (#41) to send the
 	// type/disp/rep fields the client's per-entry parser actually reads,
 	// replacing the far longer m_enabling/m_triggers/m_effects DSL text
@@ -350,7 +359,11 @@ var targetSizes = map[string]int{
 	// heads, test hair or other unwearable captain meshes).
 	// 20178 -> 21986 (+1808): each of the four starter ships' LOADOUT B
 	// (452 bytes each) right after its A in ShipLoadouts (loadout_variants.go).
-	"YA_PlayerGet": 21986,
+	// 21986 -> 21968 (-18): the contract state's LastContractsAssignment and
+	// DailyContractLastReplaceTime were the current time on every login; they
+	// are now the player's real times, 0 until a contract is assigned
+	// (daily_contracts.go). The test player has no database, so no contracts.
+	"YA_PlayerGet": 21968,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which

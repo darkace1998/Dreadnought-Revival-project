@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -2316,39 +2315,6 @@ func TestPlayerGetPayloadUsesSquadObjectShape(t *testing.T) {
 	}
 }
 
-func TestDailyContractsPayloadIsInertButParserShaped(t *testing.T) {
-	payload := buildMmogDailyContractsDataPayload()
-
-	for _, field := range []struct {
-		name  string
-		value int32
-	}{
-		{name: "DailyContractStateID", value: 0},
-	} {
-		if !bytes.Contains(payload, protocol.AppendInt32Field(nil, field.name, field.value)) {
-			t.Fatalf("YA_GetDailyContractsData missing %s=%d", field.name, field.value)
-		}
-	}
-
-	quests := extractNamedMmogArray(t, payload, "Quests")
-	topLevelContracts := extractNamedMmogArray(t, payload, "Contracts")
-	resultContracts := extractNamedMmogArray(t, extractNamedMmogObject(t, payload, "result"), "Contracts")
-	for name, container := range map[string][]byte{
-		"Quests":           quests,
-		"Contracts":        topLevelContracts,
-		"result.Contracts": resultContracts,
-	} {
-		if bytes.Contains(container, appendFieldMarker("QuestID", 0x56)) ||
-			bytes.Contains(container, appendFieldMarker("ContractID", 0x56)) ||
-			bytes.Contains(container, appendFieldMarker("ID", 0x09)) {
-			t.Fatalf("%s should not fabricate quest/contract entries", name)
-		}
-	}
-	if bytes.Contains(payload, protocol.AppendStringField(nil, fieldStatus, "ok")) {
-		t.Fatal("YA_GetDailyContractsData should not substitute status-only result for result.Contracts")
-	}
-}
-
 func TestCareerPayloadsUseGoalsModel(t *testing.T) {
 	// The client parses career progression as a GOALS system, not the
 	// progression-item taxonomy this used to send. FYCareerProgressionConfig::Load
@@ -2427,6 +2393,8 @@ func TestSeasonProgressPayloadUsesEmptyParserShape(t *testing.T) {
 }
 
 func TestSeasonDataPayloadUsesStructuredSeasonAndEventTables(t *testing.T) {
+	// The inert payload, as served with no PvE season running.
+	t.Setenv("DN_PVE_SEASON", "off")
 	result := extractNamedMmogObject(t, buildMmogSeasonDataPayload(), "result")
 
 	// Seasons/Events must be well-formed, NON-empty JSON arrays: the client
@@ -2913,8 +2881,6 @@ func TestSafeNoopClientCallsReturnSuccess(t *testing.T) {
 		// TestClaimBuysAResearchedItemWithCredits.
 		"YA_AddItems",
 		"YA_RemoveItems",
-		"YA_ContractReplace",
-		"YA_ContractRemove",
 		"YA_AnalyticsEndTransaction",
 		"YA_AnalyticsUpdateTransaction",
 		"YA_ReconnectJoinChannels",
@@ -3137,60 +3103,6 @@ func TestGatewayParsesSessionHeaderWithUsernameSuffix(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("gateway handler was not called")
-	}
-}
-
-// TestCompleteContractRejectsImmediateCompletion is a regression test for
-// the exploit where a contract could be completed (and its reward paid out)
-// instantly after being assigned, with no gameplay and no progress
-// validation, since seedDailyContractsForPlayer re-seeds a fresh contract
-// on every completion — allowing unlimited free XP/credit farming via a
-// tight complete-and-reseed loop. completeContract now requires a contract
-// to have existed for at least minContractCompletionAge before it can be
-// completed.
-func TestCompleteContractRejectsImmediateCompletion(t *testing.T) {
-	database := useTempMmogPlayerStateDB(t)
-	const playerPID = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
-	if err := seedMmogPlayerState(database, playerPID); err != nil {
-		t.Fatalf("seed player state: %v", err)
-	}
-
-	// Auto-seeding is disabled (it crashed the client's quest cycle), so
-	// insert a contract row directly to exercise the still-supported
-	// completeContract machinery.
-	if len(dailyContractSeeds) == 0 {
-		t.Fatal("dailyContractSeeds is empty, cannot exercise this test")
-	}
-	contractID := dailyContractSeeds[0].id
-	payload, _ := json.Marshal(map[string]interface{}{"rewardXP": dailyContractSeeds[0].rewardXP, "rewardGP": dailyContractSeeds[0].rewardGP})
-	if _, err := database.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, playerPID, contractID, string(payload)); err != nil {
-		t.Fatalf("insert contract: %v", err)
-	}
-
-	if _, _, success := completeContract(database, playerPID, contractID); success {
-		t.Fatal("completeContract succeeded immediately after seeding — age gate did not apply")
-	}
-
-	// Backdate the contract past the minimum completion age and retry.
-	if _, err := database.Exec(
-		`UPDATE player_contracts SET created_at=datetime('now', ?) WHERE user_id=? AND contract_id=?`,
-		fmt.Sprintf("-%d seconds", minContractCompletionAge+1), playerPID, contractID,
-	); err != nil {
-		t.Fatalf("backdate contract: %v", err)
-	}
-
-	rewardXP, rewardGP, success := completeContract(database, playerPID, contractID)
-	if !success {
-		t.Fatal("completeContract failed after contract aged past the minimum — age gate too strict or broken")
-	}
-	if rewardXP <= 0 && rewardGP <= 0 {
-		t.Fatalf("completeContract reported no reward: xp=%d gp=%d", rewardXP, rewardGP)
-	}
-
-	// A second completion attempt for the same (now-completed) contract
-	// must not succeed again (state is no longer 'active').
-	if _, _, success := completeContract(database, playerPID, contractID); success {
-		t.Fatal("completeContract succeeded a second time for an already-completed contract")
 	}
 }
 

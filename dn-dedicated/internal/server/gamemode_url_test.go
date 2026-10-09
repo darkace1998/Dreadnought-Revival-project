@@ -126,3 +126,16 @@ func TestBuildArgsCarriesURLOptionsAfterListen(t *testing.T) {
 		t.Errorf("map URL =\n  %s\nwant\n  %s", args[0], want)
 	}
 }
+
+// The PvE season modes have no alias in the client's DefaultGame.ini, so the
+// URL names the Blueprint class.
+func TestBuildArgsUsesTheClassPathForPvEModes(t *testing.T) {
+	args := BuildArgs(LaunchConfig{
+		Map:      gamedata.Map{Name: "PVE_S1E1_P", Path: "/Game/Maps/PVE/Season1/Episode1/PVE_S1E1_P"},
+		GameMode: "Horde",
+		Port:     7777,
+	}, "match-1")
+	if !strings.Contains(args[0], "?game=/Game/Generic/GameModes/Horde/GameMode_Horde_BP.GameMode_Horde_BP_C") {
+		t.Fatalf("map URL %q does not name the Horde game mode class", args[0])
+	}
+}

@@ -1,0 +1,1557 @@
+{
+ "DN_Seasons_DT": {
+  "PVE_DebugSeason": {
+   "m_active": 0,
+   "m_name": {
+    "key": "PVE_DebugSeason_Name",
+    "text": "Debug season name"
+   },
+   "m_descShort": {
+    "key": "PVE_DebugSeason_Desc_Short",
+    "text": "Debug season short Description"
+   },
+   "m_descLong": {
+    "key": "PVE_DebugSeason_Desc_Long",
+    "text": "Long Description"
+   },
+   "m_imageLarge": "",
+   "m_imageSmall": "",
+   "m_rewardLevels": [
+    {
+     "m_requiredEventRewards": 1,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/gamemodes/UI_GameMode_PVE.UI_GameMode_PVE",
+     "m_items": "",
+     "m_name": {
+      "key": "5C1ABC0D4F050D062E9C318C6EBC2D21",
+      "text": "Reward Name 1"
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 1,
+     "m_freeXP": 0
+    },
+    {
+     "m_requiredEventRewards": 2,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/gamemodes/UI_GameMode_PVE.UI_GameMode_PVE",
+     "m_items": "",
+     "m_name": {
+      "key": "40F74B064EDD393A5E164EB5C6EED966",
+      "text": "Reward Name 2"
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 1,
+     "m_freeXP": 1
+    },
+    {
+     "m_requiredEventRewards": 3,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/gamemodes/UI_GameMode_PVE.UI_GameMode_PVE",
+     "m_items": "",
+     "m_name": {
+      "key": "829904314F89A451162BFEACE9A375DA",
+      "text": "Reward Name 3"
+     },
+     "m_hardCurrency": 1,
+     "m_softCurrency": 1,
+     "m_freeXP": 1
+    }
+   ]
+  },
+  "PVE_Season3": {
+   "m_active": 0,
+   "m_name": {
+    "key": "PVE_Season3_Name",
+    "text": "Battleship Down"
+   },
+   "m_descShort": {
+    "key": "PVE_Season3_Desc_Short",
+    "text": "Season 3 short Description"
+   },
+   "m_descLong": {
+    "key": "PVE_Season3_Desc_Long",
+    "text": "Season 3 long Description"
+   },
+   "m_imageLarge": "",
+   "m_imageSmall": "",
+   "m_rewardLevels": [
+    {
+     "m_requiredEventRewards": 10,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Seasonal01.UI_Season03_Seasonal01",
+     "m_items": "352387158;352452694;352518230;352583766;352649302;352714838;352780374;352845910;352911446;352976982;353042518;353108054;353173590;353239126;353304662",
+     "m_name": {
+      "key": "0CEED50C4592FC87120C63A69A0249C3",
+      "text": "Grenadier Emblem"
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_requiredEventRewards": 20,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Seasonal02.UI_Season03_Seasonal02",
+     "m_items": "352387159;352452695;352518231;352583767;352649303;352714839;352780375;352845911;352911447;352976983;353042519;353108055;353173591;353239127;353304663",
+     "m_name": {
+      "key": "DA2621A540F0FEB0034D8BA2DA5072E3",
+      "text": "God-Hammer Emblem"
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_requiredEventRewards": 30,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Seasonal03.UI_Season03_Seasonal03",
+     "m_items": "352387160;352452696;352518232;352583768;352649304;352714840;352780376;352845912;352911448;352976984;353042520;353108056;353173592;353239128;353304664",
+     "m_name": {
+      "key": "B046E3BF4813B38C81FEEA962FA9EDAC",
+      "text": "Avatar of the Cult Emblem"
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ]
+  },
+  "PVE_Season1": {
+   "m_active": 1,
+   "m_name": {
+    "key": "PVE_Season1_Name",
+    "text": "Miner Inconvenience"
+   },
+   "m_descShort": {
+    "key": "PVE_Season1_Desc_Short",
+    "text": "Season 1 short Description"
+   },
+   "m_descLong": {
+    "key": "PVE_Season1_Desc_Long",
+    "text": "Season 1 long Description"
+   },
+   "m_imageLarge": "",
+   "m_imageSmall": "",
+   "m_rewardLevels": [
+    {
+     "m_requiredEventRewards": 10,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 1,
+     "m_freeXP": 0
+    },
+    {
+     "m_requiredEventRewards": 20,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 1,
+     "m_freeXP": 1
+    },
+    {
+     "m_requiredEventRewards": 30,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 1,
+     "m_softCurrency": 1,
+     "m_freeXP": 1
+    }
+   ]
+  }
+ },
+ "DN_Events_DT": {
+  "PVE_DebugEvent": {
+   "m_name": {
+    "key": "PVE_DebugEvent_Name",
+    "text": "PVE Debug Event"
+   },
+   "m_descShort": {
+    "key": "PVE_DebugEvent_Desc_Short",
+    "text": "Debug short description"
+   },
+   "m_descLong": {
+    "key": "PVE_DebugEvent_Desc_Long",
+    "text": "Debug long description"
+   },
+   "m_map": "/Game/Maps/PVE/Season3/Episode1/PVE_S3E1_P.PVE_S3E1_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-16776961_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/Game/Generic/UI/gamemodes/UI_GameMode_PVE.UI_GameMode_PVE",
+   "m_imageLarge": "/Game/Generic/UI/gamemodes/UI_GameMode_PVE.UI_GameMode_PVE",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "",
+     "m_items": "369164457;369229993;369295529;369361065;369426601;369492137;369557673;369623209;369688745;369754281;369819817;369885353;369950889;370016425;370081961",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 30,
+     "m_softCurrency": 300,
+     "m_freeXP": 3000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "",
+     "m_items": "352387141;352452677;352518213;352583749;352649285;352714821;352780357;352845893;352911429;352976965;353042501;353108037;353173573;353239109;353304645",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 100,
+     "m_freeXP": 1000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "402718847;402784383;402849919;402915455;402980991;403046527;403112063;403177599;403243135;403308671;403374207;403439743;403505279;403570815;403636351",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 20,
+     "m_softCurrency": 200,
+     "m_freeXP": 3500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "",
+     "m_items": "369164410;369229946;369295482;369361018;369426554;369492090;369557626;369623162;369688698;369754234;369819770;369885306;369950842;370016378;370081914",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 30,
+     "m_softCurrency": 300,
+     "m_freeXP": 3000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "",
+     "m_items": "352387137;352452673;352518209;352583745;352649281;352714817;352780353;352845889;352911425;352976961;353042497;353108033;353173569;353239105;353304641",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 100,
+     "m_freeXP": 1000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "402718838;402784374;402849910;402915446;402980982;403046518;403112054;403177590;403243126;403308662;403374198;403439734;403505270;403570806;403636342",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 20,
+     "m_softCurrency": 200,
+     "m_freeXP": 3500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "",
+     "m_items": "369164451;369229987;369295523;369361059;369426595;369492131;369557667;369623203;369688739;369754275;369819811;369885347;369950883;370016419;370081955",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 30,
+     "m_softCurrency": 300,
+     "m_freeXP": 3000
+    }
+   ],
+   "m_startDate": "2018.01.01-00.00.00",
+   "m_endDate": "2018.01.31-23.59.59",
+   "m_season": "PVE_DebugSeason"
+  },
+  "PVE_S3E1": {
+   "m_name": {
+    "key": "PVE_S3E1_Name",
+    "text": "Infestation"
+   },
+   "m_descShort": {
+    "key": "PVE_S3E2_Desc_Short",
+    "text": "Infestation"
+   },
+   "m_descLong": {
+    "key": "PVE_S3E1_Desc_Long",
+    "text": "House Oberon industrial installations and Transhuman tech research centers on the Jovian moon Callisto have been targetted by an unknown raider fleet. With Oberon's own Navy too far away to defend their assets from the next attack and an open contract set up, it's up to the Scumbelt's more adventurous mercenary captains to handle the threat."
+   },
+   "m_map": "/Game/Maps/PVE/Season3/Episode1/PVE_S3E1_P.PVE_S3E1_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-6306841_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/game/generic/ui/menu/pve/ui_eventimage_s301_s.UI_EventImage_S301_S",
+   "m_imageLarge": "/game/generic/ui/menu/pve/ui_eventimage_s301_l.UI_EventImage_S301_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Coating_01.UI_Season03_Coating_01",
+     "m_items": "369164469;369230005;369295541;369361077;369426613;369492149;369557685;369623221;369688757;369754293;369819829;369885365;369950901;370016437;370081973",
+     "m_name": {
+      "key": "D51196BB4C731C3415860FBAB272A75F",
+      "text": "Recruit Cultist Warship Coating"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Tint02.UI_Season03_Tint02",
+     "m_items": "855572522",
+     "m_name": {
+      "key": "2DA5F4994A395F4D6726798757E189AD",
+      "text": "Veteran Culist Warrior Livery"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Emblem03.UI_Season03_Emblem03",
+     "m_items": "352387152;352452688;352518224;352583760;352649296;352714832;352780368;352845904;352911440;352976976;353042512;353108048;353173584;353239120;353304656",
+     "m_name": {
+      "key": "4B595B7E44B2A3E949CAF791F52D3743",
+      "text": "Legendary Cultist Warship Emblem"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.02.06-00.00.00",
+   "m_endDate": "2018.02.08-23.59.59",
+   "m_season": "PVE_Season3"
+  },
+  "PVE_S3E2": {
+   "m_name": {
+    "key": "PVE_S3E2_Name",
+    "text": "Rabbit Season"
+   },
+   "m_descShort": {
+    "key": "PVE_S3E2_Desc_Short",
+    "text": "Battleship Down - Rabbit Season"
+   },
+   "m_descLong": {
+    "key": "PVE_S3E2_Desc_Long",
+    "text": "While no longer a threat in orbit, many of the raiders reached Callisto's surface. House Oberon's Navy is en route to the moon, where they hope to make a spectacle of vanquishing the raiders in front of the press, but before that they want you to whittle down the remaining cultist forces to a size the corporate navy can handle without worry."
+   },
+   "m_map": "/Game/Maps/PVE/Season3/Episode2/PVE_S3E2_P.PVE_S3E2_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-18314_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/game/generic/ui/menu/pve/ui_eventimage_s302_s.UI_EventImage_S302_S",
+   "m_imageLarge": "/game/generic/ui/menu/pve/ui_eventimage_s302_l.UI_EventImage_S302_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 40000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Emblem01.UI_Season03_Emblem01",
+     "m_items": "352387153;352452689;352518225;352583761;352649297;352714833;352780369;352845905;352911441;352976977;353042513;353108049;353173585;353239121;353304657",
+     "m_name": {
+      "key": "424C10004E74EF225225B6829D98AD7F",
+      "text": "Recruit Cultist Warship Emblem"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 40000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Decal02.UI_Season03_Decal02",
+     "m_items": "402718904;402784440;402849976;402915512;402981048;403046584;403112120;403177656;403243192;403308728;403374264;403439800;403505336;403570872;403636408",
+     "m_name": {
+      "key": "A33A2CFB41AD9CABE9E156AD0FFC049B",
+      "text": "Veteran Cultist Warship Decal"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 40000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Coating_03.UI_Season03_Coating_03",
+     "m_items": "369164470;369230006;369295542;369361078;369426614;369492150;369557686;369623222;369688758;369754294;369819830;369885366;369950902;370016438;370081974",
+     "m_name": {
+      "key": "9AA2E6B04B921F1AF0CE86838F2A2D81",
+      "text": "Legendary Cultist Warship Coating"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.02.09-23.59.59",
+   "m_endDate": "2018.02.10-23.59.59",
+   "m_season": "PVE_Season3"
+  },
+  "PVE_S3E3": {
+   "m_name": {
+    "key": "PVE_S3E3_Name",
+    "text": "Culling"
+   },
+   "m_descShort": {
+    "key": "PVE_S3E3_Desc_Short",
+    "text": "Battleship Down - Culling"
+   },
+   "m_descLong": {
+    "key": "PVE_S3E3_Desc_Long",
+    "text": "The Bun Bun Cult brought more to the field than house Oberon planned for, and now their fleet is tangled fighting a new wave of raider ships in orbit. On Callisto's surface, cultist ships prepare to raze the corp's installations and supporting colony. Destroy every last enemy vessel!"
+   },
+   "m_map": "/Game/Maps/PVE/Season3/Episode3/PVE_S3E3_P.PVE_S3E3_P",
+   "m_mapParameters": "?ylevelvariation=1",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-1651545_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/game/generic/ui/menu/pve/ui_eventimage_s303_s.UI_EventImage_S303_S",
+   "m_imageLarge": "/game/generic/ui/menu/pve/ui_eventimage_s303_l.UI_EventImage_S303_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 62000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Decal01.UI_Season03_Decal01",
+     "m_items": "402718903;402784439;402849975;402915511;402981047;403046583;403112119;403177655;403243191;403308727;403374263;403439799;403505335;403570871;403636407",
+     "m_name": {
+      "key": "AA2B44604F9735538D820491F3F0EDFD",
+      "text": "Recruit Cultist Warship Decal"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 62000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Coating_02.UI_Season03_Coating_02",
+     "m_items": "369164469;369230005;369295541;369361077;369426613;369492149;369557685;369623221;369688757;369754293;369819829;369885365;369950901;370016437;370081973",
+     "m_name": {
+      "key": "5744C27B46E557D4C332F7916C4DCBDF",
+      "text": "Veteran Culist Warship Coating"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 62000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Tint03.UI_Season03_Tint03",
+     "m_items": "855572523",
+     "m_name": {
+      "key": "6CCB38B44962A5CC4DDC23810F5827C3",
+      "text": "Legendary Cultist Warrior Livery"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.02.11-23.59.59",
+   "m_endDate": "2018.02.12-23.59.59",
+   "m_season": "PVE_Season3"
+  },
+  "PVE_S3E4": {
+   "m_name": {
+    "key": "PVE_S3E4_Name",
+    "text": "Pet the Bunny"
+   },
+   "m_descShort": {
+    "key": "PVE_S3E4_Desc_Short",
+    "text": "Battleship Down - Pet the Bunny"
+   },
+   "m_descLong": {
+    "key": "PVE_S3E4_Desc_Long",
+    "text": "With the battle for Callisto won and the Cult's fleets all but destroyed, the hunt has begun for the cult's scattered remnants, and more importantly, for their "
+   },
+   "m_map": "/Game/Maps/PVE/Season3/Episode4/PVE_S3E4_P.PVE_S3E4_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-2251647_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/game/generic/ui/menu/pve/ui_eventimage_s304_s.UI_EventImage_S304_S",
+   "m_imageLarge": "/game/generic/ui/menu/pve/ui_eventimage_s304_l.UI_EventImage_S304_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 11000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 15000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Tint01.UI_Season03_Tint01",
+     "m_items": "855572521",
+     "m_name": {
+      "key": "8556148242414B8AA832EEA116D82296",
+      "text": "Recruit Cultist Warrior Livery"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 11000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 15000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Emblem02.UI_Season03_Emblem02",
+     "m_items": "352387147;352452683;352518219;352583755;352649291;352714827;352780363;352845899;352911435;352976971;353042507;353108043;353173579;353239115;353304651",
+     "m_name": {
+      "key": "2B47C74D4D5A6AB69E1E42B4E2C26C7F",
+      "text": "Veteran Cultist Warship Emblem"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 11000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 15650,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season03_Decal03.UI_Season03_Decal03",
+     "m_items": "402718905;402784441;402849977;402915513;402981049;403046585;403112121;403177657;403243193;403308729;403374265;403439801;403505337;403570873;403636409",
+     "m_name": {
+      "key": "AA3962C545965DBB536EF5B41DD8DFD7",
+      "text": "Legendary Cultist Warship Decal"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.02.13-23.59.59",
+   "m_endDate": "2018.02.14-23.59.59",
+   "m_season": "PVE_Season3"
+  },
+  "PVE_S1E1": {
+   "m_name": {
+    "key": "PVE_S1E1_Name",
+    "text": "Incident Management"
+   },
+   "m_descShort": {
+    "key": "PVE_S1E1_Desc_Short",
+    "text": "Miner Inconvenience - Incident Management"
+   },
+   "m_descLong": {
+    "key": "PVE_S1E1_Desc_Long",
+    "text": "Jupiter Arms installations on the surface of Io have been under attack for weeks by raiding parties using hit and run tactics to wear down the corp's spread out defenses. The megacorp is now contacting  mercenary captains directly to assist their forces and protect Jupiter Arms assets, hoping to finally put an end to these costly attacks."
+   },
+   "m_map": "/Game/Maps/PVE/Season1/Episode1/PVE_S1E1_P.PVE_S1E1_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-6254461_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S101_S.UI_EventImage_S101_S",
+   "m_imageLarge": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S101_L.UI_EventImage_S101_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 63750,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Tint02.UI_Season01_Tint02",
+     "m_items": "855572524.0",
+     "m_name": {
+      "key": "DC5BBB834640D74C908C898D3FF9C4DC",
+      "text": "Recruit Jovian Raider Captain Livery"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 63750,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Emblem02.UI_Season01_Emblem02",
+     "m_items": "352387154;352452690;352518226;352583762;352649298;352714834;352780370;352845906;352911442;352976978;353042514;353108050;353173586;353239122;353304658",
+     "m_name": {
+      "key": "E3BD4DF2498A42CC6A3833B90E910172",
+      "text": "Veteran Jovian Raider Emblem"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 63750,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Decal03.UI_Season01_Decal03",
+     "m_items": "402718906;402784442;402849978;402915514;402981050;403046586;403112122;403177658;403243194;403308730;403374266;403439802;403505338;403570874;403636410",
+     "m_name": {
+      "key": "D3E4C0744DB4084449CA48A5EB8198EA",
+      "text": "Legendary Jovian Raider Decal"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.05.16-16.00.00",
+   "m_endDate": "2018.05.16-16.19.59",
+   "m_season": "PVE_Season1"
+  },
+  "PVE_S1E2": {
+   "m_name": {
+    "key": "PVE_S1E2_Name",
+    "text": "Operational Risks"
+   },
+   "m_descShort": {
+    "key": "PVE_S1E2_Desc_Short",
+    "text": "Miner Inconvenience - Operational Risks"
+   },
+   "m_descLong": {
+    "key": "PVE_S1E2_Desc_Long",
+    "text": "The bandits harassing Jupiter Arms' installations turned out to be the Jovian Raiders, ex-PCF Navy captains gone rogue that want Io for themselves. Now that they have a real opponent to size up against they'll be bringing their best ships and captains to the field; be ready for a proper fight!"
+   },
+   "m_map": "/Game/Maps/PVE/Season1/Episode2/PVE_S1E2_P.PVE_S1E2_P",
+   "m_mapParameters": "?ylevelvariation=1",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-2390916_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S102_S.UI_EventImage_S102_S",
+   "m_imageLarge": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S102_L.UI_EventImage_S102_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 58000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 61000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Decal01.UI_Season01_Decal01",
+     "m_items": "402718907;402784443;402849979;402915515;402981051;403046587;403112123;403177659;403243195;403308731;403374267;403439803;403505339;403570875;403636411",
+     "m_name": {
+      "key": "A7966F5D4D8869CFD9A5379F4421C1D4",
+      "text": "Recruit Jovian Raider Decal"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 58000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 61000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Coating01.UI_Season01_Coating01",
+     "m_items": "369164475;369230011;369295547;369361083;369426619;369492155;369557691;369623227;369688763;369754299;369819835;369885371;369950907;370016443;370081979",
+     "m_name": {
+      "key": "035B54DF453AF3187D52C1BA6BFA4283",
+      "text": "Veteran Jovian Raiders Coating"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 70
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 58000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 61000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Tint03.UI_Season01_Tint03",
+     "m_items": "855572526.0",
+     "m_name": {
+      "key": "DADCEF0D41DC85B49668B18E58F402CD",
+      "text": "Legendary Jovian Raider Captain Livery"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.05.16-16.20.00",
+   "m_endDate": "2018.05.16-16.39.59",
+   "m_season": "PVE_Season1"
+  },
+  "PVE_S1E3": {
+   "m_name": {
+    "key": "PVE_S1E3_Name",
+    "text": "Asset Write Off"
+   },
+   "m_descShort": {
+    "key": "PVE_S1E3_Desc_Short",
+    "text": "Miner Inconvenience - Asset Write Off"
+   },
+   "m_descLong": {
+    "key": "PVE_S1E3_Desc_Long",
+    "text": "Jupiter Arms' evacuation of their installations on Io has hit a hitch, with workers remaining on the moon left stranded. As the Jovian Raiders prepare their next attack on Kappa Base, it fall on to you to defend the installation and those trapped in it from the assault."
+   },
+   "m_map": "/Game/Maps/PVE/Season1/Episode3/PVE_S1E3_P.PVE_S1E3_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_HORDE",
+   "m_color": {
+    "?-3432538_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S103_S.UI_EventImage_S103_S",
+   "m_imageLarge": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S103_L.UI_EventImage_S103_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_GP.UI_PVE_Reward_Currency_GP",
+     "m_items": "",
+     "m_name": {
+      "key": "BFD75AE349CC5BB651BAAE8FD923F0ED",
+      "text": "Gold"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_GPFreeXP.UI_PVE_Reward_Currency_GPFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "383906A14F971FB7E38431988363898E",
+      "text": "Gold"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 70
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 60000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 0,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 63000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "",
+     "m_items": "",
+     "m_name": {
+      "key": "D3663DB045F7DF62E0C80482AC16353D",
+      "text": "Gold"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 6000
+    }
+   ],
+   "m_startDate": "2018.05.16-16.40.00",
+   "m_endDate": "2018.05.16-16.59.59",
+   "m_season": "PVE_Season1"
+  },
+  "PVE_S1E4": {
+   "m_name": {
+    "key": "PVE_S1E4_Name",
+    "text": "Goodwill Expenses"
+   },
+   "m_descShort": {
+    "key": "PVE_S1E4_Desc_Short",
+    "text": "Miner Inconvenience - Goodwill Expenses"
+   },
+   "m_descLong": {
+    "key": "PVE_S1E4_Desc_Long",
+    "text": "The evacuation of Io is nearly complete, but a mining complex has suffered a collapse, trapping scores of workers underground. With Jupiter Arms nowhere to be seen and the Jovian Raiders still on the offensive, the Miners Union is setting up a rescue operation lead by the captain of the Deliverance. Escort the hauler through hostile territory and evacuate the trapped miners!"
+   },
+   "m_map": "/Game/Maps/PVE/Season1/Episode4/PVE_S1E4_P.PVE_S1E4_P",
+   "m_mapParameters": "",
+   "m_gameMode": "YGMT_ESCORT",
+   "m_color": {
+    "?-4794901_30": "</Game/Generic/DataTables/PVE/DN_Events_DT 0 bytes>"
+   },
+   "m_imageSmall": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S104_S.UI_EventImage_S104_S",
+   "m_imageLarge": "/Game/Generic/UI/Menu/PVE/UI_EventImage_S104_L.UI_EventImage_S104_L",
+   "m_rewardLevels": [
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 2000,
+     "m_freeXP": 500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 1500,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Recruit",
+     "m_requiredScore": 45000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Coating01.UI_Season01_Coating01",
+     "m_items": "369164474;369230010;369295546;369361082;369426618;369492154;369557690;369623226;369688762;369754298;369819834;369885370;369950906;370016442;370081978",
+     "m_name": {
+      "key": "1B4F8C0844F584C4587E27941059A039",
+      "text": "Recruit Jovian Raiders Coating"
+     },
+     "m_hardCurrency": 50,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 5000,
+     "m_freeXP": 2000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 3500,
+     "m_freeXP": 5000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Veteran",
+     "m_requiredScore": 45000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Tint03.UI_Season01_Tint03",
+     "m_items": "855572526.0",
+     "m_name": {
+      "key": "6FE300A24C049040F4137EAD015533B9",
+      "text": "Legendary Jovian Raider Captain Livery"
+     },
+     "m_hardCurrency": 75,
+     "m_softCurrency": 0,
+     "m_freeXP": 70
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 0,
+     "m_rewardLevel": "EYPVERewardLevel::BRONZE",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_CreditsFreeXP.UI_PVE_Reward_Currency_CreditsFreeXP",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 0,
+     "m_softCurrency": 10000,
+     "m_freeXP": 4500
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 43000,
+     "m_rewardLevel": "EYPVERewardLevel::SILVER",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_PVE_Reward_Currency_All.UI_PVE_Reward_Currency_All",
+     "m_items": "",
+     "m_name": {
+      "key": "",
+      "text": ""
+     },
+     "m_hardCurrency": 10,
+     "m_softCurrency": 8500,
+     "m_freeXP": 10000
+    },
+    {
+     "m_fleet": "EYFleetType::EYFT_Legendary",
+     "m_requiredScore": 45000,
+     "m_rewardLevel": "EYPVERewardLevel::GOLD",
+     "m_image": "/Game/Generic/UI/Menu/PVE/UI_Season01_Emblem03.UI_Season01_Emblem03",
+     "m_items": "352387156;352452692;352518228;352583764;352649300;352714836;352780372;352845908;352911444;352976980;353042516;353108052;353173588;353239124;353304660",
+     "m_name": {
+      "key": "1198C88844165D31AEAD82ACE535EE6D",
+      "text": "Legendary Jovian Raider Emblem"
+     },
+     "m_hardCurrency": 100,
+     "m_softCurrency": 0,
+     "m_freeXP": 0
+    }
+   ],
+   "m_startDate": "2018.05.07-09.45.00",
+   "m_endDate": "2018.05.07-09.59.59",
+   "m_season": "PVE_Season1"
+  }
+ }
+}

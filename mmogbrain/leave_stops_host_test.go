@@ -52,3 +52,39 @@ func TestLeavingAFormedMatchStopsItsBattleServer(t *testing.T) {
 		t.Fatal("the battle server of the emptied match was not stopped")
 	}
 }
+
+// A leave ends only the leaver's own emptied match. Another active match with
+// no slots -- e.g. one whose slots were not written yet -- is not theirs to
+// end, and its battle server keeps running.
+func TestLeavingDoesNotEndOtherMatches(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+	stopped := make(chan string, 4)
+	controlPlane := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			stopped <- r.URL.Path
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer controlPlane.Close()
+	activeMatchmaker = matchmaker.New(database, logrus.New(), controlPlane.URL, "key", 1)
+	defer func() { activeMatchmaker = nil }()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := database.Exec(`INSERT INTO matches(id,game_mode,map,server_ip,server_port,status,created_at,started_at,instance_id)
+		VALUES('other','TDM','Glacier','127.0.0.1',7902,'active',?,?,'inst-2')`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	buildMmogLeaveMatchmakingPayload("YA_LeaveMatchmaking", pid)
+
+	var status string
+	_ = database.QueryRow(`SELECT status FROM matches WHERE id='other'`).Scan(&status)
+	if status != "active" {
+		t.Errorf("another player's match is %q after this leave, want active", status)
+	}
+	select {
+	case path := <-stopped:
+		t.Errorf("stopped %s: not the leaver's match", path)
+	case <-time.After(300 * time.Millisecond):
+	}
+}

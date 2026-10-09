@@ -918,3 +918,34 @@ end-of-match screen had no Rewards tab (MVP / Stats / Scoreboard only, no
 `RewardsPageAnimated` stage; 2026-09-30) and no ShipXpError. The component
 replicates through the PRI's channel, so pushing the PRI covers it. Not
 verified live yet that this brings the tab back.
+
+## Kill detail for daily contracts (on; `dn_host_no_kill_detail.txt` turns it off)
+
+mmogbrain counts the daily contracts (`mmogbrain/daily_contracts.go`), and many
+of them count only some kills: "Destroy Enemy Corvettes" (the destroyed ship's
+class) or "Destroy Enemies with a Corvette" (the class the player flies). The
+match result carried only a kill count. The kill hook (`HookTdmKilled`) now
+records each kill by the killer's PlayerReplicationInfo -- the destroyed ship's
+EYShipClass (pawn `+0x940`, the field `0x57BAE0` reads) and the killer's ship's
+(controller `+0x3C8` -> pawn `+0x940`) -- and the result reports them as
+`kl=victim.killer,...` (up to 64 kills). The first result that carries `kl=`
+turns the class contracts on in mmogbrain (logged "contracts: the battle
+servers report per-kill detail").
+
+Expected log: none per kill; the `battle result` line in mmogbrain's log shows
+the contract progress ("contracts: progress").
+
+## PvE season episodes: no multiplayer bot fill (not switchable)
+
+The PvE season events (mmogbrain `pve_seasons.go`) run the episode maps
+(`/Game/Maps/PVE/Season1/EpisodeN/PVE_S1EN_P`) in the Horde or Escort game mode
+(dn-dedicated passes the Blueprint class path as `?game=`). Their enemies come
+from the map's own PVE managers (`PVE_HordeManager_BP`, `PVE_HordeWave_BP`).
+A probe host on PVE_S1E1 (2026-10-09) loaded, reached `InProgress`, and the
+game-mode timer switched the multiplayer bot fill on (`m_enableSpawnAI 0 -> 1`,
+"bot list 0 entries"). That fill is now skipped for any game mode descended
+from `YGameMode_PVE`; the log says so once per match:
+
+```text
+[dn-host-loadout] pve: game mode ... (type 13) is a PvE episode -- no multiplayer bot fill
+```

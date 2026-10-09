@@ -53,6 +53,9 @@ func TestBattleResultRefusesNonLoopback(t *testing.T) {
 // values) to the wallet, free XP, rank XP and the ship flown -- once: the mod
 // may report twice, and the second report must grant nothing.
 func TestBattleResultAwardsOnce(t *testing.T) {
+	// The payout formula alone: a daily contract completed by this match
+	// would add its own credits (daily_contracts_test.go covers those).
+	t.Setenv("DN_DAILY_CONTRACTS", "0")
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "0123456789abcdef0123456789abcdef"
 	if err := seedMmogPlayerState(database, pid); err != nil {

@@ -214,7 +214,7 @@ func BuildArgs(cfg LaunchConfig, matchID string) []string {
 	// An explicit game= in URLOptions wins, so an operator can still override.
 	if !explicitGame {
 		if mode := strings.TrimSpace(cfg.GameMode); mode != "" {
-			mapURL += "?game=" + mode
+			mapURL += "?game=" + gamedata.GameOption(mode)
 		}
 	}
 

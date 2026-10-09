@@ -6,9 +6,11 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/handlers"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -333,6 +335,13 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if fresh {
+		// Daily contracts: this match's progress, and the credits of any it
+		// completes -- before the currencies push below, which then carries
+		// them (daily_contracts.go).
+		if contractCredits, changed := applyContractProgress(pid, battleContractMatch(res, q), time.Now()); changed {
+			squadHubInstance.push(pid, buildMmogContractRefreshPush(pid))
+			credits += contractCredits
+		}
 		// The hangar's credits only change through YA_RewardCurrencies, whose
 		// handler ASSIGNS Credits/Points (buildMmogRewardCurrenciesPayload); it
 		// was sent at login only, so the hangar kept the pre-match balance
@@ -633,4 +642,27 @@ func battleResultCounter(playerPID, counterID string) int32 {
 		return 0
 	}
 	return v
+}
+
+// battleContractMatch is what this result counts towards daily contracts. The
+// battle server adds kl= (one "victim.killer" EYShipClass pair per kill) and
+// score= once it reports them; their presence turns the class and score
+// contracts on (markContractDetailReported).
+func battleContractMatch(res battleResult, q url.Values) contractMatch {
+	m := contractMatch{outcome: res.outcome, kills: res.kills}
+	database := currentMmogPlayerStateDB()
+	if database != nil {
+		_ = database.QueryRow(`SELECT game_mode FROM matches WHERE battle_match_id=? AND battle_match_id<>'' LIMIT 1`, res.match).Scan(&m.mode)
+	}
+	if q.Has("kl") {
+		m.hasDetail = true
+		m.detail = parseContractKills(q.Get("kl"))
+		markContractDetailReported(database)
+	}
+	if v := strings.TrimSpace(q.Get("score")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			m.score, m.hasScore = int32(n), true
+		}
+	}
+	return m
 }

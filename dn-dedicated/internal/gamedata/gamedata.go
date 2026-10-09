@@ -119,6 +119,28 @@ var gameModes = []struct {
 	{"BC", 1},
 	{"Bootcamp", 1},
 	{"TurboTDM", 5},
+	// PvE season episodes (DN_Events_DT m_gameMode YGMT_HORDE / YGMT_ESCORT).
+	// No GameModeClassAliases exist for them, so the URL carries the class
+	// path (GameOption).
+	{"Horde", 5},
+	{"Escort", 5},
+}
+
+// gameOptionClasses is the ?game= value for a mode the client's
+// DefaultGame.ini has no alias for: the Blueprint class path, which the
+// engine's game-mode lookup accepts as well.
+var gameOptionClasses = map[string]string{
+	"Horde":  "/Game/Generic/GameModes/Horde/GameMode_Horde_BP.GameMode_Horde_BP_C",
+	"Escort": "/Game/Generic/GameModes/Escort/GameMode_Escort_BP.GameMode_Escort_BP_C",
+}
+
+// GameOption is the ?game= value for a mode: its alias short name, or its
+// class path when the game has no alias for it.
+func GameOption(mode string) string {
+	if class, ok := gameOptionClasses[mode]; ok {
+		return class
+	}
+	return mode
 }
 
 // gameModeAliases maps the longer legacy server names onto the client config

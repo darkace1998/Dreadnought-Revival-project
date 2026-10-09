@@ -458,12 +458,17 @@ func awardFleetShipXP(db *sql.DB, pid string, xp int32) {
 	if err != nil {
 		return
 	}
-	defer func() { _ = rows.Close() }()
+	var ships []int32
 	for rows.Next() {
 		var shipID int32
-		if err := rows.Scan(&shipID); err != nil {
-			continue
+		if rows.Scan(&shipID) == nil {
+			ships = append(ships, shipID)
 		}
+	}
+	_ = rows.Close()
+	// Written after Close: the store has ONE connection, and an Exec inside
+	// the open result set waits for itself forever.
+	for _, shipID := range ships {
 		_, _ = db.Exec(`INSERT INTO player_ship_xp(user_id,ship_id,xp) VALUES(?,?,?) ON CONFLICT(user_id,ship_id) DO UPDATE SET xp=xp+?, updated_at=datetime('now')`, pid, shipID, xp, xp)
 	}
 }
@@ -628,23 +633,21 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 
 	totalScore := killScore*kills + waveScore
 
-	// Calculate rewards based on score
-	bonusXP := int32(0)
-	bonusGP := int32(0)
-
+	// Calculate rewards based on score. Only the XP is paid: the GP figure
+	// getHavocRewardForScore also returns was computed and dropped here, and
+	// no PvE GP reward rule is known.
+	var bonusXP int32
 	if strings.Contains(gameMode, "Havoc") {
 		// Use Havoc reward tiers
-		bonusXP, bonusGP = getHavocRewardForScore(totalScore)
+		bonusXP, _ = getHavocRewardForScore(totalScore)
 	} else {
 		// For non-Havoc modes, use a simple multiplier
 		bonusXP = totalScore / 10
-		bonusGP = totalScore / 5
 	}
 
 	// Add boss kill bonuses
 	if bossKills > 0 {
 		bonusXP += bossKills * 500
-		bonusGP += bossKills * 1000
 	}
 
 	if bonusXP > 0 {
@@ -661,7 +664,7 @@ func awardPvEProgression(db *sql.DB, pid, gameMode string, kills int32) {
 		total_kills = total_kills + ?,
 		best_score = MAX(best_score, ?),
 		updated_at = datetime('now')
-		WHERE user_id=? AND mode=?`, wave, bossKills, kills, bonusXP, pid, gameMode)
+		WHERE user_id=? AND mode=?`, wave, bossKills, kills, totalScore, pid, gameMode)
 }
 
 // RecordBossKill records a boss kill for a player.

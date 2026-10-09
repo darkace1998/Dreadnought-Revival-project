@@ -417,6 +417,19 @@ func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []by
 		if _, err := database.Exec(`DELETE FROM queue_entries WHERE user_id=?`, pid); err != nil {
 			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
 		}
+		// The matches the player holds a slot in -- only those can be left
+		// empty by this leave. The sweep below used to take EVERY slotless
+		// active match, including one whose slots were not written yet.
+		var theirs []string
+		if rows, err := database.Query(`SELECT match_id FROM match_slots WHERE user_id=?`, pid); err == nil {
+			for rows.Next() {
+				var id string
+				if rows.Scan(&id) == nil {
+					theirs = append(theirs, id)
+				}
+			}
+			_ = rows.Close()
+		}
 		// Drop any slot they hold in a live match, or currentMmogMatchmakingStatus
 		// keeps reporting "matched" and re-pushes them at a battle server they
 		// just cancelled out of. A match left with no slots is over.
@@ -429,21 +442,19 @@ func buildMmogLeaveMatchmakingPayload(requestName string, playerPID string) []by
 		// was seen with two hosts (operator, 2026-10-01). Read before the
 		// update, and outside any open rows (single connection).
 		var emptied []string
-		if rows, err := database.Query(`SELECT COALESCE(instance_id,'') FROM matches
-			WHERE status='active' AND id NOT IN (SELECT match_id FROM match_slots)`); err == nil {
-			for rows.Next() {
-				var id string
-				if rows.Scan(&id) == nil && id != "" {
-					emptied = append(emptied, id)
-				}
+		for _, matchID := range theirs {
+			var instanceID string
+			if err := database.QueryRow(`SELECT COALESCE(instance_id,'') FROM matches
+				WHERE id=? AND status='active' AND id NOT IN (SELECT match_id FROM match_slots)`, matchID).Scan(&instanceID); err != nil {
+				continue // still has players, already over, or gone
 			}
-			_ = rows.Close()
-		}
-		if _, err := database.Exec(`
-			UPDATE matches SET status='ended', ended_at=?
-			WHERE status='active' AND id NOT IN (SELECT match_id FROM match_slots)`,
-			time.Now().UTC().Format(time.RFC3339)); err != nil {
-			return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
+			if _, err := database.Exec(`UPDATE matches SET status='ended', ended_at=? WHERE id=? AND status='active'`,
+				time.Now().UTC().Format(time.RFC3339), matchID); err != nil {
+				return buildMmogMatchmakingErrorPayload(requestName, 2, "invalid_player", "queue leave failed")
+			}
+			if instanceID != "" {
+				emptied = append(emptied, instanceID)
+			}
 		}
 		stopEmptiedBattleServers(emptied, pid)
 	}
@@ -716,8 +727,13 @@ func appendMmogConnectFields(b []byte, status mmogMatchmakingStatus) []byte {
 	b = protocol.AppendStringField(b, "DediID", status.matchID)
 	b = protocol.AppendStringField(b, "Room", status.matchID)
 	// PVEEvent is read unconditionally, so it is always present; empty means
-	// "not a PvE event match".
-	b = protocol.AppendStringField(b, "PVEEvent", "")
+	// "not a PvE event match". A PvE match is recorded with the event id as
+	// its map (matchmaker.PvEGameMode).
+	pveEvent := ""
+	if status.gameMode == matchmaker.PvEGameMode {
+		pveEvent = status.mapName
+	}
+	b = protocol.AppendStringField(b, "PVEEvent", pveEvent)
 	return b
 }
 
@@ -1489,6 +1505,16 @@ func buildMmogSeasonDataPayload() []byte {
 
 	b = protocol.AppendStringField(b, "RT", "YA_GetSeasonData")
 	b, stack = protocol.AppendObjectStart(b, stack, "result")
+	// A running PvE season (pve_seasons.go): its events, the season, and the
+	// event on now. Without one, the inert rows below.
+	if events, seasons, current, active, ok := pveSeasonDataJSON(time.Now().UTC()); ok {
+		b = protocol.AppendStringField(b, "Events", events)
+		b = protocol.AppendStringField(b, "Seasons", seasons)
+		b = protocol.AppendStringField(b, "CurrentSeason", current)
+		b = protocol.AppendStringField(b, "ActiveEvent", active)
+		b, _ = protocol.AppendObjectEnd(b, stack)
+		return b
+	}
 	b = protocol.AppendStringField(b, "Events", mmogSeasonDataEventsJSON)
 	b = protocol.AppendStringField(b, "Seasons", mmogSeasonDataSeasonsJSON)
 	// CurrentSeason intentionally EMPTY to declare NO active season.
@@ -1786,16 +1812,10 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 		b = protocol.AppendStringField(b, "ExpireTime", strconv.Itoa(int(expiresAt)))
 		b, stack = protocol.AppendObjectEnd(b, stack)
 	}
-	b = protocol.AppendStringField(b, "DailyContractStateID", strconv.Itoa(dailyContractState(playerPID)))
-	b = protocol.AppendStringField(b, "LastContractsAssignment", strconv.Itoa(int(now)))
-	b = protocol.AppendStringField(b, "DailyContractLastReplaceTime", strconv.Itoa(int(now)))
-	// issue #43: the client's top-level parser (FUN_142a70da0) reads Quests
-	// from the same object as the three DailyContract* fields above (via
-	// FUN_142a69310), but this payload never sent it — every entry silently
-	// missing. Reuses the same active-contract data as YA_GetDailyContractsData
-	// (different RT, different per-entry field names) rather than a separate
-	// quest system, since no other quest data model exists server-side.
-	b, stack = appendMmogQuestsArray(b, stack, playerPID)
+	// The player's daily contracts: Quests and the three DailyContract* fields,
+	// read together from this object (0x2A70DA0 -> 0x2A69310). See
+	// daily_contracts.go.
+	b, stack = appendContractStateFields(b, stack, currentContracts(playerPID, time.Unix(int64(now), 0)))
 	b = protocol.AppendStringField(b, "FreeXp", strconv.Itoa(int(state.freeXP)))
 	// Each ship's XP. Was always sent EMPTY, so the client never knew any ship
 	// had XP and research could only ever be paid with free XP (live,
@@ -2373,9 +2393,10 @@ func buildMmogTechTreePayload(playerPID ...string) []byte {
 	// frame would pass the budget the tree goes out WITHOUT them -- rails empty
 	// but the game playable -- and says so loudly.
 	if len(b)+len(blob) > responseBudget(techTreeFrameBudget) && !techTreeNoModules {
-		techTreeNoModules = true
-		stripped := compressMmogDocument(buildMmogTechTreeDocument())
-		techTreeNoModules = false
+		// Built WITHOUT touching techTreeNoModules: flipping that global here
+		// raced with every other player's tree and owned-item build running at
+		// the same time (they read it), which then lost their modules.
+		stripped := compressMmogDocument(buildMmogTechTreeDocumentWith(true))
 		logrus.WithFields(logrus.Fields{
 			"player": pid, "with_modules": len(b) + len(blob), "without": len(b) + len(stripped),
 			"budget": responseBudget(techTreeFrameBudget),
@@ -3080,7 +3101,11 @@ const techTreeMaxDisplayableCost = 99999
 // so they are left unlinked rather than wired to a guess. That is also why the
 // old seed for Furia pointed at Rurik: a plausible-looking cross-line link
 // somebody invented. Wires are empty for the same reason.
-func techTreeBaseItems() []techTreeItem {
+func techTreeBaseItems() []techTreeItem { return techTreeBaseItemsWith(techTreeNoModules) }
+
+// techTreeBaseItemsWith builds the base tree, without the per-ship modules
+// when noModules is set.
+func techTreeBaseItemsWith(noModules bool) []techTreeItem {
 	byLine := map[string]map[int32]int32{}
 	for _, hull := range baseShipLoadouts {
 		if byLine[hull.hullLine] == nil {
@@ -3183,7 +3208,7 @@ func techTreeBaseItems() []techTreeItem {
 			prereq:       prereq,
 		})
 		// ...and its modules, which go into the OTHER array of the same record.
-		if !techTreeNoModules {
+		if !noModules {
 			items = append(items, techTreeModuleItems(hull, manufacturerID)...)
 		}
 	}
@@ -3340,11 +3365,15 @@ func techTreeItemLimit() int {
 	return limit
 }
 
-func buildMmogTechTreeDocument() []byte {
+func buildMmogTechTreeDocument() []byte { return buildMmogTechTreeDocumentWith(techTreeNoModules) }
+
+// buildMmogTechTreeDocumentWith builds the document, stripped of modules when
+// noModules is set (see techTreeNoModules).
+func buildMmogTechTreeDocumentWith(noModules bool) []byte {
 	limit := techTreeItemLimit()
 	byManufacturer := map[int32][]techTreeItem{}
 	nextPosition := map[int32]map[bool]int32{}
-	for _, item := range append(techTreeBaseItems(), techTreeHeroItems()...) {
+	for _, item := range append(techTreeBaseItemsWith(noModules), techTreeHeroItems()...) {
 		if nextPosition[item.manufacturer] == nil {
 			nextPosition[item.manufacturer] = map[bool]int32{}
 		}
@@ -3693,6 +3722,8 @@ var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 // "the modules per ship are empty so no new unlockable ship modules", with the
 // client logging "ComposeModuleUiDataForShip | Modules not found for ship id".
 // DN_TECHTREE_NO_MODULES=1 strips them again.
+// It is the startup setting only and is never changed afterwards: an
+// over-budget tree is built stripped through buildMmogTechTreeDocumentWith.
 var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
 
 // techTreeModulePrereq sends each module entry's hull as its Prereq (see
@@ -4810,63 +4841,6 @@ func toLowerCamelCase(s string) string {
 	return string(r)
 }
 
-// appendMmogQuestsArray builds the "Quests" array read by YA_PlayerGet's
-// top-level parser (FUN_142a70da0 -> FUN_142a69310, per-entry parser
-// FUN_142a706f0). Per-entry fields are eid/id/act/cpl/prg/dif/ran — a
-// different schema than YA_GetDailyContractsData's ContractID/Progress/
-// State/etc, but backed by the same underlying active-contract data (no
-// separate quest system exists server-side).
-func appendMmogQuestsArray(b []byte, stack []int, playerPID string) ([]byte, []int) {
-	// Quests/daily contracts intentionally sent EMPTY. The client's
-	// UYPlayerMPQuestCycle::OnBackendDataAvailable (FUN_1403fe800/FUN_140404440)
-	// enters an INFINITE mutual-recursion delegate broadcast when it is given
-	// contract/quest backend data it can't drive to completion — confirmed via
-	// crash minidump: a 6-function cycle (FUN_140404440->FUN_1403fe800->
-	// FUN_1403feb30->FUN_140d18710->FUN_140d5b180->FUN_1402322a0) repeated
-	// ~833x until stack overflow. Our seeded daily contracts (progress 0,
-	// int32-typed Progress/Target fields the client reads as 0) triggered it.
-	// Contracts aren't needed for hangar entry; an empty Quests array lets the
-	// cycle terminate. Re-enable only with real, client-valid contract data +
-	// progress tracking. See seedDailyContractsForPlayer (now a no-op).
-	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
-	database := currentMmogPlayerStateDB()
-	if database == nil {
-		b, stack = protocol.AppendObjectEnd(b, stack)
-		return b, stack
-	}
-	pid := normalizedPlayerStatePID(playerPID)
-	// LIMIT 4 = 3 base slots + 1 elite slot. The client fills base slots first,
-	// then the elite slot, in the order contracts arrive; sending only 3 leaves
-	// the elite slot empty and UYPlayerMPQuestCycle loops resolving it.
-	rows, err := database.Query(`SELECT contract_id, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 4`, pid)
-	if err != nil {
-		b, stack = protocol.AppendObjectEnd(b, stack)
-		return b, stack
-	}
-	defer func() { _ = rows.Close() }()
-	for idx := 0; rows.Next(); idx++ {
-		var contractID, state string
-		var progress int32
-		if err := rows.Scan(&contractID, &progress, &state); err != nil {
-			continue
-		}
-		// eid = the client's real YMPQ_ contract id (resolves against its loaded
-		// MPQuestCollection). All numeric fields as strings (restrictive parser).
-		// idx 3 = the elite slot -> harder difficulty.
-		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-		b = protocol.AppendStringField(b, "eid", contractID)
-		b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
-		b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
-		b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
-		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
-		b = protocol.AppendStringField(b, "dif", contractDifficulty(idx))
-		b = protocol.AppendStringField(b, "ran", "0")
-		b, stack = protocol.AppendObjectEnd(b, stack)
-	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	return b, stack
-}
-
 func boolToOneZero(v bool) string {
 	if v {
 		return "1"
@@ -4874,64 +4848,16 @@ func boolToOneZero(v bool) string {
 	return "0"
 }
 
-// contractDifficulty maps a contract's slot index to its wire "dif" value. The
-// first 3 (idx 0-2) are base slots (dif 1); idx 3 is the elite slot (dif 2).
-func contractDifficulty(idx int) string {
-	if idx >= 3 {
-		return "2"
-	}
-	return "1"
-}
-
 func buildMmogDailyContractsDataPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
-
+	now := time.Now()
 	b = protocol.AppendStringField(b, "RT", "YA_GetDailyContractsData")
 	// The quest catalog the client's parser for THIS reply actually reads, at
 	// the root. See mpquest_contracts.go -- without it the quest cycle recurses.
-	b, stack = appendMmogContractCatalog(b, stack, time.Now())
-	b = protocol.AppendInt32Field(b, "DailyContractStateID", int32(dailyContractState(playerPID)))
-	b = protocol.AppendInt32Field(b, "LastContractsAssignment", int32(time.Now().Unix()))
-	b = protocol.AppendInt32Field(b, "DailyContractLastReplaceTime", int32(time.Now().Unix()))
-
-	// Quests = the player's active daily contracts, using real YMPQ_ eids so
-	// the client's daily-contract slots resolve (see dailyContractSeeds).
-	pid := normalizedPlayerStatePID(playerPID)
-	database := currentMmogPlayerStateDB()
-	b, stack = protocol.AppendArrayStart(b, stack, "Quests")
-	if database != nil {
-		// LIMIT 4 = 3 base + 1 elite slot (see buildMmogQuestsArray comment).
-		rows, err := database.Query(`SELECT contract_id, payload, progress, state FROM player_contracts WHERE user_id=? AND state='active' ORDER BY created_at LIMIT 4`, pid)
-		if err == nil {
-			defer func() { _ = rows.Close() }()
-			for idx := 0; rows.Next(); idx++ {
-				var contractID, payloadJSON, state string
-				var progress int32
-				if err := rows.Scan(&contractID, &payloadJSON, &progress, &state); err != nil {
-					continue
-				}
-				b, stack = protocol.AppendUnnamedObjectStart(b, stack)
-				b = protocol.AppendStringField(b, "eid", contractID)
-				b = protocol.AppendStringField(b, "id", strconv.Itoa(idx))
-				b = protocol.AppendStringField(b, "act", boolToOneZero(state == "active"))
-				b = protocol.AppendStringField(b, "cpl", boolToOneZero(progress >= 100))
-				b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(progress)))
-				b = protocol.AppendStringField(b, "dif", contractDifficulty(idx))
-				b = protocol.AppendStringField(b, "ran", "0")
-				b, stack = protocol.AppendObjectEnd(b, stack)
-			}
-		}
-	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-
-	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b, stack = protocol.AppendArrayStart(b, stack, "Contracts")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, _ = protocol.AppendObjectEnd(b, stack)
+	b, stack = appendMmogContractCatalog(b, stack, now)
+	// The player's own contracts, as on the player object (daily_contracts.go).
+	b, _ = appendContractStateFields(b, stack, currentContracts(playerPID, now))
 	return b
 }
 
@@ -6269,35 +6195,6 @@ func itemTypeFromCategoryLaw(itemID int32) string {
 	}
 }
 
-// Daily contract seeds
-// dailyContractSeeds MUST use the client's real YMPQ_ contract IDs (from
-// MPQuestCollection.m_dailyContractsConfig.m_initialContracts). The client's
-// daily-contract system (UYPlayerMPQuestCycle) resolves each active contract's
-// "eid" against its locally-loaded MPQuestCollection quest assets. Fabricated
-// ids ("contract_kills_5" etc.) never match any loaded YMPQ_ quest, so the
-// contract slots never fill, the cycle keeps re-generating/reloading, and it
-// spams EYA_MenuNewQuest until the stack overflows.
-//
-// The config (MPQuestCollection.m_dailyContractsConfig) declares 4 slots:
-// m_numBaseContractSlots=3 + m_numEliteContractSlots=1. The elite slot is NOT
-// gated on membership at fill time — the client fills base slots first, then the
-// elite slot, from the contracts it receives in order. The daily-contract wire
-// struct (FUN_142a706f0: eid/id/act/cpl/prg/dif/ran) carries NO per-contract
-// elite flag; elite is decided purely by slot position. So if we send only 3
-// contracts, the elite slot stays empty and UYPlayerMPQuestCycle loops trying to
-// resolve/fill it. Seed all 4 slots: 3 base + 1 elite (the 4th entry fills the
-// elite slot). dif=2 on the elite one for a harder target.
-var dailyContractSeeds = []struct {
-	id, name, description    string
-	targetKills, targetScore int32
-	rewardXP, rewardGP       int32
-}{
-	{"YMPQ_Kills", "Kills", "Eliminate enemy ships", 10, 0, 500, 1000},
-	{"YMPQ_CompleteMatches", "Complete Matches", "Complete matches", 3, 0, 300, 600},
-	{"YMPQ_WinMatches", "Win Matches", "Win matches", 1, 0, 400, 800},
-	{"YMPQ_ModuleKills", "Module Kills", "Destroy enemy modules", 15, 0, 800, 1600},
-}
-
 // buildMmogPurchasePayload answers a store purchase (YA_PurchaseItem and its
 // aliases).
 //
@@ -6726,155 +6623,7 @@ func buildMmogXPConversionPayload(requestName string, playerPID string, payload 
 	return b
 }
 
-func buildMmogContractCompletionPayload(requestName string, playerPID string, payload []byte) []byte {
-	contractID := protocol.FirstNonEmptyString(payload, "ContractID", "contractID", "contract_id", "id")
-	if contractID == "" {
-		return buildMmogErrorPayload(requestName, "missing contract ID")
-	}
-
-	pid := normalizedPlayerStatePID(playerPID)
-	database := currentMmogPlayerStateDB()
-	if database == nil {
-		return buildMmogErrorPayload(requestName, "database unavailable")
-	}
-
-	rewardXP, rewardGP, success := completeContract(database, pid, contractID)
-	if !success {
-		return buildMmogErrorPayload(requestName, "contract completion failed")
-	}
-
-	var b []byte
-	var stack []int
-	b = protocol.AppendStringField(b, "RT", requestName)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendStringField(b, "contractID", contractID)
-	b = protocol.AppendInt32Field(b, "rewardXP", rewardXP)
-	b = protocol.AppendInt32Field(b, "rewardGP", rewardGP)
-	b, _ = protocol.AppendObjectEnd(b, stack)
-	return b
-}
-
-func buildMmogContractRerollPayload(requestName string, playerPID string, payload []byte) []byte {
-	contractID := protocol.FirstNonEmptyString(payload, "ContractID", "contractID", "contract_id", "id")
-	if contractID == "" {
-		return buildMmogErrorPayload(requestName, "missing contract ID")
-	}
-
-	pid := normalizedPlayerStatePID(playerPID)
-	database := currentMmogPlayerStateDB()
-	if database == nil {
-		return buildMmogErrorPayload(requestName, "database unavailable")
-	}
-
-	// Reroll costs 100 credits. Atomic conditional deduction — see
-	// buildMmogPurchasePayload's comment for why check-then-update is
-	// unsafe under concurrent requests.
-	rerollCost := int32(100)
-
-	// Deduct reroll cost
-	result, err := database.Exec(`UPDATE player_state SET soft_currency=soft_currency-?, updated_at=datetime('now') WHERE user_id=? AND soft_currency>=?`, rerollCost, pid, rerollCost)
-	if err != nil {
-		return buildMmogErrorPayload(requestName, "currency deduction failed")
-	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
-		return buildMmogErrorPayload(requestName, "insufficient credits for reroll")
-	}
-
-	// Mark old contract as rerolled
-	_, _ = database.Exec(`UPDATE player_contracts SET state='rerolled', updated_at=datetime('now') WHERE user_id=? AND contract_id=?`, pid, contractID)
-
-	// Seed new contracts
-	seedDailyContractsForPlayer(database, pid)
-
-	var b []byte
-	var stack []int
-	b = protocol.AppendStringField(b, "RT", requestName)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, fieldStatus, "ok")
-	b = protocol.AppendStringField(b, "contractID", contractID)
-	b = protocol.AppendInt32Field(b, "rerollCost", rerollCost)
-	b, _ = protocol.AppendObjectEnd(b, stack)
-	return b
-}
-
 // Contract and XP conversion functions (moved from handlers package)
-
-func seedDailyContractsForPlayer(db *sql.DB, pid string) {
-	// Seed the 4 daily contracts (3 base + 1 elite) using the client's real YMPQ_ contract
-	// ids so the client's daily-contract slots resolve against its loaded
-	// MPQuestCollection quests (see dailyContractSeeds). Sending valid ids (vs
-	// the old fabricated "contract_*" ids) is what stops the quest-cycle
-	// recursion / EYA_MenuNewQuest notification flood.
-	var count int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
-	if count >= len(dailyContractSeeds) {
-		return
-	}
-	for i := 0; i < len(dailyContractSeeds); i++ {
-		seed := dailyContractSeeds[i]
-		payload, _ := json.Marshal(map[string]interface{}{
-			"id": seed.id, "name": seed.name, "description": seed.description,
-			"targetKills": seed.targetKills, "targetScore": seed.targetScore,
-			"rewardXP": seed.rewardXP, "rewardGP": seed.rewardGP,
-		})
-		_, _ = db.Exec(`INSERT OR IGNORE INTO player_contracts(user_id,contract_id,state,progress,payload) VALUES(?,?,'active',0,?)`, pid, seed.id, string(payload))
-	}
-}
-
-// minContractCompletionAge is a rough anti-farming heuristic: the server
-// has no real progress tracking tying "kills"/"score" objectives to actual
-// match events (see tracked issue — contracts can be claimed with zero
-// gameplay), so completion currently can't be validated against genuine
-// progress. This isn't a real fix — it only stops literal zero-delay
-// complete-and-reseed scripting loops — but it's cheap and honest about
-// its limits pending real per-objective progress tracking.
-const minContractCompletionAge = 120 // seconds
-
-func completeContract(db *sql.DB, pid, contractID string) (rewardXP, rewardGP int32, success bool) {
-	// Get contract details
-	var payload string
-	err := db.QueryRow(`SELECT payload FROM player_contracts WHERE user_id=? AND contract_id=? AND state='active'`, pid, contractID).Scan(&payload)
-	if err != nil {
-		return 0, 0, false
-	}
-
-	// Parse payload to get rewards
-	var contractData struct {
-		RewardXP int32 `json:"rewardXP"`
-		RewardGP int32 `json:"rewardGP"`
-	}
-	if err := json.Unmarshal([]byte(payload), &contractData); err != nil {
-		return 0, 0, false
-	}
-
-	// Mark contract as completed — the age check and state='active' guard
-	// are both in this single atomic UPDATE so a duplicate/concurrent
-	// completion request for the same contract can't double-pay (mirrors
-	// the atomic-conditional-UPDATE pattern used for currency deductions).
-	result, err := db.Exec(`UPDATE player_contracts SET state='completed', progress=100, completed_at=datetime('now'), updated_at=datetime('now')
-		WHERE user_id=? AND contract_id=? AND state='active' AND datetime(created_at,?) <= datetime('now')`,
-		pid, contractID, fmt.Sprintf("+%d seconds", minContractCompletionAge))
-	if err != nil {
-		return 0, 0, false
-	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
-		return 0, 0, false
-	}
-
-	// Award rewards
-	if contractData.RewardXP > 0 {
-		_, _ = db.Exec(`UPDATE player_state SET current_xp=current_xp+?, updated_at=datetime('now') WHERE user_id=?`, contractData.RewardXP, pid)
-	}
-	if contractData.RewardGP > 0 {
-		_, _ = db.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, contractData.RewardGP, pid)
-	}
-
-	// Seed new contract to replace completed one
-	seedDailyContractsForPlayer(db, pid)
-
-	return contractData.RewardXP, contractData.RewardGP, true
-}
 
 func convertXPToCredits(db *sql.DB, pid string, xpAmount int32) (creditsGained int32, success bool) {
 	if xpAmount <= 0 {
@@ -6924,19 +6673,6 @@ func convertXPToPremiumCredits(db *sql.DB, pid string, xpAmount int32) (premiumC
 	}
 
 	return premiumCreditsGained, true
-}
-
-func dailyContractState(pid string) int {
-	db := currentMmogPlayerStateDB()
-	if db == nil {
-		return 0
-	}
-	var count int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM player_contracts WHERE user_id=? AND state='active'`, pid).Scan(&count)
-	if count > 0 {
-		return count
-	}
-	return 0
 }
 
 // ribbonThresholds defines the 12 ribbon types and their unlock conditions

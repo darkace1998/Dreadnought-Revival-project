@@ -1624,6 +1624,8 @@ static void ConquestTick(uint8_t *gm);
 static void ReportFarAway(uint8_t *pawn, const char *what);
 static void NpcAiStartTick(uint8_t *gm);
 
+static bool ClassChainContains(UObjectMin *obj, const char *needle);
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
   if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
@@ -1662,7 +1664,18 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
                "destroyed bots no longer respawn", gameMode);
         }
       }
-      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && s_teStopped != gameMode &&
+      // Not on a PvE season episode (YGameMode_PVE: Horde, Escort): its waves
+      // come from the map's own PVE managers, and the multiplayer bot fill
+      // has nothing to do there (2026-10-09, probe host on PVE_S1E1).
+      static int s_pve = -1;
+      static void *s_pveFor = nullptr;
+      if (s_pveFor != gameMode) {
+        s_pveFor = gameMode;
+        s_pve = ClassChainContains((UObjectMin *)gameMode, "YGameMode_PVE") ? 1 : 0;
+        if (s_pve)
+          Logf("pve: game mode %p (type %d) is a PvE episode -- no multiplayer bot fill", gameMode, type);
+      }
+      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && s_teStopped != gameMode && !s_pve &&
           (type == YGMT_BOOTCAMP || !g_botsBCOnly)) {
         gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
         Logf("bots: game mode %p (type %d) m_enableSpawnAI 0 -> 1. The game fills "
@@ -1823,6 +1836,82 @@ static bool SetLeaderByPoints(uint8_t *gs, int p1, int p2) {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Kill detail for daily contracts (on; dn_host_no_kill_detail.txt turns it off)
+//
+// mmogbrain counts the daily contracts (mmogbrain/daily_contracts.go), and
+// many count only some kills: "Destroy Enemy Corvettes" (the destroyed ship's
+// class), "Destroy Enemies with a Corvette" (the class the player flies). The
+// match result carried only a kill count. Each kill is now recorded here --
+// the destroyed ship's EYShipClass (pawn +0x940, read by 0x57BAE0) and the
+// killer's ship's, by the killer's PlayerReplicationInfo -- and reported with
+// the result as kl=victim.killer,... (ReportMatchResult).
+#define OFF_PAWN_SHIP_CLASS 0x940
+#define OFF_PC_PLAYER_STATE 0x3E0 // also defined with the match result below
+#define KILL_LOG_MAX 64
+struct KillLog {
+  void *pri;
+  int n;
+  uint8_t victim[KILL_LOG_MAX], killer[KILL_LOG_MAX];
+};
+static KillLog g_killLogs[64] = {};
+static SRWLOCK g_killLogLock = SRWLOCK_INIT;
+
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+static bool KillDetailEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_KILL_DETAIL", "dn_host_no_kill_detail.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static void RecordKill(void *killerCtrl, uint8_t victimClass) {
+  uint8_t *kc = (uint8_t *)killerCtrl;
+  if (!kc || !IsReadable(kc + OFF_PC_PLAYER_STATE, 8) || !IsReadable(kc + OFF_CONTROLLER_PAWN, 8))
+    return;
+  void *pri = *(void **)(kc + OFF_PC_PLAYER_STATE);
+  uint8_t *kp = *(uint8_t **)(kc + OFF_CONTROLLER_PAWN);
+  uint8_t killerClass = (kp && IsReadable(kp + OFF_PAWN_SHIP_CLASS, 1)) ? kp[OFF_PAWN_SHIP_CLASS] : 0;
+  if (!pri)
+    return;
+  AcquireSRWLockExclusive(&g_killLogLock);
+  KillLog *slot = nullptr;
+  for (auto &k : g_killLogs) {
+    if (k.pri == pri) { slot = &k; break; }
+    if (!slot && !k.pri) slot = &k;
+  }
+  if (slot) {
+    slot->pri = pri;
+    if (slot->n < KILL_LOG_MAX) {
+      slot->victim[slot->n] = victimClass;
+      slot->killer[slot->n] = killerClass;
+      slot->n++;
+    }
+  }
+  ReleaseSRWLockExclusive(&g_killLogLock);
+}
+
+// The player's kills as "victim.killer,..." into out; false when the kill
+// detail is off (mmogbrain then counts only the class-free contracts).
+static bool TakeKillLog(void *pri, char *out, size_t outLen) {
+  out[0] = 0;
+  if (!KillDetailEnabled())
+    return false;
+  size_t o = 0;
+  AcquireSRWLockExclusive(&g_killLogLock);
+  for (auto &k : g_killLogs) {
+    if (k.pri != pri)
+      continue;
+    for (int i = 0; i < k.n && o + 12 < outLen; ++i)
+      o += _snprintf_s(out + o, outLen - o, _TRUNCATE, "%s%u.%u", o ? "," : "", k.victim[i], k.killer[i]);
+    k = KillLog{};
+    break;
+  }
+  ReleaseSRWLockExclusive(&g_killLogLock);
+  return true;
+}
+
 static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimCtrl,
                                      void *victimPawn, void *damageType) {
   uint8_t *gm = (uint8_t *)gameMode;
@@ -1862,7 +1951,19 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
     ((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET] = 1;
     flagged = true;
   }
+  // The destroyed ship's class, read before the original runs (it may
+  // destroy the pawn). Kill detail for daily contracts, see RecordKill.
+  int victimClass = -1;
+  if (KillDetailEnabled() && killer && killer != victimCtrl && victimPawn &&
+      IsReadable((uint8_t *)victimPawn + OFF_PAWN_SHIP_CLASS, 1))
+    victimClass = ((uint8_t *)victimPawn)[OFF_PAWN_SHIP_CLASS];
   g_origTdmKilled(gameMode, killer, victimCtrl, victimPawn, damageType);
+  if (victimClass >= 0) {
+    __try {
+      RecordKill(killer, (uint8_t)victimClass);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+  }
   if (flagged)
     ((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET] = 0;
 
@@ -2981,8 +3082,11 @@ static void ReportFarAway(uint8_t *pawn, const char *what) {
   for (int i = 0; i < s_n; ++i)
     if (s_seen[i] == pawn)
       return;
-  if (s_n < 64)
-    s_seen[s_n++] = pawn;
+  // Once the list is full, stop: an unlisted actor would otherwise be logged
+  // again on every tick.
+  if (s_n >= 64)
+    return;
+  s_seen[s_n++] = pawn;
   Logf("far away: %s %s %p at (%.0f, %.0f, %.0f) -- its movement no longer replicates (RepMovement packing)", what,
        ClassNameOf(pawn), pawn, x, y, z);
 }
@@ -3063,27 +3167,35 @@ static void *__fastcall HookWeaponGroupLoadRow(void *group) {
   if (row)
     return row;
   uint8_t *g = (uint8_t *)group;
+  // The group's own row name, kept so it is put back on EVERY path: left
+  // pointing at the static buffer below, the engine would one day free it.
+  wchar_t *name = nullptr;
+  int32_t num = 0, max = 0;
+  bool swapped = false;
   __try {
-    wchar_t *name = *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME);
+    name = *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME);
     if (!name || (lstrcmpW(name, L"WP_ONS_AITargetH_weapon02_BP") != 0 &&
                   lstrcmpW(name, L"WP_ONS_AITargetH_weapon03_BP") != 0))
       return row;
     static wchar_t s_weapon01[] = L"WP_ONS_AITargetH_weapon01_BP";
-    int32_t num = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8);
-    int32_t max = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12);
+    num = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8);
+    max = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12);
+    swapped = true;
     *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME) = s_weapon01;
     *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8) = (int32_t)(sizeof(s_weapon01) / sizeof(wchar_t));
     *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12) = (int32_t)(sizeof(s_weapon01) / sizeof(wchar_t));
     *(void **)(g + OFF_WEAPON_GROUP_ROW) = nullptr;
     row = g_origWeaponGroupLoadRow(group);
-    *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME) = name;
-    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8) = num;
-    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12) = max;
     static volatile LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 4)
       Logf("command ship gun: no weapon row for %S; using WP_ONS_AITargetH_weapon01_BP's -> %p", name, row);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("command ship gun: EXCEPTION 0x%08X", GetExceptionCode());
+  }
+  if (swapped) {
+    *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME) = name;
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8) = num;
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12) = max;
   }
   return row;
 }
@@ -3687,7 +3799,7 @@ static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *event
 }
 
 static void ReportMatchResult(void *orbitComp) {
-  char pid[80], match[96], path[1536], body[2048];
+  char pid[80], match[96], path[2560], body[2048];
   uint8_t *priOut = nullptr;
   int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
   const char *teamSource = "none";
@@ -3770,6 +3882,12 @@ static void ReportMatchResult(void *orbitComp) {
     size_t pl = strlen(path);
     _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&event_xp=%lld&event_credits=%lld&events=%d",
                 (long long)evXp, (long long)evCr, evN);
+  }
+  // The kills by class, for mmogbrain's daily contracts (see RecordKill).
+  char kl[KILL_LOG_MAX * 8 + 8];
+  if (priOut && TakeKillLog(priOut, kl, sizeof(kl))) {
+    size_t pl = strlen(path);
+    _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&kl=%s", kl);
   }
   bool ok = HttpGetLoopback(path, body, sizeof(body));
   if (ok && priOut && RewardsScreenEnabled())

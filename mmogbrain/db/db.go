@@ -418,6 +418,36 @@ var migrations = []string{
 		reason     TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL DEFAULT (datetime('now'))
 	)`,
+	// Daily contracts (daily_contracts.go). One row per contract ever
+	// assigned; entry_id is the client's "eid" (YA_ContractReplace/Remove
+	// name an assignment by it). state: active, completed (reward paid,
+	// waiting for the player to acknowledge it), acknowledged, replaced
+	// (rerolled), removed. Times are Unix seconds.
+	`CREATE TABLE IF NOT EXISTS player_daily_contracts (
+		entry_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id      TEXT NOT NULL,
+		slot         INTEGER NOT NULL,
+		quest_id     TEXT NOT NULL,
+		difficulty   INTEGER NOT NULL DEFAULT 0,
+		target       INTEGER NOT NULL,
+		progress     INTEGER NOT NULL DEFAULT 0,
+		reward       INTEGER NOT NULL DEFAULT 0,
+		state        TEXT NOT NULL DEFAULT 'active',
+		assigned_at  INTEGER NOT NULL,
+		completed_at INTEGER NOT NULL DEFAULT 0
+	)`,
+	`CREATE INDEX IF NOT EXISTS player_daily_contracts_user ON player_daily_contracts(user_id, state)`,
+	`CREATE TABLE IF NOT EXISTS player_contract_state (
+		user_id          TEXT PRIMARY KEY,
+		state_id         INTEGER NOT NULL DEFAULT 0,
+		last_assignment  INTEGER NOT NULL DEFAULT 0,
+		last_replace     INTEGER NOT NULL DEFAULT 0
+	)`,
+	// Server-wide flags (e.g. that the battle servers report per-kill detail).
+	`CREATE TABLE IF NOT EXISTS server_flags (
+		name  TEXT PRIMARY KEY,
+		value TEXT NOT NULL DEFAULT ''
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

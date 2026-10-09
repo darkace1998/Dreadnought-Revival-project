@@ -279,7 +279,9 @@ type mmogConnState struct {
 	squadRegistered string
 	// registeredAt is when that happened; an admin kick drops connections
 	// registered before it.
-	registeredAt             time.Time
+	registeredAt time.Time
+	// contractPeriod is the daily contract period this connection last saw.
+	contractPeriod           int64
 	loginResponseSent        bool
 	playerGetResponded       bool
 	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
@@ -959,6 +961,14 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 		if adminConnectionRevoked(state.squadRegistered, state.registeredAt) {
 			log.WithFields(logrus.Fields{"remote": remote, "pid": state.squadRegistered}).Warn("mmog: dropping connection, player kicked or banned")
 			return errAdminDisconnected
+		}
+		// A daily contract reset while the player is online: new contracts go
+		// out now, not at the next login (daily_contracts.go).
+		if period := contractPeriodStart(time.Now()).Unix(); state.contractPeriod != period {
+			if state.contractPeriod != 0 {
+				squadHubInstance.push(state.squadRegistered, buildMmogContractRefreshPush(state.squadRegistered))
+			}
+			state.contractPeriod = period
 		}
 		switch squadHubInstance.takeArm(state.squadRegistered) {
 		case 1: // queued by their squad's leader
