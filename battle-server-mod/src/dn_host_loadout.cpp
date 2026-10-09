@@ -52,6 +52,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <math.h>
 #pragma comment(lib, "ws2_32.lib")
 
 #include <share.h>
@@ -1620,6 +1621,8 @@ static void FlushPendingEomStats();
 
 static void OnslaughtCreepTick(uint8_t *gm);
 static void ConquestTick(uint8_t *gm);
+static void ReportFarAway(uint8_t *pawn, const char *what);
+static void NpcAiStartTick(uint8_t *gm);
 
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
@@ -1672,6 +1675,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   g_origGameModeTimer(gameMode);
   OnslaughtCreepTick(gm);
   ConquestTick(gm);
+  NpcAiStartTick(gm);
   PlayersTick(gm);
   FlushPendingEomStats();
 }
@@ -1729,6 +1733,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
 #define VT_GM_END_MATCH 0x668
 #define ONS_KILL_LIMIT_OFF 1000000
 #define OFF_GS_WINNING_TEAM_FINAL 0x56B // GameState final match result (0 while playing)
+#define OFF_PAWN_IS_AI_TARGET 0x950 // YPawn: what vtable +0x7E0 returns
 #ifndef OFF_USTRUCT_SUPER
 #define OFF_USTRUCT_SUPER 0x30
 #endif
@@ -1846,7 +1851,20 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
     kills2 = *(int32_t *)(gs + OFF_GS_KILLS_T2);
   }
 
+  // The assault and command ships are AI targets only while their kill is
+  // scored (see SpawnOnslaughtAIShip): set the byte for the original's
+  // AI-scoring route (victim vtable +0x7E0), clear it again after so the
+  // game's ship-list removal on death runs for them.
+  int victimSize = gs ? CreepSize(victimPawn) : -1;
+  bool flagged = false;
+  if (victimSize >= 1 && IsReadable((uint8_t *)victimPawn + OFF_PAWN_IS_AI_TARGET, 1) &&
+      !((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET]) {
+    ((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET] = 1;
+    flagged = true;
+  }
   g_origTdmKilled(gameMode, killer, victimCtrl, victimPawn, damageType);
+  if (flagged)
+    ((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET] = 0;
 
   if (!gs)
     return;
@@ -2105,6 +2123,7 @@ static void CountOnslaughtCreeps(uint8_t *gm, uint8_t *gs, int alive[2][3]) {
         int team = ((uint8_t *)o)[OFF_SHIP_TEAM];
         if (team == 1 || team == 2) {
           alive[team - 1][csize[c]]++;
+          ReportFarAway((uint8_t *)o, "onslaught ship");
           if (csize[c] >= 1 && gs && gs[OFF_GS_MATCH_RUNNING] && !gs[OFF_GS_MATCH_OVER]) {
             uint8_t *ctrl = *(uint8_t **)((uint8_t *)o + 0x3F8); // APawn::Controller
             if (ctrl && IsReadable(ctrl + OFF_NPC_AI_HALTED, 1) && ctrl[OFF_NPC_AI_HALTED] &&
@@ -2186,7 +2205,6 @@ static void AllowCreepSpawnWhenColliding(void *cls) {
 #define VT_ACTOR_GET_WORLD 0x108
 #define VT_PAWN_SPAWN_DEFAULT_CONTROLLER 0x6B0
 #define OFF_PAWN_CONTROLLER 0x3F8            // APawn::Controller
-#define OFF_PAWN_IS_AI_TARGET 0x950          // YPawn: what vtable +0x7E0 returns
 #define OFF_PAWN_AI_CONTROLLER_CLASS 0x3D8   // APawn::AIControllerClass
 #define OFF_NPC_BEHAVIOUR_STATE 0xA38        // EYCombatSceneBehavior the scene spawn resets
 #define YCSB_NONE 0x14
@@ -2345,7 +2363,15 @@ static void *SpawnOnslaughtAIShip(uint8_t *gm, void *cls, void *at, int team, bo
   // Blueprints do not, so destroying them scored nothing (operator,
   // 2026-10-08) although the handler names their classes: the server that
   // spawned them set it.
-  ((uint8_t *)pawn)[OFF_PAWN_IS_AI_TARGET] = 1;
+  // NOT set here any more (2026-10-08): it is set only for the kill itself,
+  // in HookTdmKilled. As an AI target the ship was never registered in the
+  // game's list of ships (0x57FF20 adds only pawns whose +0x7E0 is false; the
+  // death/destroy removals 0x571500/0x575970 skip them too), and that list is
+  // where the Onslaught bots' GetCommandShip (0x28BDA0: ship class 0x1D,
+  // YSC_AI_CREEP_LARGE) looks. Every bot got None ("Accessed None" floods from
+  // VH_ONS_ScoutLightStandard_Behavior TickBehaviorPerception, host logs
+  // 2026-10-08) and had no objective. Off, the ship is also in the scene
+  // manager's ship list that turrets (CAPITALSHIP) and the AI perceive.
   void **vt = *(void ***)pawn;
   // The controller, set up the way the combat scene manager sets up the NPC
   // ships it spawns (0x2693A0, around 0x26A096): spawn the pawn's
@@ -2457,6 +2483,51 @@ static bool SpawnOnslaughtCreep(uint8_t *gm, uint8_t *gs, int team, int size, bo
   return pawn != nullptr;
 }
 
+// Diagnostics for "turrets, bots and the AI ships never target each other"
+// (operator report 2026-10-08). Verified in the exe, the candidates all come
+// from the combat scene manager. Its tick (0x2693A0) rebuilds three lists from
+// the world's pawns every +0x3FC seconds:
+//   - +0x448/+0x450: ships that are not AI targets (vtable +0x7E0) and alive
+//     (+0x4E8);
+//   - +0x458/+0x460: AI targets whose controller is no YFighterDroneAIController
+//     -- the fighters, assault ships and command ships;
+//   - +0x468/+0x470: fighter drones.
+// Turrets (0x272490) cycle them by their m_targetShipTypes (+0x540: the
+// support auto gun has CAPITALSHIP, CREEP, JET -- all three). The AI's candidate
+// pass (0x2C6180) drops pawns whose state byte +0x941 (0x57BD10) is 2 or 3.
+// This logs the list sizes, how many of list 2 are the mod's ships, and each
+// sampled ship's state, so one match shows which step drops them.
+#define OFF_PAWN_STATE 0x941
+static void LogTargetLists() {
+  uint8_t *sm = (uint8_t *)((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+  if (!sm || !IsReadable(sm + 0x448, 0x30))
+    return;
+  int n[3] = {*(int32_t *)(sm + 0x450), *(int32_t *)(sm + 0x460), *(int32_t *)(sm + 0x470)};
+  int ours = 0, oursShips = 0, states[4] = {0, 0, 0, 0};
+  uint8_t *ships = *(uint8_t **)(sm + 0x448);
+  if (ships && n[0] > 0 && n[0] < 4096 && IsReadable(ships, (size_t)n[0] * 8))
+    for (int i = 0; i < n[0]; ++i) {
+      uint8_t *p = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(ships + (size_t)i * 8);
+      if (p && CreepSize(p) >= 1)
+        ++oursShips;
+    }
+  uint8_t *data = *(uint8_t **)(sm + 0x458);
+  if (data && n[1] > 0 && n[1] < 4096 && IsReadable(data, (size_t)n[1] * 8))
+    for (int i = 0; i < n[1]; ++i) {
+      uint8_t *p = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * 8);
+      if (!p || !IsReadable(p + OFF_PAWN_STATE, 1))
+        continue;
+      if (CreepSize(p) >= 0)
+        ++ours;
+      int st = p[OFF_PAWN_STATE];
+      if (st >= 0 && st < 4)
+        ++states[st];
+    }
+  Logf("onslaught targets: scene manager lists ships %d (%d assault/command ships) / AI targets %d (%d Onslaught "
+       "ships; states 0:%d 1:%d 2:%d 3:%d) / drones %d", n[0], oursShips, n[1], ours, states[0], states[1], states[2],
+       states[3], n[2]);
+}
+
 static void OnslaughtCreepTick(uint8_t *gm) {
   static int s_enabled = -1;
   if (s_enabled < 0)
@@ -2510,10 +2581,12 @@ static void OnslaughtCreepTick(uint8_t *gm) {
         uint8_t *ctrl = ship ? *(uint8_t **)(ship + OFF_PAWN_CONTROLLER) : nullptr;
         int behaviour = ctrl && IsReadable(ctrl + OFF_NPC_BEHAVIOUR_STATE, 1) ? ctrl[OFF_NPC_BEHAVIOUR_STATE] : -1;
         if (comp && IsReadable(comp + 0x160, 12))
-          Logf("onslaught creeps: %s T%d %p at (%.0f, %.0f, %.0f), behaviour %d", big ? "command ship" : "assault ship",
-               t + 1, ship,
-               *(float *)(comp + 0x160), *(float *)(comp + 0x164), *(float *)(comp + 0x168), behaviour);
+          Logf("onslaught creeps: %s T%d %p at (%.0f, %.0f, %.0f), behaviour %d, state %d, ai target %d, team %d, "
+               "controller %p", big ? "command ship" : "assault ship", t + 1, ship,
+               *(float *)(comp + 0x160), *(float *)(comp + 0x164), *(float *)(comp + 0x168), behaviour,
+               ship[OFF_PAWN_STATE], ship[OFF_PAWN_IS_AI_TARGET], ship[OFF_SHIP_TEAM], ctrl);
       }
+      LogTargetLists();
     }
     if (!st.firstWave) {
       st.firstWave = true;
@@ -2590,7 +2663,8 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 // score; at m_scoreForWinning it sets the winner (+0x4E8) and calls EndMatch
 // (vtable +0x668), as the Onslaught rule does.
 // GUESS: a team's territory is its tiles in the capture-point map plus its
-// ships' claimed tiles (pawn +0x858, see CountShipTiles); the original's own
+// ships' claimed tiles; its percentage is its share of both teams' tiles
+// (see the tick) (pawn +0x858, see CountShipTiles); the original's own
 // team sum is not in this exe.
 // GUESS: the multiplier is applied when the designers set one (> 0), else 1;
 // the threshold is "a team must hold more than this % to score"; percentages
@@ -2816,11 +2890,17 @@ static void ConquestTick(uint8_t *gm) {
     t2 += s2;
     float total = gw * gh;
     int pct1 = 0, pct2 = 0;
-    if (ok && total >= 1.0f) {
-      pct1 = (int)(100.0f * t1 / total + 0.5f);
-      pct2 = (int)(100.0f * t2 / total + 0.5f);
-      if (pct1 > 100) pct1 = 100;
-      if (pct2 > 100) pct2 = 100;
+    // A team's percentage is its share of the CLAIMED territory, t / (t1 + t2).
+    // GUESS, chosen by the operator 2026-10-08 after the first live Conquest
+    // matches. As a share of the whole 30 x 30 grid, a team held 5-23%, and a
+    // 12-minute match stood at 736 vs 1050 when the players left. That is not
+    // the designers' 2500-to-win at +score every 10 s. As a share of the
+    // claimed tiles the two add up to 100, and an even match reaches 2500 in
+    // about 8-9 minutes.
+    (void)total;
+    if (ok && t1 + t2 > 0) {
+      pct1 = (int)(100.0f * t1 / (t1 + t2) + 0.5f);
+      pct2 = 100 - pct1;
     }
     int32_t *terr = (int32_t *)(gs + OFF_GS_TER_TERRITORY_T1);
     bool changed = terr[0] != pct1 || terr[1] != pct2;
@@ -2855,6 +2935,157 @@ static void ConquestTick(uint8_t *gm) {
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("conquest: EXCEPTION 0x%08X in the score tick", GetExceptionCode());
   }
+}
+
+// ---------------------------------------------------------------------------
+// Bots spawned before the match starts (on; dn_host_no_npc_ai_start.txt turns
+// it off)
+//
+// Operator report 2026-10-08: Conquest and Onslaught bots "just sit still and
+// ignore the objective". Verified in the exe the same day:
+//   - An NPC controller is born halted (+0xAFA = 1, ctor 0x276EA0) until
+//     0x288AE0 starts its AI (see the Onslaught AI ships above).
+//   - The scene manager's NPC spawn (0x2693A0) calls 0x288AE0 itself only when
+//     the game mode is NOT a YGameMode_Multiplayer (class 0x601440). For the
+//     multiplayer modes it leaves the start to the game mode's NPC-spawned
+//     handler (vtable +0x978 = 0x378DE0, called only at 0x26A438, in that
+//     spawn). That handler starts it only if the match already runs
+//     (GameState +0x569), and the pawn's vtable +0x7D8 agrees.
+//   - The bots are spawned when the pre-match countdown reaches 50 s, before
+//     the match runs. So no one starts them, and they stay halted until they
+//     die and respawn mid-match.
+// So once a second, while the match runs, every scene-manager NPC (table
+// +0x3C0, 0xA8-byte entries, weak pawn +0x8C) whose controller is still halted
+// gets exactly what 0x378DE0 would have given it.
+#define OFF_SCENE_NPC_PAWN 0x8C
+#define VT_PAWN_NPC_AI_OK 0x7D8
+typedef bool(__fastcall *tPawnBoolFn)(void *pawn);
+
+// Diagnostic (2026-10-09): two Amirani Onslaught matches logged 47,490 and
+// 119,500 "Native NetSerialize ... ReplicatedMovement ... failed" (about 150 a
+// second for the last minutes; Gorge 0). FRepMovement fails to pack a location
+// or velocity beyond about +-2^19, so an actor left the playable space and its
+// movement stopped replicating. The log does not say which actor. This names
+// any bot or Onslaught ship that is that far out, or has a NaN position, once
+// per actor.
+static void ReportFarAway(uint8_t *pawn, const char *what) {
+  uint8_t *comp = IsReadable(pawn + 0x198, 8) ? *(uint8_t **)(pawn + 0x198) : nullptr;
+  if (!comp || !IsReadable(comp + 0x160, 12))
+    return;
+  float x = *(float *)(comp + 0x160), y = *(float *)(comp + 0x164), z = *(float *)(comp + 0x168);
+  bool bad = x != x || y != y || z != z || fabsf(x) > 500000.f || fabsf(y) > 500000.f || fabsf(z) > 500000.f;
+  if (!bad)
+    return;
+  static void *s_seen[64];
+  static int s_n = 0;
+  for (int i = 0; i < s_n; ++i)
+    if (s_seen[i] == pawn)
+      return;
+  if (s_n < 64)
+    s_seen[s_n++] = pawn;
+  Logf("far away: %s %s %p at (%.0f, %.0f, %.0f) -- its movement no longer replicates (RepMovement packing)", what,
+       ClassNameOf(pawn), pawn, x, y, z);
+}
+
+static void NpcAiStartTick(uint8_t *gm) {
+  static int s_enabled = -1;
+  if (s_enabled < 0)
+    s_enabled = SwitchOn("DN_HOST_NO_NPC_AI_START", "dn_host_no_npc_ai_start.txt") ? 0 : 1;
+  if (!s_enabled)
+    return;
+  __try {
+    if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
+      return;
+    uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+    if (!gs || !IsReadable(gs + OFF_GS_MATCH_RUNNING, 2) || !gs[OFF_GS_MATCH_RUNNING] || gs[OFF_GS_MATCH_OVER])
+      return;
+    uint8_t *sm = (uint8_t *)((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+    if (!sm || !IsReadable(sm + OFF_SCENE_NPCS, 16))
+      return;
+    uint8_t *data = *(uint8_t **)(sm + OFF_SCENE_NPCS);
+    int n = *(int32_t *)(sm + OFF_SCENE_NPCS_COUNT);
+    if (!data || n <= 0 || n > 4096 || !IsReadable(data, (size_t)n * NPC_SPAWN_SIZE))
+      return;
+    void *npcCls = *(void **)(g_base + OFF_CLASSPTR_NPC_AI_CONTROLLER);
+    static int s_started = 0;
+    for (int i = 0; i < n; ++i) {
+      uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * NPC_SPAWN_SIZE + OFF_SCENE_NPC_PAWN);
+      if (!pawn || !IsReadable(pawn + OFF_PAWN_CONTROLLER, 8))
+        continue;
+      ReportFarAway(pawn, "scene NPC");
+      uint8_t *ctrl = *(uint8_t **)(pawn + OFF_PAWN_CONTROLLER);
+      if (!ctrl || !IsReadable(ctrl + OFF_NPC_AI_HALTED, 1) || !ctrl[OFF_NPC_AI_HALTED] ||
+          !ClassIsAncestor(((UObjectMin *)ctrl)->Class, npcCls))
+        continue;
+      if (!((tPawnBoolFn)(*(void ***)pawn)[VT_PAWN_NPC_AI_OK / 8])(pawn))
+        continue;
+      ((tNpcStartAI)(g_base + RVA_NPC_START_AI))(ctrl);
+      if (++s_started <= 40)
+        Logf("bots: NPC %d %s (%s) was spawned before the match started -- AI started", i, ClassNameOf(pawn),
+             ClassNameOf(ctrl));
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("bots: EXCEPTION 0x%08X in the NPC AI start tick", GetExceptionCode());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Veteran / Legendary command ship guns (on; dn_host_no_ons_gun_rows.txt turns
+// it off)
+//
+// Operator report 2026-10-08: the command ship shoots in Recruit Onslaught
+// but not in Veteran or Legendary. Verified in the cooked files the same day:
+//   - The tiers' command ships (GameInfo_Onslaught_BP m_bigCreepClass / Vet /
+//     Leg = VH_ONS_AITargetH_Pawn_BP / _Pawn_V_BP / _Pawn_L_BP) carry
+//     WP_ONS_AITargetH_weapon01 / 02 / 03.
+//   - The three weapon Blueprints are identical except their projectile row,
+//     proj01 / 02 / 03. Every field of the three projectile rows matches
+//     except the damage: 400/200/100, 700/300/150, 1000/500/200.
+//   - DN_Weapons_OTS_DT has a row for weapon01 only. The host gets no tuning
+//     (it never logs in), so its weapon groups fall back to the cooked table,
+//     and every Veteran / Legendary match logged "Weapon Data for
+//     'WP_ONS_AITargetH_weapon02_BP' Couldn't be found": that gun has no
+//     weapon row and never fires.
+// So when UYWeaponGroup::LoadWeaponDataTableRow (0x518EE0; the row name is the
+// FString at +0x2B8, the row is cached at +0x2B0) finds nothing for weapon02 or
+// weapon03, it is asked once more under weapon01's name. The weapon row is the
+// gun's mechanics. The tier's damage stays in its own projectile row.
+// GUESS: weapon02/03's own rows were copies of weapon01's. The three Blueprints
+// agree field for field, but the rows themselves are lost.
+#define RVA_WEAPON_GROUP_LOAD_ROW 0x518EE0
+#define OFF_WEAPON_GROUP_ROW_NAME 0x2B8
+#define OFF_WEAPON_GROUP_ROW 0x2B0
+typedef void *(__fastcall *tWeaponGroupLoadRow)(void *group);
+static tWeaponGroupLoadRow g_origWeaponGroupLoadRow = nullptr;
+
+static void *__fastcall HookWeaponGroupLoadRow(void *group) {
+  void *row = g_origWeaponGroupLoadRow(group);
+  if (row)
+    return row;
+  uint8_t *g = (uint8_t *)group;
+  __try {
+    wchar_t *name = *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME);
+    if (!name || (lstrcmpW(name, L"WP_ONS_AITargetH_weapon02_BP") != 0 &&
+                  lstrcmpW(name, L"WP_ONS_AITargetH_weapon03_BP") != 0))
+      return row;
+    static wchar_t s_weapon01[] = L"WP_ONS_AITargetH_weapon01_BP";
+    int32_t num = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8);
+    int32_t max = *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12);
+    *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME) = s_weapon01;
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8) = (int32_t)(sizeof(s_weapon01) / sizeof(wchar_t));
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12) = (int32_t)(sizeof(s_weapon01) / sizeof(wchar_t));
+    *(void **)(g + OFF_WEAPON_GROUP_ROW) = nullptr;
+    row = g_origWeaponGroupLoadRow(group);
+    *(wchar_t **)(g + OFF_WEAPON_GROUP_ROW_NAME) = name;
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 8) = num;
+    *(int32_t *)(g + OFF_WEAPON_GROUP_ROW_NAME + 12) = max;
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 4)
+      Logf("command ship gun: no weapon row for %S; using WP_ONS_AITargetH_weapon01_BP's -> %p", name, row);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("command ship gun: EXCEPTION 0x%08X", GetExceptionCode());
+  }
+  return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -4670,6 +4901,10 @@ static DWORD WINAPI Startup(LPVOID) {
   } else
     Logf("onslaught points: OFF (dn_host_no_onslaught_points.txt / "
          "DN_HOST_NO_ONSLAUGHT_POINTS=1). Onslaught ends at 30 kills.");
+
+  if (!SwitchOn("DN_HOST_NO_ONS_GUN_ROWS", "dn_host_no_ons_gun_rows.txt"))
+    InstallSwitchedHook("command ship gun rows (LoadWeaponDataTableRow)", RVA_WEAPON_GROUP_LOAD_ROW,
+                        (void *)&HookWeaponGroupLoadRow, (void **)&g_origWeaponGroupLoadRow);
 
   if (ShipPhysicsEnabled())
     InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",

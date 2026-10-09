@@ -374,6 +374,26 @@ match runs. So once a second, while the match runs, the mod calls it for any
 assault/command ship whose controller is still halted. Log:
 `... controller ... AI started`.
 
+Bots had no objective (2026-10-08). The Onslaught bot controllers
+(`VH_ONS_*_Behavior_YAICtrl_BP`) target the enemy command ship from
+`GetCommandShip` (`0x28BDA0`). It searches the game's global ship list for ship
+class `0x1D` (`YSC_AI_CREEP_LARGE`). That list (`0x57FF20`) only takes pawns that
+are NOT AI targets. The mod had marked the assault and command ships as AI
+targets (`+0x950`) at spawn so their kills would score, so the command ship was
+never listed. Every bot got None ("Accessed None" floods), so the bots had no
+objective. Now the byte is set only for the kill itself (`HookTdmKilled`) and
+cleared after it. The ships are listed, bots find the command ship, and the
+ships sit in the scene manager's ship list that turrets and the AI perceive.
+
+Targeting diagnostics (2026-10-08, testers: turrets ignore the AI ships,
+the AI ships attack no one, and bots ignore them). Every candidate comes from
+the combat scene manager's three lists, rebuilt in its tick `0x2693A0`:
+non-AI ships, AI targets, and fighter drones. Every 15 s the log prints
+`onslaught targets: scene manager lists ships N / AI targets N (N Onslaught
+ships; states ...) / drones N`. Each sampled ship line also shows its
+`+0x941` state, AI-target byte, team and controller. The AI's candidate pass
+drops states 2 and 3.
+
 Not done yet: the NPC PlayerState, the level script's `OnNPCSpawned`, and the
 game mode's vtable `+0x978`, which the scene manager's own spawn also calls.
 `WP_ONS_AITargetH_weapon02/03_BP` have no row in the cooked `DN_Weapons_OTS_DT`
@@ -423,11 +443,51 @@ once the match runs, the mod:
 Log: `conquest: capture point CapturePoint_TER_A -- index 0, owner 0 ...
 active 1` per point, then `N capture points set up; ... tile map N tiles`.
 
-A team's territory is its tiles in that map plus its ships' claimed tiles. Those
+A team's territory is its tiles in that map plus its ships' claimed tiles.
+Its percentage is its share of both teams' claimed tiles. This was the
+operator's choice on 2026-10-08. As a share of the whole grid, teams held 5-23%,
+and a 12-minute match stood at 736 vs 1050 when the players left. There is no
+time limit: the operator reports the Conquest clock counts up. Those
 come from the GameState's own per-ship pass, pawn `+0x858`. The every-10-s line
 shows both. `GameMode_TER_BP` sets no `m_maxMatchTime` (`+0x884`), unlike the
 other modes, which set 20 minutes. Its value is logged, and the mod leaves it
 alone.
+
+## Bots spawned before the match starts (on; `dn_host_no_npc_ai_start.txt` turns it off)
+
+Conquest and Onslaught bots sat still (operator, 2026-10-08). An NPC
+controller is born halted (`+0xAFA`) until `0x288AE0` starts its AI. In the
+multiplayer modes the scene manager leaves that start to the game mode's
+NPC-spawned handler (`0x378DE0`). That handler runs once, at spawn, and only
+starts the AI if the match already runs (GameState `+0x569`). The bots are
+spawned during the pre-match countdown, so they stayed halted until they died
+and respawned. Once a second while the match runs, the mod gives every halted
+scene-manager NPC that handler's start, under the same checks. All modes. Log:
+`bots: NPC N <pawn> (<controller>) was spawned before the match started -- AI
+started`.
+
+The Conquest bots (`VH_TER_*_Behavior`, built on the TDM ones) go for the
+nearest capturable point within 50,000 (A/B; not owned by their team). Within
+10,000 they hold it through the combat manager. Otherwise they fight.
+
+Diagnostic: two Amirani Onslaught matches logged 47,490 and 119,500
+`ReplicatedMovement ... failed` warnings (Gorge: 0). That is an actor beyond
+about +-2^19 units, whose movement no longer replicates. Any bot or Onslaught
+ship that far out, or with a NaN position, is now logged once: `far away: ...`.
+
+## Veteran / Legendary command ship guns (on; `dn_host_no_ons_gun_rows.txt` turns it off)
+
+The Recruit command ship shoots, but the Veteran and Legendary ones don't
+(operator, 2026-10-08). Each tier carries its own gun:
+`WP_ONS_AITargetH_weapon01/02/03`. The three Blueprints are identical except
+the projectile row. `proj01/02/03` differ only in damage: 400/700/1000 high.
+The cooked `DN_Weapons_OTS_DT` has a weapon row for `weapon01` only. The host
+gets no tuning, so `weapon02/03` load no row ("Weapon Data ... Couldn't be
+found") and never fire. The mod hooks `UYWeaponGroup::LoadWeaponDataTableRow`
+(`0x518EE0`): when no row is found for `weapon02/03`, it retries under
+`weapon01`'s name. The tier damage stays in each gun's own projectile row.
+GUESS: the lost rows were copies of `weapon01`'s. Log: `command ship gun: no
+weapon row for WP_ONS_AITargetH_weapon02_BP; using ...`.
 
 ## Original match XP (on; `dn_host_no_event_xp.txt` turns it off)
 
