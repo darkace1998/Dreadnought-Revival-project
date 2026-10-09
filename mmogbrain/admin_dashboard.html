@@ -173,6 +173,11 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
         <div class="row"><button class="btn" id="mAdd">Add (negative subtracts)</button><button class="btn" id="mSet">Set exactly</button>
           <span class="muted">Empty fields are left unchanged.</span></div>
       </section>
+      <section><h2>Daily contracts</h2>
+        <div class="table-wrap"><table><thead><tr><th>Slot</th><th>Contract</th><th class="num">Progress</th><th class="num">Reward</th><th>State</th></tr></thead><tbody id="mContracts"></tbody></table></div>
+        <div class="row" style="margin-top:8px"><button class="btn" id="mResetContracts">Reset contracts</button>
+          <span class="muted">Drops the current contracts and gives a fresh set now, with today's reroll back.</span></div>
+      </section>
       <section><h2>Hero ships</h2>
         <div class="row"><select id="mHero"></select><button class="btn" id="mGrant">Grant ship</button></div>
         <div class="muted" id="mShips"></div>
@@ -362,6 +367,10 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     $('mBan').classList.toggle('hidden', !!d.banned);
     $('mUnban').classList.toggle('hidden', !d.banned);
     $('mKick').disabled = !d.online;
+    fill('mContracts', (d.contracts || []).map((c) => el('tr', {}, el('td', {}, c.elite ? 'Elite' : String(c.slot + 1)),
+      el('td', {}, CONTRACT_NAMES[c.quest] || c.quest), el('td', { class: 'num' }, `${c.progress} / ${c.target}`),
+      el('td', { class: 'num' }, fmt(c.reward) + ' cr'),
+      el('td', {}, el('span', { class: 'chip ' + (c.state === 'completed' ? 'good' : '') }, c.state)))), 'No contracts.', 5);
     const sel = $('mHero'); sel.replaceChildren();
     const free = d.heroes.filter((h) => !h.owned);
     free.forEach((h) => sel.append(el('option', { value: h.id }, `T${h.tier} ${h.name}`)));
@@ -422,6 +431,22 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     post(`/players/${managed}/ships`, { ship_id: Number(sel.value) }, 'Ship granted.');
   };
   $('mClose').onclick = () => { $('manage').classList.add('hidden'); managed = null; };
+  $('mResetContracts').onclick = () => {
+    if (!confirm(`Reset the daily contracts of ${$('mName').textContent}? Their current contracts and progress are dropped and a fresh set is given now.`)) return;
+    post(`/players/${managed}/contracts/reset`, {}, 'Contracts reset.');
+  };
+  // The contracts' in-game names (MPQuestCollection m_name, English).
+  const CONTRACT_NAMES = {
+    YMPQ_CompleteMatches: 'You Know The Drill! (complete battles)', YMPQ_CompleteMatchesONS: 'Frontier Warfare (complete Onslaught battles)',
+    YMPQ_CompleteMatchesTURBO: 'Complete Turbo battles', YMPQ_WinMatches: 'Path To Glory! (win battles)',
+    YMPQ_WinMatchesONS: "Don't Leave Me Hanging! (win Onslaught)", YMPQ_WinMatchesTER: 'Territorial Conquest (win Conquest)',
+    YMPG_MatchScoreONS: 'Onslaught score', YMPQ_Kills: 'Know The Ropes (destroy enemies)',
+    YMPQ_DestroyArtilleryCruiser: 'Counter-Battery (destroy artillery cruisers)', YMPQ_DestroyCorvette: 'Seek And Destroy (destroy corvettes)',
+    YMPQ_DestroyDestroyer: 'Down The Boat! (destroy destroyers)', YMPQ_DestroyDreadnought: 'The More Danger, The More Fame! (destroy dreadnoughts)',
+    YMPQ_DestroyTacticalCruiser: 'Cut The Lifeline! (destroy tactical cruisers)', YMPQ_KillsArtilleryCruiser: 'Target Practice (kills in an artillery cruiser)',
+    YMPQ_KillsCorvette: 'On The Hunt (kills in a corvette)', YMPQ_KillsDestroyer: 'Vicious Tin Can (kills in a destroyer)',
+    YMPQ_KillsDreadnought: 'Bring Out The Big Guns (kills in a dreadnought)', YMPQ_KillsTacticalCruiser: "I Ain't No Pacifist (kills in a tactical cruiser)",
+  };
   $('mKick').onclick = async () => {
     if (!confirm(`Kick ${$('mName').textContent}? Their game disconnects; they can sign in again.`)) return;
     const msg = $('mMsg');

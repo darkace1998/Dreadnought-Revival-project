@@ -53,9 +53,21 @@ func buildMmogClaimCareerGoalPayload(playerPID string, payload []byte) []byte {
 	b = protocol.AppendStringField(b, "id", goalID)
 	b = protocol.AppendStringField(b, "stage", strconv.Itoa(int(stage)))
 	b, stack = protocol.AppendObjectEnd(b, stack)
+	// rewardInfo.freexp is ASSIGNED to the client's free XP balance (handler
+	// 0x2A3056E: mov [mmog+0x3B98], eax -- the field YA_PlayerGet's FreeXp
+	// fills), then the player-data-changed event fires (+0xE40). It went out
+	// as the reward amount -- 0 for every credit reward -- so each claim
+	// showed the player's free XP as 0 until the next login (operator report
+	// 2026-10-09: a claim made the progression screen show -1). It is the
+	// balance after the claim.
 	b, stack = protocol.AppendObjectStart(b, stack, "rewardInfo")
-	b = protocol.AppendStringField(b, "freexp", strconv.Itoa(int(freeXP)))
+	b = protocol.AppendStringField(b, "freexp", strconv.Itoa(int(mmogPlayerStateForPID(pid).freeXP)))
 	b, _ = protocol.AppendObjectEnd(b, stack)
+	// A credit or GP reward reaches the hangar only through
+	// YA_RewardCurrencies (assigned Credits/Points).
+	if status == "ok" {
+		squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
+	}
 	return b
 }
 
@@ -116,6 +128,8 @@ func claimCareerGoalStage(pid, goalID string, wireStage int32) (status string, f
 	switch st.rewardType {
 	case "EYGoalRewardType::YGR_CREDITS":
 		_, err = tx.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, st.reward, pid)
+	case "EYGoalRewardType::YGR_GP":
+		_, err = tx.Exec(`UPDATE player_state SET premium_currency=premium_currency+?, updated_at=datetime('now') WHERE user_id=?`, st.reward, pid)
 	case "EYGoalRewardType::YGR_FREEXP":
 		freeXP = st.reward
 		_, err = tx.Exec(`UPDATE player_state SET free_xp=free_xp+?, updated_at=datetime('now') WHERE user_id=?`, st.reward, pid)

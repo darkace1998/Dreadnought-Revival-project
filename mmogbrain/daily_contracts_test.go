@@ -221,3 +221,50 @@ func TestContractKillDetail(t *testing.T) {
 		t.Error("module kills are not reported and must not be offered")
 	}
 }
+
+// "act" is the activation time (Unix seconds); "1" read as 1970 and the
+// client treated every contract as expired.
+func TestContractEntryCarriesItsActivationTime(t *testing.T) {
+	database := contractTestDB(t)
+	at := time.Date(2026, 10, 9, 15, 0, 0, 0, time.UTC)
+	setContracts(t, database, at, "YMPQ_CompleteMatches")
+	b, _ := appendContractEntries(nil, nil, "Quests", readContractState(database, contractTestPID).entries)
+	if !bytes.Contains(b, protocol.AppendStringField(nil, "act", strconv.FormatInt(at.Unix(), 10))) {
+		t.Fatal("entry lacks its activation time")
+	}
+}
+
+// The admin reset drops the current contracts (finished or not), gives back
+// the reroll and fills every slot again at once -- also slots already
+// acknowledged today.
+func TestAdminResetsDailyContracts(t *testing.T) {
+	database := contractTestDB(t)
+	now := time.Now()
+	setContracts(t, database, now, "YMPQ_CompleteMatches", "YMPQ_WinMatches", "YMPQ_Kills", "YMPQ_WinMatchesTER")
+	applyContractProgress(contractTestPID, contractMatch{mode: "TDM", outcome: "win"}, now)
+	removeDailyContract(contractTestPID, contractBySlot(t, 1).entryID) // acknowledged today
+	if _, err := database.Exec(`INSERT INTO player_contract_state(user_id,state_id,last_replace) VALUES(?,1,?)
+		ON CONFLICT(user_id) DO UPDATE SET last_replace=excluded.last_replace`, contractTestPID, now.Unix()); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := adminPost(adminTestRouter(), "/admin/api/players/"+contractTestPID+"/contracts/reset", "test-admin-key", `{}`)
+	if rec.Code != 200 {
+		t.Fatalf("reset: %d %s", rec.Code, rec.Body.String())
+	}
+	st := readContractState(database, contractTestPID)
+	if len(st.entries) != contractSlots() {
+		t.Fatalf("%d contracts after the reset, want every slot filled", len(st.entries))
+	}
+	for _, c := range st.entries {
+		if c.entryID <= 4 || c.progress != 0 || c.state != "active" {
+			t.Errorf("slot %d not a fresh contract: %+v", c.slot, c)
+		}
+	}
+	if st.lastReplace != 0 {
+		t.Error("the day's reroll was not given back")
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"contracts"`)) {
+		t.Error("player detail lacks the contracts")
+	}
+}

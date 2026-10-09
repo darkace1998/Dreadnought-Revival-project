@@ -45,7 +45,12 @@ var targetSizes = map[string]int{
 	"YA_GetGameConfigData": 1116,
 	// Was 2153. +594: goal m_title/m_description now go out as NSLOCTEXT(...)
 	// macros -- the FText import the client uses left bare strings blank.
-	"YA_GetStaticCareerData": 2747,
+	// 2747 -> 2744 (-3): UnlockAllModes' category YGC_RECRUIT -> YGC_NONE
+	// (a helper goal, not a Recruit milestone; career_goals.go).
+	// 2744 -> 10000 (+7256): the careers rebuilt (career_goals.go): 15
+	// goals (6 Recruit, 9 Captain) with the game's original titles and
+	// descriptions keyed into its MmogData locres, 2-3 stages each.
+	"YA_GetStaticCareerData": 10000,
 	// Was 126. +1690: the reply now carries the PR rank ladder (51 {RP, CR}
 	// entries at the root, parser 0x2A738D0) instead of a list of ship ids
 	// under result that nothing read -- the client's rank thresholds came
@@ -61,8 +66,9 @@ var targetSizes = map[string]int{
 	// and the contract state fields are strings like on the player object.
 	"YA_GetDailyContractsData": 4448,
 	"YA_GetBoosterData":        1856,
-	"YA_GetCareerProgression":  382,
-	"YA_GetPlayerScores":       277,
+	// 382 -> 1257 (+875): one progress entry per goal of the rebuilt careers.
+	"YA_GetCareerProgression": 1257,
+	"YA_GetPlayerScores":      277,
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).

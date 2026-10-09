@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -25,6 +26,34 @@ func registerAdminPlayerManagement(api *mux.Router) {
 	api.HandleFunc("/players/{pid}", adminAPIPlayerDetail).Methods(http.MethodGet)
 	api.HandleFunc("/players/{pid}/currency", adminAPIPlayerCurrency).Methods(http.MethodPost)
 	api.HandleFunc("/players/{pid}/ships", adminAPIPlayerGrantShip).Methods(http.MethodPost)
+	api.HandleFunc("/players/{pid}/contracts/reset", adminAPIPlayerResetContracts).Methods(http.MethodPost)
+}
+
+type adminContract struct {
+	Slot     int    `json:"slot"`
+	Elite    bool   `json:"elite"`
+	Quest    string `json:"quest"`
+	Progress int32  `json:"progress"`
+	Target   int32  `json:"target"`
+	Reward   int32  `json:"reward"`
+	State    string `json:"state"`
+}
+
+// adminAPIPlayerResetContracts gives the player a fresh set of daily
+// contracts now (resetDailyContracts) and pushes them if online.
+func adminAPIPlayerResetContracts(w http.ResponseWriter, r *http.Request) {
+	pid, database, ok := adminPlayerPID(w, r)
+	if !ok {
+		return
+	}
+	n, err := resetDailyContracts(pid, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	adminAudit(database, r, "reset contracts", pid, map[string]any{"dropped": n})
+	squadHubInstance.push(pid, buildMmogContractRefreshPush(pid))
+	adminAPIPlayerDetail(w, r)
 }
 
 func adminPlayerPID(w http.ResponseWriter, r *http.Request) (string, *sql.DB, bool) {
@@ -70,16 +99,17 @@ func adminAPIPlayerDetail(w http.ResponseWriter, r *http.Request) {
 		Online  bool   `json:"online"`
 		Created string `json:"created"`
 		// Banned: banned_at / ban_reason from admin_bans (admin_moderation.go).
-		Banned    bool        `json:"banned"`
-		BanReason string      `json:"ban_reason,omitempty"`
-		BannedAt  string      `json:"banned_at,omitempty"`
-		Matches   int         `json:"matches"`
-		Wins      int         `json:"wins"`
-		Kills     int         `json:"kills"`
-		Deaths    int         `json:"deaths"`
-		LastMatch string      `json:"last_match,omitempty"`
-		Ships     []adminShip `json:"ships"`
-		Heroes    []adminShip `json:"heroes"`
+		Banned    bool            `json:"banned"`
+		BanReason string          `json:"ban_reason,omitempty"`
+		BannedAt  string          `json:"banned_at,omitempty"`
+		Matches   int             `json:"matches"`
+		Wins      int             `json:"wins"`
+		Kills     int             `json:"kills"`
+		Deaths    int             `json:"deaths"`
+		LastMatch string          `json:"last_match,omitempty"`
+		Contracts []adminContract `json:"contracts"`
+		Ships     []adminShip     `json:"ships"`
+		Heroes    []adminShip     `json:"heroes"`
 	}
 	out.PID = pid
 	if err := database.QueryRow(`SELECT COALESCE(display_name,''), current_rank, soft_currency, premium_currency, free_xp, created_at
@@ -111,6 +141,11 @@ func adminAPIPlayerDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		return out.Ships[i].Name < out.Ships[j].Name
 	})
+	out.Contracts = []adminContract{}
+	for _, c := range readContractState(database, pid).entries {
+		out.Contracts = append(out.Contracts, adminContract{Slot: c.slot, Elite: c.slot >= mpQuestNumBaseContractSlots,
+			Quest: c.quest, Progress: c.progress, Target: c.target, Reward: c.reward, State: c.state})
+	}
 	out.Heroes = []adminShip{}
 	for _, h := range heroShipLoadouts {
 		out.Heroes = append(out.Heroes, adminShip{ID: h.loadoutID, Name: h.name, Tier: h.tier, Hero: true, Owned: owned[h.loadoutID]})

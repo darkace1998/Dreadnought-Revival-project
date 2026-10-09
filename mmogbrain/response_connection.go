@@ -1179,7 +1179,10 @@ func isMmogPlayerMutationRequest(requestName string) bool {
 		// nothing -- the same ship could be unlocked forever and never became
 		// owned.
 		"YA_UnlockItem",
-		"YA_SaveGame", "YA_SaveCtAData":
+		"YA_SaveGame", "YA_SaveCtAData",
+		// The client's own goal counters (stats_counters.go). Missing here, so
+		// persistIncrementPlayerStatsCounter never ran: 0 rows ever stored.
+		"YA_IncrementPlayerStatsCounter":
 		return true
 	default:
 		return false

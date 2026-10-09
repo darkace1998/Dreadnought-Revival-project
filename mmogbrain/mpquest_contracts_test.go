@@ -93,7 +93,11 @@ func TestCareerGoalTextsAreNsLocTextMacros(t *testing.T) {
 	var stack []int
 	b, _ = appendCareerGoalsConfig(b, stack)
 	for _, goal := range careerGoalsConfig() {
-		title := nsLocText(careerGoalTextNamespace, goal.id+".Title", goal.title)
+		// Original texts carry their key in the client's MmogData locres.
+		title := careerGoalText(goal.titleKey, goal.id+".Title", goal.title)
+		if goal.titleKey != "" && title != nsLocText("", goal.titleKey, goal.title) {
+			t.Errorf("goal %s: original title not keyed into the locres", goal.id)
+		}
 		if !bytes.Contains(b, protocol.AppendStringField(nil, "m_title", title)) {
 			t.Errorf("goal %s: m_title is not %s", goal.id, title)
 		}

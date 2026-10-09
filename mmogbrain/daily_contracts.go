@@ -28,7 +28,8 @@ import (
 // What the client does, verified in the exe 2026-10-09:
 //
 //	entry   eid (string, the assignment's own id), id (the quest's m_id, matched
-//	        case-insensitively against the collection), act, cpl (bool),
+//	        case-insensitively against the collection), act (activation time,
+//	        Unix s), cpl (bool),
 //	        prg (progress), dif (index into the quest's per-difficulty
 //	        target/reward arrays, also handed to the quest via vtable +0x1E0),
 //	        ran. Entries past m_numBaseContractSlots are the elite slot.
@@ -317,7 +318,8 @@ func ensureDailyContracts(database *sql.DB, pid string, now time.Time) bool {
 			visible[c.slot] = true
 			exclude[strings.ToLower(c.quest)] = true
 		}
-		if c.assignedAt > lastFilled[c.slot] {
+		// An admin reset frees the slot for today (resetDailyContracts).
+		if c.state != "reset" && c.assignedAt > lastFilled[c.slot] {
 			lastFilled[c.slot] = c.assignedAt
 		}
 	}
@@ -436,6 +438,35 @@ func removeDailyContract(pid string, entryID int64) bool {
 	return true
 }
 
+// resetDailyContracts is the admin dashboard's reset: the player's current
+// contracts are dropped (kept as state "reset" for the record), today's
+// reroll is given back, and every slot is refilled at once with new
+// contracts. Returns how many contracts were dropped.
+func resetDailyContracts(pid string, now time.Time) (int64, error) {
+	database := currentMmogPlayerStateDB()
+	pid = normalizedPlayerStatePID(pid)
+	if database == nil {
+		return 0, sql.ErrConnDone
+	}
+	contractsMu.Lock()
+	defer contractsMu.Unlock()
+	res, err := database.Exec(`UPDATE player_daily_contracts SET state='reset' WHERE user_id=? AND state IN ('active','completed')`, pid)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	// Slots emptied today (acknowledged or dropped) count as filled today;
+	// the reset frees them as well.
+	if _, err := database.Exec(`UPDATE player_daily_contracts SET state='reset' WHERE user_id=? AND state IN ('acknowledged','removed','replaced') AND assigned_at>=?`,
+		pid, contractPeriodStart(now).Unix()); err != nil {
+		return n, err
+	}
+	_, _ = database.Exec(`UPDATE player_contract_state SET last_replace=0 WHERE user_id=?`, pid)
+	bumpContractState(database, pid, 0, 0)
+	ensureDailyContracts(database, pid, now)
+	return n, nil
+}
+
 // --- progress -----------------------------------------------------------------
 
 // applyContractProgress counts a finished match against the player's
@@ -503,7 +534,11 @@ func appendContractEntries(b []byte, stack []int, name string, entries []dailyCo
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "eid", strconv.FormatInt(c.entryID, 10))
 		b = protocol.AppendStringField(b, "id", c.quest)
-		b = protocol.AppendStringField(b, "act", "1")
+		// "act" is the ACTIVATION TIME in Unix seconds, not a flag: the client
+		// turns it into a date (0x3E4110: 1970-01-01 + act). "1" made every
+		// contract look a day older than the reset -- hidden at login, then
+		// acknowledged as finished on the next refresh (operator 2026-10-09).
+		b = protocol.AppendStringField(b, "act", strconv.FormatInt(c.assignedAt, 10))
 		b = protocol.AppendStringField(b, "cpl", boolToOneZero(c.state == "completed"))
 		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(c.progress)))
 		b = protocol.AppendStringField(b, "dif", strconv.Itoa(int(c.difficulty)))

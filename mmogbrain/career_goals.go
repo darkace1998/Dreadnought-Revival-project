@@ -74,9 +74,14 @@ type careerGoalStage struct {
 }
 
 type careerGoal struct {
-	id                 string
-	title              string
-	description        string
+	id          string
+	title       string
+	description string
+	// titleKey / descriptionKey are the texts' keys in the client's
+	// DreadGame_MmogData.locres (namespace ""), so the client shows them in
+	// its own language. Empty = our own namespace (nsLocText fallback).
+	titleKey           string
+	descriptionKey     string
 	uiGuideAvailable   bool
 	counterID          string
 	counterSubID       string
@@ -106,57 +111,84 @@ func careerGoalsConfig() []careerGoal {
 			// per-player counter that this server does not track, so gating on
 			// it would leave the game modes locked permanently rather than
 			// unlocking them through play.
-			id:                 "UnlockAllModes",
-			title:              "Full Deployment",
-			description:        "All game modes are available.",
-			uiGuideAvailable:   false,
-			counterID:          "MatchesPlayed",
-			category:           "EYGoalCategory::YGC_RECRUIT",
+			id:               "UnlockAllModes",
+			title:            "Full Deployment",
+			description:      "All game modes are available.",
+			uiGuideAvailable: false,
+			counterID:        "MatchesPlayed",
+			// Not a career milestone: the game's own text calls it a "Special
+			// helper goal to configure the amount of matches to be played to
+			// unlock all modes" (DreadGame_MmogData.locres). In the Recruit
+			// career it blocked the rank-up to Captain -- the client unlocks a
+			// career only when every goal of the previous one has every stage
+			// claimed (0x535300) -- and nobody claims a helper (operator
+			// 2026-10-09: "i claimed and got 2/2 i should rank up but didnt").
+			// UYGoalManager still finds it by id for IsGameModesUnlocked.
+			category:           "EYGoalCategory::YGC_NONE",
 			platformVisibility: "EYGoalPlatformVisibility::YGPV_PC",
 			stages: []careerGoalStage{
 				{amountToComplete: 1, reward: 0, rewardType: "EYGoalRewardType::YGR_NONE"},
 			},
 		},
-		{
-			id:                 "GOAL_MATCHES_PLAYED",
-			title:              "Shakedown Cruise",
-			description:        "Complete multiplayer matches.",
-			uiGuideAvailable:   false,
-			counterID:          "MatchesPlayed",
-			category:           "EYGoalCategory::YGC_RECRUIT",
-			platformVisibility: "EYGoalPlatformVisibility::YGPV_PC",
-			stages: []careerGoalStage{
-				{amountToComplete: 1, reward: 1000, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-				{amountToComplete: 5, reward: 2500, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-				{amountToComplete: 25, reward: 5000, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-			},
-		},
-		{
-			id:                 "GOAL_MATCHES_WON",
-			title:              "Victory Conditions",
-			description:        "Win multiplayer matches.",
-			uiGuideAvailable:   false,
-			counterID:          "MatchesWon",
-			category:           "EYGoalCategory::YGC_CAPTAIN",
-			platformVisibility: "EYGoalPlatformVisibility::YGPV_PC",
-			stages: []careerGoalStage{
-				{amountToComplete: 1, reward: 1500, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-				{amountToComplete: 10, reward: 4000, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-			},
-		},
-		{
-			id:                 "GOAL_SHIPS_DESTROYED",
-			title:              "Hull Breaker",
-			description:        "Destroy enemy ships.",
-			uiGuideAvailable:   false,
-			counterID:          "ShipsDestroyed",
-			category:           "EYGoalCategory::YGC_ACHIEVEMENT",
-			platformVisibility: "EYGoalPlatformVisibility::YGPV_PC",
-			stages: []careerGoalStage{
-				{amountToComplete: 10, reward: 1000, rewardType: "EYGoalRewardType::YGR_CREDITS"},
-				{amountToComplete: 100, reward: 5000, rewardType: "EYGoalRewardType::YGR_FREEXP"},
-			},
-		},
+		// The careers below, rebuilt 2026-10-09 (operator: "please rebuild
+		// it"). RECOVERED: every title and description is an original text
+		// of the game, with its locres key -- titles like "Know the Ropes",
+		// "Veteran Captain", "Fame and Fortune", and the counter texts
+		// ("Matches played", "Daily Contracts completed", "T3 ships owned").
+		// LOST (issue #68; no published list): which title went with which
+		// counter, the stage targets, the rewards and the career of each.
+		// GUESS: the pairing, targets, rewards and careers below -- an
+		// onboarding Recruit career, then the Captain career it unlocks (the
+		// help text: "Initially you will see only the Recruit-ranked
+		// milestones ... once you have completed them, a new group of
+		// Captain-ranked milestones will become available"). Every counter
+		// is one this server can count (careerCounterValue).
+		careerGoalDef("GOAL_TUTORIAL", "New Commission", "2E1734904B0297C5C209D28917B27944",
+			"Tutorial finished", "B0AE20804D0AAA595D92EBA85529C886", counterTutorialFinished, "YGC_RECRUIT",
+			cs(1, 1000, rewardCredits)),
+		careerGoalDef("GOAL_PROVING_GROUNDS", "Action Stations", "05A0D0B046A8CFD0C6883C98EF431694",
+			"Proving Grounds played", "3F93DE194F7B404F31B6EA86905B87DF", counterProvingGrounds, "YGC_RECRUIT",
+			cs(1, 1000, rewardCredits), cs(3, 2000, rewardCredits)),
+		careerGoalDef("GOAL_MATCHES_PLAYED", "Know the Ropes", "629D8DDB47B8372AC5DB5B97CF7A1F45",
+			"Matches played", "29AFB2A34D03601987111BAAEFD10618", counterMatchesPlayed, "YGC_RECRUIT",
+			cs(1, 1000, rewardCredits), cs(5, 2500, rewardCredits), cs(10, 1000, rewardFreeXP)),
+		careerGoalDef("GOAL_SHIPS_DESTROYED", "Eliminate the Enemy", "D16D7C6A4465561ACC77BC8057436160",
+			"Enemy ships destroyed", "A55B7144421596BA917808AB1F3FFACB", counterShipsDestroyed, "YGC_RECRUIT",
+			cs(5, 1500, rewardCredits), cs(25, 3000, rewardCredits)),
+		careerGoalDef("GOAL_MODULES_RESEARCHED", "Modulist", "7E4669DB4F6F0625D6D45F986B7299DD",
+			"T1 modules researched", "9A09D2AD460E20FE480C71BF851DDEC0", counterModulesResearched, "YGC_RECRUIT",
+			cs(1, 1000, rewardCredits), cs(5, 2000, rewardCredits)),
+		careerGoalDef("GOAL_T2_OWNED", "On the Rise", "A9F162A4490610DD79009AA1244C7BBF",
+			"T2 ships owned", "1BBFB69041F6B23267DF9F8F33235974", counterT2Owned, "YGC_RECRUIT",
+			cs(1, 2500, rewardCredits)),
+
+		careerGoalDef("GOAL_MATCHES_WON", "Conqueror", "0ABB5A5948FFD45E3619A198DEF31422",
+			"Matches won", "314440E248D3F945B40BD8846B8AE2D6", counterMatchesWon, "YGC_CAPTAIN",
+			cs(10, 5000, rewardCredits), cs(50, 10000, rewardCredits), cs(100, 100, rewardGP)),
+		careerGoalDef("GOAL_DESTRUCTION", "Wreak Destruction", "8F9962DA4FFFCD519B9D168874836CD7",
+			"Enemy ships destroyed", "A55B7144421596BA917808AB1F3FFACB", counterShipsDestroyed, "YGC_CAPTAIN",
+			cs(100, 5000, rewardCredits), cs(500, 5000, rewardFreeXP), cs(1000, 150, rewardGP)),
+		careerGoalDef("GOAL_T3_OWNED", "Veteran Captain", "8D02B34043877C80D75E9EAEDED9D956",
+			"T3 ships owned", "0D2CEB514E6B7EC0F0A5F19FDDFFE18F", counterT3Owned, "YGC_CAPTAIN",
+			cs(1, 5000, rewardCredits), cs(5, 10000, rewardCredits)),
+		careerGoalDef("GOAL_T4_OWNED", "Legendary Captain", "35CD19F64BB7DC1963DA019EBB2CF5A0",
+			"T4 ships or higher owned", "CA958C1B4A0CD7B9EB9A9E9FF3DBEB9C", counterT4Owned, "YGC_CAPTAIN",
+			cs(1, 10000, rewardCredits), cs(5, 200, rewardGP)),
+		careerGoalDef("GOAL_CONTRACTS", "Fame and Fortune", "23193AFC47D175DA23DD918965B75D0D",
+			"Daily Contracts completed", "2F31B7184F3CEBD4C285CDA4D515FCE2", counterContracts, "YGC_CAPTAIN",
+			cs(5, 5000, rewardCredits), cs(25, 10000, rewardCredits), cs(100, 200, rewardGP)),
+		careerGoalDef("GOAL_TDM", "Spread the Dread", "15F1297A4B903CF28DEE15B9E777568C",
+			"Team Deathmatches played", "F3BDBF534752E5EC068746B5283D8928", counterTDMPlayed, "YGC_CAPTAIN",
+			cs(10, 3000, rewardCredits), cs(50, 3000, rewardFreeXP)),
+		careerGoalDef("GOAL_TE", "Stand Your Ground", "B2E21F9A4A80B9D5052F2FB04C465486",
+			"Team Eliminations played", "8EF5FC69425DDC8700B3EDA4C6FF6418", counterTEPlayed, "YGC_CAPTAIN",
+			cs(5, 3000, rewardCredits), cs(25, 3000, rewardFreeXP)),
+		careerGoalDef("GOAL_ONSLAUGHT", "Own the Skies", "9ECF198D446A083A08AC82BE48EBCF29",
+			"Onslaught matches played", "0C7F56D6453053CC921991ABCDC68982", counterOnslaughtPlayed, "YGC_CAPTAIN",
+			cs(5, 3000, rewardCredits), cs(25, 3000, rewardFreeXP)),
+		careerGoalDef("GOAL_CONQUEST", "Colonial Scramble", "BDDA088D46445BE2546056BA044DB11F",
+			"Conquest matches played", "9CD684BE42858900F5380B9D0E1B58EB", counterConquestPlayed, "YGC_CAPTAIN",
+			cs(5, 3000, rewardCredits), cs(25, 3000, rewardFreeXP)),
 	}
 }
 
@@ -170,8 +202,8 @@ func appendCareerGoalsConfig(b []byte, stack []int) ([]byte, []int) {
 	for _, goal := range careerGoalsConfig() {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "m_id", goal.id)
-		b = protocol.AppendStringField(b, "m_title", nsLocText(careerGoalTextNamespace, goal.id+".Title", goal.title))
-		b = protocol.AppendStringField(b, "m_description", nsLocText(careerGoalTextNamespace, goal.id+".Description", goal.description))
+		b = protocol.AppendStringField(b, "m_title", careerGoalText(goal.titleKey, goal.id+".Title", goal.title))
+		b = protocol.AppendStringField(b, "m_description", careerGoalText(goal.descriptionKey, goal.id+".Description", goal.description))
 		b = protocol.AppendBoolField(b, "m_uiGuideAvailable", goal.uiGuideAvailable)
 		b = protocol.AppendStringField(b, "m_counterID", goal.counterID)
 		b = protocol.AppendStringField(b, "m_counterSubId", goal.counterSubID)
@@ -254,18 +286,7 @@ func careerGoalProgressForPlayer(playerPID string, goalID string) int32 {
 		if value := playerStatsCounterValue(playerPID, goal.counterID, goal.counterSubID); value > 0 {
 			return value
 		}
-		// Otherwise fall back to what this server observed. Since 2026-09-26
-		// battle-server-mod reports every finished match (battle_result.go), so
-		// matches played, matches won and ships destroyed come from recorded
-		// results. (Before that nothing recorded a result, and a wins goal
-		// stayed at zero rather than being fabricated.)
-		if v := battleResultCounter(playerPID, goal.counterID); v > 0 {
-			return v
-		}
-		if goal.counterID == counterMatchesPlayed {
-			return matchesPlayedByPlayer(playerPID)
-		}
-		return 0
+		return careerCounterValue(playerPID, goal.counterID)
 	}
 	return 0
 }
@@ -315,4 +336,30 @@ const careerGoalTextNamespace = "DNPrivateServer.CareerGoals"
 func nsLocText(namespace, key, source string) string {
 	esc := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	return `NSLOCTEXT("` + esc.Replace(namespace) + `", "` + esc.Replace(key) + `", "` + esc.Replace(source) + `")`
+}
+
+// careerGoalText is a goal text as an NSLOCTEXT macro: with its key in the
+// client's DreadGame_MmogData.locres (namespace "") when it is an original
+// text, so the client shows its own translation; otherwise our namespace.
+func careerGoalText(locresKey, ownKey, source string) string {
+	if locresKey != "" {
+		return nsLocText("", locresKey, source)
+	}
+	return nsLocText(careerGoalTextNamespace, ownKey, source)
+}
+
+const (
+	rewardCredits = "EYGoalRewardType::YGR_CREDITS"
+	rewardFreeXP  = "EYGoalRewardType::YGR_FREEXP"
+	rewardGP      = "EYGoalRewardType::YGR_GP"
+)
+
+func cs(amount, reward int32, rewardType string) careerGoalStage {
+	return careerGoalStage{amountToComplete: amount, reward: reward, rewardType: rewardType}
+}
+
+func careerGoalDef(id, title, titleKey, description, descriptionKey, counter, category string, stages ...careerGoalStage) careerGoal {
+	return careerGoal{id: id, title: title, titleKey: titleKey, description: description, descriptionKey: descriptionKey,
+		counterID: counter, category: "EYGoalCategory::" + category,
+		platformVisibility: "EYGoalPlatformVisibility::YGPV_PC", stages: stages}
 }
