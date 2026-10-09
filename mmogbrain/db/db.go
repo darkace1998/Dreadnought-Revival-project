@@ -393,6 +393,31 @@ var migrations = []string{
 		updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
 		PRIMARY KEY (user_id, loadout_id, slot)
 	)`,
+	// Admin dashboard (admin_metrics.go, admin_moderation.go): a load sample
+	// every few minutes, every admin action, and the bans mmogbrain enforces
+	// itself (a launcher JWT stays valid for 24 h, so the auth server's ban
+	// alone would not stop a player who is already signed in).
+	`CREATE TABLE IF NOT EXISTS admin_metrics_samples (
+		ts        TEXT PRIMARY KEY,
+		online    INTEGER NOT NULL DEFAULT 0,
+		in_match  INTEGER NOT NULL DEFAULT 0,
+		queued    INTEGER NOT NULL DEFAULT 0,
+		instances INTEGER NOT NULL DEFAULT 0
+	)`,
+	`CREATE TABLE IF NOT EXISTS admin_audit (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		actor      TEXT NOT NULL DEFAULT '',
+		action     TEXT NOT NULL,
+		target     TEXT NOT NULL DEFAULT '',
+		details    TEXT NOT NULL DEFAULT ''
+	)`,
+	`CREATE INDEX IF NOT EXISTS admin_audit_target ON admin_audit(target, id)`,
+	`CREATE TABLE IF NOT EXISTS admin_bans (
+		user_id    TEXT PRIMARY KEY,
+		reason     TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL DEFAULT (datetime('now'))
+	)`,
 }
 
 func Open(path string) (*sql.DB, error) {

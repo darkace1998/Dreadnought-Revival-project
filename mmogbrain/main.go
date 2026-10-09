@@ -97,6 +97,11 @@ func main() {
 
 	adminKey := requireAdminKey(log)
 	r := newRouter(h, secret, adminKey, getenv("INTERNAL_API_KEY", adminKey), log)
+	// Admin dashboard: bans are forwarded to the auth server, and the load
+	// is sampled for the metrics tab (admin_moderation.go, admin_metrics.go).
+	adminDash.authURL = getenv("AUTH_URL", "http://127.0.0.1:8081")
+	adminLoadBans()
+	startAdminMetricsSampler(log)
 
 	srv := &http.Server{
 		Addr:         addr,

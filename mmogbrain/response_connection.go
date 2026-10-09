@@ -276,7 +276,10 @@ func nextBufferedMmogPacket(data []byte) ([]byte, []byte, bool) {
 type mmogConnState struct {
 	// squadRegistered is the player id this connection registered with the
 	// squad hub (squads.go), or "" before login.
-	squadRegistered          string
+	squadRegistered string
+	// registeredAt is when that happened; an admin kick drops connections
+	// registered before it.
+	registeredAt             time.Time
 	loginResponseSent        bool
 	playerGetResponded       bool
 	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
@@ -948,7 +951,14 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 	if state.loginResponseSent && state.playerPID != "" && state.playerPID != defaultMmogPlayerPID {
 		if state.squadRegistered == "" {
 			state.squadRegistered = normalizedPlayerStatePID(state.playerPID)
+			state.registeredAt = time.Now()
 			squadHubInstance.connected(state.squadRegistered)
+		}
+		// Kicked or banned from the admin dashboard (admin_moderation.go):
+		// drop the connection; the deferred close in handleMmogConn runs.
+		if adminConnectionRevoked(state.squadRegistered, state.registeredAt) {
+			log.WithFields(logrus.Fields{"remote": remote, "pid": state.squadRegistered}).Warn("mmog: dropping connection, player kicked or banned")
+			return errAdminDisconnected
 		}
 		switch squadHubInstance.takeArm(state.squadRegistered) {
 		case 1: // queued by their squad's leader

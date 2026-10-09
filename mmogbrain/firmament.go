@@ -283,6 +283,10 @@ func handleFirmamentConn(log *logrus.Logger, conn net.Conn, secret []byte) {
 		return
 	}
 	playerID := protocol.GatewayPlayerDataReadyKey(protocol.GatewayClaimsUserID(claims))
+	if playerID != "" && adminPlayerBanned(playerID) {
+		log.WithFields(logrus.Fields{"remote": remote, "pid": normalizedPlayerStatePID(playerID)}).Warn("firmament: player is banned, rejecting connection")
+		return
+	}
 	if playerID == "" {
 		log.WithField("remote", remote).Warn("firmament: auth payload missing player identity; sending success without MMOG readiness gate")
 	} else if !gatewayPlayerDataReadyForUser(playerID) {

@@ -424,14 +424,14 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminBan(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
+		UserID   string `json:"user_id"`
 		Reason   string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" {
-		writeGreyboxError(w, http.StatusBadRequest, -32602, "username and reason required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Username == "" && req.UserID == "") {
+		writeGreyboxError(w, http.StatusBadRequest, -32602, "username (or user_id) and reason required")
 		return
 	}
-	var userID string
-	err := h.DB.QueryRow(`SELECT id FROM users WHERE username=?`, req.Username).Scan(&userID)
+	userID, err := h.adminTargetUser(&req.Username, req.UserID)
 	if err == sql.ErrNoRows {
 		writeGreyboxError(w, http.StatusNotFound, -32001, "user not found")
 		return
@@ -473,17 +473,31 @@ func (h *Handler) AdminBan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "banned", fieldUsername: req.Username})
 }
 
+// adminTargetUser resolves an admin request's account: by username, or by
+// user id in either form (the game servers use the id without dashes, as
+// mmogbrain's admin dashboard does). Fills in the username for the log.
+func (h *Handler) adminTargetUser(username *string, userID string) (string, error) {
+	var id string
+	if *username != "" {
+		err := h.DB.QueryRow(`SELECT id FROM users WHERE username=?`, *username).Scan(&id)
+		return id, err
+	}
+	norm := strings.ToLower(strings.ReplaceAll(userID, "-", ""))
+	err := h.DB.QueryRow(`SELECT id, username FROM users WHERE lower(replace(id,'-',''))=?`, norm).Scan(&id, username)
+	return id, err
+}
+
 // AdminUnban handles POST /admin/unban — removes a ban by username.
 func (h *Handler) AdminUnban(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
+		UserID   string `json:"user_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" {
-		writeGreyboxError(w, http.StatusBadRequest, -32602, "username required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Username == "" && req.UserID == "") {
+		writeGreyboxError(w, http.StatusBadRequest, -32602, "username or user_id required")
 		return
 	}
-	var userID string
-	err := h.DB.QueryRow(`SELECT id FROM users WHERE username=?`, req.Username).Scan(&userID)
+	userID, err := h.adminTargetUser(&req.Username, req.UserID)
 	if err == sql.ErrNoRows {
 		writeGreyboxError(w, http.StatusNotFound, -32001, "user not found")
 		return

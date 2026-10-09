@@ -9,12 +9,11 @@ import (
 	"sort"
 
 	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
 )
 
 // Player management for the admin dashboard: read one account, change its
 // credits / GP / free XP, and grant hero ships. Every change is logged at warn
-// level ("admin: ...") and, when the player is online, pushed to their client
+// level ("admin: action") and in the admin_audit table, and, when the player is online, pushed to their client
 // with the same in-session pushes the game flow uses, so no relog is needed.
 
 var adminPIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -62,22 +61,37 @@ func adminAPIPlayerDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out struct {
-		PID     string      `json:"pid"`
-		Name    string      `json:"name"`
-		Rank    int         `json:"rank"`
-		Credits int64       `json:"credits"`
-		Premium int64       `json:"premium"`
-		FreeXP  int64       `json:"free_xp"`
-		Online  bool        `json:"online"`
-		Ships   []adminShip `json:"ships"`
-		Heroes  []adminShip `json:"heroes"`
+		PID     string `json:"pid"`
+		Name    string `json:"name"`
+		Rank    int    `json:"rank"`
+		Credits int64  `json:"credits"`
+		Premium int64  `json:"premium"`
+		FreeXP  int64  `json:"free_xp"`
+		Online  bool   `json:"online"`
+		Created string `json:"created"`
+		// Banned: banned_at / ban_reason from admin_bans (admin_moderation.go).
+		Banned    bool        `json:"banned"`
+		BanReason string      `json:"ban_reason,omitempty"`
+		BannedAt  string      `json:"banned_at,omitempty"`
+		Matches   int         `json:"matches"`
+		Wins      int         `json:"wins"`
+		Kills     int         `json:"kills"`
+		Deaths    int         `json:"deaths"`
+		LastMatch string      `json:"last_match,omitempty"`
+		Ships     []adminShip `json:"ships"`
+		Heroes    []adminShip `json:"heroes"`
 	}
 	out.PID = pid
-	if err := database.QueryRow(`SELECT COALESCE(display_name,''), current_rank, soft_currency, premium_currency, free_xp
-		FROM player_state WHERE user_id=?`, pid).Scan(&out.Name, &out.Rank, &out.Credits, &out.Premium, &out.FreeXP); err != nil {
+	if err := database.QueryRow(`SELECT COALESCE(display_name,''), current_rank, soft_currency, premium_currency, free_xp, created_at
+		FROM player_state WHERE user_id=?`, pid).Scan(&out.Name, &out.Rank, &out.Credits, &out.Premium, &out.FreeXP, &out.Created); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if database.QueryRow(`SELECT reason, created_at FROM admin_bans WHERE user_id=?`, pid).Scan(&out.BanReason, &out.BannedAt) == nil {
+		out.Banned = true
+	}
+	_ = database.QueryRow(`SELECT COUNT(*), COALESCE(SUM(outcome='win'),0), COALESCE(SUM(kills),0), COALESCE(SUM(deaths),0),
+		COALESCE(MAX(created_at),'') FROM battle_results WHERE user_id=?`, pid).Scan(&out.Matches, &out.Wins, &out.Kills, &out.Deaths, &out.LastMatch)
 	for _, p := range socialHubInstance.onlinePlayers() {
 		if p.PID == pid {
 			out.Online = true
@@ -165,8 +179,8 @@ func adminAPIPlayerCurrency(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	logrus.WithFields(logrus.Fields{"player": pid, "mode": req.Mode, "credits": req.Credits, "premium": req.Premium,
-		"free_xp": req.FreeXP}).Warn("admin: player balances changed")
+	adminAudit(database, r, "balances", pid, map[string]any{"mode": req.Mode, "credits": req.Credits,
+		"premium": req.Premium, "free_xp": req.FreeXP})
 	// Online: credits/GP through YA_RewardCurrencies (assigned), free XP
 	// through YA_ConvertShipXP with no ship entries (FreeXp assigned).
 	squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
@@ -208,7 +222,7 @@ func adminAPIPlayerGrantShip(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	logrus.WithFields(logrus.Fields{"player": pid, "ship": req.ShipID}).Warn("admin: hero ship granted")
+	adminAudit(database, r, "grant ship", pid, map[string]any{"ship_id": req.ShipID, "name": adminShipName(req.ShipID)})
 	// Online: the ship itself (YA_ClaimItem addedLoadouts), then the fleets,
 	// which a hero ship can unlock.
 	if payload, ok := buildMmogShipClaimPush(pid, req.ShipID); ok {
@@ -241,4 +255,13 @@ func adminGrantShip(database *sql.DB, pid string, shipID int32) error {
 		return errors.New("the ship could not be granted (no loadout data for it)")
 	}
 	return tx.Commit()
+}
+
+func adminShipName(id int32) string {
+	for _, h := range heroShipLoadouts {
+		if h.loadoutID == id {
+			return h.name
+		}
+	}
+	return ""
 }

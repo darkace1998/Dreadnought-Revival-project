@@ -6,8 +6,8 @@ package main
 // refuses to leave empty). mmogbrain's HTTP port is not forwarded to the
 // internet, so the page is reachable only from the machine or the LAN.
 //
-// Read-only except one action -- stopping a battle server -- which is logged
-// with the caller's address.
+// Actions (stopping a battle server, player management and moderation) are
+// recorded in the admin_audit table with the caller's address.
 
 import (
 	"bufio"
@@ -35,6 +35,8 @@ var adminDashboardHTML []byte
 type adminDashboardConfig struct {
 	controlPlaneURL string // GAME_MGR_URL (dn-dedicated)
 	internalKey     string // X-Internal-Key for the control plane
+	adminKey        string // forwarded to the auth server's /admin routes
+	authURL         string // auth server; "" = bans stay local (tests)
 	startedAt       time.Time
 }
 
@@ -56,7 +58,7 @@ func constantTimeKeyMiddleware(key string) mux.MiddlewareFunc {
 }
 
 func registerAdminDashboard(r *mux.Router, adminKey, controlPlaneURL, internalKey string) {
-	adminDash = adminDashboardConfig{controlPlaneURL: controlPlaneURL, internalKey: internalKey, startedAt: time.Now()}
+	adminDash = adminDashboardConfig{controlPlaneURL: controlPlaneURL, internalKey: internalKey, adminKey: adminKey, startedAt: time.Now()}
 	r.HandleFunc("/admin/dashboard", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -75,7 +77,9 @@ func registerAdminDashboard(r *mux.Router, adminKey, controlPlaneURL, internalKe
 	api.HandleFunc("/telemetry", adminAPITelemetry).Methods(http.MethodGet)
 	api.HandleFunc("/logs", adminAPILogs).Methods(http.MethodGet)
 	api.HandleFunc("/battle-logs", adminAPIBattleLogs).Methods(http.MethodGet)
+	api.HandleFunc("/metrics", adminAPIMetrics).Methods(http.MethodGet)
 	registerAdminPlayerManagement(api)
+	registerAdminModeration(api)
 }
 
 func writeAdminJSON(w http.ResponseWriter, v any) {
@@ -154,6 +158,7 @@ func adminAPIStopInstance(w http.ResponseWriter, r *http.Request) {
 	_ = resp.Body.Close()
 	logrus.WithFields(logrus.Fields{"instance": id, "status": resp.StatusCode, "by": r.RemoteAddr}).
 		Warn("admin dashboard: battle server stopped")
+	adminAudit(currentMmogPlayerStateDB(), r, "stop instance", id, map[string]any{"status": resp.StatusCode})
 	writeAdminJSON(w, map[string]any{"status": resp.StatusCode})
 }
 
@@ -238,9 +243,12 @@ func adminAPIPlayers(w http.ResponseWriter, r *http.Request) {
 			(SELECT COUNT(*) FROM battle_results b WHERE b.user_id=p.user_id AND b.outcome='win'),
 			(SELECT COALESCE(SUM(kills),0) FROM battle_results b WHERE b.user_id=p.user_id),
 			-- the fleet of the player's current queue, else of their last match
+			-- (match_slots are deleted when a match ends, so the last match's
+			-- fleet comes from the player's result)
 			COALESCE((SELECT q.fleet_type FROM queue_entries q WHERE q.user_id=p.user_id AND q.status='waiting' LIMIT 1),
-				(SELECT m.fleet_type FROM match_slots s JOIN matches m ON m.id=s.match_id WHERE s.user_id=p.user_id
-					ORDER BY s.joined_at DESC LIMIT 1), 0)
+				(SELECT b.fleet_type FROM battle_results b WHERE b.user_id=p.user_id AND b.fleet_type>0
+					ORDER BY b.created_at DESC LIMIT 1), 0),
+			EXISTS (SELECT 1 FROM admin_bans a WHERE a.user_id=p.user_id)
 		FROM player_state p
 		WHERE (?='' OR p.display_name LIKE '%'||?||'%' OR p.user_id LIKE ?||'%')
 		ORDER BY p.updated_at DESC LIMIT 100`, q, q, strings.ToLower(strings.ReplaceAll(q, "-", "")))
@@ -264,6 +272,7 @@ func adminAPIPlayers(w http.ResponseWriter, r *http.Request) {
 		Wins     int    `json:"wins"`
 		Kills    int    `json:"kills"`
 		IsOnline bool   `json:"online"`
+		Banned   bool   `json:"banned"`
 		Fleet    string `json:"fleet,omitempty"` // queued, else last match; "" = never queued
 	}
 	out := []row{}
@@ -271,7 +280,7 @@ func adminAPIPlayers(w http.ResponseWriter, r *http.Request) {
 		var x row
 		var fleetType int32
 		if rows.Scan(&x.PID, &x.Name, &x.Rank, &x.XP, &x.FreeXP, &x.Credits, &x.Premium, &x.Created, &x.Updated,
-			&x.Ships, &x.Matches, &x.Wins, &x.Kills, &fleetType) == nil {
+			&x.Ships, &x.Matches, &x.Wins, &x.Kills, &fleetType, &x.Banned) == nil {
 			x.IsOnline = online[x.PID]
 			if fleetType > 0 {
 				x.Fleet = fleetTypeName(fleetType)

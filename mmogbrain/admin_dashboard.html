@@ -66,7 +66,18 @@ pre.log { margin: 0; padding: 10px 12px; font: 12px/1.4 var(--mono); white-space
 .manage input, .manage select { width: 100%; }
 .ok { color: var(--good); }
 td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
-@media (max-width: 640px) { input[type=search] { min-width: 0; width: 100%; } }
+.charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.chart { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.chart h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .axis { font-size: 10px; fill: var(--muted); }
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend i { display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+.charts.wide { grid-template-columns: 1fr; }
+.btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.banner { border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; }
+@media (max-width: 640px) { input[type=search] { min-width: 0; width: 100%; } .charts { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -85,8 +96,10 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   <h1>Server Admin</h1>
   <nav id="tabs">
     <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="metrics">Metrics</button>
     <button data-tab="instances">Battle servers</button>
     <button data-tab="players">Players</button>
+    <button data-tab="moderation">Moderation</button>
     <button data-tab="matches">Matches</button>
     <button data-tab="reports">Bug reports</button>
     <button data-tab="telemetry">Telemetry</button>
@@ -105,6 +118,36 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     <section><h2>Battle server outcomes (newest 40 logs)</h2><div class="grid" id="crashes"></div></section>
   </div>
 
+  <div id="tab-metrics" class="hidden">
+    <div class="row" id="mxRange">
+      <span class="muted">Range:</span>
+      <button class="btn" data-days="1">24 h</button><button class="btn on" data-days="7">7 days</button>
+      <button class="btn" data-days="30">30 days</button><button class="btn" data-days="90">90 days</button>
+      <span class="muted" id="mxNote"></span>
+    </div>
+    <div class="grid" id="mxCards"></div>
+    <section><h2>Players online</h2><div class="charts wide"><div class="chart" id="mxOnline"></div></div></section>
+    <section><h2>Per day (UTC)</h2><div class="charts" id="mxDaily"></div></section>
+    <section><h2>Matches by hour of day (UTC)</h2><div class="charts wide"><div class="chart" id="mxHours"></div></div></section>
+    <section><h2>Game modes</h2>
+      <div class="table-wrap"><table><thead><tr><th>Mode</th><th class="num">Matches</th><th class="num">Share</th><th class="num">Avg length</th><th class="num">Avg players reporting</th></tr></thead><tbody id="mxModes"></tbody></table></div>
+    </section>
+    <section><h2>Fleets and outcomes</h2><div class="grid" id="mxSplit"></div></section>
+    <section><h2>Most active players</h2>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Win rate</th><th class="num">Kills</th></tr></thead><tbody id="mxTop"></tbody></table></div>
+    </section>
+  </div>
+
+  <div id="tab-moderation" class="hidden">
+    <section style="margin-top:0"><h2>Banned players</h2>
+      <div class="row"><span class="muted">A ban signs the player out of the game now, refuses them at the gateway and the social socket, and is passed to the auth server so the launcher refuses them too. Ban or kick from a player's panel on the Players tab.</span></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Reason</th><th>Since (UTC)</th><th>Player id</th><th></th></tr></thead><tbody id="banRows"></tbody></table></div>
+    </section>
+    <section><h2>Admin actions</h2>
+      <div class="table-wrap"><table><thead><tr><th>When (UTC)</th><th>Action</th><th>Target</th><th>Details</th><th>From</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+    </section>
+  </div>
+
   <div id="tab-instances" class="hidden">
     <div class="row"><span class="muted">Every battle server the control plane is running. A crashed server can stay listed until it is stopped.</span></div>
     <div class="table-wrap"><table><thead><tr><th>Port</th><th>Mode</th><th>Map</th><th>Players</th><th>State</th><th>Up for</th><th></th></tr></thead><tbody id="instRows"></tbody></table></div>
@@ -119,6 +162,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
         <div><h3 id="mName"></h3><div class="muted" id="mInfo"></div></div>
         <button class="btn" id="mClose">Close</button>
       </div>
+      <div id="mBanned" class="banner hidden"></div>
       <div class="grid" id="mCards" style="margin-top:12px"></div>
       <section><h2>Balances</h2>
         <div class="fields">
@@ -133,7 +177,22 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
         <div class="row"><select id="mHero"></select><button class="btn" id="mGrant">Grant ship</button></div>
         <div class="muted" id="mShips"></div>
       </section>
+      <section><h2>Moderation</h2>
+        <div class="row">
+          <input id="mReason" type="text" maxlength="200" placeholder="Reason (required for a ban)" style="flex:1;min-width:200px">
+          <button class="btn" id="mKick">Kick</button>
+          <button class="btn danger" id="mBan">Ban</button>
+          <button class="btn" id="mUnban">Unban</button>
+        </div>
+        <div class="muted">Kick drops the player's connections; they can sign in again. Ban also keeps them out until unbanned.</div>
+      </section>
       <p id="mMsg"></p>
+      <section><h2>Recent matches</h2>
+        <div class="table-wrap"><table><thead><tr><th>When</th><th>Mode</th><th>Map</th><th>Fleet</th><th>Result</th><th class="num">K / D / A</th><th class="num">Damage</th><th class="num">Credits</th><th class="num">XP</th></tr></thead><tbody id="mMatches"></tbody></table></div>
+      </section>
+      <section><h2>Admin actions on this player</h2>
+        <div class="table-wrap"><table><thead><tr><th>When (UTC)</th><th>Action</th><th>Details</th><th>From</th></tr></thead><tbody id="mAudit"></tbody></table></div>
+      </section>
     </div>
     <section><h2>Accounts</h2>
       <div class="row"><input id="playerSearch" type="search" placeholder="Search name or player id"><button class="btn" id="playerSearchBtn">Search</button></div>
@@ -282,7 +341,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     const q = $('playerSearch').value.trim();
     const d = await api('/players?q=' + encodeURIComponent(q));
     fill('playerRows', d.players.map((p) => el('tr', {}, el('td', {}, el('a', { class: 'link', onclick: () => openManage(p.pid) }, p.name || '?')),
-      el('td', {}, p.online ? el('span', { class: 'chip good' }, 'online') : ''),
+      el('td', {}, p.banned ? el('span', { class: 'chip bad' }, 'banned') : p.online ? el('span', { class: 'chip good' }, 'online') : ''),
       ...[p.rank, p.xp, p.free_xp, p.credits, p.premium, p.ships, p.matches, p.wins, p.kills].map((v) => el('td', { class: 'num' }, fmt(v))),
       el('td', {}, p.fleet || '—'), el('td', {}, ago(p.updated)), el('td', { class: 'muted' }, (p.created || '').slice(0, 10)))), q ? 'No account matches.' : 'No accounts.', 14);
   }
@@ -294,7 +353,15 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     $('manage').classList.remove('hidden');
     $('mName').textContent = d.name || '?';
     $('mInfo').textContent = d.pid + (d.online ? ' · online (changes reach the game now)' : ' · offline (applied at next login)');
-    $('mCards').replaceChildren(card('Credits', fmt(d.credits)), card('GP', fmt(d.premium)), card('Free XP', fmt(d.free_xp)), card('Rank', fmt(d.rank)));
+    const kd = d.deaths ? (d.kills / d.deaths).toFixed(2) : fmt(d.kills);
+    $('mCards').replaceChildren(card('Credits', fmt(d.credits)), card('GP', fmt(d.premium)), card('Free XP', fmt(d.free_xp)), card('Rank', fmt(d.rank)),
+      card('Matches', fmt(d.matches)), card('Win rate', d.matches ? Math.round(100 * d.wins / d.matches) + ' %' : '—'), card('K/D', kd),
+      card('Last match', d.last_match ? ago(d.last_match) + ' ago' : 'never', true), card('Account created', (d.created || '').slice(0, 10), true));
+    $('mBanned').classList.toggle('hidden', !d.banned);
+    $('mBanned').textContent = d.banned ? `Banned since ${d.banned_at} UTC: ${d.ban_reason}` : '';
+    $('mBan').classList.toggle('hidden', !!d.banned);
+    $('mUnban').classList.toggle('hidden', !d.banned);
+    $('mKick').disabled = !d.online;
     const sel = $('mHero'); sel.replaceChildren();
     const free = d.heroes.filter((h) => !h.owned);
     free.forEach((h) => sel.append(el('option', { value: h.id }, `T${h.tier} ${h.name}`)));
@@ -303,20 +370,35 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     const heroes = d.ships.filter((s) => s.hero).map((s) => `T${s.tier} ${s.name}`);
     $('mShips').textContent = `${d.ships.length} ships owned` + (heroes.length ? ` · heroes: ${heroes.join(', ')}` : ' · no hero ships');
   }
+  async function loadManageHistory(pid) {
+    const [m, a] = await Promise.all([api(`/players/${pid}/matches`), api(`/players/${pid}/audit`)]);
+    if (managed !== pid) return;
+    fill('mMatches', m.matches.map((x) => el('tr', {}, el('td', {}, ago(x.at) + ' ago'), el('td', {}, modeName(x.mode)), el('td', {}, x.map || '?'),
+      el('td', {}, x.fleet), el('td', {}, el('span', { class: 'chip ' + (x.outcome === 'win' ? 'good' : x.outcome === 'loss' ? 'bad' : '') }, x.outcome)),
+      el('td', { class: 'num' }, `${x.kills} / ${x.deaths} / ${x.assists}`), el('td', { class: 'num' }, fmt(x.damage)),
+      el('td', { class: 'num' }, fmt(x.credits)), el('td', { class: 'num' }, fmt(x.xp)))), 'No matches played.', 9);
+    fill('mAudit', a.audit.map((x) => el('tr', {}, el('td', {}, x.at), el('td', {}, x.action), el('td', { class: 'results' }, auditText(x.details)),
+      el('td', { class: 'muted' }, x.actor))), 'No admin actions on this player.', 4);
+  }
   async function openManage(pid) {
-    $('mMsg').textContent = '';
-    try { renderManage(await api('/players/' + pid)); $('manage').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    catch (e) { $('mMsg').className = 'err'; $('mMsg').textContent = String(e.message || e); }
+    $('mMsg').textContent = ''; $('mReason').value = '';
+    try {
+      renderManage(await api('/players/' + pid)); $('manage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await loadManageHistory(pid);
+    } catch (e) { $('mMsg').className = 'err'; $('mMsg').textContent = String(e.message || e); }
+  }
+  async function postJSON(path, body) {
+    const res = await fetch('/admin/api' + path, { method: 'POST', headers: { 'X-Admin-Key': key || '', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.status === 403) { lock('That key was not accepted.'); throw new Error('forbidden'); }
+    const text = await res.text();
+    if (!res.ok) { let m = text; try { m = JSON.parse(text).error || text; } catch (e) {} throw new Error(m); }
+    return JSON.parse(text);
   }
   async function post(path, body, okMsg) {
     const msg = $('mMsg');
     try {
-      const res = await fetch('/admin/api' + path, { method: 'POST', headers: { 'X-Admin-Key': key || '', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (res.status === 403) { lock('That key was not accepted.'); return; }
-      const text = await res.text();
-      if (!res.ok) { let m = text; try { m = JSON.parse(text).error || text; } catch (e) {} throw new Error(m); }
-      renderManage(JSON.parse(text)); msg.className = 'ok'; msg.textContent = okMsg; loadPlayers();
-    } catch (e) { msg.className = 'err'; msg.textContent = String(e.message || e); }
+      renderManage(await postJSON(path, body)); msg.className = 'ok'; msg.textContent = okMsg; loadPlayers(); loadManageHistory(managed);
+    } catch (e) { if (e.message !== 'forbidden') { msg.className = 'err'; msg.textContent = String(e.message || e); } }
   }
   function amounts() {
     const out = {};
@@ -340,6 +422,140 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     post(`/players/${managed}/ships`, { ship_id: Number(sel.value) }, 'Ship granted.');
   };
   $('mClose').onclick = () => { $('manage').classList.add('hidden'); managed = null; };
+  $('mKick').onclick = async () => {
+    if (!confirm(`Kick ${$('mName').textContent}? Their game disconnects; they can sign in again.`)) return;
+    const msg = $('mMsg');
+    try {
+      const r = await postJSON(`/players/${managed}/kick`, { reason: $('mReason').value.trim() });
+      msg.className = 'ok'; msg.textContent = r.was_online ? 'Kicked.' : 'The player was not connected.';
+      setTimeout(() => openManage(managed), 1500); loadOnline();
+    } catch (e) { if (e.message !== 'forbidden') { msg.className = 'err'; msg.textContent = String(e.message || e); } }
+  };
+  $('mBan').onclick = () => {
+    const reason = $('mReason').value.trim();
+    if (!reason) { $('mMsg').className = 'err'; $('mMsg').textContent = 'Enter a reason for the ban.'; $('mReason').focus(); return; }
+    if (!confirm(`Ban ${$('mName').textContent}?\n\nReason: ${reason}\n\nThey are disconnected now and cannot sign in until unbanned.`)) return;
+    post(`/players/${managed}/ban`, { reason }, 'Banned.').then(() => { $('mReason').value = ''; loadOnline(); });
+  };
+  $('mUnban').onclick = () => {
+    if (!confirm(`Unban ${$('mName').textContent}?`)) return;
+    post(`/players/${managed}/unban`, {}, 'Unbanned.');
+  };
+
+  // --- metrics ------------------------------------------------------------
+  const MODE_NAMES = { TDM: 'Team Deathmatch', TurboTDM: 'Turbo TDM', PodTDM: 'Ceres Awakens', TE: 'Team Elimination', TER: 'Conquest', Territory: 'Conquest', BC: 'Bootcamp', Onslaught: 'Onslaught' };
+  const modeName = (m) => MODE_NAMES[m] ? `${MODE_NAMES[m]}` : (m || '?');
+  const auditText = (raw) => {
+    try { return Object.entries(JSON.parse(raw)).filter(([, v]) => v !== null && v !== '').map(([k, v]) => `${k}: ${v}`).join(' · '); } catch (e) { return raw; }
+  };
+  const NS = 'http://www.w3.org/2000/svg';
+  function svg(tag, attrs = {}, ...kids) {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    for (const k of kids) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+    return e;
+  }
+  const niceMax = (v) => { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; };
+  const compact = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'k' : String(n);
+  // chart draws one or more series over shared x labels, as bars (one
+  // series) or lines. Values are text in <title> tooltips.
+  function chart(target, title, labels, series, opts = {}) {
+    const W = 640, H = opts.height || 180, L = 40, R = 8, T = 8, B = 22;
+    const max = niceMax(Math.max(1, ...series.flatMap((s) => s.values)));
+    const pw = W - L - R, ph = H - T - B, n = Math.max(1, labels.length);
+    const x = (i) => L + (opts.bars ? (i + 0.5) * pw / n : (n === 1 ? pw / 2 : i * pw / (n - 1)));
+    const y = (v) => T + ph - (v / max) * ph;
+    const g = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': title });
+    for (let k = 0; k <= 4; k++) {
+      const v = max * k / 4;
+      g.append(svg('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), class: 'grid-line' }), svg('text', { x: L - 6, y: y(v) + 3, 'text-anchor': 'end', class: 'axis' }, compact(Math.round(v))));
+    }
+    const step = Math.max(1, Math.ceil(n / (opts.maxLabels || 10)));
+    labels.forEach((lb, i) => { if (i % step === 0) g.append(svg('text', { x: x(i), y: H - 6, 'text-anchor': 'middle', class: 'axis' }, opts.short ? opts.short(lb) : lb)); });
+    if (opts.bars) {
+      const s = series[0], bw = Math.max(2, pw / n * 0.7);
+      s.values.forEach((v, i) => g.append(svg('rect', { x: x(i) - bw / 2, y: y(v), width: bw, height: Math.max(0, T + ph - y(v)), rx: 2, style: `fill:${s.color}` },
+        svg('title', {}, `${labels[i]}: ${fmt(v)}${s.unit || ''}`))));
+    } else {
+      series.forEach((s) => {
+        if (!s.values.length) return;
+        g.append(svg('polyline', { points: s.values.map((v, i) => `${x(i)},${y(v)}`).join(' '), style: `fill:none;stroke:${s.color};stroke-width:2;stroke-linejoin:round` }));
+        if (s.values.length <= 60) s.values.forEach((v, i) => g.append(svg('circle', { cx: x(i), cy: y(v), r: 2.5, style: `fill:${s.color}` }, svg('title', {}, `${labels[i]} ${s.name}: ${fmt(v)}`))));
+      });
+    }
+    const box = typeof target === 'string' ? $(target) : target;
+    const legend = series.length > 1 ? el('div', { class: 'legend' }, ...series.map((s) => { const i = el('i'); i.style.background = s.color; return el('span', {}, i, s.name); })) : null;
+    box.replaceChildren(el('h3', {}, title), g, legend);
+  }
+  let metricsDays = 7;
+  try { metricsDays = Number(localStorage.getItem('adminMetricsDays')) || 7; } catch (e) {}
+  document.querySelectorAll('#mxRange button').forEach((b) => {
+    b.classList.toggle('on', Number(b.dataset.days) === metricsDays);
+    b.onclick = () => {
+      metricsDays = Number(b.dataset.days);
+      try { localStorage.setItem('adminMetricsDays', metricsDays); } catch (e) {}
+      document.querySelectorAll('#mxRange button').forEach((o) => o.classList.toggle('on', o === b));
+      loadMetrics();
+    };
+  });
+  async function loadMetrics() {
+    const m = await api('/metrics?days=' + metricsDays);
+    const t = m.totals;
+    const crashRate = t.host_logs ? Math.round(1000 * t.crashes / t.host_logs) / 10 + ' %' : '—';
+    $('mxCards').replaceChildren(card('Matches', fmt(t.matches)), card('Active players', fmt(t.players)),
+      card('Returning players', fmt(m.returning_players)), card('New accounts', fmt(t.new_accounts)),
+      card('Peak online', m.samples.length ? fmt(t.peak_online) : '—'), card('Results reported', fmt(t.results)),
+      card('Credits paid', fmt(t.credits)), card('XP paid', fmt(t.xp)), card('Kills', fmt(t.kills)),
+      card('Host crashes', `${fmt(t.crashes)} / ${fmt(t.host_logs)} (${crashRate})`, true));
+    $('mxNote').textContent = m.samples_hourly ? `online history: hourly peaks of ${m.sample_minutes}-minute samples` : `online history: a sample every ${m.sample_minutes} minutes`;
+    const C = (v) => `var(--${v})`;
+    if (m.samples.length) {
+      const lab = m.samples.map((s) => s.ts.slice(5, 16));
+      chart('mxOnline', 'Online, in a match, queued, battle servers', lab, [
+        { name: 'online', color: C('accent'), values: m.samples.map((s) => s.online) },
+        { name: 'in a match', color: C('good'), values: m.samples.map((s) => s.in_match) },
+        { name: 'queued', color: C('warn'), values: m.samples.map((s) => s.queued) },
+        { name: 'battle servers', color: C('muted'), values: m.samples.map((s) => s.instances) },
+      ], { maxLabels: 8, height: 200 });
+    } else {
+      $('mxOnline').replaceChildren(el('h3', {}, 'Online'), el('div', { class: 'muted' }, 'No samples yet. The server records one every few minutes from now on; nothing before this version kept a history of who was online.'));
+    }
+    const days = m.daily.map((d) => d.day), short = (d) => d.slice(5);
+    const box = $('mxDaily'); box.replaceChildren();
+    [['Matches', 'matches', 'accent'], ['Active players', 'players', 'good'], ['New accounts', 'new_accounts', 'accent'],
+      ['Peak online', 'peak_online', 'good'], ['Credits paid', 'credits', 'warn'], ['Host crashes', 'crashes', 'bad']].forEach(([title, f, c]) => {
+      const div = el('div', { class: 'chart' }); box.append(div);
+      chart(div, title, days, [{ name: title, color: C(c), values: m.daily.map((d) => d[f]) }], { bars: true, short, maxLabels: 12 });
+    });
+    chart('mxHours', 'Matches started', m.hours_utc.map((_, h) => String(h).padStart(2, '0')), [{ name: 'matches', color: C('accent'), values: m.hours_utc }], { bars: true, maxLabels: 24, height: 150 });
+    const totalModes = m.modes.reduce((a, x) => a + x.matches, 0) || 1;
+    fill('mxModes', m.modes.map((x) => el('tr', {}, el('td', {}, modeName(x.mode), el('span', { class: 'muted' }, ` (${x.mode})`)), el('td', { class: 'num' }, fmt(x.matches)),
+      el('td', { class: 'num' }, Math.round(100 * x.matches / totalModes) + ' %'), el('td', { class: 'num' }, x.avg_minutes ? x.avg_minutes + ' min' : '—'),
+      el('td', { class: 'num' }, x.avg_players))), 'No matches in this range.', 5);
+    const split = [];
+    ['Recruit', 'Veteran', 'Legendary'].forEach((f) => split.push(card(f + ' matches', fmt(m.fleets[f] || 0))));
+    Object.entries(m.outcomes).sort((a, b) => b[1] - a[1]).forEach(([o, n]) => split.push(card('Results: ' + o, fmt(n))));
+    $('mxSplit').replaceChildren(...split);
+    fill('mxTop', m.top_players.map((p) => el('tr', {}, el('td', {}, el('a', { class: 'link', onclick: () => { show('players'); openManage(p.pid); } }, p.name)),
+      el('td', { class: 'num' }, fmt(p.matches)), el('td', { class: 'num' }, fmt(p.wins)), el('td', { class: 'num' }, p.matches ? Math.round(100 * p.wins / p.matches) + ' %' : '—'),
+      el('td', { class: 'num' }, fmt(p.kills)))), 'Nobody played in this range.', 5);
+  }
+
+  // --- moderation ---------------------------------------------------------
+  async function loadModeration() {
+    const [b, a] = await Promise.all([api('/bans'), api('/audit')]);
+    fill('banRows', b.bans.map((x) => el('tr', {}, el('td', {}, el('a', { class: 'link', onclick: () => { show('players'); openManage(x.pid); } }, x.name)),
+      el('td', { class: 'results' }, x.reason), el('td', {}, x.at), el('td', { class: 'muted' }, x.pid),
+      el('td', {}, el('button', { class: 'btn', onclick: async (ev) => {
+        if (!confirm(`Unban ${x.name}?`)) return;
+        ev.target.disabled = true;
+        try { await postJSON(`/players/${x.pid}/unban`, {}); } catch (e) { if (e.message !== 'forbidden') alert(e.message); }
+        loadModeration();
+      } }, 'Unban')))), 'Nobody is banned.', 5);
+    fill('auditRows', a.audit.map((x) => el('tr', {}, el('td', {}, x.at), el('td', {}, x.action),
+      el('td', {}, x.name ? el('a', { class: 'link', onclick: () => { show('players'); openManage(x.target); } }, x.name) : x.target),
+      el('td', { class: 'results' }, auditText(x.details)), el('td', { class: 'muted' }, x.actor))), 'No admin actions yet.', 5);
+  }
 
   async function loadMatches() {
     const d = await api('/matches');
@@ -395,7 +611,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   }
 
   const loaders = {
-    overview: loadOverview, instances: loadInstances, players: () => Promise.all([loadOnline(), loadPlayers()]),
+    overview: loadOverview, metrics: loadMetrics, moderation: loadModeration, instances: loadInstances, players: () => Promise.all([loadOnline(), loadPlayers()]),
     matches: loadMatches, reports: loadReports, telemetry: loadTelemetry, logs: loadLog,
   };
   async function refresh() {
@@ -404,8 +620,8 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   }
   function schedule() {
     clearInterval(timer);
-    const live = tab === 'overview' || tab === 'instances' || (tab === 'players' && !$('playerSearch').value) || (tab === 'logs' && $('logFollow').checked);
-    if (live) timer = setInterval(refresh, tab === 'logs' || tab === 'players' ? 5000 : 10000);
+    const live = tab === 'overview' || tab === 'instances' || tab === 'metrics' || (tab === 'players' && !$('playerSearch').value) || (tab === 'logs' && $('logFollow').checked);
+    if (live) timer = setInterval(refresh, tab === 'logs' || tab === 'players' ? 5000 : tab === 'metrics' ? 60000 : 10000);
   }
   function show(t) {
     tab = t;

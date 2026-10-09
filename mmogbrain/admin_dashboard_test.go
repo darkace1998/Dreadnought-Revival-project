@@ -38,11 +38,17 @@ func TestAdminDashboardPageServed(t *testing.T) {
 func TestAdminAPIRequiresTheKey(t *testing.T) {
 	r := adminTestRouter()
 	for _, path := range []string{"/admin/api/overview", "/admin/api/instances", "/admin/api/online", "/admin/api/players",
-		"/admin/api/matches", "/admin/api/reports", "/admin/api/logs?src=mmogbrain", "/admin/api/battle-logs"} {
+		"/admin/api/matches", "/admin/api/reports", "/admin/api/logs?src=mmogbrain", "/admin/api/battle-logs",
+		"/admin/api/metrics", "/admin/api/audit", "/admin/api/bans", "/admin/api/players/x/matches"} {
 		for _, key := range []string{"", "wrong"} {
 			if rec := adminGet(r, path, key); rec.Code != http.StatusForbidden {
 				t.Errorf("%s with key %q: %d, want 403", path, key, rec.Code)
 			}
+		}
+	}
+	for _, action := range []string{"kick", "ban", "unban"} {
+		if rec := adminPost(r, "/admin/api/players/"+adminTestPID+"/"+action, "", `{"reason":"x"}`); rec.Code != http.StatusForbidden {
+			t.Errorf("%s without the key: %d, want 403", action, rec.Code)
 		}
 	}
 	del := httptest.NewRequest(http.MethodDelete, "/admin/api/instances/x", nil)
@@ -87,7 +93,8 @@ func TestAdminAPIDoesNotDeadlockTheStore(t *testing.T) {
 		}
 	}
 	r := adminTestRouter()
-	for _, path := range []string{"/admin/api/matches", "/admin/api/reports", "/admin/api/telemetry", "/admin/api/telemetry?rt=YA_GameModeEvent&q=x", "/admin/api/players?q=", "/admin/api/online", "/admin/api/overview"} {
+	for _, path := range []string{"/admin/api/matches", "/admin/api/reports", "/admin/api/telemetry", "/admin/api/telemetry?rt=YA_GameModeEvent&q=x", "/admin/api/players?q=", "/admin/api/online", "/admin/api/overview",
+		"/admin/api/metrics?days=30", "/admin/api/audit", "/admin/api/bans", "/admin/api/players/" + pid + "/matches", "/admin/api/players/" + pid} {
 		done := make(chan int, 1)
 		go func() { done <- adminGet(r, path, "test-admin-key").Code }()
 		select {

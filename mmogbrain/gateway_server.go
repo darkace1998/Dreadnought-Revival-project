@@ -216,6 +216,13 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 		return
 	}
+	// Banned from the admin dashboard (admin_moderation.go): the launcher
+	// token is still valid for up to 24 h, so the ban is enforced here.
+	if adminPlayerBanned(userID) {
+		logrus.WithField("pid", normalizedPlayerStatePID(userID)).Warn("gateway: login refused, player is banned")
+		http.Error(w, `{"error":"account banned"}`, http.StatusForbidden)
+		return
+	}
 
 	sessionID := uuid.New().String()
 	sessionsMu.Lock()
