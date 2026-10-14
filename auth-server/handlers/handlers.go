@@ -219,10 +219,15 @@ func (h *Handler) loginSteam(w http.ResponseWriter, ticket string, rpcID interfa
 // accepting either is unambiguous.
 func (h *Handler) loginPassword(w http.ResponseWriter, identifier, password string) {
 	var user models.User
+	// Case-insensitive: a player's login was refused when the case of one letter
+	// differed from the registered name (2026-10-14), and players do not remember the exact
+	// capitalisation of the name they registered. An exact match still wins,
+	// and registration refuses names that differ only by case.
 	err := h.DB.QueryRow(
 		`SELECT id, username, email, password_hash FROM users
-		 WHERE (username=? OR email=?) AND banned_at IS NULL`,
-		identifier, identifier,
+		 WHERE (username=? COLLATE NOCASE OR email=? COLLATE NOCASE) AND banned_at IS NULL
+		 ORDER BY (username=? OR email=?) DESC LIMIT 1`,
+		identifier, identifier, identifier, identifier,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash)
 	if err == sql.ErrNoRows {
 		writeGreyboxError(w, http.StatusUnauthorized, -32006, "Invalid username or password")
@@ -327,7 +332,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// registrations, so it is NOT the source of truth for duplicate
 	// detection — the INSERT below is, via a typed constraint-error check.
 	var existingID string
-	if err := h.DB.QueryRow(`SELECT id FROM users WHERE username=? OR email=?`, req.Username, req.Email).Scan(&existingID); err == nil {
+	if err := h.DB.QueryRow(`SELECT id FROM users WHERE username=? COLLATE NOCASE OR email=? COLLATE NOCASE`, req.Username, req.Email).Scan(&existingID); err == nil {
 		writeGreyboxError(w, http.StatusConflict, -32002, "username or email already taken")
 		return
 	}

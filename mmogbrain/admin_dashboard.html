@@ -191,6 +191,15 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
         </div>
         <div class="muted">Kick drops the player's connections; they can sign in again. Ban also keeps them out until unbanned.</div>
       </section>
+      <section><h2>Account</h2>
+        <div class="row"><button class="btn danger" id="mResetPw">Reset password</button></div>
+        <div class="row hidden" id="mPwBox">
+          <span class="muted">New password:</span>
+          <code id="mPw" style="user-select:all;font-size:1.1em"></code>
+          <button class="btn" id="mPwCopy">Copy</button>
+        </div>
+        <div class="muted">Gives the account a new random password and signs it out everywhere. The password is shown here once and is not stored anywhere readable; pass it on to the player.</div>
+      </section>
       <p id="mMsg"></p>
       <section><h2>Recent matches</h2>
         <div class="table-wrap"><table><thead><tr><th>When</th><th>Mode</th><th>Map</th><th>Fleet</th><th>Result</th><th class="num">K / D / A</th><th class="num">Damage</th><th class="num">Credits</th><th class="num">XP</th></tr></thead><tbody id="mMatches"></tbody></table></div>
@@ -391,6 +400,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
   }
   async function openManage(pid) {
     $('mMsg').textContent = ''; $('mReason').value = '';
+    $('mPw').textContent = ''; $('mPwBox').classList.add('hidden');
     try {
       renderManage(await api('/players/' + pid)); $('manage').scrollIntoView({ behavior: 'smooth', block: 'start' });
       await loadManageHistory(pid);
@@ -430,7 +440,7 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     if (!confirm(`Grant ${sel.options[sel.selectedIndex].text} to ${$('mName').textContent}?`)) return;
     post(`/players/${managed}/ships`, { ship_id: Number(sel.value) }, 'Ship granted.');
   };
-  $('mClose').onclick = () => { $('manage').classList.add('hidden'); managed = null; };
+  $('mClose').onclick = () => { $('manage').classList.add('hidden'); managed = null; $('mPw').textContent = ''; $('mPwBox').classList.add('hidden'); };
   $('mResetContracts').onclick = () => {
     if (!confirm(`Reset the daily contracts of ${$('mName').textContent}? Their current contracts and progress are dropped and a fresh set is given now.`)) return;
     post(`/players/${managed}/contracts/reset`, {}, 'Contracts reset.');
@@ -461,6 +471,20 @@ td a.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
     if (!reason) { $('mMsg').className = 'err'; $('mMsg').textContent = 'Enter a reason for the ban.'; $('mReason').focus(); return; }
     if (!confirm(`Ban ${$('mName').textContent}?\n\nReason: ${reason}\n\nThey are disconnected now and cannot sign in until unbanned.`)) return;
     post(`/players/${managed}/ban`, { reason }, 'Banned.').then(() => { $('mReason').value = ''; loadOnline(); });
+  };
+  $('mResetPw').onclick = async () => {
+    if (!confirm(`Reset the password of ${$('mName').textContent}?\n\nTheir old password stops working and they are signed out everywhere.`)) return;
+    const msg = $('mMsg');
+    try {
+      const r = await postJSON(`/players/${managed}/password`, {});
+      $('mPw').textContent = r.password; $('mPwBox').classList.remove('hidden');
+      msg.className = 'ok'; msg.textContent = 'Password reset. Copy it now -- it is not shown again.';
+      loadManageHistory(managed);
+    } catch (e) { if (e.message !== 'forbidden') { msg.className = 'err'; msg.textContent = String(e.message || e); } }
+  };
+  $('mPwCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText($('mPw').textContent); $('mPwCopy').textContent = 'Copied'; setTimeout(() => ($('mPwCopy').textContent = 'Copy'), 1500); }
+    catch (e) { const r = document.createRange(); r.selectNodeContents($('mPw')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
   };
   $('mUnban').onclick = () => {
     if (!confirm(`Unban ${$('mName').textContent}?`)) return;

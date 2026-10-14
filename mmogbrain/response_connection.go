@@ -708,6 +708,24 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			// update below, so the fleets can name it.
 			if requestName == "YA_UnlockItem" {
 				shipID := firstMmogInt32Field(frame.Payload, "ItemID", "itemID", "itemId")
+				// A module just researched showed a credit price of 0 in the
+				// tech tree until a restart (operator, 2026-10-14), although
+				// its market offer exists from login and buying it works: the
+				// tree's price (widget +0x2D0, read by GetTechTreePurchasePrice
+				// 0xBBC5F0) is filled when the tree's data is composed.
+				// YA_PushInventory fires the client's inventory-updated event
+				// (+0x26C0) and its purchases/progression re-request (verified
+				// live: an extra pair follows every push). GUESS: that
+				// recomposes the tree with the price. DN_RESEARCH_INVENTORY_PUSH=0
+				// turns it off.
+				if takeNewlyResearchedItem(state.playerPID, shipID) && os.Getenv("DN_RESEARCH_INVENTORY_PUSH") != "0" {
+					if pushID, err := uuid.NewRandom(); err == nil {
+						push := protocol.BuildResponseFrame(pushID, frame.MsgType, buildMmogPushInventoryPayload(state.playerPID))
+						if err := writeMmogAppResponse(log, conn, remote, pushID, "YA_PushInventory", push, appEncoder, encryptResponses, "inventory push failed", "sent YA_PushInventory after a research"); err != nil {
+							return err
+						}
+					}
+				}
 				if takeNewlyClaimedShip(state.playerPID, shipID) {
 					if payload, ok := buildMmogShipClaimPush(state.playerPID, shipID); ok {
 						if pushID, err := uuid.NewRandom(); err == nil {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -147,6 +148,7 @@ func registerAdminModeration(api *mux.Router) {
 	api.HandleFunc("/players/{pid}/kick", adminAPIPlayerKick).Methods(http.MethodPost)
 	api.HandleFunc("/players/{pid}/ban", adminAPIPlayerBan).Methods(http.MethodPost)
 	api.HandleFunc("/players/{pid}/unban", adminAPIPlayerUnban).Methods(http.MethodPost)
+	api.HandleFunc("/players/{pid}/password", adminAPIPlayerResetPassword).Methods(http.MethodPost)
 	api.HandleFunc("/players/{pid}/matches", adminAPIPlayerMatches).Methods(http.MethodGet)
 	api.HandleFunc("/players/{pid}/audit", adminAPIPlayerAudit).Methods(http.MethodGet)
 	api.HandleFunc("/bans", adminAPIBans).Methods(http.MethodGet)
@@ -240,25 +242,62 @@ func adminAPIPlayerUnban(w http.ResponseWriter, r *http.Request) {
 // adminAuthCall forwards a ban/unban to the auth server so the launcher
 // refuses the account too. Best effort: mmogbrain's own ban already holds.
 func adminAuthCall(path, pid, reason string) error {
+	_, err := adminAuthPost(path, map[string]string{"user_id": pid, "reason": reason})
+	return err
+}
+
+// adminAuthPost sends an admin request to the auth server and returns its
+// reply body.
+func adminAuthPost(path string, payload map[string]string) ([]byte, error) {
 	if adminDash.authURL == "" {
-		return errors.New("auth server not configured")
+		return nil, errors.New("auth server not configured")
 	}
-	body, _ := json.Marshal(map[string]string{"user_id": pid, "reason": reason})
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(adminDash.authURL, "/")+path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Admin-Key", adminDash.adminKey)
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_ = resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+	reply, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("auth server answered %d", resp.StatusCode)
+		return reply, fmt.Errorf("auth server answered %d", resp.StatusCode)
 	}
-	return nil
+	return reply, nil
+}
+
+// adminAPIPlayerResetPassword gives the account a new random password (the
+// auth server makes and stores it, and signs the account out everywhere) and
+// returns it ONCE, for the admin to pass on. The audit records the reset, never
+// the password.
+func adminAPIPlayerResetPassword(w http.ResponseWriter, r *http.Request) {
+	pid, database, ok := adminPlayerPID(w, r)
+	if !ok {
+		return
+	}
+	reply, err := adminAuthPost("/admin/password", map[string]string{"user_id": pid})
+	if err != nil {
+		adminAudit(database, r, "password reset failed", pid, map[string]any{"error": err.Error()})
+		http.Error(w, `{"error":"`+strings.ReplaceAll(err.Error(), `"`, `'`)+`"}`, http.StatusBadGateway)
+		return
+	}
+	var out struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.Unmarshal(reply, &out); err != nil || out.Password == "" {
+		http.Error(w, `{"error":"auth server sent no password"}`, http.StatusBadGateway)
+		return
+	}
+	adminAudit(database, r, "password reset", pid, map[string]any{"username": out.Username})
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func adminAPIPlayerMatches(w http.ResponseWriter, r *http.Request) {

@@ -142,7 +142,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	// "YA_GetShipBonuses" has zero occurrences anywhere in the client binary.
 	case "YA_GetShipBonuses":
 		return buildMmogShipBonusesPayload(requestName, playerPID, payload)
-	case "YA_UpdateShipLoadout", "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
+	case "YA_UpdateShipLoadout":
+		return buildMmogUpdateShipLoadoutPayload(playerPID, payload)
+	case "YA_RenameShipLoadout", "YA_AddShipDefaultLoadouts":
 		return buildMmogRequestSuccessPayload(requestName)
 
 	// --- Market / Purchases ---

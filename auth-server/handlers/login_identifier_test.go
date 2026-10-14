@@ -102,3 +102,21 @@ func TestRegisterRejectsDuplicateEmailOrUsername(t *testing.T) {
 		}
 	}
 }
+
+// A player who types their name with different capitals still signs in, and a
+// second account differing only by case cannot be registered.
+func TestPasswordLoginIgnoresCase(t *testing.T) {
+	h := newTestHandler(t)
+	register(t, h, "PilotNameX", "Pilot@Example.com", "hunter2x")
+	for _, identifier := range []string{"PilotNameX", "pilotnamex", "PilotNamex", "pilot@example.com"} {
+		if rec := passwordLogin(t, h, identifier, "hunter2x"); rec.Code != http.StatusOK {
+			t.Errorf("login as %q: %d", identifier, rec.Code)
+		}
+	}
+	body, _ := json.Marshal(map[string]string{"username": "pilotnamex", "email": "other@example.com", "password": "hunter2x"})
+	rec := httptest.NewRecorder()
+	h.Register(rec, httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(string(body))))
+	if rec.Code == http.StatusCreated {
+		t.Error("registered a name that differs only by case")
+	}
+}

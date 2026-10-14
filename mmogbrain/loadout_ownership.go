@@ -60,6 +60,18 @@ func ownedItemSet(playerPID string) map[int32]bool {
 	for _, item := range starterOwnedInventorySeeds() {
 		add(item.itemID)
 	}
+	// An owned hero's own fit, which clientOwnedItemIDs leaves out while its
+	// base hull is not owned (see ownedBaseHulls there). It is still fittable
+	// on the hero itself.
+	for _, loadout := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID) {
+		if h, ok := heroByID(loadout.precastLoadoutID); ok {
+			for _, id := range append(append([]int32{h.primary, h.secondary}, h.abilities[:]...), h.perks[:]...) {
+				if id > 0 {
+					add(id)
+				}
+			}
+		}
+	}
 	// Cosmetics: bought, free, and every owned ship's own look as its
 	// blueprint names it -- from tier III up a base ship's parts are its own
 	// (Onager wears the Kore parts), not the hull line's generic default

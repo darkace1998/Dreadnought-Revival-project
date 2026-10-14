@@ -1180,6 +1180,15 @@ func takeNewlyClaimedShip(playerPID string, itemID int32) bool {
 	return ok
 }
 
+// newlyResearchedItems marks weapons/modules just researched, until the
+// connection has refreshed the client's owned list (takeNewlyResearchedItem).
+var newlyResearchedItems sync.Map // normalized pid + "|" + item id -> true
+
+func takeNewlyResearchedItem(playerPID string, itemID int32) bool {
+	_, ok := newlyResearchedItems.LoadAndDelete(unlockOutcomeKey(playerPID, itemID))
+	return ok
+}
+
 func unlockOutcomeKey(playerPID string, itemID int32) string {
 	return normalizedPlayerStatePID(playerPID) + "|" + strconv.Itoa(int(itemID))
 }
@@ -1324,6 +1333,8 @@ func persistUnlockItem(database *sql.DB, playerPID string, payload []byte) error
 		// A ship was just granted: the connection pushes it to the client
 		// (buildMmogShipClaimPush), which otherwise learns ships only at login.
 		newlyClaimedShips.Store(unlockOutcomeKey(playerPID, itemID), true)
+	} else {
+		newlyResearchedItems.Store(unlockOutcomeKey(playerPID, itemID), true)
 	}
 	if shipXP > 0 {
 		outcome.shipID = shipKey // the reply names it in the client's key space

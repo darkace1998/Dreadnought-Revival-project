@@ -2051,8 +2051,14 @@ func buildMmogPushInventoryPayload(playerPID string) []byte {
 // --- Loadout serialization ---
 
 func appendMmogShipLoadoutEntry(b []byte, stack []int, playerPID string, loadout mmogShipLoadoutSeed, includePID bool) ([]byte, []int) {
-	loadoutID := loadout.loadoutID()
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+	return appendMmogShipLoadoutFields(b, stack, playerPID, loadout, includePID)
+}
+
+// appendMmogShipLoadoutFields writes one loadout's fields into an object the
+// caller opened, and closes it.
+func appendMmogShipLoadoutFields(b []byte, stack []int, playerPID string, loadout mmogShipLoadoutSeed, includePID bool) ([]byte, []int) {
+	loadoutID := loadout.loadoutID()
 	b = protocol.AppendStringField(b, "ID", loadout.entryID())
 	if includePID {
 		b = protocol.AppendStringField(b, "PID", playerPID)
@@ -4621,12 +4627,32 @@ func clientOwnedItemIDs(playerPID string) []int32 {
 	for _, h := range baseShipLoadouts {
 		fittedByLoadout[h.loadoutID] = h
 	}
+	heroLoadouts := map[int32]bool{}
 	for _, h := range heroShipLoadouts {
-		fittedByLoadout[h.loadoutID] = baseShipLoadout{loadoutID: h.loadoutID, hullLine: h.hullLine,
+		fittedByLoadout[h.loadoutID] = baseShipLoadout{loadoutID: h.loadoutID, hullLine: h.hullLine, tier: h.tier,
 			primary: h.primary, secondary: h.secondary, abilities: h.abilities, perks: h.perks}
+		heroLoadouts[h.loadoutID] = true
 	}
 	state := mmogPlayerStateForPID(playerPID)
-	for _, loadout := range ownedShipLoadoutsForPlayerData(state, playerPID) {
+	ownedLoadouts := ownedShipLoadoutsForPlayerData(state, playerPID)
+	// A hero's fitted weapons/modules are per-CLASS ids, and every hero shares
+	// its pawn, class and tier with one base hull (all 48 checked 2026-10-14),
+	// so 2-5 of them are research items of that base hull. Listed as owned
+	// while the base hull is not, GetTechTreeItemState (0x543890) answers 4
+	// "owned" for them before looking at anything else: the base tree showed
+	// them owned, with no research or buy, and nothing to equip them on (live
+	// report 2026-10-14, "buy a premium ship before its tech tree counterpart").
+	// So they count only once that base hull is owned. The hero's own fit
+	// needs no entry: the item-state path for an item fitted to an owned ship
+	// (0x53BE30 -> 0x33D4B0) covers it -- GUESS from the decompile, unverified
+	// live. Whether the original backend did the same is unknown.
+	ownedBaseHulls := map[string]bool{}
+	for _, loadout := range ownedLoadouts {
+		if hull, ok := fittedByLoadout[loadout.precastLoadoutID]; ok && !heroLoadouts[hull.loadoutID] {
+			ownedBaseHulls[hull.hullLine+"/"+strconv.Itoa(int(hull.tier))] = true
+		}
+	}
+	for _, loadout := range ownedLoadouts {
 		// The ship ITSELF. GetTechTreeItemState (0x543890) walks a hull's
 		// prerequisites and accepts one only if it is in this list (0x548990
 		// reads +0x3F90) or researched (0x547DD0, ProgressionData); anything
@@ -4643,10 +4669,16 @@ func clientOwnedItemIDs(playerPID string) []int32 {
 			continue
 		}
 		class := eyShipClassByKey[hull.hullLine]
+		heroWithoutBase := heroLoadouts[hull.loadoutID] && !ownedBaseHulls[hull.hullLine+"/"+strconv.Itoa(int(hull.tier))]
 		for _, id := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
-			if id > 0 {
-				add(inflatedItemID(id, class))
+			if id <= 0 {
+				continue
 			}
+			inflated := inflatedItemID(id, class)
+			if c := (id >> 24) & 0xff; heroWithoutBase && (c == 4 || c == 5) {
+				continue // per-class weapon/module: see ownedBaseHulls
+			}
+			add(inflated)
 		}
 	}
 	// Officer briefings come with the ships that unlock them, and count on

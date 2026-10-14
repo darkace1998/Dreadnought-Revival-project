@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -470,8 +473,44 @@ func handleGWBundles(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 // never arrives still gets a catalog rather than hanging.
 func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
 	playerID := protocol.GatewayClaimsUserID(claims)
+	start := time.Now()
 	ready := waitForGatewayBootstrapPlayerDataReady(playerID)
-	gwJSON(w, gatewayAbsoluteImageURLs(gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), ready), r))
+	body, err := json.Marshal(gatewayAbsoluteImageURLs(gatewayBootstrapPayload(playerID, gatewayCatalogResponseKey(r.URL.Path), ready), r))
+	if err != nil {
+		http.Error(w, "catalog unavailable", http.StatusInternalServerError)
+		return
+	}
+	body = append(body, '\n')
+	// The item catalogs are ~15 MB of JSON each, fetched at login only (the
+	// market fetch 0x3D2F40), and a client that does not get one shows every
+	// price as 0 and buys nothing ("cost 0", 2026-10-10). Compressed when the
+	// client asks for it; every fetch is logged with what it took, so a
+	// download that a slow connection never finishes is visible.
+	gzipped := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+	sent := len(body)
+	w.Header().Set("Content-Type", "application/json")
+	var werr error
+	if gzipped {
+		w.Header().Set("Content-Encoding", "gzip")
+		var buf bytes.Buffer
+		zw, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+		_, _ = zw.Write(body)
+		_ = zw.Close()
+		sent = buf.Len()
+		w.Header().Set("Content-Length", strconv.Itoa(sent))
+		_, werr = w.Write(buf.Bytes())
+	} else {
+		w.Header().Set("Content-Length", strconv.Itoa(sent))
+		_, werr = w.Write(body)
+	}
+	entry := logrus.WithFields(logrus.Fields{"pid": normalizedPlayerStatePID(playerID), "path": r.URL.Path,
+		"bytes": len(body), "sent": sent, "gzip": gzipped, "accept_encoding": r.Header.Get("Accept-Encoding"),
+		"ready": ready, "ms": time.Since(start).Milliseconds(), "remote": r.RemoteAddr})
+	if werr != nil {
+		entry.WithError(werr).Warn("gateway: catalog not delivered")
+		return
+	}
+	entry.Info("gateway: catalog delivered")
 }
 
 func gatewayCatalogResponseKey(path string) string {

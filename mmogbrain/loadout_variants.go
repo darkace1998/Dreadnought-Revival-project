@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 	"github.com/sirupsen/logrus"
 )
 
@@ -183,4 +184,45 @@ func ensureLoadoutVariantRow(database *sql.DB, playerPID string, loadoutID, slot
 		return false, fmt.Errorf("find loadout variant: %w", err)
 	}
 	return n > 0, nil
+}
+
+// buildMmogUpdateShipLoadoutPayload answers YA_UpdateShipLoadout with the
+// loadout as stored, after persistUpdateShipLoadout has saved it.
+//
+// The reply arm (dispatcher 0x2A2F34F, read 2026-10-14) compares ROOT
+// "result" with the string "ok", then parses ROOT "loadout" with the
+// ShipLoadouts entry parser (0x2A6F9F0), finds the client's own copy of that
+// loadout (+0x3990, 0x2A1D920), updates it (0x2A13E50) and broadcasts the
+// change (+0x8C0); "ok" with no loadout raises error event 4 (+0xD60). It was
+// answered with the generic envelope, whose "result" is an OBJECT -- neither
+// "ok" nor "failed", so nothing happened: the client kept the loadouts it got
+// at login, and switching between LOADOUT A and B in the editor reloaded those
+// stale copies over the edit ("change A, switch to B and back twice, the change
+// is reverted", operator 2026-10-14; the save that followed carried B's fit as
+// slot 1 and overwrote A).
+func buildMmogUpdateShipLoadoutPayload(playerPID string, payload []byte) []byte {
+	loadoutID := firstMmogInt32Field(payload, "ShipID", "LoadoutID", "loadoutID", "precastLoadout", "precastLoadoutID")
+	slot := firstMmogInt32Field(payload, "LoadoutSlotNum")
+	if slot < 1 {
+		slot = 1
+	}
+	var b []byte
+	var stack []int
+	b = protocol.AppendStringField(b, "RT", "YA_UpdateShipLoadout")
+	n := int32(0)
+	for _, l := range withLoadoutVariants(playerPID, ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerPID), playerPID)) {
+		if l.loadoutID() != loadoutID || loadoutID == 0 {
+			continue
+		}
+		if n++; n != slot {
+			continue
+		}
+		b = protocol.AppendStringField(b, "result", "ok")
+		b, stack = protocol.AppendObjectStart(b, stack, "loadout")
+		b, _ = appendMmogShipLoadoutFields(b, stack, playerPID, l, true)
+		return b
+	}
+	logrus.WithFields(logrus.Fields{"player": playerPID, "loadout": loadoutID, "slot": slot}).
+		Warn("loadout: save answered as failed -- no such loadout")
+	return protocol.AppendStringField(b, "result", "failed")
 }
