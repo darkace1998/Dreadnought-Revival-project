@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -827,7 +828,32 @@ func loadPlayerSaveBlob(playerPID string, slot string) []byte {
 		`SELECT data FROM player_save_blobs WHERE user_id=? AND slot=?`,
 		normalizedPlayerStatePID(playerPID), slot,
 	).Scan(&blob)
+	if err != nil && slot == playerSaveSlotOnboarding {
+		return onboardingTemplateBlob(database)
+	}
 	if err != nil {
+		return nil
+	}
+	return blob
+}
+
+// onboardingTemplateBlob lets a brand-new account skip the tutorial: with
+// DN_ONBOARDING_TEMPLATE_PID set, a player with no SGD blob of their own is
+// handed that player's. The blob holds no player id (see provision.go,
+// -save-blobs-from, which does the same per account by hand), so it is the
+// client's own data. Nothing is written here; once the client uploads its own
+// SGD (YA_SaveGame), that one is returned instead.
+//
+// Not verified against a new account yet: the blob also marks
+// Ob_CharacterFinished, so the captain creator is presumably skipped too.
+func onboardingTemplateBlob(database *sql.DB) []byte {
+	src := strings.TrimSpace(os.Getenv("DN_ONBOARDING_TEMPLATE_PID"))
+	if src == "" {
+		return nil
+	}
+	var blob []byte
+	if database.QueryRow(`SELECT data FROM player_save_blobs WHERE user_id=? AND slot=?`,
+		normalizedPlayerStatePID(src), playerSaveSlotOnboarding).Scan(&blob) != nil {
 		return nil
 	}
 	return blob

@@ -8,7 +8,21 @@ import (
 	"sync"
 
 	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
+	"github.com/sirupsen/logrus"
 )
+
+// logBriefingEmissions is the briefing-dupe probe: one line per briefing id per payload build. The client
+// should show each briefing once; if the client still projects duplicates
+// while every payload build logs emitted=1, the dupes are client-side
+// (cosmetic). If any build logs emitted>1 for one
+// id, the duplication is ours and the dupe's source is named by `where`.
+func logBriefingEmissions(where string, seen map[int32]int) {
+	for _, id := range officerBriefings() {
+		if n := seen[id]; n > 0 {
+			logrus.WithField("where", where).Infof("briefing: id=%08X emitted=%d", uint32(id), n)
+		}
+	}
+}
 
 // Officer briefings.
 //

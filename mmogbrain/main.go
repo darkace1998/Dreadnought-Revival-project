@@ -82,6 +82,11 @@ func main() {
 	// game-manager's /instances route requires the shared secret; without it
 	// every formed match came back 403 and rolled straight back into the queue.
 	internalKey := os.Getenv("INTERNAL_API_KEY")
+	if internalKey == "changeme-internal-api-key" {
+		// The committed .env.example placeholder is not a secret; treat it as
+		// unset so we fall back to ADMIN_KEY (which requireAdminKey gates).
+		internalKey = ""
+	}
 	if internalKey == "" {
 		internalKey = os.Getenv("ADMIN_KEY")
 	}
@@ -176,7 +181,7 @@ func getenv(key, fallback string) string {
 // /internal endpoint.
 func requireAdminKey(log *logrus.Logger) string {
 	key := os.Getenv("ADMIN_KEY")
-	if key == "" || key == "changeme-admin-key" {
+	if key == "" || key == "changeme-admin-key" || key == "changeme-internal-api-key" {
 		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
@@ -281,7 +286,7 @@ func internalKeyMiddleware(key string) mux.MiddlewareFunc {
 func adminKeyMiddleware(key string) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Admin-Key") != key {
+			if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Key")), []byte(key)) != 1 {
 				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 				return
 			}

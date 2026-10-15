@@ -15,7 +15,7 @@ import (
 // Every documented bundle resolves its heroes from the client's data, is
 // Featured, references its contents, and costs more GP than nothing.
 func TestMarketBundlesAreRealAndFeatured(t *testing.T) {
-	seeds := marketBundleCatalogSeeds()
+	seeds := marketBundleCatalogSeeds("")
 	if len(seeds) != len(marketBundles) {
 		t.Fatalf("%d bundle offers for %d bundles", len(seeds), len(marketBundles))
 	}

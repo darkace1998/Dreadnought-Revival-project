@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"sync"
+	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/db"
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/handlers"
+	dreadconfig "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfig"
 )
 
 // provision-test-account: give an existing account everything, for testing.
@@ -213,6 +218,24 @@ func provisionUnlockSet() (ships []int32, items []int32) {
 	return ships, items
 }
 
+// provisionCosmeticSet is every player-facing cosmetic (ship vanity 20-24,
+// captain customisation 50-55): the cooked catalog filtered by
+// VanityItemIsPlayerFacing, i.e. exactly what the store lists (1,427 of
+// 1,494). The excluded 67 are the NPC officers' heads/bodies,
+// gender items and test assets -- owned, the captain editor showed them as
+// options with no head or nothing to wear.
+// Kept out of provisionUnlockSet so its ship/module tests stay unchanged.
+func provisionCosmeticSet() []int32 {
+	var ids []int32
+	for _, v := range dreadconfig.VanityItems() {
+		if v.ItemID > 0 && dreadconfig.VanityItemIsPlayerFacing(v) {
+			ids = append(ids, v.ItemID)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
 // maybeRunSubcommand runs a one-shot subcommand and exits, or returns false.
 func maybeRunSubcommand() bool {
 	if len(os.Args) < 2 || os.Args[1] != "provision-test-account" {
@@ -223,4 +246,89 @@ func maybeRunSubcommand() bool {
 		os.Exit(1)
 	}
 	return true
+}
+
+// DN_UNLOCK_ALL: everything unlocked BY DEFAULT, for
+// every player, with no rank or currency changes. The grants are the same
+// player_purchases rows (+ grantUnlockedShipLoadout) provision-test-account
+// uses, which is the OWNED state in YA_PlayerGet's inventory
+// (purchasedInventoryItemIDs) and reads as "owned" in the tech tree -- the
+// currency='admin' rows are deliberately NOT researchOnlyPurchase, so a hull's
+// NumTechTreeItemsRequired module gates see bought modules too.
+//
+// Runs once per player, at the YA_PlayerGet dispatch (response_dispatcher.go),
+// so the granted rows exist before the player data is built. Idempotent both
+// within the process (per-pid cache) and across restarts (NOT EXISTS guard,
+// price 0), and the in-game unlock flow can still be tested with
+// DN_UNLOCK_ALL=off.
+//
+// Cosmetics are included (provisionCosmeticSet, item_type 'vanity'); before
+// that a new player owned no cosmetics beyond the vanity probe's four.
+var unlockAllEnabled = os.Getenv("DN_UNLOCK_ALL") != "off"
+
+var unlockAllDone sync.Map // pid -> true, once this process granted it
+
+func autoProvisionEverything(pid string) {
+	if !unlockAllEnabled {
+		return
+	}
+	pid = normalizedPlayerStatePID(pid)
+	if len(pid) != 32 {
+		return
+	}
+	if _, done := unlockAllDone.LoadOrStore(pid, true); done {
+		return
+	}
+	database := currentMmogPlayerStateDB()
+	if database == nil {
+		// Nothing to write against; retry on the next PlayerGet, not just this
+		// one (delete the cache entry so the LoadOrStore above is re-run).
+		unlockAllDone.Delete(pid)
+		return
+	}
+	ships, items := provisionUnlockSet()
+	cosmetics := provisionCosmeticSet()
+	started := time.Now()
+	if err := func() error {
+		tx, err := database.Begin()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		record := func(id int32, kind string) error {
+			_, err := tx.Exec(`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+				SELECT ?,?,?,0,'admin' WHERE NOT EXISTS
+				(SELECT 1 FROM player_purchases WHERE user_id=? AND item_id=?)`, pid, id, kind, pid, id)
+			return err
+		}
+		for _, id := range ships {
+			if err := record(id, "loadout"); err != nil {
+				return fmt.Errorf("record ship %d: %w", id, err)
+			}
+			if err := grantUnlockedShipLoadout(tx, pid, id); err != nil {
+				return fmt.Errorf("grant loadout %d: %w", id, err)
+			}
+		}
+		for _, id := range items {
+			kind := map[int32]string{4: "ability", 5: "weapon", 6: "perk"}[(id>>24)&0xff]
+			if err := record(id, kind); err != nil {
+				return fmt.Errorf("record item %d: %w", id, err)
+			}
+		}
+		for _, id := range cosmetics {
+			if err := record(id, "vanity"); err != nil {
+				return fmt.Errorf("record cosmetic %d: %w", id, err)
+			}
+		}
+		return tx.Commit()
+	}(); err != nil {
+		unlockAllDone.Delete(pid)
+		logrus.WithError(err).WithFields(logrus.Fields{"player": pid}).
+			Warn("mmog: DN_UNLOCK_ALL grant failed -- will retry on next YA_PlayerGet")
+		return
+	}
+	logrus.WithFields(logrus.Fields{
+		"player": pid, "ships": len(ships), "items": len(items), "cosmetics": len(cosmetics),
+		"took": time.Since(started).String(),
+	}).Info("mmog: DN_UNLOCK_ALL -- granted every ship, weapon/ability/perk and cosmetic at YA_PlayerGet")
 }

@@ -51,6 +51,9 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 	case "YA_GetPvERewardTiers":
 		return buildMmogPvERewardTiersPayload()
 	case "YA_PlayerGet":
+		autoProvisionEverything(playerPID)
+		grantEventItems(playerPID)
+		vanityProbeProvision(playerPID)
 		return buildMmogPlayerGetPayload(playerPID)
 	// The client can request this itself (its sender at 0x142a42542 sets
 	// RT=YA_RewardCurrencies), not just receive the push we send after

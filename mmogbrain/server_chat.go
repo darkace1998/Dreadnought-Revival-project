@@ -176,6 +176,7 @@ var serverChatModeNames = map[string]string{
 	// own (SID_MATCHMAKINGTYPE_ONSLAUGHT / _HAVOC). It said "Havoc" until
 	// 2026-10-07 (operator report).
 	"Onslaught": "Onslaught",
+	"Havoc":     "Havoc",
 }
 
 var (
