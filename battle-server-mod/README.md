@@ -942,6 +942,72 @@ servers report per-kill detail").
 Expected log: none per kill; the `battle result` line in mmogbrain's log shows
 the contract progress ("contracts: progress").
 
+## Ribbons announced in the match (on, added 2026-10-15)
+
+Switch off with `dn_host_no_live_ribbons.txt` / `DN_HOST_NO_LIVE_RIBBONS=1`.
+
+No ribbon ever showed during a match: the host's reward path (`0x426DC0`) only
+builds type-1 (event) achievements (`0x5A9D30` is always called with 1) and
+sends them with `ClientAddAchievement` (RPC stub `0x5E50C0`; earlier notes call
+it ClientApplyRespawnFilter, which is the NEXT FName at `0xCD4A6`). Type 2 is
+the ribbon, and nothing in this exe builds one.
+
+When the match table is built the mod loads the mode's ribbon rows from
+mmogbrain (`GET /battle/ribbons?mode=`: ordinal, EventsForRibbon, ribbon
+score/XP/credits). Each time a player's count of an event reaches a multiple of
+EventsForRibbon, it builds the type-2 achievement (layout from `0x5A9D30`),
+adds it to the scoring component's ribbon list (`0x413740`, component =
+PRI `+0x928`) and, when the component's net check (`0x1839880`) returns 1,
+sends it with `ClientAddAchievement` -- as the host does for type 1. Match
+Finish is sent at the player's end of match, MVP there too, Man Of The Day at
+the winning kill.
+
+Expected log: `ribbons: N ribbon rules loaded for mode "TDM"` per match and
+`ribbons: event E -> ribbon for player state ... (net 1, sent)` per ribbon.
+NOT verified live: whether the client shows the ribbon (popup / end-of-match
+list) from this RPC.
+
+## MVP and Man Of The Day ribbons (on, added 2026-10-15)
+
+Switch off with `dn_host_no_eom_ribbons.txt` / `DN_HOST_NO_EOM_RIBBONS=1`.
+
+Both are end-of-match scoring events (EYScoringEventID ManOfTheDay 41, MVP 42)
+that mmogbrain keeps out of the host's scoring table, because end-of-match
+events overflowed the host's stack (2026-09-28). So no one could earn either
+ribbon. The mod adds them to the player's `ev=` counts itself:
+
+- **MVP** ("Player with most RP gathered total during the match"): the player(s)
+  with the highest `m_score` (`+0x7FC`) in the game state's PlayerArray when the
+  result is reported. GUESS: RP is the match score, ties all get it, bots (no
+  player state) do not compete.
+- **Man Of The Day** ("Score the last kill that makes your team win."): the
+  killer whose kill takes his team to the kill limit (game mode `+0x9DC`, team
+  kills GameState `+0x1DF0/+0x1DF4`), or, in Onslaught, the kill that reaches
+  the points target.
+
+Expected log: `ribbons: MVP -> <pid>` and `ribbons: Man Of The Day -> ...`; in
+mmogbrain's `battle result` line, `event_counts` shows MVP / ManOfTheDay and
+`ribbons` the earned ribbon. NOT verified live.
+
+## Statistics: score, healing, time per ship class (on, added 2026-10-15)
+
+The Statistics screen (`YA_GetPlayerStatistics`) shows ScoreSum, HealPoints and
+seconds per ship type, which nothing reported. The match result now also sends:
+
+- `score=` -- `AYPlayerReplicationInfo::m_score` (`+0x7FC`, SDK dump);
+- `heal=` -- `m_totalHealingDone` (`+0x924`, float, SDK dump);
+- `ct=class.seconds,...` -- seconds each EYShipClass was flown. Nothing in the
+  exe counts this (the `TimeUseShipClass` stats counter has no sender), so the
+  once-a-second game-mode timer samples every human's current ship (controller
+  `+0x3C8` -> pawn `+0x940`) and adds the elapsed time; no pawn adds nothing.
+
+Double kills and first strikes need no mod change: they are the Dominator and
+FirstStrike counts already in `ev=`. `score=` also turns on mmogbrain's
+score-based daily contracts. The offsets are NOT verified live.
+
+Expected log: the `match result:` line now shows `score N healing N`; in
+mmogbrain's log, `statistics: match recorded` with `from_mod=true`.
+
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 
 The PvE season events (mmogbrain `pve_seasons.go`) run the episode maps

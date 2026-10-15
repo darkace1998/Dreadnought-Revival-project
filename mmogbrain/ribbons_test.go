@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
@@ -79,5 +81,73 @@ func TestBattleResultRecordsRibbonsOnce(t *testing.T) {
 	_ = database.QueryRow(`SELECT count FROM player_ribbons WHERE user_id=? AND ribbon_type='Rampage'`, pid).Scan(&n)
 	if n != 1 {
 		t.Errorf("Rampage ribbons %d after one match reported twice, want 1", n)
+	}
+}
+
+// MVP and Man Of The Day are reported by battle-server-mod under these
+// ordinals (SCORING_EVENT_MVP / _MAN_OF_THE_DAY in dn_host_loadout.cpp); the
+// two lists must agree.
+func TestEndOfMatchRibbonOrdinalsMatchTheMod(t *testing.T) {
+	for name, want := range map[string]int{"ManOfTheDay": 41, "MVP": 42} {
+		if got, ok := scoringEventOrdinal(name); !ok || got != want {
+			t.Errorf("%s ordinal %d, the mod uses %d", name, got, want)
+		}
+	}
+}
+
+func TestRibbonCreditsArePaidPerMode(t *testing.T) {
+	if len(originalScoringTable()) == 0 {
+		t.Skip("original scoring table not available")
+	}
+	mvp, _ := scoringEventOrdinal("MVP")
+	motd, _ := scoringEventOrdinal("ManOfTheDay")
+	ribbons, _ := matchRibbons(map[int]int{mvp: 1, motd: 1}, "TDM")
+	if ribbons["MVP"] != 1 || ribbons["ManOfTheDay"] != 1 {
+		t.Fatalf("ribbons %v", ribbons)
+	}
+	r, _ := findOriginalScoringRow("MVP")
+	want := int32(scoringValueFor(r.RibbonCredits, "TDM"))
+	if m, _ := findOriginalScoringRow("MatchEnd"); m.RibbonCredits != "" {
+		want += int32(scoringValueFor(m.RibbonCredits, "TDM"))
+	}
+	if r2, _ := findOriginalScoringRow("ManOfTheDay"); r2.RibbonCredits != "" {
+		want += int32(scoringValueFor(r2.RibbonCredits, "TDM"))
+	}
+	if got := ribbonCredits(ribbons, "TDM"); got != want || want <= 0 {
+		t.Errorf("ribbon credits %d, want %d (> 0)", got, want)
+	}
+	// Paid on top of the formula's credits.
+	base, _ := currentBattleRewards().forOutcome("win", 0, 1)
+	rw := currentBattleRewards()
+	rw.ribbonCredits = want
+	if paid, _ := rw.forOutcome("win", 0, 1); paid <= base {
+		t.Errorf("credits %d with ribbon credits, %d without", paid, base)
+	}
+}
+
+func TestBattleRibbonsTableForTheHost(t *testing.T) {
+	if len(originalScoringTable()) == 0 {
+		t.Skip("original scoring table not available")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/battle/ribbons?mode=TDM", nil)
+	req.RemoteAddr = "127.0.0.1:5555"
+	rec := httptest.NewRecorder()
+	battleRibbonsHandler(rec, req)
+	body := rec.Body.String()
+	dom, _ := scoringEventOrdinal("Dominator")
+	r, _ := findOriginalScoringRow("Dominator")
+	want := fmt.Sprintf("%d %d %d %d %d\n", dom, r.EventsForRibbon, scoringValueFor(r.RibbonScore, "TDM"),
+		scoringValueFor(r.RibbonXP, "TDM"), scoringValueFor(r.RibbonCredits, "TDM"))
+	if !strings.Contains(body, want) {
+		t.Errorf("no Dominator line %q in\n%s", want, body)
+	}
+	if n := strings.Count(body, "\n"); n < 40 {
+		t.Errorf("%d ribbon lines, want the original 44", n)
+	}
+	req.RemoteAddr = "10.0.0.5:5555"
+	rec = httptest.NewRecorder()
+	battleRibbonsHandler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("non-loopback got %d", rec.Code)
 	}
 }

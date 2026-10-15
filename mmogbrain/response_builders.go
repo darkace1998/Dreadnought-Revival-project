@@ -4699,19 +4699,32 @@ func buildMmogStaticCareerDataPayload() []byte {
 	return b
 }
 
+// buildMmogScoringDataPayload answers YA_GetScoringData with the scoring
+// table, the one the host gets (scoringDocument), at the ROOT.
+//
+// The reply arm (0x2A2C7FC) hands the DOCUMENT ROOT to the scoring parser
+// 0x2A75740 (into player data +0x43F8), which reads root "ScoringTable" and
+// "ScoringParamsTable". We sent five PvE tables under "result" instead, so
+// the client's scoring table was always empty -- and the Ribbons screen
+// (0xAC2060) draws one ribbon per row of that table that has a ribbon name,
+// with the amount from YA_PlayerGet "Ribbons": no rows, no ribbons, only the
+// widget's placeholder ("ribbon name x999", operator 2026-10-15). The PvE
+// tables were read by nothing here. DN_CLIENT_SCORING_TABLE=0 restores them.
 func buildMmogScoringDataPayload() []byte {
 	var b []byte
-	var stack []int
-
 	b = protocol.AppendStringField(b, "RT", "YA_GetScoringData")
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b = protocol.AppendStringField(b, "YScoringDataTableRow", dreadconfig.MedalScoringTuneJSON())
-	b = protocol.AppendStringField(b, "m_defendScoringDataTable", dreadconfig.DefendScoringTuneJSON())
-	b = protocol.AppendStringField(b, "m_remainingPlayerScoringDataTable", dreadconfig.RemainingPlayerScoringTuneJSON())
-	b = protocol.AppendStringField(b, "m_killScoringDataTable", dreadconfig.KillScoringTuneJSON())
-	b = protocol.AppendStringField(b, "m_waveScoringDataTable", dreadconfig.WaveScoringTuneJSON())
-	b, _ = protocol.AppendObjectEnd(b, stack)
-	return b
+	if os.Getenv("DN_CLIENT_SCORING_TABLE") == "0" {
+		var stack []int
+		b, stack = protocol.AppendObjectStart(b, stack, "result")
+		b = protocol.AppendStringField(b, "YScoringDataTableRow", dreadconfig.MedalScoringTuneJSON())
+		b = protocol.AppendStringField(b, "m_defendScoringDataTable", dreadconfig.DefendScoringTuneJSON())
+		b = protocol.AppendStringField(b, "m_remainingPlayerScoringDataTable", dreadconfig.RemainingPlayerScoringTuneJSON())
+		b = protocol.AppendStringField(b, "m_killScoringDataTable", dreadconfig.KillScoringTuneJSON())
+		b = protocol.AppendStringField(b, "m_waveScoringDataTable", dreadconfig.WaveScoringTuneJSON())
+		b, _ = protocol.AppendObjectEnd(b, stack)
+		return b
+	}
+	return append(b, scoringDocumentFields(true)...)
 }
 
 func buildMmogDailyContractsDataPayload() []byte {
@@ -5919,9 +5932,9 @@ func buildMmogTuneDocument() []byte {
 // AssistNum, DoubleKillNum, FirstStrikeNum, DestroyerTimeSec,
 // ArtilleryCruiserTimeSec, DreadnoughtTimeSec, TacticalCruiserTimeSec,
 // CorvetteTimeSec, TotalGameTimeSec, through the scalar reader (0x238000):
-// numeric strings. Filled from the match results this server records; what
-// it does not record (score, healing, double kills, first strikes, time per
-// ship class) is 0.
+// numeric strings. Filled from the match results this server records, and
+// since 2026-10-15 score, healing, double kills, first strikes and time per
+// ship type from battle_result_stats (match_statistics.go).
 func buildMmogPlayerStatisticsPayload(playerPID string, payload []byte) []byte {
 	var pids []string
 	for _, sc := range protocol.Scalars(payload) {
@@ -5941,15 +5954,20 @@ func buildMmogPlayerStatisticsPayload(playerPID string, payload []byte) []byte {
 	b, stack = protocol.AppendArrayStart(b, stack, "stats")
 	for _, pid := range pids {
 		st := playerMatchStatistics(pid)
+		more := playerStatTotals(currentMmogPlayerStateDB(), pid)
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		for _, f := range []struct {
 			name  string
 			value int64
 		}{
-			{"WinNum", st.wins}, {"LoseNum", st.losses}, {"ScoreSum", 0}, {"KillNum", st.kills},
-			{"DeathNum", st.deaths}, {"HealPoints", 0}, {"AssistNum", st.assists}, {"DoubleKillNum", 0},
-			{"FirstStrikeNum", 0}, {"DestroyerTimeSec", 0}, {"ArtilleryCruiserTimeSec", 0},
-			{"DreadnoughtTimeSec", 0}, {"TacticalCruiserTimeSec", 0}, {"CorvetteTimeSec", 0},
+			{"WinNum", st.wins}, {"LoseNum", st.losses}, {"ScoreSum", more[statScore]}, {"KillNum", st.kills},
+			{"DeathNum", st.deaths}, {"HealPoints", more[statHealing]}, {"AssistNum", st.assists},
+			{"DoubleKillNum", more[statDoubleKills]}, {"FirstStrikeNum", more[statFirstStrikes]},
+			{"DestroyerTimeSec", more[statTimePrefix+"Destroyer"]},
+			{"ArtilleryCruiserTimeSec", more[statTimePrefix+"ArtilleryCruiser"]},
+			{"DreadnoughtTimeSec", more[statTimePrefix+"Dreadnought"]},
+			{"TacticalCruiserTimeSec", more[statTimePrefix+"TacticalCruiser"]},
+			{"CorvetteTimeSec", more[statTimePrefix+"Corvette"]},
 			{"TotalGameTimeSec", st.seconds},
 		} {
 			b = protocol.AppendStringField(b, f.name, strconv.FormatInt(f.value, 10))

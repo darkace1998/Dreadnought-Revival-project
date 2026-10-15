@@ -448,6 +448,25 @@ var migrations = []string{
 		name  TEXT PRIMARY KEY,
 		value TEXT NOT NULL DEFAULT ''
 	)`,
+	// Per-match figures for the Statistics screen that battle_results has no
+	// column for (score, healing, double kills, first strikes, seconds per
+	// ship class), one row per stat (match_statistics.go).
+	`CREATE TABLE IF NOT EXISTS battle_result_stats (
+		match_id TEXT NOT NULL,
+		user_id  TEXT NOT NULL,
+		stat     TEXT NOT NULL,
+		value    INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (match_id, user_id, stat)
+	)`,
+	// Run once: what the ribbons already recorded say about the matches played
+	// before per-match stats were kept. First Strike's ribbon takes 1 event, so
+	// it is exact; Domination's takes 2 (the double kill, Dominator VAL(2):T(15)),
+	// so twice the ribbons is a lower bound (a match's odd one was dropped).
+	`INSERT OR IGNORE INTO battle_result_stats(match_id,user_id,stat,value)
+		SELECT 'before-2026-10-15', user_id,
+			CASE ribbon_type WHEN 'FirstStrike' THEN 'first_strikes' ELSE 'double_kills' END,
+			CASE ribbon_type WHEN 'FirstStrike' THEN count ELSE count*2 END
+		FROM player_ribbons WHERE ribbon_type IN ('FirstStrike','Dominator') AND count > 0`,
 }
 
 func Open(path string) (*sql.DB, error) {

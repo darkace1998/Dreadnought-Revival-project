@@ -7,8 +7,10 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -260,10 +262,44 @@ func handleGWLogin(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims)
 		"id":         sessionID,
 		"userId":     userID,
 		"user_id":    userID,
-		"UserName":   username,
-		"Username":   username,
-		"username":   username,
+		// All three spellings carry the tag: the plugin's JSON lookup ignores
+		// case, so "UserName" (first in Go's sorted output) was the one found,
+		// and the bare name in it defeated the split (client log 2026-10-15:
+		// "Username":"Name#1414" received, name still blank).
+		"UserName": gatewayUsernameTag(username, userID),
+		"Username": gatewayUsernameTag(username, userID),
+		"username": gatewayUsernameTag(username, userID),
 	})
+}
+
+// gatewayUsernameTag is the login reply's "Username": "<name>#<number>".
+//
+// The client does not keep it whole. CreateSessionRequestDefinition's
+// response handler (0x2AB1ED0) reads "Username" (0x2AB5550), splits it at the
+// first '#' (FString::Split 0x140267EB0, separator at 0x38E4264) and
+// broadcasts each half only when it is non-empty: the name to the session
+// manager's +0x230 (delegate 0x421D60), the number to +0x240 (0x421D70). The
+// player data parser copies +0x230 into the local player's name (0x2A71230 via
+// 0x4216D0), which is what the hangar's player card shows (GetPlayerUiData
+// 0xAECB30 -> 0xAA8180). We sent the bare account name: no '#', so the split
+// failed, nothing was stored, and no player ever saw his own name in the
+// hangar (operator, 2026-10-15; the identity's GetPlayerNickname(UniqueNetId),
+// vtable slot 30, is an empty stub, so that fallback is blank too).
+//
+// GUESS: the number. Accounts here have none, and nothing says how the
+// original assigned them; a stable 4-digit number derived from the player id
+// stands in. '#' is removed from the name so the split cannot cut it.
+func gatewayUsernameTag(username, userID string) string {
+	name := strings.ReplaceAll(strings.TrimSpace(username), "#", "")
+	if name == "" {
+		return ""
+	}
+	pid := normalizedPlayerStatePID(userID)
+	var n uint32
+	for _, c := range pid {
+		n = n*31 + uint32(c)
+	}
+	return fmt.Sprintf("%s#%04d", name, n%10000)
 }
 
 // handleGWLogout handles POST /api/v1/authentication/logout.
@@ -433,9 +469,9 @@ func handleGWSessionCreate(w http.ResponseWriter, r *http.Request, claims jwt.Ma
 		"id":         sessionID,
 		"userId":     userID,
 		"user_id":    userID,
-		"UserName":   username,
-		"Username":   username,
-		"username":   username,
+		"UserName":   gatewayUsernameTag(username, userID), // see handleGWLogin
+		"Username":   gatewayUsernameTag(username, userID),
+		"username":   gatewayUsernameTag(username, userID),
 	})
 }
 
@@ -460,6 +496,15 @@ func handleGWPlay(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) 
 func handleGWBundles(w http.ResponseWriter, r *http.Request, claims jwt.MapClaims) {
 	playerID := protocol.GatewayClaimsUserID(claims)
 	gwJSON(w, gatewayAbsoluteImageURLs(gatewayBootstrapPayload(playerID, "bundles", waitForGatewayBootstrapPlayerDataReady(playerID)), r))
+}
+
+// catalogWriteTimeout is how long one catalog response may take to send:
+// DN_CATALOG_WRITE_TIMEOUT seconds, default 300.
+func catalogWriteTimeout() time.Duration {
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("DN_CATALOG_WRITE_TIMEOUT"))); err == nil && v > 0 {
+		return time.Duration(v) * time.Second
+	}
+	return 300 * time.Second
 }
 
 // handleGWCatalog handles catalog endpoints.
@@ -487,6 +532,15 @@ func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 	// client asks for it; every fetch is logged with what it took, so a
 	// download that a slow connection never finishes is visible.
 	gzipped := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+	// The server's 15 s WriteTimeout covers the whole response, and it is too
+	// short for this one: every client fetches the catalog a second time
+	// without asking for compression (the full ~10 MB), and on slow links
+	// that never finished -- 25 "i/o timeout" failures on 2026-10-15, one
+	// player retrying 20 times, each left with no prices until a restart.
+	// This response alone gets catalogWriteTimeout.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(catalogWriteTimeout())); err != nil {
+		logrus.WithError(err).Warn("gateway: catalog write deadline not extended")
+	}
 	sent := len(body)
 	w.Header().Set("Content-Type", "application/json")
 	var werr error

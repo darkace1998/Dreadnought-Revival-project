@@ -1606,6 +1606,7 @@ static tGameModeTimer g_origGameModeTimer = nullptr;
 
 static bool g_bcAIArmed = false;
 static void PlayersTick(uint8_t *gm);
+static void ClassTimeTick(uint8_t *gm);
 
 // Bots in every multiplayer mode (on; dn_host_bots_bc_only.txt /
 // DN_HOST_BOTS_BC_ONLY=1 limits them to the proving ground again). Added
@@ -1690,6 +1691,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   ConquestTick(gm);
   NpcAiStartTick(gm);
   PlayersTick(gm);
+  ClassTimeTick(gm);
   FlushPendingEomStats();
 }
 
@@ -1892,6 +1894,58 @@ static void RecordKill(void *killerCtrl, uint8_t victimClass) {
   ReleaseSRWLockExclusive(&g_killLogLock);
 }
 
+// ---------------------------------------------------------------------------
+// Seconds per ship class, for the Statistics screen (on; added 2026-10-15)
+//
+// YA_GetPlayerStatistics has DestroyerTimeSec .. CorvetteTimeSec, and nothing
+// in this exe counts them (the TimeUseShipClass stats counter has no sender:
+// the client's only YA_IncrementPlayerStatsCounter calls are Customize and
+// FinishTutorial, 0x30FFA0/0x426740/0x54B690). So the players tick samples,
+// once a second, the class of every human's current ship (controller +0x3C8
+// -> pawn +0x940, as RecordKill reads it) and adds the elapsed time to it.
+// No pawn (dead, in orbit) adds nothing. Reported with the result as
+// ct=class.seconds,... (mmogbrain/match_statistics.go).
+#define CLASS_TIME_MAX 21 // EYShipClass values 0..20
+struct ClassTime {
+  void *pri;
+  DWORD ms[CLASS_TIME_MAX];
+};
+static ClassTime g_classTimes[64] = {};
+static SRWLOCK g_classTimeLock = SRWLOCK_INIT;
+
+static void AddClassTime(void *pri, uint8_t cls, DWORD ms) {
+  if (!pri || cls == 0 || cls >= CLASS_TIME_MAX || ms == 0 || ms > 10000)
+    return;
+  AcquireSRWLockExclusive(&g_classTimeLock);
+  ClassTime *slot = nullptr;
+  for (auto &c : g_classTimes) {
+    if (c.pri == pri) { slot = &c; break; }
+    if (!slot && !c.pri) slot = &c;
+  }
+  if (slot) {
+    slot->pri = pri;
+    slot->ms[cls] += ms;
+  }
+  ReleaseSRWLockExclusive(&g_classTimeLock);
+}
+
+// The player's seconds per class as "class.seconds,..." into out.
+static void TakeClassTime(void *pri, char *out, size_t outLen) {
+  out[0] = 0;
+  size_t o = 0;
+  AcquireSRWLockExclusive(&g_classTimeLock);
+  for (auto &c : g_classTimes) {
+    if (c.pri != pri)
+      continue;
+    for (int i = 1; i < CLASS_TIME_MAX && o + 16 < outLen; ++i)
+      if (c.ms[i] >= 1000)
+        o += _snprintf_s(out + o, outLen - o, _TRUNCATE, "%s%d.%lu", o ? "," : "", i, (unsigned long)(c.ms[i] / 1000));
+    c = ClassTime{};
+    break;
+  }
+  ReleaseSRWLockExclusive(&g_classTimeLock);
+}
+
 // The player's kills as "victim.killer,..." into out; false when the kill
 // detail is off (mmogbrain then counts only the class-free contracts).
 static bool TakeKillLog(void *pri, char *out, size_t outLen) {
@@ -1910,6 +1964,50 @@ static bool TakeKillLog(void *pri, char *out, size_t outLen) {
   }
   ReleaseSRWLockExclusive(&g_killLogLock);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// MVP and Man Of The Day ribbons (on; dn_host_no_eom_ribbons.txt /
+// DN_HOST_NO_EOM_RIBBONS=1 turns them off). Added 2026-10-15.
+//
+// Both are end-of-match scoring events (EYScoringEventID ManOfTheDay 41, MVP
+// 42), and mmogbrain keeps every end-of-match event out of the host's table:
+// with them in it, every match that reached EndMatch overflowed the host's
+// stack (2026-09-28). So nobody ever earned either ribbon. The original texts:
+//   MVP          "Player with most RP gathered total during the match"
+//   ManOfTheDay  "Score the last kill that makes your team win."
+// The mod adds them to the player's event counts (ev=) itself: MVP to the
+// player(s) with the highest m_score at the match result (GUESS: RP = the
+// match score; ties all get it; bots have no player state and do not
+// compete), Man Of The Day to the killer whose kill ends the match for his
+// team (TDM family: the kill that reaches the kill limit; Onslaught: the kill
+// that reaches the points target).
+#define SCORING_EVENT_MAN_OF_THE_DAY 41
+#define SCORING_EVENT_MVP 42
+static void AddScoringEvent(void *pri, uint32_t event);
+static bool EomRibbonsEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_EOM_RIBBONS", "dn_host_no_eom_ribbons.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+// The match-winning kill: killer's player state and team, if the killer is a
+// player.
+static void AwardManOfTheDay(void *killer, int winningTeam, const char *why) {
+  uint8_t *kc = (uint8_t *)killer;
+  if (!EomRibbonsEnabled() || !kc || !IsReadable(kc + OFF_PC_PLAYER_STATE, 8))
+    return;
+  uint8_t *pri = *(uint8_t **)(kc + OFF_PC_PLAYER_STATE);
+  if (!IsReadable(pri, 0x941) || !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo"))
+    return;
+  int team = pri[0x940]; // OFF_PRI_TEAM
+  if (team != winningTeam) {
+    Logf("ribbons: match-ending kill (%s) by team %d, winner %d -- no Man Of The Day", why, team, winningTeam);
+    return;
+  }
+  AddScoringEvent(pri, SCORING_EVENT_MAN_OF_THE_DAY);
+  Logf("ribbons: Man Of The Day -> player state %p (team %d, %s)", pri, team, why);
 }
 
 static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimCtrl,
@@ -1957,7 +2055,39 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   if (KillDetailEnabled() && killer && killer != victimCtrl && victimPawn &&
       IsReadable((uint8_t *)victimPawn + OFF_PAWN_SHIP_CLASS, 1))
     victimClass = ((uint8_t *)victimPawn)[OFF_PAWN_SHIP_CLASS];
+  // Man Of The Day, TDM family: the original call ends the match when a
+  // team's kills reach the game mode's m_killsForWinning (+0x9DC, via
+  // 0x3685C0). Lifted to ONS_KILL_LIMIT_OFF in Onslaught, so it never fires
+  // there (Onslaught is handled where its points end the match).
+  int32_t limit = 0, before1 = 0, before2 = 0;
+  uint8_t *tdmGS = nullptr;
+  __try {
+    if (EomRibbonsEnabled() && killer && killer != victimCtrl && IsReadable(gm + OFF_GM_KILLS_FOR_WINNING, 4) &&
+        IsReadable(gm + OFF_GM_GAMESTATE, 8)) {
+      tdmGS = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+      limit = *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING);
+      if (tdmGS && IsReadable(tdmGS + OFF_GS_KILLS_T2, 4)) {
+        before1 = *(int32_t *)(tdmGS + OFF_GS_KILLS_T1);
+        before2 = *(int32_t *)(tdmGS + OFF_GS_KILLS_T2);
+      } else {
+        tdmGS = nullptr;
+      }
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    tdmGS = nullptr;
+  }
   g_origTdmKilled(gameMode, killer, victimCtrl, victimPawn, damageType);
+  if (tdmGS && limit > 0 && limit < ONS_KILL_LIMIT_OFF) {
+    __try {
+      int32_t after1 = *(int32_t *)(tdmGS + OFF_GS_KILLS_T1);
+      int32_t after2 = *(int32_t *)(tdmGS + OFF_GS_KILLS_T2);
+      if (before1 < limit && after1 >= limit)
+        AwardManOfTheDay(killer, 1, "kill limit");
+      else if (before2 < limit && after2 >= limit)
+        AwardManOfTheDay(killer, 2, "kill limit");
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+  }
   if (victimClass >= 0) {
     __try {
       RecordKill(killer, (uint8_t)victimClass);
@@ -2006,6 +2136,7 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
       SetLeaderByPoints(gs, p1, p2);
       Logf("onslaught: team %d reached %d points (T1 %d, T2 %d) -- ending the match",
            p1 >= p2 ? 1 : 2, target, p1, p2);
+      AwardManOfTheDay(killer, p1 >= p2 ? 1 : 2, "onslaught points");
       void **vt = *(void ***)gm;
       ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
     }
@@ -3310,7 +3441,10 @@ static void __fastcall HookClientSetPlayerRestrictions(
 //   0xD5B2A4 -> 0x28D6FB -> ...        (862 repetitions in 512 KB of stack)
 //
 // 0x5E50C0 is the RPC stub of ClientApplyRespawnFilter (its FName global
-// 0x3E10168 is initialised at 0xCD48D). It calls ProcessEvent (0xD5B180), which
+// 0x3E10168 is initialised at 0xCD48D). CORRECTION 2026-10-15: that global is
+// initialised from L"ClientAddAchievement" (0xCD486); ClientApplyRespawnFilter
+// is the next one (0xCD4A6). The stub is ClientAddAchievement on the scoring
+// component; the loop and the guard are unchanged (see the live ribbons). It calls ProcessEvent (0xD5B180), which
 // runs the exec thunk (0x744AF0) and the body 0x4171E0: that adds the filter's
 // value to this+0x1F0 and then, when the object's net check (0x141839880)
 // returns 1 -- which it does on this host, which reports itself DEDICATED --
@@ -3665,6 +3799,10 @@ typedef void(__fastcall *tProcessEventVirt)(void *obj, void *fn, void *parms);
 #define OFF_PRI_DAMAGE_WEAPONS 0x908
 #define OFF_PRI_DAMAGE_ABILITIES 0x90C
 #define OFF_PRI_TEAM 0x940
+// Statistics screen figures (2026-10-15), from the SDK dump like the rest:
+// m_score IntProperty, m_totalHealingDone FloatProperty. NOT verified live.
+#define OFF_PRI_SCORE 0x7FC
+#define OFF_PRI_HEALING 0x924
 // AYPlayerController::m_team (SDK: Net, 0x0C30). FIXED 2026-09-27: the first
 // reported match read PRI m_team = 0 (YT_NONE; EYTeam is NONE 0, TEAM1 1,
 // TEAM2 2 per its registration 0x140697ED0) on a proving-ground host, so a won
@@ -3762,6 +3900,119 @@ struct EventTotals {
 static EventTotals g_eventTotals[128] = {};
 static SRWLOCK g_eventTotalsLock = SRWLOCK_INIT;
 
+// ---------------------------------------------------------------------------
+// Ribbons announced in the match (on; dn_host_no_live_ribbons.txt /
+// DN_HOST_NO_LIVE_RIBBONS=1 turns it off). Added 2026-10-15.
+//
+// A ribbon never showed during a match (operator: "ribbons dont get rewarded
+// in matches"), although mmogbrain awards them from ev= after it. The host's
+// reward path (0x426DC0) builds only a type-1 (event) achievement (0x5A9D30
+// is called with 1), adds it to the scoring component's event list
+// (0x4135A0) and, when the component's net check 0x141839880 says 1, sends it
+// to the player with ClientAddAchievement -- the RPC stub 0x5E50C0 (its FName
+// global 0x3E10168 is initialised from L"ClientAddAchievement" at 0xCD486;
+// the respawn-filter guard further down hooks the same stub). Type 2 is the
+// ribbon: 0x5A9D30 fills it from the RIBBON half of the record, and 0x413740
+// is the component's ribbon list. Nothing in this exe ever builds one; the
+// original server build did.
+//
+// So, the original rule: when a player's count of an event reaches a
+// multiple of the row's EventsForRibbon (the same floor(count/n) mmogbrain
+// pays), the mod builds the type-2 achievement and sends it exactly as the
+// host sends type 1. The ribbon values per mode come from mmogbrain
+// (GET /battle/ribbons?mode=, loaded when the match table is built).
+// Achievement layout (0x1C, from 0x5A9D30 and the RPC's 0x1C-byte copy):
+//   +0x00 u8 type (1 event, 2 ribbon)   +0x04 i32 EYScoringEventID
+//   +0x08 u8 1, +0x09..0x0B 0           +0x0C score  +0x10 XP  +0x14 credits
+//   +0x18 i32 the ship's precast loadout id (record [2] = PRI +0x654)
+// The scoring component is AYPlayerReplicationInfo::m_scoringEventComponent
+// (+0x928, SDK). NOT verified live.
+#define RVA_CLIENT_ADD_ACHIEVEMENT_RPC 0x5E50C0
+#define RVA_COMPONENT_ADD_RIBBON 0x413740
+#define RVA_COMPONENT_NET_CHECK 0x1839880
+#define OFF_PRI_SCORING_COMPONENT 0x928
+#define OFF_PRI_PRECAST_LOADOUT 0x654
+#define SCORING_EVENT_MATCH_END 40
+struct RibbonRule {
+  int n, score, xp, credits;
+};
+static RibbonRule g_ribbonRules[SCORING_EVENT_COUNT] = {};
+static bool SwitchOn(const char *envName, const char *markerFile);
+
+static bool LiveRibbonsEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_LIVE_RIBBONS", "dn_host_no_live_ribbons.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+// The ribbon rows for the match's scoring mode, from mmogbrain.
+static void LoadRibbonRules(const wchar_t *mode) {
+  if (!LiveRibbonsEnabled())
+    return;
+  char m[24] = {0}, path[96], body[4096];
+  for (int i = 0; i < 20 && mode && mode[i]; ++i)
+    m[i] = (mode[i] < 128 && (isalnum((int)mode[i]) || mode[i] == L'_')) ? (char)mode[i] : '_';
+  _snprintf_s(path, sizeof(path), _TRUNCATE, "/battle/ribbons?mode=%s", m);
+  if (!HttpGetLoopback(path, body, sizeof(body))) {
+    Logf("ribbons: GET %s failed; no ribbons announced in this match", path);
+    return;
+  }
+  RibbonRule rules[SCORING_EVENT_COUNT] = {};
+  int loaded = 0;
+  for (char *line = body; line && *line;) {
+    char *next = strchr(line, '\n');
+    if (next)
+      *next++ = 0;
+    int ord, n, sc, xp, cr;
+    if (sscanf_s(line, "%d %d %d %d %d", &ord, &n, &sc, &xp, &cr) == 5 && ord >= 0 &&
+        ord < SCORING_EVENT_COUNT && n > 0) {
+      rules[ord] = RibbonRule{n, sc, xp, cr};
+      ++loaded;
+    }
+    line = next;
+  }
+  memcpy(g_ribbonRules, rules, sizeof(rules));
+  Logf("ribbons: %d ribbon rules loaded for mode \"%s\"", loaded, m);
+}
+
+// Sends one ribbon (type-2 achievement) for event to the player owning pri.
+static void SendRibbonAchievement(void *pri, uint32_t event) {
+  if (!LiveRibbonsEnabled() || event >= SCORING_EVENT_COUNT || g_ribbonRules[event].n <= 0)
+    return;
+  __try {
+    uint8_t *p = (uint8_t *)pri;
+    if (!IsReadable(p + OFF_PRI_SCORING_COMPONENT, 8) || !IsReadable(p + OFF_PRI_PRECAST_LOADOUT, 4))
+      return;
+    void *comp = *(void **)(p + OFF_PRI_SCORING_COMPONENT);
+    if (!comp || !IsReadable(comp, 0x200))
+      return;
+    alignas(8) uint8_t ach[0x20] = {};
+    ach[0] = 2;
+    *(int32_t *)(ach + 0x04) = (int32_t)event;
+    ach[0x08] = 1;
+    *(int32_t *)(ach + 0x0C) = g_ribbonRules[event].score;
+    *(int32_t *)(ach + 0x10) = g_ribbonRules[event].xp;
+    *(int32_t *)(ach + 0x14) = g_ribbonRules[event].credits;
+    *(int32_t *)(ach + 0x18) = *(int32_t *)(p + OFF_PRI_PRECAST_LOADOUT);
+    ((void(__fastcall *)(void *, void *))(g_base + RVA_COMPONENT_ADD_RIBBON))(comp, ach);
+    int net = ((int(__fastcall *)(void *))(g_base + RVA_COMPONENT_NET_CHECK))(comp);
+    if (net == 1)
+      ((void(__fastcall *)(void *, void *))(g_base + RVA_CLIENT_ADD_ACHIEVEMENT_RPC))(comp, ach);
+    Logf("ribbons: event %u -> ribbon for player state %p (net %d%s)", event, pri, net,
+         net == 1 ? ", sent" : ", not sent: not a remote owner");
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("ribbons: EXCEPTION announcing event %u for %p", event, pri);
+  }
+}
+
+// After a count went up: a ribbon when it reaches a multiple of the row's n.
+static void MaybeAnnounceRibbon(void *pri, uint32_t event, unsigned count) {
+  if (event < SCORING_EVENT_COUNT && count > 0 && g_ribbonRules[event].n > 0 &&
+      count % (unsigned)g_ribbonRules[event].n == 0)
+    SendRibbonAchievement(pri, event);
+}
+
 static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
   g_origAssignScoringReward(pri, reward);
   __try {
@@ -3776,10 +4027,11 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
       if (t.pri == pri) { slot = &t; break; }
       if (!slot && !t.pri) slot = &t;
     }
+    unsigned count = 0;
     if (slot) {
       slot->pri = pri;
       if (event < SCORING_EVENT_COUNT && slot->counts[event] < 0xFFFF)
-        slot->counts[event]++;
+        count = ++slot->counts[event];
       if (xp > 0 || cr > 0) {
         slot->xp += xp > 0 ? xp : 0;
         slot->credits += cr > 0 ? cr : 0;
@@ -3787,8 +4039,30 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
       }
     }
     ReleaseSRWLockExclusive(&g_eventTotalsLock);
+    MaybeAnnounceRibbon(pri, event, count);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
+}
+
+// One more occurrence of a scoring event for this player, for an event the
+// host itself never fires here (see MVP / Man Of The Day below).
+static void AddScoringEvent(void *pri, uint32_t event) {
+  if (!pri || event >= SCORING_EVENT_COUNT)
+    return;
+  AcquireSRWLockExclusive(&g_eventTotalsLock);
+  EventTotals *slot = nullptr;
+  for (auto &t : g_eventTotals) {
+    if (t.pri == pri) { slot = &t; break; }
+    if (!slot && !t.pri) slot = &t;
+  }
+  unsigned count = 0;
+  if (slot) {
+    slot->pri = pri;
+    if (slot->counts[event] < 0xFFFF)
+      count = ++slot->counts[event];
+  }
+  ReleaseSRWLockExclusive(&g_eventTotalsLock);
+  MaybeAnnounceRibbon(pri, event, count);
 }
 
 // The player's summed event XP and credits; false when the host awarded none
@@ -3819,9 +4093,9 @@ static bool TakeEventTotals(void *pri, int64_t *xp, int64_t *credits, int *event
 static void ReportMatchResult(void *orbitComp) {
   char pid[80], match[96], path[3584], body[2048];
   uint8_t *priOut = nullptr;
-  int kills = 0, deaths = 0, assists = 0, team = 0, result = 0;
+  int kills = 0, deaths = 0, assists = 0, team = 0, result = 0, score = 0;
   const char *teamSource = "none";
-  float damage = 0;
+  float damage = 0, healing = 0;
   __try {
     uint8_t *pc = *(uint8_t **)((uint8_t *)orbitComp + OFF_COMPONENT_OWNER);
     if (!PlayerPIDForController(pc, pid, sizeof(pid))) {
@@ -3844,6 +4118,8 @@ static void ReportMatchResult(void *orbitComp) {
     assists = *(int32_t *)(pri + OFF_PRI_ASSISTS);
     damage = *(float *)(pri + OFF_PRI_DAMAGE_WEAPONS) +
              *(float *)(pri + OFF_PRI_DAMAGE_ABILITIES);
+    score = *(int32_t *)(pri + OFF_PRI_SCORE);
+    healing = *(float *)(pri + OFF_PRI_HEALING);
     team = pri[OFF_PRI_TEAM];
     teamSource = "PRI";
     if ((team < 1 || team > 2) && IsReadable(pc + OFF_PC_TEAM, 1)) {
@@ -3877,6 +4153,10 @@ static void ReportMatchResult(void *orbitComp) {
   }
   if (!(damage >= 0 && damage < 1e9f))
     damage = 0;
+  if (!(healing >= 0 && healing < 1e9f))
+    healing = 0;
+  if (score < 0 || score > 10000000)
+    score = 0;
   // Loadout ids are FName text; escape anything a query string cannot carry.
   char ships[1024];
   size_t o = 0;
@@ -3894,6 +4174,32 @@ static void ReportMatchResult(void *orbitComp) {
   // The original table's XP and credits the host awarded this player (see
   // HookAssignScoringReward). Absent when none were awarded: mmogbrain then
   // pays its formula, as before.
+  // Match Finish: every player who finishes earns it (mmogbrain counts it per
+  // result); announced here, at the player's end of match.
+  if (priOut)
+    SendRibbonAchievement(priOut, SCORING_EVENT_MATCH_END);
+  // MVP: the highest match score among the players (see AddScoringEvent).
+  if (priOut && EomRibbonsEnabled()) {
+    __try {
+      uint8_t *gs = GameStateForPRI(priOut);
+      if (gs && IsReadable(gs + 0x470, 16)) { // AGameState::PlayerArray (SDK)
+        uint8_t **arr = *(uint8_t ***)(gs + 0x470);
+        int count = *(int32_t *)(gs + 0x470 + 8);
+        int best = 0;
+        if (count > 0 && count <= 256 && IsReadable(arr, (size_t)count * 8))
+          for (int i = 0; i < count; ++i)
+            if (IsReadable(arr[i], OFF_PRI_SCORE + 4) &&
+                ClassChainContains((UObjectMin *)arr[i], "YPlayerReplicationInfo") &&
+                *(int32_t *)(arr[i] + OFF_PRI_SCORE) > best)
+              best = *(int32_t *)(arr[i] + OFF_PRI_SCORE);
+        if (best > 0 && score == best) {
+          AddScoringEvent(priOut, SCORING_EVENT_MVP);
+          Logf("ribbons: MVP -> %s (score %d, the match's highest)", pid, score);
+        }
+      }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+  }
   int64_t evXp = 0, evCr = 0;
   int evN = 0;
   char evCounts[SCORING_EVENT_COUNT * 10 + 8];
@@ -3914,14 +4220,24 @@ static void ReportMatchResult(void *orbitComp) {
     size_t pl = strlen(path);
     _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&kl=%s", kl);
   }
+  // Statistics screen: score, healing, seconds per ship class (ct= always
+  // sent, empty when nothing was flown, so mmogbrain knows not to estimate).
+  {
+    char ct[CLASS_TIME_MAX * 16 + 8];
+    ct[0] = 0;
+    if (priOut)
+      TakeClassTime(priOut, ct, sizeof(ct));
+    size_t pl = strlen(path);
+    _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&score=%d&heal=%d&ct=%s", score, (int)healing, ct);
+  }
   bool ok = HttpGetLoopback(path, body, sizeof(body));
   if (ok && priOut && RewardsScreenEnabled())
     WriteEomRewards(priOut, body, match);
   for (char *c = body; *c; ++c)
     if (*c == '\n') *c = ' ';
   Logf("match result: %s team %d (%s) final %d kills %d deaths %d assists %d damage %d "
-       "event xp %lld credits %lld (%d events) ships [%s] -> %s%s",
-       pid, team, teamSource, result, kills, deaths, assists, (int)damage,
+       "score %d healing %d event xp %lld credits %lld (%d events) ships [%s] -> %s%s",
+       pid, team, teamSource, result, kills, deaths, assists, (int)damage, score, (int)healing,
        (long long)evXp, (long long)evCr, evN, FlownShipsFor(pid),
        ok ? "mmogbrain: " : "FAILED (mmogbrain unreachable or refused)", ok ? body : "");
   if (ok)
@@ -4289,6 +4605,44 @@ static void PlayersTick(uint8_t *gm) {
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("players tick: EXCEPTION on game mode %p", gm);
+  }
+}
+
+// Seconds per ship class (see AddClassTime). Runs from the same once-a-second
+// game-mode timer, timed by the tick count rather than assumed to be 1 s.
+static void ClassTimeTick(uint8_t *gm) {
+  static DWORD s_last = 0;
+  static void *s_lastGM = nullptr;
+  DWORD now = GetTickCount();
+  DWORD elapsed = (s_lastGM == gm && s_last) ? now - s_last : 0;
+  s_last = now;
+  s_lastGM = gm;
+  if (!elapsed)
+    return;
+  __try {
+    if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
+      return;
+    uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+    if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+      return;
+    uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+    int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+    if (count <= 0 || count > 256 || !IsReadable(arr, (size_t)count * 8))
+      return;
+    for (int i = 0; i < count; ++i) {
+      uint8_t *pri = arr[i];
+      if (!IsReadable(pri, OFF_PRI_TEAM + 1))
+        continue;
+      uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+      if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) ||
+          !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+          !*(void **)(pc + OFF_PC_NETCONNECTION) || !IsReadable(pc + OFF_CONTROLLER_PAWN, 8))
+        continue;
+      uint8_t *pawn = *(uint8_t **)(pc + OFF_CONTROLLER_PAWN);
+      if (pawn && IsReadable(pawn + OFF_PAWN_SHIP_CLASS, 1))
+        AddClassTime(pri, pawn[OFF_PAWN_SHIP_CLASS], elapsed);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
 }
 
@@ -4691,6 +5045,7 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   }
   Logf("scoring: building the match table for mode \"%ls\"", mode);
   g_origScoringCopy(table, modeName);
+  LoadRibbonRules(mode);
 }
 
 static DWORD WINAPI PostLoginInstallThread(LPVOID);

@@ -84,6 +84,9 @@ type battleRewards struct {
 	// fleet bonus still apply on top, as they did to the placeholder base.
 	eventXP    int32
 	useEventXP bool
+	// ribbonCredits is what the match's ribbons pay (ribbonCredits in
+	// ribbons.go), added to the credit performance part like kill credits.
+	ribbonCredits int32
 }
 
 // withEventXP is r paying xp as the match's XP base (see eventXP).
@@ -253,7 +256,7 @@ func (r battleRewards) poolsFor(outcome string, kills int32, fleetType int) (cre
 	if outcome == "win" {
 		baseCredits, baseXP = r.winCredits, r.winXP
 	}
-	credits = r.split(baseCredits, r.killCredits*kills, r.creditBonuses, fleetType)
+	credits = r.split(baseCredits, r.killCredits*kills+r.ribbonCredits, r.creditBonuses, fleetType)
 	if r.useEventXP {
 		// All of it as base: the event XP is not split into a win/loss base
 		// and a kill performance, and unplayedShipPools takes its share of
@@ -325,7 +328,12 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	matchMode, _ := matchModeAndStart(currentMmogPlayerStateDB(), match)
 	scoringMode := scoringModeCode(matchMode)
 	// The ribbons the match's event counts earn (ribbons.go), and their XP.
-	ribbons, ribbonXP := matchRibbons(parseScoringEventCounts(q.Get("ev")), scoringMode)
+	eventCounts := parseScoringEventCounts(q.Get("ev"))
+	ribbons, ribbonXP := matchRibbons(eventCounts, scoringMode)
+	ribbonCR := ribbonCredits(ribbons, scoringMode)
+	if ribbonCR > 0 && os.Getenv("DN_REWARD_RIBBON_CREDITS") != "0" {
+		rewards.ribbonCredits = ribbonCR
+	}
 	if v := strings.TrimSpace(q.Get("event_xp")); v != "" && os.Getenv("DN_REWARD_EVENT_XP") != "0" {
 		eventXP = int32(num("event_xp"))
 		eomXP, scoringMode = endOfMatchEventXP(currentMmogPlayerStateDB(), match)
@@ -340,6 +348,12 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	if fresh {
 		if database := currentMmogPlayerStateDB(); database != nil {
 			recordRibbons(database, pid, ribbons)
+			// The Statistics screen's score, healing, double kills, first
+			// strikes and time per ship type (match_statistics.go).
+			stats := matchStatValues(q, eventCounts, scoringMode, res.ships, matchPlaySeconds(database, match))
+			recordMatchStats(database, match, pid, stats)
+			logrus.WithFields(logrus.Fields{"match": match, "player": pid, "stats": stats,
+				"from_mod": q.Has("ct")}).Info("statistics: match recorded")
 		}
 		// Daily contracts: this match's progress, and the credits of any it
 		// completes -- before the currencies push below, which then carries
@@ -362,7 +376,8 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh,
 		"event_xp": eventXP, "eom_xp": eomXP, "scoring_mode": scoringMode, "events": q.Get("events"),
-		"event_credits": q.Get("event_credits"), "ribbons": ribbons, "ribbon_xp": ribbonXP}).Info("battle result")
+		"event_credits": q.Get("event_credits"), "ribbons": ribbons, "ribbon_xp": ribbonXP, "ribbon_credits": ribbonCR,
+		"event_counts": scoringEventNames(eventCounts)}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)
 	// The same payout split into pools, for the end-of-match screen: the mod

@@ -192,11 +192,21 @@ const scoringGameModes = "TDM:TER:IVN:Outpost:PodTDM:TurboTDM:TE:Territory:TM:TM
 // empty/0. XP and credits stay 0 here: mmogbrain pays rewards itself
 // (battle_result.go), so the host's own XP figures are not used.
 func scoringDocument() []byte {
+	return protocol.AppendRootEnd(scoringDocumentFields(false))
+}
+
+// scoringDocumentFields is the scoring document's two root fields, without
+// the root terminator. forClient keeps the end-of-match rows (MatchEnd, MVP,
+// ManOfTheDay, Winner, PlayTime): the client only DISPLAYS from its table --
+// the Ribbons screen draws a ribbon for every row of it that has a ribbon name
+// (0xAC2060) -- while the host awards from its copy, which is where those rows
+// overflowed the stack (scoringEndOfMatchEvents).
+func scoringDocumentFields(forClient bool) []byte {
 	var b []byte
 	var stack []int
 	b, stack = protocol.AppendArrayStart(b, stack, "ScoringTable")
 	if rows := originalScoringTable(); len(rows) > 0 {
-		b, stack = appendOriginalScoringRows(b, stack, rows)
+		b, stack = appendOriginalScoringRows(b, stack, rows, forClient)
 	}
 	for _, e := range pvpScoringTable {
 		if len(originalScoringTable()) > 0 {
@@ -238,8 +248,8 @@ func scoringDocument() []byte {
 	} {
 		b = protocol.AppendInt32Field(b, f.name, f.value)
 	}
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	return protocol.AppendRootEnd(b)
+	b, _ = protocol.AppendObjectEnd(b, stack)
+	return b
 }
 
 // appendOriginalScoringRows writes the original table's rows (see
@@ -252,10 +262,10 @@ func scoringDocument() []byte {
 // parser accepts for its int and bool fields (0x2A7A030: double, int64 or
 // string). GUESS: NotifyDuringMatch is not in the table; a visible event
 // notifies.
-func appendOriginalScoringRows(b []byte, stack []int, rows []originalScoringRow) ([]byte, []int) {
+func appendOriginalScoringRows(b []byte, stack []int, rows []originalScoringRow, keepEndOfMatch bool) ([]byte, []int) {
 	for _, r := range rows {
 		id, ok := scoringEventOrdinal(r.Enum)
-		if !ok || scoringEndOfMatchEvents[r.Enum] || strings.TrimSpace(r.GameModes) == "" {
+		if !ok || (scoringEndOfMatchEvents[r.Enum] && !keepEndOfMatch) || strings.TrimSpace(r.GameModes) == "" {
 			continue
 		}
 		name := r.NameForPlayer

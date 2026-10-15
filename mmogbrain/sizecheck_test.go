@@ -56,7 +56,13 @@ var targetSizes = map[string]int{
 	// under result that nothing read -- the client's rank thresholds came
 	// from here and were empty.
 	"YA_GetProgressionData": 1816,
-	"YA_GetScoringData":     5753,
+	// 5753 -> 43600 (+37847): the reply is the original scoring table at the
+	// ROOT (ScoringTable + ScoringParamsTable, parser 0x2A75740 via arm
+	// 0x2A2C7FC), end-of-match rows included, instead of five PvE tables under
+	// "result" that nothing read -- the client's scoring table was empty, so
+	// the Ribbons screen drew no ribbon. Over one frame; chunked
+	// (frame_chunking, verified live 2026-10-01).
+	"YA_GetScoringData": 43600,
 	// Was 227. +4278 for the quest catalog (ContractTable: the client's 24
 	// MPQuestCollection rows, ContractConfigTable, ContractNextResetTime) --
 	// the fields the client's parser for this reply (0x2A6B7F0) actually reads.

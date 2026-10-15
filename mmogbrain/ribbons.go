@@ -2,6 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"net"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -84,6 +87,30 @@ func matchRibbons(counts map[int]int, mode string) (ribbons map[string]int32, xp
 	return ribbons, xp
 }
 
+// ribbonCredits is the credits a match's ribbons pay in mode: each row's
+// RibbonCredits (MVP, Onslaught and Conquest ribbons carry them). They were
+// never paid; the host pays only the event half of a row (see above).
+func ribbonCredits(ribbons map[string]int32, mode string) int32 {
+	var cr int32
+	for name, n := range ribbons {
+		if r, ok := findOriginalScoringRow(name); ok {
+			cr += n * int32(scoringValueFor(r.RibbonCredits, mode))
+		}
+	}
+	return cr
+}
+
+// scoringEventNames is a match's event counts by name, for the log: which
+// events fired at all is what tells a ribbon nobody earns (threshold not
+// reached) from one whose event never fires on our hosts.
+func scoringEventNames(counts map[int]int) map[string]int {
+	out := make(map[string]int, len(counts))
+	for id, n := range counts {
+		out[scoringEventIDs[id]] = n
+	}
+	return out
+}
+
 // recordRibbons adds a match's ribbons to the player's totals.
 func recordRibbons(database *sql.DB, pid string, ribbons map[string]int32) {
 	for name, n := range ribbons {
@@ -92,4 +119,43 @@ func recordRibbons(database *sql.DB, pid string, ribbons map[string]int32) {
 			logrus.WithError(err).WithFields(logrus.Fields{"player": pid, "ribbon": name}).Warn("ribbons: not recorded")
 		}
 	}
+}
+
+// battleRibbonsHandler tells battle-server-mod which events earn a ribbon in
+// a mode, so the host can announce each ribbon IN the match the way the
+// original server did: a ClientAddAchievement of type 2 (ribbon) when a
+// player's count of the event reaches a multiple of EventsForRibbon. The host
+// itself only ever builds type 1 (event) achievements (0x5A9D30, its one
+// caller passes 1), so no ribbon ever showed during a match (operator,
+// 2026-10-15).
+//
+// GET /battle/ribbons?mode=TDM -> text, one line per ribbon row:
+//
+//	<EYScoringEventID ordinal> <EventsForRibbon> <RibbonScore> <RibbonXP> <RibbonCredits>
+//
+// values for the mode (scoringValueFor). Loopback only.
+func battleRibbonsHandler(w http.ResponseWriter, r *http.Request) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(host).IsLoopback() {
+		http.Error(w, "loopback only", http.StatusForbidden)
+		return
+	}
+	mode := scoringModeCode(r.URL.Query().Get("mode"))
+	if m := strings.TrimSpace(r.URL.Query().Get("mode")); m != "" && strings.ToUpper(m) == m {
+		mode = m // already a host mode code (TDM, TER, IVN, POD_TDM, ...)
+	}
+	var b strings.Builder
+	n := 0
+	for _, row := range originalScoringTable() {
+		ord, ok := scoringEventOrdinal(row.Enum)
+		if !ok || row.RibbonName == "" || row.EventsForRibbon <= 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "%d %d %d %d %d\n", ord, row.EventsForRibbon, scoringValueFor(row.RibbonScore, mode),
+			scoringValueFor(row.RibbonXP, mode), scoringValueFor(row.RibbonCredits, mode))
+		n++
+	}
+	logrus.WithFields(logrus.Fields{"mode": mode, "ribbons": n}).Info("battle ribbons: table served")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(b.String()))
 }

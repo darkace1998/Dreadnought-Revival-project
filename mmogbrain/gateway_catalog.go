@@ -214,8 +214,21 @@ func gatewayItemCatalogCollection(entities []any) map[string]any {
 	// length 0" and "GetShipPurchaseData Offer not found for ship ..." even
 	// with Items fully populated. Every item is offered, at the price 0 that
 	// gatewayMarketEntity already reports.
+	//
+	// "entities" goes EMPTY (CHANGED 2026-10-15). The catalog parser
+	// (0x142a34700) never reads it; MarketManager's completion check
+	// (FUN_1403dac50) only needs the key present, and an empty array passes --
+	// the currency catalogs have always sent one. As a third copy of the same
+	// ~3.4 MB of offers it only made the download longer: clients on slow
+	// links never finished the uncompressed re-fetch inside the write timeout
+	// and were left with no prices ("cost 0", "insufficient credits" until a
+	// restart). DN_CATALOG_ENTITIES=full sends the copy again.
+	listed := []any{}
+	if os.Getenv("DN_CATALOG_ENTITIES") == "full" {
+		listed = entities
+	}
 	return map[string]any{
-		"entities":    entities,
+		"entities":    listed,
 		"Items":       entities,
 		"ItemOffers":  entities,
 		"ForexOffers": []any{},
