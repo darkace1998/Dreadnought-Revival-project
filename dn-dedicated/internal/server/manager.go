@@ -64,16 +64,20 @@ type ManagerConfig struct {
 	// Reaper limits; zero means the default. Nothing else ever stops a battle
 	// server -- mmogbrain only marks the match ended -- so without these every
 	// match left a ~1.45 GB host behind until the OOM killer took a live one.
-	IdleStop    time.Duration // everyone left: stop after this long empty (default 60s)
+	IdleStop    time.Duration // everyone left: stop after this long empty (default 10s)
 	NoJoinStop  time.Duration // nobody ever joined: stop this long after launch (default 5m)
 	MaxLifetime time.Duration // hard cap (default 45m, mmogbrain's MaxMatchLifetime)
 }
 
 const (
-	defaultIdleStop    = 60 * time.Second
+	// Nobody can join a match already under way, so an emptied host has no
+	// future; the grace only covers a disconnect/rejoin blip. (Hosts also
+	// tend to crash ~0.3 s after the last player leaves -- AV reading 0x18 --
+	// which ends them sooner still.)
+	defaultIdleStop    = 10 * time.Second
 	defaultNoJoinStop  = 5 * time.Minute
 	defaultMaxLifetime = 45 * time.Minute
-	reapInterval       = 15 * time.Second
+	reapInterval       = 5 * time.Second
 )
 
 func orDefault(d, def time.Duration) time.Duration {
@@ -221,7 +225,7 @@ func (m *Manager) registerInstance(inst *Instance) {
 	serverID, err := m.cfg.Master.Register(ctx, master.RegisterRequest{
 		Name:       fmt.Sprintf("Match-%s", shortID(inst.MatchID)),
 		IP:         m.cfg.ServerIP,
-		Port:       inst.Port,
+		Port:       PublicUDPPort(inst.Port),
 		GameMode:   inst.GameMode,
 		Map:        inst.MapName,
 		MaxPlayers: inst.MaxPlayers,
@@ -265,7 +269,7 @@ func (m *Manager) supervise(inst *Instance) {
 				inst.zombieTicks = 0
 			}
 			players, joined, since := inst.PlayerState()
-			if inst.zombieTicks >= 2 { // two reap intervals (~30 s): not a transient state
+			if inst.zombieTicks >= 6 { // six reap intervals (~30 s): not a transient state
 				fmt.Fprintf(m.cfg.LogTo, "[%s] stopping battle server on port %d: the engine's main thread has exited (host is dead; players=%d)\n",
 					shortID(inst.ID), inst.Port, players)
 				if err := inst.Stop(10 * time.Second); err != nil {
@@ -295,7 +299,11 @@ func (m *Manager) supervise(inst *Instance) {
 		}
 	}
 
-	if err := inst.ExitErr(); err != nil {
+	if players, joined, _ := inst.PlayerState(); joined && players == 0 {
+		// the host's teardown after the last player leaves is known to crash;
+		// say so, so a crash here is not read as a mid-match failure
+		fmt.Fprintf(m.cfg.LogTo, "[%s] battle server ended after every player left (%v)\n", shortID(inst.ID), inst.ExitErr())
+	} else if err := inst.ExitErr(); err != nil {
 		fmt.Fprintf(m.cfg.LogTo, "[%s] battle server exited: %v\n", shortID(inst.ID), err)
 	} else {
 		fmt.Fprintf(m.cfg.LogTo, "[%s] battle server exited cleanly\n", shortID(inst.ID))

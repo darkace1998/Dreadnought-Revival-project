@@ -124,6 +124,9 @@ var gameModes = []struct {
 	// path (GameOption).
 	{"Horde", 5},
 	{"Escort", 5},
+	// Havoc: the console wave-defence mode (GameMode_Havoc_BP, a Horde
+	// subclass) on its own maps /Game/Maps/Havoc/Map1|Map2/HVC_MapN_P.
+	{"Havoc", 5},
 }
 
 // gameOptionClasses is the ?game= value for a mode the client's
@@ -132,6 +135,7 @@ var gameModes = []struct {
 var gameOptionClasses = map[string]string{
 	"Horde":  "/Game/Generic/GameModes/Horde/GameMode_Horde_BP.GameMode_Horde_BP_C",
 	"Escort": "/Game/Generic/GameModes/Escort/GameMode_Escort_BP.GameMode_Escort_BP_C",
+	"Havoc":  "/Game/Generic/GameModes/Horde/Havoc/GameMode_Havoc_BP.GameMode_Havoc_BP_C",
 }
 
 // GameOption is the ?game= value for a mode: its alias short name, or its
@@ -151,12 +155,15 @@ var gameModeAliases = map[string]string{
 	"TeamElimination":  "TE",
 	"TerritoryControl": "TER",
 	"BootCamp":         "BC",
-	"HAVOC":            "Onslaught",
-	"PvE_Standard":     "Onslaught",
-	"PvE_Havoc":        "Onslaught",
-	"PvE_Onslaught":    "Onslaught",
-	"PvE_Coop":         "Onslaught",
-	"Training":         "BC",
+	// HAVOC used to alias Onslaught, and matching is case-insensitive, so it
+	// also swallowed "Havoc" itself (HVC_Map1 was hosted as
+	// ?game=Onslaught -> "Failed to find object 'Class None.Onslaught'").
+	"HAVOC":         "Havoc",
+	"PvE_Standard":  "Onslaught",
+	"PvE_Havoc":     "Havoc",
+	"PvE_Onslaught": "Onslaught",
+	"PvE_Coop":      "Onslaught",
+	"Training":      "BC",
 }
 
 // NormalizeGameMode resolves an alias to its client config name and validates

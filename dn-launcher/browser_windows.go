@@ -9,7 +9,9 @@ package main
 // the certificate, the game folder, the options, news and Play -- through the
 // same launcherAPI.
 //
-// Loopback only, on a port the OS picks. Every API call must carry a random
+// Loopback only, on a fixed port (defaultUIPort, or Config.UIPort) so the link
+// stays the same between runs; falls back to a port the OS picks when that one
+// is taken. Every API call must carry a random
 // per-run key in a custom header: a custom header forces a CORS preflight that
 // this server never answers, so no other web page open in the browser can
 // drive the launcher.
@@ -65,8 +67,20 @@ const browserBridgeJS = `<script>
 // pinging (tab closed) before it exits.
 const browserIdleExit = 90 * time.Second
 
+// defaultUIPort is the launcher page's port unless Config.UIPort says
+// otherwise, so the link does not change between runs.
+const defaultUIPort = "47801"
+
 func runBrowserLauncher(exeDir string, cfg Config) error {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	port := strings.TrimSpace(cfg.UIPort)
+	if port == "" {
+		port = defaultUIPort
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:"+port)
+	if err != nil && port != "0" {
+		fmt.Printf("[!] Launcher page port %s is busy (%v); using a free one\n", port, err)
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
+	}
 	if err != nil {
 		return fmt.Errorf("open the launcher page: %w", err)
 	}
