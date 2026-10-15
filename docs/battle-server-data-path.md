@@ -305,3 +305,257 @@ that could not have shown X.
   today the server cannot change that at all, because `Set()` never runs.
 - The first thing worth fixing is therefore **why the YA_Tune response is
   ignored**. Until it applies, nothing the server sends can affect the upload.
+
+## 4. The ship-appearance popup: what the client actually reads
+
+Offline RE only (no live client). Goal: find the function
+that builds the hangar customize popup's option list and the client structure it
+reads. Verified vs suspected is marked inline. All ranges are `.pdata` ranges.
+
+### Ordinals: the EYUILoadoutItemType enum, verified two independent ways
+
+1. Enum-registration walkthrough at `0x69C8DE-0x69D23E`: a `TArray<FName>`
+   append loop referencing each `::name` utf-16 literal in order, with a
+   running index counter -- the canonical UE4 native-enum registration.
+2. The tech-tree classifier tags items by the same ordinals (1 = primary
+   weapon, 2 secondary, 3-6 abilities, 7-10 officers, 11-18 appearance,
+   19 ship class, 20 elite status).
+
+| # | value | # | value |
+|---|---|---|---|
+| 0 | NONE | 11 | APPEARANCE_COATING |
+| 1 | WEAPON_FIRST | 12 | APPEARANCE_PATTERN |
+| 2 | WEAPON_SECOND | 13 | APPEARANCE_EMBLEM |
+| 3 | ABILITY_FIRST | 14 | APPEARANCE_DECAL |
+| 4 | ABILITY_SECOND | 15 | APPEARANCE_FORECASTLE |
+| 5 | ABILITY_THIRD | 16 | APPEARANCE_HULL |
+| 6 | ABILITY_FOURTH | 17 | APPEARANCE_BRIDGE |
+| 7 | OFFICER_FIRST | 18 | APPEARANCE_STERN |
+| 8 | OFFICER_SECOND | 19 | SHIP_CLASS |
+| 9 | OFFICER_THIRD | 20 | ELITE_STATUS |
+| 10 | OFFICER_FOURTH | 21 | MAX |
+
+The enum full-name strings are in the binary's `.rdata` utf-16 pool; they are
+NOT in any extracted asset name table.
+
+### The popup chain, verified end to end
+
+Cooked `UI_EditShip_Panel_Appearance` calls BP function
+`GetPossibleAppearanceDataForShipSlot` → native thunk `0x140BB2020` (no unwind;
+bumps a UFunction refcount and jumps) → `0x140AC00E0` (guard: the ship-edit data
+object at `[singleton+0x4F0]` NULL ⇒ **popup shows nothing at all** -- one of the
+possible empty states) → `0x140AB2690` (ENTRY `0xAB272B`-adjacent chunks; caches
+its result at `[dataObj+0x108]`; PC via `0x140AAAED0`; **fleet manager =
+`[PC+0x958]`**; bail if the frontend component `[PC-cast+0x550]` is null).
+
+Inside, the slot search is `0x140358500` (ENTRY `0x358500-0x3585BE`, 173 B,
+self-contained UYFleetManager member -- it owns the only LEA of its log
+literal):
+
+- rows at `[fm+0x30]` (ptr), `[fm+0x38]` (Num, int32 movsxd);
+- row stride **0x50**; slot test `BYTE [row+0x40] == LoadoutType` (11-18 for
+  appearance slots);
+- on hit: returns **the result of the nativized helper
+  `0x142A16490` (ENTRY `0x2A16490-0x2A16557`, 199 B)** -- NOT a found-bool.
+  It moves the row's FString ptr at `[row+0x20]` into a local, walks to
+  `[YMmogModule+0x3518]`, queries by FName + FString ('transactionId',
+  'settings', 'slot', 'fleet', 'flag' all in its string pool), and its bool is
+  the search's result;
+- on miss: LogYFleetManager line 1385, verbosity-gated
+  ('FleetManager.cp' path, fmt `0x142E6D030`).
+
+Found-path assembly: three delegate inits via `0x140BFBF10`, then
+`0x140A9B750` / `0x140A9B1F0` / `0x140A95780` (rcx = frontend component,
+rdx = result local) fill three arrays whose per-element release loops release
+0x18-stride objects (`0x140BFC9C0`). Hit result is cached to
+`[dataObj+0x108]`.
+
+### The row struct (copy ctor `0x140332CC0`, dtor `0x140236EF0`)
+
+Stride-0x50 **recursive tree-node** ("array of arrays" shape, the nativized
+tech/fleet graph node):
+
+- +0x00 DWORD
+- +0x08/+0x0C/+0x10 TArray, elements stride 0x10
+- +0x18/+0x1C/+0x20 TArray, elements stride **0x50 -- recursive**
+- +0x28/+0x2C/+0x30 TArray, elements stride 0x10
+- +0x38/+0x3C/+0x40 TArray (the Num at +0x40 shares address space with the
+  slot byte the popup test reads -- the slot byte is the low byte of that Num
+  count, i.e. rows whose type byte is 11-18 are rows of that type)
+- +0x48 raw QWORD
+
+Wait, correction while writing this: the test is `BYTE [row+0x40]` against the
+LoadoutType, and the +0x38 TArray's Num field would naturally sit at +0x40
+(int32). A TArray's Num being 11..18 as a *count* and matching the slot id is
+implausible, so the +0x40 byte is a dedicated byte field that follows the
+TArray at +0x38 (ptr@+0x38, Max@+0x3C, byte@+0x40). Suspected, not
+disassembled twice -- verify before building on it.
+
+### Where the rows come from -- the fill chain
+
+Callers of the copy ctor enumerate the record writers:
+`0xAB2C50` (chunks, iterating `[r15+0x3830]` on the MMOG module),
+`0x3C8480-0x3C972A` (TuneManager context -- logs
+'YTuneManager::LoadBackupDataTablesFromAssets(): Sync-loading data table
+assets…'; actual inline Add at `0x1403C8EE3`, rows built by nativized helper
+`0x142A3BA60` (ENTRY `0x2A3BA60-0x2A3BBDF`, 383 B) and copied to `[obj+0xD0]`),
+`0x3D5363-0x3D5528`, `0x3D6340`, `0x3FFE28-0x4018DA`, `0x347E1C-0x347FD4`,
+`0x335AB5`, and nativized `0x2A0DC30`/`0x2A0DD30`/`0x2A0EAD0`/`0x2A14270`/
+`0x2A18000`.
+
+The blob-fill side: `InitializeFromPlayerData` (0x14034BD00) → fill
+`0x14034FF90` → blob fetch `0x1405B9360` → `[module+0x3898]` fleet manager →
+field move-ctor `0x1405A9770` (ENTRY `0x5A9770-0x5A9D2D`, 1469 B), then an
+element loop of stride **0x68** temp rows with ctor `0x140332FB0`: each row's
+dword id (+0x00) resolves through a 14-bit-chunked id registry
+(`[(id>>14)][(id&0x3FFF)*8]`, entry must be non-null, else the row is SKIPPED),
+dedupes against already-created runtime item objects (their id at
+`[obj+0xB0]`), then creates the object via `0x14034D690` (ENTRY
+`0x34D690-0x34D801` -- copies FName→`[obj+0xB0]`, vtable+0x238/+0x240/+0x260,
+word→`[obj+0xC0]`, byte→`[obj+0xD8]`, int32x4 blocks→`[obj+0x158]`/`[obj+0x168]`).
+
+An on-demand dispatcher `0x1403585C0-0x358660` resolves 'YMmogbrain' (ASCII
+literal `0x142E31278`), reads `[module+0xE40]`, and if empty broadcasts a
+delegate that targets `0x14034BD00` -- meaning the rows may simply never be
+built on our server if that chain is never triggered. This is the current
+leading hypothesis for the empty popup.
+
+### Tune tables are NOT the missing piece
+
+strxref on every tune-table name: exactly 1 LEA each for
+WeaponsTune/ProjectilesTune/AbilitiesTune/OfficersTune/FeatsTune/
+BattleReadyTune/HavocTune/GameModifiersTune; **zero** for
+AppearanceTune/LoadoutTune/ShipLoadoutTune/ItemsTune/CatalogTune/VehiclesTune/
+ShipclassTune -- those strings do not exist in the binary. mmogbrain's
+`tuneTablesInPriorityOrder()` (response_builders.go) already sends exactly the
+8 real ones. So ship-appearance options never travel in a tune table.
+
+### Captain vanity is a different subsystem
+
+The LogYUIUtil flood 'Unhandled character vanity slot type <0>' (17,782 hits in
+the client log) is captain-level vanity handled by GetCategoryImagePath
+(`0x4E67C0-0x4E75E4`) + switch `0x140324C40` mapping slot values 9..14; it is
+not the ship-appearance popup.
+
+### Open (the remaining question of this cycle)
+
+Which of the record writers feeds `[PC+0x958 fm]+0x30` specifically, and which
+blob field it reads -- decided between: (a) built from the fleet/loadout blob
+the server already sends (then the one-change is adding appearance entries
+there), or (b) built lazily by the on-demand dispatcher `0x1403585C0` chain
+(then the one-change is triggering/emptying `[module+0xE40]` so the dispatcher
+runs). Both are server-side only; the client stays stock.
+
+### Addendum (same round, offline): the fill gate inside UYLoadoutManager
+
+- UYLoadoutManager ctor entry `0x333860-0x3339A7` (+chunk): vtables
+  `0x142E81488`/`0x142E817D8`; flag DWORD `[this+0x238..0x23B]` set to
+  `0x10000` at construction -- i.e. byte +0x23A starts as **1**. Chunk
+  0x3339A7-0x333A06 then overwrites byte **+0x238** with
+  `(GetPlatformFeature([0x144091dd8]+0x1190, featureIdx=1) == 3)`
+  (checked via leaf 0x140309640 -> 0x140CB6D30). A live-flag legend:
+  +0x238 = appearance/loadout feature enabled, +0x23A = set by ctor,
+  +0x23B = "InitializeFromPlayerData ran" (set at 0x14034be42).
+- The fill wrapper `0x14034FF90` requires byte +0x23A != 0 AND byte
+  +0x238 != 0; with +0x238 == 0 it calls **UYLoadoutManager::
+  LoadInstallingLoadouts** (`0x34F1D0-0x34F1FB`, iterates
+  `[this+0x128]/[+0x130]` stride 0x10; its log literal
+  'LoadoutManager::LoadInstallingLadouts | Unable to Load Installer
+  Loadout [%s]') and fills nothing.
+- `FindLoadoutByID` lives at ~0x14034AB80 (log literals
+  'UYLoadoutManager::FindLoadoutByID | Dind't find any loadouts matching id
+  %s.' / 'Received NAME_None.'); it lazily calls InitializeFromPlayerData
+  (0x14034bd00) and the on-demand dispatcher 0x1403585c0 when the id misses.
+  Live log: 1,794 FindLoadoutByID calls (hero-loadout misses only) -- so the
+  manager's lazy-init chain DOES run on our server.
+- The fill body (0x14034FFD7-0x1403503F2): copies blob loadout rows (stride
+  0x68 from blob fields `[rbp+0x138]/[+0x140]`), validates each row's dword
+  id against the chunked ItemIDTable ([tableObj+0x400] bounds, 14-bit
+  registry), dedupes, then `NewObject`-creates a runtime item object and
+  calls `UYLoadoutManager::AddLoadoutInternal`
+  (`0x1403382F0-0x140338542`, log 'AddLoadoutInternal | Tried adding loadout
+  howerver null.' / 'AddLoadout | %s | %i' with kind byte=2) which appends a
+  stride-0x30 bucket to `[this+0x108]/[+0x110]`.
+- 'DreadGamePlatformFeatures' turned out to be a Yager UI module (alongside
+  Voice/WebBrowser/CEF3Utils in the same stub family), NOT server-fed data --
+  the +0x238 feature check runs against engine-local state.
+- Pop-search class confirmed UYFleetManager by its literals
+  ('IsFleetBattleReady', 'PurchaseBattleReadyState'); the remaining
+  unknown is still what writes `[fm+0x30]` (the stride-0x50 node array the
+  popup scans). Module+0x3830 candidates live nativized-side; not traced
+  to a blob field yet. Run client.log has zero 'player custom loadouts'
+  messages (the InitializeFromPlayerData failure branch never logged).
+
+### Addendum 2 (evening, same day, offline): the type byte that slots appearances
+
+The popup's per-slot option list is NOT the owned-items list. It is an
+enumeration in two layers, now traced end to end (all verified in-binary):
+
+1. **Collector `0x140A9E350`** (ENTRY `0xA9E350-0xA9E34D`): gathers the
+   tech-tree manager's item-id list (`[mgr/fm+0x968]` → `0x1403F9FC0`, the
+   same gather gate `ComposeShipManufacturerDataForLoadout` uses), then per
+   id: lookup `0x140480F70` → record, **`cmp BYTE PTR [rec+0x10D], r13b`
+   (r8d arg = the wanted LoadoutType, 11-18 for appearance slots)** -- only
+   records whose type byte matches the slot enter the option list. A second
+   byte filter `cmp BYTE PTR [rdx], bpl` walks the record's children
+   (TArray at `rec+0x0`, stride 8) and dedupes `[rdx+4]` ids into the out
+   array.
+2. **Provenance of `rec+0x10D`** (the type byte): the tech-tree cached
+   record builder `0x14047EAB0-0x14047F2E6` writes `[rec+0x10D] =
+   [loadoutItem+0xD8]` (0x14047EBF7) or `= [rbx+0xED]`, or constant 0x5.
+   The loadout runtime item's `+0xD8` is set by the item ctor **0x14034D690**
+   (`ENTRY 0x34D690-0x34D801`) as `movzx eax,BYTE PTR [rdi+0x28];
+   mov BYTE PTR [rbx+0xD8],al` (0x14034D72E) -- i.e. **BYTE 0x28 of the
+   0x68-stride precast/loadout blob row**.
+3. **Blob row +0x28 is a DWORD, copied by converter `0x14034E550`**
+   (ENTRY `0x34E550-0x34E68E`): `mov eax,[rbx+0x28]; mov [rdi+0x28],eax` from
+   the loaded tech/loadout row row into the ctor's source struct. Only the
+   low byte of that DWORD matters anywhere (all three consumers are byte
+   reads).
+
+So: the client classifies every blob row into an appearance slot **by the
+row's own LoadoutType byte at blob-row +0x28**. A cosmetic row whose byte is
+not 11-18 can be owned, listed, and still never reach any appearance slot --
+exactly the "visible but not usable" symptom. The remaining offline question
+(never confirmed, do not build on guesses): **which wire field parses into
+blob-row +0x28.** 0x1405A9770 and 0x140332FB0 are move/copy ctors only
+(verified -- 0x1405A9770 copies [rdx+0x28]→[rcx+0x28] verbatim); the writer
+is in the wire parse, unmapped. Candidates to test next cycle: a `LoadoutType`
+or `Type` field on module rows (grep'd `.rdata` for `LoadoutType` utf16:
+only the enum-name hits `EYLoadoutType` at 0x5FD608/0x8C22C3 -- the UProperty
+name, which is what a wire parser would look up by FString→FName).
+
+### Addendum 3: what the screenshots actually showed
+
+Verified from cooked data, closes cycle B's observations:
+
+- Every popup tab's option list = the ship precast's own `m_appereance`
+  struct (`data/loadouts/PrecastLoadouts_cooked.jsonl`): exactly one item per
+  slot -- m_heroShipParts (4× `VAN_H_AssaultM_{Bridge,Forecastle,Hull,Stern}_
+  Default_DA`), m_emblem `VAN_EMB_Default_DA`, m_paint
+  `VAN_PN_Manufacturer_Jupiter_DA`, m_pattern `VAN_PTN_AssaultM_Default_DA`,
+  m_decal `VAN_DCL_Default_DA`. That is why paint showed exactly "Jupiter
+  Arms", pattern exactly "Default", emblem/decal exactly "None": the option
+  list is per-loadout appearance data, not the whole owned catalog.
+- "Jupiter Arms" = `VAN_PN_Manufacturer_Jupiter_DA`, id 385810573 =
+  **0x16FF000D**, icon `UI_Icon_VanityItems_Coating_JupiterArms` -- the
+  precast's own manufacturer paint (17 of the AssaultMedium-family precasts
+  carry it; Akula-brand precasts carry Manufacturer_Akula_Green ×19, Ober
+  ×16). NOT one of the four vanity_probe ids; the probe ids never produced
+  tiles and were never what surfaced.
+- Cycle B (cosmetic ids into PurchasesData → `+0x3F90` →
+  GetTechTreeItemState 0x543890 → state 4) made the precast-referenced
+  cosmetic selectable -- the one visible change reported in play
+  (default→JA coating preview worked). Ownership is the availability layer;
+  the type byte above is the slotting layer.
+- Display-string cosmetics (Agosta emblem 0x15FF00EA, coating
+  0x16FF0041 VAN_PN_Winter_Vanity_01) have NO client item records -- tiles
+  for them could not resolve names even if slotted.
+- Ship-part slots' 5 visible-but-padlocked entries are the hull line's
+  precast tier-variant loadouts; suspected genuine tier gating, not a bug.
+
+**Proposed ONE change for the next test cycle:** make the cosmetic blob rows
+carry the LoadoutType byte that maps to blob-row +0x28 (coating 11, pattern
+12, emblem 13, decal 14, ship parts 15-18) -- after confirming offline which
+wire field parses into +0x28. Fallback if it cannot be set: extend the
+compose gather surface instead (0x1403F4F20's item-id list).

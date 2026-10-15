@@ -350,7 +350,11 @@ type Config struct {
 	// (launcher sign-in and news) when it is not 443 -- e.g. a router mapping
 	// 8443 -> 443 because 443 is taken. Only the launcher uses that gateway;
 	// the game's ports (65443, 48843, UDP 7777-7877) are unaffected.
-	WebPort       string `json:"web_port"`
+	WebPort string `json:"web_port"`
+	// UIPort is the loopback port of the browser-mode launcher page
+	// (browser_windows.go), fixed so the link can be bookmarked; also
+	// DN_LAUNCHER_UI_PORT. Empty = defaultUIPort; "0" = any free port.
+	UIPort        string `json:"ui_port"`
 	AuthURL       string `json:"auth_url"`
 	GatewayIP     string `json:"gateway_ip"`
 	GatewayPort   string `json:"gateway_port"`
@@ -392,6 +396,10 @@ func defaultConfig() Config {
 		GatewayPort:   "65443",
 		FirmamentHost: "", // empty = use GatewayIP (avoids need for hosts file entry)
 		FirmamentPort: "48843",
+		// On by default: players on a revival server do not need the
+		// tutorial. "skip_onboarding": false or DN_SKIP_ONBOARDING=0 restores
+		// the new-player flow.
+		SkipOnboarding: true,
 	}
 }
 
@@ -432,11 +440,14 @@ func loadConfig(exeDir string) Config {
 	if v := strings.TrimSpace(os.Getenv("DN_GAME_PATH")); v != "" {
 		cfg.detectedGamePath = v
 	}
+	if v := strings.TrimSpace(os.Getenv("DN_LAUNCHER_UI_PORT")); v != "" {
+		cfg.UIPort = v
+	}
 	if v := strings.TrimSpace(os.Getenv("DN_LOG_WINDOW")); v != "" && v != "0" {
 		cfg.LogWindow = true
 	}
-	if v := strings.TrimSpace(os.Getenv("DN_SKIP_ONBOARDING")); v != "" && v != "0" {
-		cfg.SkipOnboarding = true
+	if v := strings.TrimSpace(os.Getenv("DN_SKIP_ONBOARDING")); v != "" {
+		cfg.SkipOnboarding = v != "0"
 	}
 	if v := strings.TrimSpace(os.Getenv("DN_ALLOW_STEAM")); v != "" && v != "0" {
 		cfg.AllowSteam = true
@@ -655,12 +666,10 @@ func startGame(exeDir string, cfg Config, jwtToken, username string) (int, error
 		// UUI_LoginGateScreen::EnterGame runs before it will leave the loading
 		// screen — short-circuits to "satisfied" when it is set.
 		//
-		// This is off by default on purpose: new players are supposed to go
-		// through onboarding, exactly as they did on the live servers. The
-		// server persists the client's own onboarding save blob (YA_SaveGame ->
-		// the SGD field of YA_PlayerGet), so progress sticks across logins
-		// without skipping anything. Use this only to get straight to the
-		// hangar while debugging.
+		// On by default (see defaultConfig). With it off, new players go
+		// through onboarding as on the live servers; the server persists the
+		// client's own onboarding save blob (YA_SaveGame -> the SGD field of
+		// YA_PlayerGet), so progress sticks across logins.
 		args = append(args, "-noonboarding")
 		fmt.Println("[*] Onboarding disabled (DN_SKIP_ONBOARDING / skip_onboarding) — the tutorial gate is bypassed.")
 	}

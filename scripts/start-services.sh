@@ -53,8 +53,8 @@ export SERVER_IP
 # while GATEWAY_ADDR and FIRMAMENT_ADDR are the TLS sockets the game client
 # itself dials. Note GATEWAY_ADDR belongs to mmogbrain, NOT to the gateway
 # service -- the gateway is the reverse proxy on HTTP_ADDR/HTTPS_ADDR.
-export FIRMAMENT_ADDR="${FIRMAMENT_ADDR:-:48843}"
-export GATEWAY_ADDR="${GATEWAY_ADDR:-:65443}"
+export FIRMAMENT_ADDR="${FIRMAMENT_ADDR:-0.0.0.0:48843}"
+export GATEWAY_ADDR="${GATEWAY_ADDR:-0.0.0.0:65443}"
 export GATEWAY_CERT="${GATEWAY_CERT:-$ROOT/certs/server.crt}"
 export GATEWAY_KEY="${GATEWAY_KEY:-$ROOT/certs/server.key}"
 # The firmament socket gets its OWN certificate, not server.crt: the client pins
@@ -64,6 +64,15 @@ export GATEWAY_KEY="${GATEWAY_KEY:-$ROOT/certs/server.key}"
 # install for a reason nothing in the log explains.
 export FIRMAMENT_CERT="${FIRMAMENT_CERT:-$ROOT/certs/firmament.crt}"
 export FIRMAMENT_KEY="${FIRMAMENT_KEY:-$ROOT/certs/firmament.key}"
+
+# This install is loopback-only (see the binds below), but the /play/lkg
+# response defaults serverHost to SERVER_IP, the LAN IP -- and the client opens
+# its MMOG connection to THAT. A dial to the LAN IP hits a socket that is not
+# listening, and the client times out one 5001ms phase budget later as
+# "ET_ConnectionFailed: phase 2 / Mmog login failed", with no second connection
+# ever reaching mmogbrain. Point the MMOG
+# address at loopback to match what mmogbrain actually binds.
+export MMOG_HOST="${MMOG_HOST:-127.0.0.1}"
 
 export MASTER_URL="${MASTER_URL:-http://127.0.0.1:8084}"
 export GAME_MGR_URL="${GAME_MGR_URL:-http://127.0.0.1:8085}"
@@ -124,6 +133,12 @@ fi
 #
 # Set PLAYERS_PER_MATCH=2 (or more) for anything other than solo testing.
 export PLAYERS_PER_MATCH="${PLAYERS_PER_MATCH:-1}"
+
+# Test hook (mmogbrain/matchmaker/matchpin.go): `dn headless --pin MODE[:MAP]`
+# writes this file and the next match formed is played in that mode/map. The
+# file is consumed by that match and removed when the run exits; with no file
+# nothing changes. DN_MATCH_PIN_FILE= (empty) disables the hook entirely.
+export DN_MATCH_PIN_FILE="${DN_MATCH_PIN_FILE-$RUN_DIR/headless/match-pin.json}"
 
 # FALLBACK for how long mmogbrain holds YA_Connect back after a match forms.
 #
@@ -237,7 +252,7 @@ start_control_plane() {
     # game-manager reads, so nothing else here changes. --register puts matches
     # in the server browser, which game-manager did unconditionally.
     start dn-dedicated "$RUN_DIR/dn-dedicated" serve \
-        --addr ":8085" \
+        --addr "127.0.0.1:8085" \
         --engine-log-cmds "$DN_ENGINE_LOG_CMDS" \
         ${DN_MAP_URL_OPTION:+--url-option "$DN_MAP_URL_OPTION"} \
         --server-ip "$SERVER_IP" \
@@ -274,13 +289,22 @@ export DN_ENGINE_LOG_CMDS="${DN_ENGINE_LOG_CMDS-global verbose, LogYLoadout very
 export DN_MAP_URL_OPTION="${DN_MAP_URL_OPTION:-}"
 
 echo "=== Starting services ==="
-start auth-server "$RUN_DIR/auth-server"
-start master-server "$RUN_DIR/master-server"
+# Loopback binds throughout: a single-host install only serves clients on this
+# machine, and the earlier default (bare :PORT) exposed auth, the admin API and
+# the spawn endpoint to the LAN. The mmogbrain TLS sockets above get the same
+# treatment via FIRMAMENT_ADDR/GATEWAY_ADDR. (ADDR is exported around each call
+# because start() passes "$@" through as a temp-env prefix, which bash mishandled.)
+export ADDR=127.0.0.1:8081; start auth-server "$RUN_DIR/auth-server"; unset ADDR
+export ADDR=127.0.0.1:8084; start master-server "$RUN_DIR/master-server"; unset ADDR
 start_control_plane
-TLS_CERT="$ROOT/certs/server.crt" TLS_KEY="$ROOT/certs/server.key" \
-    CRASH_REPORT_DIR="$RUN_DIR/crash-reports" start gateway "$RUN_DIR/gateway"
-start mmogbrain "$RUN_DIR/mmogbrain"
-start legacy-api "$RUN_DIR/legacy-api"
+# 443 is public (router-forwarded for remote players); HTTP-80 and the crash
+# receiver stay loopback -- nothing remote needs them.
+export HTTP_ADDR=127.0.0.1:80 HTTPS_ADDR=0.0.0.0:443 CRASH_RECEIVER_ADDR=127.0.0.1:57005
+export TLS_CERT="$ROOT/certs/server.crt" TLS_KEY="$ROOT/certs/server.key" CRASH_REPORT_DIR="$RUN_DIR/crash-reports"
+start gateway "$RUN_DIR/gateway"
+unset HTTP_ADDR HTTPS_ADDR CRASH_RECEIVER_ADDR
+export ADDR=127.0.0.1:8083; start mmogbrain "$RUN_DIR/mmogbrain"; unset ADDR
+export ADDR=127.0.0.1:8082; start legacy-api "$RUN_DIR/legacy-api"; unset ADDR
 
 sleep 3
 echo "=== Health checks ==="

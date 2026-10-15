@@ -726,9 +726,12 @@ player record, it belongs in the other repository.
 
 ## Building
 
-Windows, MSVC, x64. Nothing else — no Go, no `go.work` entry, no
-`scripts/setup.sh` step. Deleting this whole directory leaves the stack building
-and running exactly as before.
+Windows, MSVC, x64 -- **or Linux, clang, no Windows at all** (`build-linux.sh`
+cross-compiles with `--target=x86_64-pc-windows-gnu -fms-extensions`; MSVC's
+SEH `__try/__except` compiles fine under clang, unlike MinGW's GCC. Same
+sources, same MinHook, UCRT imports the game prefix already provides). Either
+script: no Go, no `go.work` entry, no `scripts/setup.sh` step. Deleting this
+whole directory leaves the stack building and running exactly as before.
 
 ```console
 > cd battle-server-mod
@@ -956,3 +959,12 @@ from `YGameMode_PVE`; the log says so once per match:
 ```text
 [dn-host-loadout] pve: game mode ... (type 13) is a PvE episode -- no multiplayer bot fill
 ```
+
+## Loadout-side appearance import (off; `dn_host_loadout_import.txt` / `DN_HOST_LOADOUT_IMPORT=1` turns it on)
+
+Replaces an earlier import that called UYShipCustomizationComponent's
+0x422400 on a UYShipLoadout and overwrote the next heap block (the spawn crash).
+This calls the loadout's own import 0x35AB00 (`this+0x108`), the struct the ship
+actor replicates to clients (0x594B40 -> 0x56B700 -> export 0x41C980). Logs
+each changed word of `+0x108..+0x168`. Not verified that remote clients render
+the look; needs a two-player match.

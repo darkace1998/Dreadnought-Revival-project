@@ -3216,6 +3216,11 @@ func techTreeBaseItemsWith(noModules bool) []techTreeItem {
 		// ...and its modules, which go into the OTHER array of the same record.
 		if !noModules {
 			items = append(items, techTreeModuleItems(hull, manufacturerID)...)
+			// Single-hull vanity A/B: blob rows ONLY on
+			// the probe hull, so the cycle can compare it against every other.
+			if vanityProbeEnabled() && hull.loadoutID == vanityProbeHullID {
+				items = append(items, vanityProbeTechTreeItems(hull, manufacturerID)...)
+			}
 		}
 	}
 	// The unlock gate: N modules of the parent must be BOUGHT first. Capped at
@@ -3379,7 +3384,15 @@ func buildMmogTechTreeDocumentWith(noModules bool) []byte {
 	limit := techTreeItemLimit()
 	byManufacturer := map[int32][]techTreeItem{}
 	nextPosition := map[int32]map[bool]int32{}
-	for _, item := range append(techTreeBaseItemsWith(noModules), techTreeHeroItems()...) {
+	treeItems := append(techTreeBaseItemsWith(noModules), techTreeHeroItems()...)
+	briefingSeen := map[int32]int{}
+	for _, item := range treeItems {
+		if isOfficerBriefing(item.id) {
+			briefingSeen[item.id]++
+		}
+	}
+	logBriefingEmissions("techtrees", briefingSeen)
+	for _, item := range treeItems {
 		if nextPosition[item.manufacturer] == nil {
 			nextPosition[item.manufacturer] = map[bool]int32{}
 		}
@@ -4685,6 +4698,21 @@ func clientOwnedItemIDs(playerPID string) []int32 {
 	// every ship (officer_briefings.go).
 	for _, id := range officerBriefingsOwnedThroughShips(playerPID) {
 		add(id)
+	}
+	if idMirrorEnabled() {
+		// DN_ID_MIRROR: the gate queries ids in
+		// the per-ship (inflated) form the TechTrees document carries, so every
+		// id the document emits for an owned hull -- plus loadout/prereq ids
+		// (category 1) and the shared forms of every fitted id -- goes out here
+		// too. GetTechTreeItemState (0x543890) checks PurchasesData FIRST and
+		// returns state 4 on an exact match, so a mirrored id is owned for the
+		// equip gate regardless of form.
+		mirror, counts := techTreeMirrorIDs(playerPID, fittedByLoadout)
+		for _, id := range mirror {
+			add(id)
+		}
+		logrus.WithFields(counts.fields()).WithField("player", playerPID).
+			Info("id_mirror: granted ids mirrored into purchasesdata (DN_ID_MIRROR)")
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
@@ -7086,8 +7114,39 @@ func appendOwnedInventoryEntriesCounted(b []byte, stack []int, playerPID string)
 	// ShipLoadouts.
 	purchased := purchasedInventoryItemIDs(playerPID)
 	// Briefings owned through ships are inventory items like bought ones; the
-	// officer slots offer what the owned list holds.
-	purchased = append(purchased, officerBriefingsOwnedThroughShips(playerPID)...)
+	// officer slots offer what the owned list holds. One copy per id though:
+	// a live measurement had every briefing id emitted exactly 2x in this list whenever it was both a
+	// purchase row and ship-owned -- UnlockAll's grant puts them in
+	// player_purchases, and officerBriefingsOwnedThroughShips (which never sees
+	// the purchase list) re-added the same ids. The PurchasesData leg dedupes
+	// through clientOwnedItemIDs' seen map; this leg had no such guard.
+	boughtBriefing := map[int32]bool{}
+	for _, id := range purchased {
+		if isOfficerBriefing(id) {
+			boughtBriefing[id] = true
+		}
+	}
+	for _, id := range officerBriefingsOwnedThroughShips(playerPID) {
+		if !boughtBriefing[id] {
+			purchased = append(purchased, id)
+		}
+	}
+	briefingSeen := map[int32]int{}
+	for _, itemID := range purchased {
+		if isOfficerBriefing(itemID) {
+			briefingSeen[itemID]++
+		}
+	}
+	logBriefingEmissions("inventory", briefingSeen)
+	// NO id-mirror leg here (trimmed after measurement): mirroring the same ids into the Items list was redundant --
+	// GetTechTreeItemState (0x543890) checks the PurchasesData array
+	// (+0x3F90, exact int32) FIRST, and the mirror puts every mirrored id in
+	// PurchasesData, so the +0x39E8 leg is never even reached for them -- and
+	// it cost real budget: on a fully-fitted small account it added 28 ids and
+	// pushed the YA_PushInventory remainder past the 28000 frame budget
+	// (inventory_push_test), where the push's own truncation would DROP those
+	// ids -- a loss, not a deferral. Briefings already ride this list through
+	// their real ownership path above.
 	isShip := func(id int32) bool {
 		category := (id >> 24) & 0xff
 		return category == mmogItemCategoryShipLoadoutPrecast || category == mmogItemCategoryShipLoadoutHero

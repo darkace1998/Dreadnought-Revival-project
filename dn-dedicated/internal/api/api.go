@@ -206,7 +206,7 @@ func (s *Server) createInstance(w http.ResponseWriter, r *http.Request) {
 		"instance_id": inst.ID,
 		"match_id":    inst.MatchID,
 		"ip":          s.ServerIP,
-		"port":        inst.Port,
+		"port":        server.PublicUDPPort(inst.Port),
 		"game_mode":   inst.GameMode,
 		"map":         inst.MapName,
 		// map_path is additional to game-manager's response. Callers that only
@@ -256,7 +256,7 @@ func (s *Server) listInstances(w http.ResponseWriter, _ *http.Request) {
 		views = append(views, map[string]interface{}{
 			"id":         inst.ID,
 			"match_id":   inst.MatchID,
-			"port":       inst.Port,
+			"port":       server.PublicUDPPort(inst.Port),
 			"game_mode":  inst.GameMode,
 			"map":        inst.MapName,
 			"map_path":   inst.MapPath,
@@ -296,7 +296,7 @@ func (s *Server) getInstance(w http.ResponseWriter, r *http.Request) {
 		"id":         inst.ID,
 		"match_id":   inst.MatchID,
 		"ip":         s.ServerIP,
-		"port":       inst.Port,
+		"port":       server.PublicUDPPort(inst.Port),
 		"game_mode":  inst.GameMode,
 		"map":        inst.MapName,
 		"map_path":   inst.MapPath,

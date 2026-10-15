@@ -114,7 +114,7 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		// Here both names are bound to the same slice, so either winner is the
 		// right answer. Dropping the lowercase alias as "just a collision" is
 		// what failed the market fetch.
-		bundles := gatewayMarketEntities(gatewayBundleCatalogSeeds(), playerDataReady)
+		bundles := gatewayMarketEntities(gatewayBundleCatalogSeeds(playerID), playerDataReady)
 		payload["Bundles"] = bundles
 		payload["bundles"] = bundles
 		// The bundle index (0x142a5dd80 via 0x142a61be0) reads the response
@@ -147,7 +147,7 @@ func gatewayRequestedCatalogCollection(playerID string, requestedCatalog string,
 		// DN_BUNDLE_LISTING=0 sends it empty (no bundles in the Market).
 		entities := []any{}
 		if os.Getenv("DN_BUNDLE_LISTING") != "0" {
-			entities = gatewayBundleListing(playerDataReady)
+			entities = gatewayBundleListing(playerID, playerDataReady)
 		}
 		return map[string]any{
 			"entities":    entities,
@@ -900,7 +900,7 @@ func gatewayCurrencyCatalogSeeds(_ string, _ string) []gatewayCatalogEntitySeed 
 	return nil
 }
 
-func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
+func gatewayBundleCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	seeds := []gatewayCatalogEntitySeed{{
 		itemID:          9100001,
 		externalID:      "starter_bundle",
@@ -935,7 +935,7 @@ func gatewayBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 	if os.Getenv("DN_PLACEHOLDER_BUNDLES") == "1" {
 		seeds = append(seeds, realCatalogBucketSeeds("Bundles", "bundle", "bundle", "CR", 1000, realCatalogBucketIDBase["Bundles"])...)
 	}
-	return append(seeds, marketBundleCatalogSeeds()...)
+	return append(seeds, marketBundleCatalogSeeds(playerID)...)
 }
 
 func gatewayMarketIdentity(seed gatewayCatalogEntitySeed, _ bool) (int32, int32, int32, string) {
@@ -1457,9 +1457,9 @@ func isShipVanityOffer(seed gatewayCatalogEntitySeed) bool {
 // id", "Field prices was not found" for each, then crashed reading 0x8
 // (operator, 2026-10-01). So the entries are the full offers, with entity_id
 // set to the bundle's external_id so the two halves match.
-func gatewayBundleListing(playerDataReady bool) []any {
+func gatewayBundleListing(playerID string, playerDataReady bool) []any {
 	out := []any{}
-	for _, seed := range marketBundleCatalogSeeds() {
+	for _, seed := range marketBundleCatalogSeeds(playerID) {
 		entity := gatewayMarketEntity(seed, playerDataReady)
 		entity["entity_id"] = seed.externalID
 		out = append(out, entity)

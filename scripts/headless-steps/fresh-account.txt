@@ -1,0 +1,10 @@
+# Fresh account, real onboarding gate (run with --onboarding --account NEW):
+# reaching the hangar = DN_ONBOARDING_TEMPLATE_PID skipped the tutorial; a
+# timeout here with S01E00_00_Tutorial in the client log = it did not.
+wait-hangar
+shot hangar
+sleep 5
+shot hangar-settled
+click 107 288     # PLAY
+sleep 5
+shot play

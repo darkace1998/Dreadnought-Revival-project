@@ -227,10 +227,31 @@ func marketBundleByID(id int32) (marketBundle, bool) {
 
 // marketBundleCatalogSeeds lists the bundles, Featured, referencing their
 // contents (ItemIDs) so the client can show what is inside.
-func marketBundleCatalogSeeds() []gatewayCatalogEntitySeed {
+//
+// A bundle is owned once everything in it is: the Hero Ships tab lists the
+// bundles, and with no owned flag every one showed as buyable to a player who
+// owned all its ships. grantMarketBundle skips owned items
+// anyway, so buying it again would only have bought the credits.
+func marketBundleCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
+	have := map[int32]bool{}
+	if playerID != "" {
+		for _, l := range ownedShipLoadoutsForPlayerData(mmogPlayerStateForPID(playerID), playerID) {
+			have[l.precastLoadoutID] = true
+		}
+		for _, id := range ownedPurchaseItemIDs(playerID) {
+			have[id] = true
+		}
+		for _, id := range ownedVanityItemIDs(playerID) {
+			have[id] = true
+		}
+	}
 	seeds := make([]gatewayCatalogEntitySeed, 0, len(marketBundles))
 	for _, b := range marketBundles {
 		heroes, vanity := b.contents()
+		owned := playerID != "" && len(heroes)+len(vanity) > 0
+		for _, id := range append(append([]int32{}, heroes...), vanity...) {
+			owned = owned && have[id]
+		}
 		seed := gatewayCatalogEntitySeed{
 			itemID: b.id,
 			// The bundle's own id, NOT "999"+id: the client takes the offer
@@ -248,6 +269,7 @@ func marketBundleCatalogSeeds() []gatewayCatalogEntitySeed {
 			priceCurrencyID: vanityCurrency,
 			priceAmount:     b.priceGP(),
 			quantity:        1,
+			owned:           owned,
 			offerItemIDs:    append(heroes, vanity...),
 			// The original names were English everywhere; descriptions are
 			// localized where the client still has the text.

@@ -76,6 +76,45 @@ Six runs on separate ports, which is what a real answer looks like:
 
 Set `DREADGAME_EXE` if the binary isn't at the default path.
 
+## The headless client (Linux): `dn live` and `dn headless`
+
+The real, unmodified client against the local stack, on a private display, unattended. Every run is a bundle in `run/cycles/<id>/` (client log, log
+slices of every service + battle host, shots, contact sheet, summary with
+milestones / crash markers / VERDICT).
+
+```console
+$ dn live start probe              # boots, passes the title, waits for the hangar
+$ dn live click 107 288            # -> shot path + notable new log lines
+$ dn live hold w 4                 # held keys fly the ship
+$ dn live wait 'ClientLoadingCompleted' 120
+$ dn live stop                     # bundle + steps.txt (replayable)
+$ dn headless pg --steps scripts/headless-steps/pg-battle.txt --expect 'Starting game music'
+```
+
+Read each shot before the next action. Coordinates are game-window pixels,
+straight off the 1280x720 PNG. Recording keeps only time the game needed
+(settle/wait durations), never your thinking time.
+
+Traps:
+- **Display = headless sway + rootful Xwayland on :97, NOT Xvfb.** On Xvfb,
+  wined3d falls to llvmpipe and UE's RenderThread aborts loading the hangar
+  (exit rc=3 = `abort()`; find the thread with
+  `DN_WINEDEBUG=+threadname,+seh`). Real clients run wined3d too
+  (ATI HD 5600 id), so no DXVK (`--dxvk` dies at device creation).
+- **The X screen is 16 rows taller than the window on purpose**: a window
+  covering the whole root gets present-flipped and x11grab returns a frozen
+  frame for minutes while the game runs. If shots look stuck, compare the UE
+  frame counter `[NNN]` in the client log before blaming the game.
+- **Audio goes to a pactl null sink**; `-nosound` and `taskset` both break
+  Wwise init (page fault).
+- **`wait-log` matches the whole log**: `Match State Changed to InProgress`
+  is logged on join, before the ship picker exists -- wait on
+  `ClientLoadingCompleted` / `Starting game music` instead.
+- **Warm starts present the hangar with its ActivateLevel line**; there is no
+  later screen change to wait for.
+- **A dead battle host ends the run** (`battle host crashed (...)` stop reason,
+  live prints `BATTLE HOST CRASHED`) instead of sitting out UE's 180 s timeout.
+
 ### Bisecting which hook breaks something
 
 The mod reads these at startup, so you can bisect without rebuilding:

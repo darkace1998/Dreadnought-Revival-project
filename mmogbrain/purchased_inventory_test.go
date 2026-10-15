@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/darkace1998/Dreadnought-Revival-project/mmogbrain/protocol"
 )
 
 // "tried to buy it but it never updated" -- reported live 2026-08-08 after
@@ -182,5 +184,74 @@ func TestClaimItemPushEmitsInventoryLast(t *testing.T) {
 	// Nothing else may follow inventory either.
 	if tail := push[inv+len("inventory"):]; strings.Contains(tail, "addedLoadouts") {
 		t.Error("an array sibling follows inventory")
+	}
+}
+
+// Measured live: every briefing id appeared exactly TWICE in
+// the owned-item list on UnlockAll -- once as its player_purchases row, once
+// through its ships (officerBriefingsOwnedThroughShips never sees the purchase
+// list). The client's +0x39E8 array only needs the id once; a second entry is
+// not more ownership, it is a malformed list. This buys a briefing the fresh
+// account already owns through its starter ships and asserts it is emitted
+// exactly once -- the purchase must stick, and the ship leg must defer to it.
+func TestBuyingABriefingOwnedThroughShipsEmitsItOnce(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const pid = "00000000000000000000000000000001"
+
+	briefingCounts := func(payload []byte) map[int32]int {
+		counts := map[int32]int{}
+		for _, s := range protocol.Scalars(payload) {
+			if !s.IsStr || s.Name != "ItemID" {
+				continue
+			}
+			id, err := strconv.ParseInt(s.Str, 10, 32)
+			if err != nil || id <= 0 {
+				continue
+			}
+			if isOfficerBriefing(int32(id)) {
+				counts[int32(id)]++
+			}
+		}
+		return counts
+	}
+
+	// Seed one owned ship whose roster carries briefing perks (Dola;
+	// Agosta-class starters carry none). Same seeding the roster tests use:
+	// a raw loadout row, no purchase.
+	database := currentMmogPlayerStateDB()
+	// player_ship_loadouts.user_id has an FK to player_state.
+	if _, err := database.Exec(`INSERT INTO player_state(user_id) VALUES(?)`, pid); err != nil {
+		t.Fatalf("seed player row: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO player_ship_loadouts(user_id,loadout_id,native_loadout_id,precast_loadout_id,ship_id,loadout_index,loadout_name,position,active)
+		VALUES(?,33489271,'Default__VH_AssaultHeavy_T3_PrecastLoadout_BP_C',33489271,0,0,'Dola',3,1)`, pid); err != nil {
+		t.Fatalf("seed Dola loadout row: %v", err)
+	}
+	// The fresh payload holds briefings only through ships -- each once.
+	fresh := briefingCounts(buildMmogPlayerGetPayload(pid))
+	chosen := int32(0)
+	for id, n := range fresh {
+		if n != 1 {
+			t.Fatalf("briefing %d appears %d times in a fresh inventory with no "+
+				"purchases; the ship leg itself must not duplicate", id, n)
+		}
+		if chosen == 0 || id < chosen {
+			chosen = id
+		}
+	}
+	if chosen == 0 {
+		t.Fatal("the fresh inventory holds no ship-owned briefing for the starter " +
+			"fleet; this fixture needs a real one")
+	}
+
+	if _, err := database.Exec(
+		`INSERT INTO player_purchases(user_id,item_id,item_type,price_paid,currency)
+		 VALUES(?,?,?,?,?)`, pid, chosen, "briefing", 0, "admin"); err != nil {
+		t.Fatalf("record briefing purchase: %v", err)
+	}
+
+	if got := briefingCounts(buildMmogPlayerGetPayload(pid))[chosen]; got != 1 {
+		t.Fatalf("briefing %d appears %d times after being both bought and "+
+			"ship-owned, want exactly 1 (2 before the fix)", chosen, got)
 	}
 }

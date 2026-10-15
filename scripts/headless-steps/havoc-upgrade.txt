@@ -1,0 +1,44 @@
+# Havoc upgrade panel: pg-battle flow to spawn, ready, then watch the between-wave
+# upgrade selection (host with dn_host_havoc_fast_waves.txt ends each wave at 40 s).
+wait-hangar
+shot hangar
+click 645 446     # OK on the Login Streak popup; empty hangar otherwise
+sleep 2
+click 107 288     # PLAY (left menu, top item)
+sleep 5
+click 353 380     # RECRUIT fleet card
+sleep 5
+click 1073 260    # PROVING GROUNDS
+sleep 5
+shot fleet
+click 640 155     # PLAY on the fleet screen -> matchmaking -> battle server
+wait-log ClientLoadingCompleted
+sleep 8           # ship picker presents a few s after loading completes
+shot choose-ship
+click 172 585     # first ship card (Havoc lobby layout)
+sleep 3
+click 500 690     # READY toggle (Havoc lobby)
+sleep 3
+shot ready
+wait-log Starting game music   # ~60 s orbit intro, then control
+sleep 5
+shot spawned
+hold w 4          # fly forward
+hold a 2          # turn
+sleep 2
+shot flying
+key space         # ReadyUp
+sleep 30
+shot t+30
+sleep 30
+shot t+60
+sleep 20
+shot t+80
+sleep 15
+shot t+95
+sleep 15
+shot t+110
+sleep 20
+shot t+130
+sleep 30
+shot t+160

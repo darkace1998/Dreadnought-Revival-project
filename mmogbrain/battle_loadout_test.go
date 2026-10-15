@@ -54,7 +54,9 @@ func TestBattlePlayerNameLookup(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:5000"
 	rec := httptest.NewRecorder()
 	battlePlayerHandler(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "name=Tester\n" {
+	// captain=: the host copies it into the player state's
+	// m_captainDisplayInformation (otherwise every captain draws as default).
+	if want := "name=Tester\ncaptain=" + defaultCaptainDisplayInfo + "\n"; rec.Code != http.StatusOK || rec.Body.String() != want {
 		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodGet, "/battle/player?pid="+pid, nil)

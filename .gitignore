@@ -57,6 +57,8 @@ bin/
 # dn-dedicated build output (`go build -o dn-dedicated.exe .`), not source
 /dn-dedicated/dn-dedicated.exe
 *.exe~
+battle-server-mod/build/
+battle-server-mod/build-linux/
 
 # GitHub CLI config
 .config/
@@ -71,3 +73,8 @@ backups/
 *.log.*
 tls-sha384-clients.json
 tls-sha384-clients.json.tmp
+
+# local launcher distribution build outputs (launcher binary + the client CA
+# never belong in git; certs/ is covered separately above)
+dn-launcher-dist.exe
+dn-launcher/linux/

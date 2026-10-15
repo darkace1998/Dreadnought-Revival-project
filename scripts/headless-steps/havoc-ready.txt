@@ -1,0 +1,44 @@
+# Havoc: pg-battle flow (pin picks Havoc), then probe what starts wave 1.
+# ReadyUp is bound to SpaceBar in the client's DefaultInput.ini (pak chunk0);
+# the sweep run pressed space only at the orbit READY and no wave ever began.
+wait-hangar
+shot hangar
+click 645 446     # OK on the Login Streak popup; empty hangar otherwise
+sleep 2
+click 107 288     # PLAY (left menu, top item)
+sleep 5
+click 353 380     # RECRUIT fleet card
+sleep 5
+click 1073 260    # PROVING GROUNDS
+sleep 5
+shot fleet
+click 640 155     # PLAY on the fleet screen -> matchmaking -> battle server
+wait-log Bringing World /Game/Maps/Havoc   # a cold battle server takes ~2 min; ClientLoadingCompleted alone matched a hangar load (22:55)
+wait-log ClientLoadingCompleted
+wait-log CallOnPlayerSpawned   # orbit pawn spawned; the picker follows the fly-in (8 s after ClientLoadingCompleted showed the fly-in on a cold server, 23:05)
+sleep 15
+shot choose-ship
+click 172 585     # first ship card (Havoc lobby layout)
+sleep 3
+click 500 690     # READY toggle (Havoc lobby)
+sleep 3
+shot ready
+wait-log Starting game music   # ~60 s orbit intro, then control
+sleep 5
+shot spawned
+hold w 4          # fly forward
+hold a 2          # turn
+sleep 2
+shot flying
+sleep 10
+shot pre-ready
+key space         # ReadyUp (wave 1?)
+sleep 5
+shot after-space
+hold space 1.5    # in case the prompt wants a hold
+sleep 20
+shot t+25
+sleep 30
+shot t+55
+sleep 60
+shot t+115

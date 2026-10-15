@@ -115,6 +115,12 @@ func main() {
 			http.Error(w, `{"error":"map contains invalid characters"}`, http.StatusBadRequest)
 			return
 		}
+		if req.MapPath != "" && !strings.HasPrefix(req.MapPath, "/Game/") {
+			// Same gate dn-dedicated applies; map_path reaches the Wine argv
+			// verbatim, so anything not a /Game/ package path is refused.
+			http.Error(w, `{"error":"map_path must be a /Game/... package path"}`, http.StatusBadRequest)
+			return
+		}
 		if pool.InUse() >= pool.Capacity() {
 			http.Error(w, `{"error":"no ports available"}`, http.StatusServiceUnavailable)
 			return
@@ -283,7 +289,7 @@ func requireInternalKey(log *logrus.Logger) string {
 	if key == "" {
 		key = os.Getenv("ADMIN_KEY")
 	}
-	if key == "" || key == "changeme-admin-key" {
+	if key == "" || key == "changeme-admin-key" || key == "changeme-internal-api-key" {
 		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key

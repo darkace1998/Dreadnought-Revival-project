@@ -1,0 +1,31 @@
+# hangar -> Proving Grounds (Recruit) -> Agosta -> ready -> in battle, flying.
+# Recorded with `dn live` and verified to spawn + move; coordinates
+# are game-window pixels (1280x720). The run ends when the steps do; a battle
+# host crash ends it early.
+wait-hangar
+shot hangar
+click 645 446     # OK on the Login Streak popup; empty hangar otherwise
+sleep 2
+click 107 288     # PLAY (left menu, top item)
+sleep 5
+click 353 380     # RECRUIT fleet card
+sleep 5
+click 1073 260    # PROVING GROUNDS
+sleep 5
+shot fleet
+click 640 155     # PLAY on the fleet screen -> matchmaking -> battle server
+wait-log ClientLoadingCompleted
+sleep 8           # ship picker presents a few s after loading completes
+shot choose-ship
+click 380 605     # Agosta (first card)
+sleep 3
+key space         # READY  (no wait-log InProgress: the battle world logs it
+sleep 3           # on join, before the ship picker even shows)
+shot ready
+wait-log Starting game music   # ~60 s orbit intro, then control
+sleep 5
+shot spawned
+hold w 4          # fly forward
+hold a 2          # turn
+sleep 2
+shot flying

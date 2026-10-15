@@ -130,7 +130,7 @@ func requireJWTSecret(log *logrus.Logger) []byte {
 // let anyone who has read the source authenticate to every /admin endpoint.
 func requireAdminKey(log *logrus.Logger) string {
 	key := os.Getenv("ADMIN_KEY")
-	if key == "" || key == "changeme-admin-key" {
+	if key == "" || key == "changeme-admin-key" || key == "changeme-internal-api-key" {
 		log.Fatal(`ADMIN_KEY must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
@@ -144,7 +144,7 @@ func requireInternalKey(log *logrus.Logger) string {
 	if key == "" {
 		key = os.Getenv("ADMIN_KEY")
 	}
-	if key == "" || key == "changeme-admin-key" {
+	if key == "" || key == "changeme-admin-key" || key == "changeme-internal-api-key" {
 		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
@@ -220,7 +220,7 @@ func jwtMiddleware(secret []byte, database *sql.DB, next http.HandlerFunc) http.
 func adminKeyMiddleware(key string) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Admin-Key") != key {
+			if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Key")), []byte(key)) != 1 {
 				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 				return
 			}

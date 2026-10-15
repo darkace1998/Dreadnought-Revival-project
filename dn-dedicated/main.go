@@ -121,10 +121,11 @@ func internalKeyFromEnv() string {
 
 // placeholderKeys are the values game-manager explicitly refuses to start with.
 var placeholderKeys = map[string]bool{
-	"":                   true,
-	"changeme-admin-key": true,
-	"changeme":           true,
-	"change-me":          true,
+	"":                          true,
+	"changeme-admin-key":        true,
+	"changeme-internal-api-key": true,
+	"changeme":                  true,
+	"change-me":                 true,
 }
 
 // findGameBinary resolves the game executable.

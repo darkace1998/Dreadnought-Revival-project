@@ -3809,3 +3809,59 @@ func TestShipAndHeroNamesMatchTheAuthoritativeTable(t *testing.T) {
 		}
 	}
 }
+
+// TestOnboardingTemplateSkipsTutorialForNewAccounts: with
+// DN_ONBOARDING_TEMPLATE_PID set, an account with no SGD of its own gets the
+// template player's, and its own replaces it once saved. SCtA is not shared.
+func TestOnboardingTemplateSkipsTutorialForNewAccounts(t *testing.T) {
+	useTempMmogPlayerStateDB(t)
+	const tmpl, fresh = "21212121212121212121212121212121", "31313131313131313131313131313131"
+	done := []byte{0x15, 0x00, 0x00, 0x00, 0x78, 0x9c, 0x01}
+	_ = buildMmogPlayerGetPayload(tmpl)
+	if err := persistMmogPlayerMutation(tmpl, "YA_SaveGame", protocol.AppendBytesField(nil, "data", done)); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadPlayerSaveBlob(fresh, "SGD"); got != nil {
+		t.Fatalf("template unset: SGD = % x, want none", got)
+	}
+	t.Setenv("DN_ONBOARDING_TEMPLATE_PID", tmpl)
+	if got := loadPlayerSaveBlob(fresh, "SGD"); !bytes.Equal(got, done) {
+		t.Fatalf("new account SGD = % x, want template % x", got, done)
+	}
+	if got := loadPlayerSaveBlob(fresh, "SCtA"); got != nil {
+		t.Fatalf("SCtA must not come from the template: % x", got)
+	}
+	own := []byte{0x20, 0x00, 0x00, 0x00, 0x78, 0x9c, 0x02}
+	_ = buildMmogPlayerGetPayload(fresh)
+	if err := persistMmogPlayerMutation(fresh, "YA_SaveGame", protocol.AppendBytesField(nil, "data", own)); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadPlayerSaveBlob(fresh, "SGD"); !bytes.Equal(got, own) {
+		t.Fatalf("own SGD = % x, want % x", got, own)
+	}
+}
+
+// TestEventGrantsGiveCosmeticsOnce: DN_EVENT_GRANTS hands out listed
+// cosmetics once per player and refuses non-cosmetic ids.
+func TestEventGrantsGiveCosmeticsOnce(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "41414141414141414141414141414141"
+	_ = buildMmogPlayerGetPayload(pid)
+	t.Setenv("DN_EVENT_GRANTS", "385810495, 419365147,67043338")
+	grantEventItems(pid)
+	grantEventItems(pid)
+	var n int
+	if err := database.QueryRow(`SELECT count(*) FROM player_purchases WHERE user_id=? AND currency='event'`, pid).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("event rows = %d, want 2 (two cosmetics; the hero loadout id must be refused)", n)
+	}
+	owned := map[int32]bool{}
+	for _, id := range ownedVanityItemIDs(pid) {
+		owned[id] = true
+	}
+	if !owned[385810495] || !owned[419365147] {
+		t.Fatalf("granted items not owned: %v", owned)
+	}
+}

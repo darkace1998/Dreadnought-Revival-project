@@ -205,7 +205,14 @@ var targetSizes = map[string]int{
 	// all 20 on every tier III-V ship (~700 entries); corrected the same day
 	// to the game's rule -- each of 16 briefings is in the tree of the ONE
 	// ship that unlocks it (officer_briefings.go), 16 entries.
-	"YA_GetTechTree": 14502,
+	// 14502 -> 13580: 14502 NEVER matched this
+	// tree. Measured at 3f795df -- the commit that set the pin -- and at
+	// every commit since (through upstream master dd5944c): the payload is
+	// 13580 on this clone's data/ every time, so the original number came
+	// from a different data extraction, not from code that later shrank the
+	// tree. The guard's job is regression/bloat against the 32KB ring, so
+	// the pin is re-anchored to this tree's own measured value.
+	"YA_GetTechTree": 13580,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).
@@ -236,7 +243,12 @@ var targetSizes = map[string]int{
 	// wear them (in a gender's captain template): the NPC heads and test hair
 	// are gone -- owned, they were empty options in the captain editor.
 	// Materials keep the old rule.
-	"YA_GetPlayerPurchases": 2967,
+	// 2967 -> 3311 (+344): the DN_ID_MIRROR alignment mirror (id_mirror.go)
+	// appends the already-granted ids the client
+	// cannot otherwise read as owned -- per-ship forms of shared modules, shared
+	// forms of fitted inflated ids, owned hulls' prerequisite loadouts. 24 ids
+	// on this account. GetTechTreeItemState (0x543890) matches this array exactly.
+	"YA_GetPlayerPurchases": 3311,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the
 	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,

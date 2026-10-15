@@ -113,6 +113,15 @@ func startGatewayServer(ctx context.Context, log *logrus.Logger, addr, certFile,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
+		// Must outlive the client's keep-alive pool. Unset, Go idles out on
+		// ReadTimeout (15 s), and Wine's wininet keeps idle connections ~60 s
+		// (http.c COLLECT_TIME) and never retries one the server closed: the
+		// periodic session/touch fired >15 s after the last request picked a
+		// dead socket and failed in ~2 ms -- "No response received for [Touch
+		// session]" / "Connection error", then 2 retries and the logout on the
+		// rest of the pool (in client logs, 93/113 failed touches had a >15 s
+		// gap before them, 100/120 good ones <=15 s).
+		IdleTimeout: 3 * time.Minute,
 	}
 
 	go func() {
@@ -339,14 +348,16 @@ func mmogHostAddress() string {
 // without ever opening the MMOG connection (mmogbrain.log 22:07-22:08: login,
 // legal texts, lkg, then nothing).
 //
-// Preference: MMOG_HOST (operator override); else the IP the client used to
-// reach THIS gateway (the Host header) -- it is already proven reachable from
-// that client, and it is the LAN IP for a LAN launcher and the outside IP for
-// the public one; else SERVER_IP, resolved to IPv4 if it is a name.
+// Preference: the IP the client used to reach THIS gateway (the Host header)
+// -- it is already proven reachable from that client, and it is the LAN IP for
+// a LAN launcher, the relay's edge IP for a tunneled one -- else MMOG_HOST
+// (pure-loopback and name-based requests, i.e. local play); else SERVER_IP,
+// resolved to IPv4 if it is a name. The request-host branch comes first so a
+// relayed client (whose Host is the relay's edge IP) is not handed a local
+// override that only makes sense on this host (e.g. MMOG_HOST=127.0.0.1 for
+// local phase-2 timeouts would tell relayed clients to dial their own
+// machines).
 func lkgHostForClient(r *http.Request) (host, source string) {
-	if h := getenv("MMOG_HOST", ""); h != "" {
-		return h, "MMOG_HOST"
-	}
 	reqHost := r.Host
 	if h, _, err := net.SplitHostPort(reqHost); err == nil {
 		reqHost = h
@@ -372,6 +383,24 @@ func handleGWPlayLkg(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 	host, source := lkgHostForClient(r)
 	logrus.WithFields(logrus.Fields{"serverHost": host, "source": source, "request_host": r.Host}).Info("play/lkg: MMOG address")
 	port := getenv("FIRMAMENT_PORT", "48843")
+	// Clients arriving through a relay (playit.gg, ngrok, ...) must be told the
+	// RELAY's firmament port, not this process's local one: their connection
+	// comes in on the relay's edge port and is forwarded to the local socket,
+	// so answering "48843" would send the client to a port that answers
+	// nothing beyond the relay. The relay's ports cannot be derived here, so
+	// they are configured: DN_FIRMAMENT_PORT_PUBLIC is the relay's external
+	// port for the shared firmament+MMOG socket, DN_GATEWAY_PORT_PUBLIC the
+	// relay's external port for the gateway/web-services socket. Both set =>
+	// a client whose request Host carries the public gateway port is answered
+	// with the public firmament port. Local clients (Host 127.0.0.1:65443, or
+	// the LAN port) still get FIRMAMENT_PORT unchanged -- set and forget.
+	if pubFm := getenv("DN_FIRMAMENT_PORT_PUBLIC", ""); pubFm != "" {
+		if pubGw := getenv("DN_GATEWAY_PORT_PUBLIC", ""); pubGw != "" {
+			if _, reqPort, err := net.SplitHostPort(r.Host); err == nil && reqPort == pubGw {
+				port = pubFm
+			}
+		}
+	}
 	gwJSON(w, map[string]any{
 		"Code":       0,
 		"serverHost": host,

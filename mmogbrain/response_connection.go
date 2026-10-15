@@ -498,6 +498,16 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 		if !state.loginResponseSent && requestName == "YA_UserLogin" {
 			state.playerPID = protocol.ExtractPlayerPID(frame.Payload, defaultMmogPlayerPID, mmogJWTSecret())
 			setGatewayPlayerDataReadyState(state.playerPID, false)
+			// DN_UNLOCK_ALL must grant BEFORE any player payload is built.
+			// First live test: the grant ran at the
+			// YA_PlayerGet dispatch, but the client had already received
+			// YA_GetPlayerProgression / YA_GetPlayerPurchases (its
+			// researched/owned lists, ProgressionData +0x3F80 and PurchasesData
+			// +0x3F90) a second earlier, so ships came out unlocked while every
+			// tech-tree module still showed its research price. Ships got their
+			// grant because the PlayerGet reply is built after the hook;
+			// ProgressionData/PurchasesData replies are not.
+			autoProvisionEverything(state.playerPID)
 			log.WithFields(logrus.Fields{
 				"remote": remote,
 				"pid":    state.playerPID,
@@ -709,7 +719,7 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 			if requestName == "YA_UnlockItem" {
 				shipID := firstMmogInt32Field(frame.Payload, "ItemID", "itemID", "itemId")
 				// A module just researched showed a credit price of 0 in the
-				// tech tree until a restart (operator, 2026-10-14), although
+				// tech tree until a restart, although
 				// its market offer exists from login and buying it works: the
 				// tree's price (widget +0x2D0, read by GetTechTreePurchasePrice
 				// 0xBBC5F0) is filled when the tree's data is composed.

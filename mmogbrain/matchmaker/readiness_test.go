@@ -186,6 +186,43 @@ func TestPollBattleServersEndsAMatchWhoseHostIsGone(t *testing.T) {
 	}
 }
 
+// The zombie match, in miniature: a match whose host died while mmogbrain was
+// itself shut down. On the next process start seenInstance is empty, but
+// server_ready_at is set -- a stamp that only a real ready poll ever writes --
+// so the first 404 must still end it. Seen live: a match stayed 'active'
+// across a stack stop and restart, and the player's
+// two logins were pushed YA_Connect at a instance nine minutes dead, each
+// burning the client's 180 s loading timeout.
+func TestPollBattleServersEndsAMatchStampedReadyByThePreviousProcess(t *testing.T) {
+	database := sweepTestDB(t)
+	insertActiveMatch(t, database, "m1", "inst-1")
+	if _, err := database.Exec(
+		`UPDATE matches SET server_ready_at='2026-10-05T21:46:21Z' WHERE id='m1'`); err != nil {
+		t.Fatalf("stamp as the previous process did: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO match_slots(match_id,user_id,team) VALUES('m1','player-1',0)`); err != nil {
+		t.Fatalf("seed slot: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	// Fresh process: seenInstance is empty; the stamp is all the evidence there is.
+	readinessMatchmaker(t, database, srv.URL).pollBattleServers()
+	if status := matchStatus(t, database, "m1"); status != "ended" {
+		t.Errorf("match status = %q, want ended once a stamped-ready instance 404s", status)
+	}
+	var slots int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM match_slots WHERE match_id='m1'`).Scan(&slots); err != nil {
+		t.Fatalf("count slots: %v", err)
+	}
+	if slots != 0 {
+		t.Errorf("%d slots left; the player is still pinned to a dead match", slots)
+	}
+}
+
 // A control plane with no per-instance route 404s EVERY id, forever. Reading
 // that as "the host is gone" would end every live match on the older
 // game-manager, so a 404 only counts once that instance has answered a 200.
