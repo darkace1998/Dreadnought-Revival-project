@@ -1,0 +1,360 @@
+#!/usr/bin/env bash
+# dn -- Dreadnought private-server ops helper.
+#
+# Why this exists: across six agent sessions the tool loop was 85-92% Bash, and
+# the single most repeated command was `export DREADGAME_EXE=<110-char path>`
+# (219 times), because every tool call is a fresh shell. The second-largest
+# bucket was tail/head/cat/grep over a 72 MB client.log. This wraps both into
+# compact, deterministic commands so a session spends its time on decisions
+# instead of re-deriving shell incantations.
+#
+# Output is deliberately tight -- every command here bounds what it prints.
+#
+#   dn env                      resolved paths
+#   dn status                   services, health, pids, log sizes
+#   dn logs --list              known log targets
+#   dn logs mmog --last 40      tail a log (bounded)
+#   dn logs client --grep crash --last 30
+#   dn logs mmog --since 18:26 --grep YA_Tune
+#   dn grep crash               grep every service log, deduped + counted
+#   dn build [module]           per-module go build/test/vet
+#   dn deploy [svc...]          build services into run/ + source stamp
+#   dn cycle begin LABEL --expect RX   start an operator test cycle (offsets,
+#                               live switches, stamps); `dn cycle end` slices
+#                               every log + verdict -> run/cycles/<id>/summary.md
+#   dn headless LABEL [--expect RX] [--steps F]   unattended client on :97 (sway+Xwayland), own account
+#   dn live start LABEL | click X Y | key K | hold K S | shot | wait RX | settle | log | stop
+#                                 interactive client, one action per call (scripts/live.py)
+#   dn headless-stop               stop the headless display
+#   dn cycles | dn cycle show [ID]
+#   dn restart                  stop -> start -> health -> in-process DN_ switches
+#   dn rva <script> [args...]   run an RVA toolkit script with DREADGAME_EXE set
+#   dn sql "<query>" [--db mmog|auth|legacy|master]
+#
+# Traps encoded below (see the dreadnought-stack skill):
+#   * mmogbrain's per-request trail is in the REPO-ROOT mmogbrain.log, NOT run/.
+#   * With two hosts up, both write one dn_host_loadout.log; per-host lines are
+#     only in that host's run/battle-logs/ file.
+#   * run/client.log is ~72 MB and grows; never dump it unbounded.
+#   * "Switch reached the process?" is checked via /proc/<pid>/environ, because
+#     a switch can be set in the file and not reach a still-coming-up process.
+
+set -uo pipefail
+
+REPO="${DN_REPO:-$HOME/Projects/dreadnought}"
+RUN="$REPO/run"
+RVA_DIR="$REPO/.claude/skills/dreadnought-rva/scripts"
+EXE="${DREADGAME_EXE:-$HOME/.local/share/Steam/steamapps/common/Dreadnought/DreadGame/DreadGame/Binaries/Win64/DreadGame-Win64-Shipping.exe}"
+export DREADGAME_EXE="$EXE"
+
+die() { echo "dn: $*" >&2; exit 2; }
+
+# ---------------------------------------------------------------------------
+# log target -> path. Returns 1 for an unknown target.
+# ---------------------------------------------------------------------------
+logpath() {
+  case "${1:-}" in
+    mmog|mmogbrain)  echo "$REPO/mmogbrain.log" ;;          # repo root, NOT run/
+    client|game)     echo "$RUN/client.log" ;;
+    dedicated)       echo "$RUN/dn-dedicated.log" ;;
+    gateway)         echo "$RUN/gateway.log" ;;
+    auth)            echo "$RUN/auth-server.log" ;;
+    legacy)          echo "$RUN/legacy-api.log" ;;
+    master)          echo "$RUN/master-server.log" ;;
+    launcher)        echo "$RUN/ensure-server.log" ;;
+    mod|loadout)     echo "$(dirname "$EXE")/dn_host_loadout.log" ;;
+    battle)          ls -t "$RUN/battle-logs"/battle-*.log 2>/dev/null | head -1 ;;
+    *) return 1 ;;
+  esac
+}
+
+list_logs() {
+  printf '%-12s %s\n' "TARGET" "PATH"
+  for t in mmog client dedicated gateway auth legacy master launcher mod battle; do
+    p="$(logpath "$t")"
+    if [[ -n "${p:-}" && -e "$p" ]]; then
+      printf '%-12s %s  (%s)\n' "$t" "${p/#$HOME/~}" "$(du -h "$p" 2>/dev/null | cut -f1)"
+    else
+      printf '%-12s %s\n' "$t" "(missing)"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+cmd_env() {
+  echo "REPO      $REPO"
+  echo "RUN       ${RUN/#$HOME/~}"
+  echo "EXE       ${EXE/#$HOME/~}"
+  echo "EXE exists: $([[ -f "$EXE" ]] && echo yes || echo 'NO -- set DREADGAME_EXE')"
+  echo "RVA_DIR   ${RVA_DIR/#$HOME/~}"
+  echo "secrets   $([[ -r "$RUN/secrets.env" ]] && echo 'readable' || echo 'not readable')"
+}
+
+cmd_status() {
+  echo "== services (health :8081-8085) =="
+  for spec in "auth:8081" "legacy:8082" "mmog:8083" "master:8084" "dedicated:8085"; do
+    n="${spec%%:*}"; p="${spec##*:}"
+    code="$(curl -s -o /dev/null -m 2 -w '%{http_code}' "http://127.0.0.1:$p/health" 2>/dev/null)"
+    pidf="$RUN/$n-server.pid"; [[ -f "$pidf" ]] || pidf="$RUN/$n.pid"
+    pid="$(cat "$pidf" 2>/dev/null || echo '-')"
+    if [[ "$code" == "200" ]]; then st="up"; else st="DOWN"; fi
+    printf '  %-10s :%s  %-5s code=%-4s pid=%s\n' "$n" "$p" "$st" "${code:-000}" "$pid"
+  done
+
+  echo "== running processes =="
+  pgrep -af 'run/(mmogbrain|auth-server|legacy-api|master-server|dn-dedicated|gateway)$' 2>/dev/null | sed 's/^/  /' || echo "  (none)"
+
+  echo "== binaries (run/ vs source) =="
+  stamp_report
+  echo "== logs (large files are the context hazard) =="
+  list_logs | tail -n +2 | sed 's/^/  /'
+}
+
+cmd_logs() {
+  local target="" last=40 grep="" since=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --list|-l) list_logs; return 0 ;;
+      --last|-n) last="$2"; shift 2 ;;
+      --grep|-g) grep="$2"; shift 2 ;;
+      --since|-s) since="$2"; shift 2 ;;
+      *) target="$1"; shift ;;
+    esac
+  done
+  [[ -n "$target" ]] || die "usage: dn logs <target> [--last N] [--grep P] [--since T]   (--list for targets)"
+
+  local p; p="$(logpath "$target")" || die "unknown target '$target' (try: dn logs --list)"
+  [[ -e "$p" ]] || die "no such log: $p"
+
+  # Build the pipeline; --since is a plain substring match so it works whether
+  # or not the log has a parseable timestamp format.
+  local n=0
+  if [[ -n "$since" ]]; then n=$((n+1)); fi
+  {
+    if [[ -n "$since" || -n "$grep" ]]; then
+      # read the tail of the file, then filter (never scan 72 MB line by line)
+      tail -c 2000000 "$p" 2>/dev/null
+    else
+      tail -n "$last" "$p"
+    fi
+  } | {
+    if [[ -n "$since" ]]; then grep -F -- "$since" || true; else cat; fi
+  } | {
+    if [[ -n "$grep" ]]; then grep -E -- "$grep" || true; else cat; fi
+  } | tail -n "$last" | sed "s/^/  /"
+  echo "  -- ${p/#$HOME/~}$([[ -n "$since" ]] && echo "  (last 2MB scanned, since '$since')")"
+}
+
+cmd_grep() {
+  local pat="${1:-}"; [[ -n "$pat" ]] || die "usage: dn grep <pattern> [targets...]"
+  shift || true
+  local targets=("$@")
+  [[ ${#targets[@]} -gt 0 ]] || targets=(mmog client dedicated gateway auth legacy master)
+  for t in "${targets[@]}"; do
+    local p; p="$(logpath "$t")" || continue
+    [[ -e "$p" ]] || continue
+    local c; c="$(tail -c 2000000 "$p" 2>/dev/null | grep -cE -- "$pat" || true)"
+    printf '  %-10s %5s hits  (%s)\n' "$t" "$c" "${p/#$HOME/~}"
+    if [[ "${c:-0}" -gt 0 ]]; then
+      tail -c 2000000 "$p" | grep -E -- "$pat" | tail -3 | cut -c1-160 | sed 's/^/        /'
+    fi
+  done
+}
+
+cmd_build() {
+  local m="${1:-}"
+  run_mod() { ( cd "$REPO/$1" && shift && echo "  -- $PWD" && "$@" ); }
+  case "$m" in
+    mmog|mmogbrain) run_mod mmogbrain go test ./... && run_mod mmogbrain go vet ./... ;;
+    shared)         run_mod shared go test ./... ;;
+    dn-dedicated|dedicated)
+                    run_mod dn-dedicated env GOWORK=off go build ./... \
+                    && run_mod dn-dedicated env GOWORK=off go test ./... ;;
+    ""|all)
+      echo "== per-module (root 'go build ./...' fails by design) =="
+      run_mod mmogbrain go build ./... ; run_mod shared go build ./...
+      ( cd "$REPO/dn-dedicated" && GOWORK=off go build ./... )
+      ;;
+    *) die "unknown module '$m' (mmogbrain|shared|dn-dedicated|all)" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# deploy: build services INTO run/ and stamp each with the source it came from.
+# A binary built before a merge looks identical to a fresh one until a cycle
+# is wasted on it. `dn status` compares stamps against the tree.
+# ---------------------------------------------------------------------------
+SERVICES=(auth-server legacy-api mmogbrain master-server game-manager gateway admin-cli dn-dedicated mod)
+MODDIR="$REPO/battle-server-mod"   # "mod" = battle-server-mod -> wer.dll beside the game exe
+
+# Fingerprint of everything a service binary is built from: its module dir +
+# shared/, committed tree ids plus a hash of any uncommitted diff.
+src_fingerprint() {
+  local mod="$1" paths=("$1")
+  case "$mod" in
+    mod) paths=(battle-server-mod/src battle-server-mod/build-linux.sh) ;;
+    dn-dedicated) ;;
+    *) paths+=(shared) ;;
+  esac
+  local trees; trees="$(cd "$REPO" && for d in "${paths[@]}"; do git rev-parse "HEAD:$d" 2>/dev/null; done | tr '\n' ' ')"
+  local dirty; dirty="$(cd "$REPO" && { git diff HEAD -- "${paths[@]}"; git ls-files -o --exclude-standard -- "${paths[@]}" | xargs -r cat; } 2>/dev/null | sha1sum | cut -c1-10)"
+  echo "${trees}dirty:$dirty"
+}
+
+cmd_deploy() {
+  local want=("$@"); [[ ${#want[@]} -gt 0 ]] || want=("${SERVICES[@]}")
+  mkdir -p "$RUN/.stamps"
+  local rc=0 svc caps_needed=()
+  for svc in "${want[@]}"; do
+    [[ "$svc" == mmog ]] && svc=mmogbrain
+    printf '  %-14s ' "$svc"
+    local out
+    if [[ "$svc" == mod ]]; then
+      # wer.dll is loaded by EVERY DreadGame process in that dir (hosts and
+      # the local client); the previous one is kept as wer.dll.prev.
+      local dst; dst="$(dirname "$EXE")/wer.dll"
+      if out="$(bash "$MODDIR/build-linux.sh" 2>&1)" && [[ -f "$MODDIR/build-linux/dn_host_loadout.dll" ]]; then
+        if ! cmp -s "$MODDIR/build-linux/dn_host_loadout.dll" "$dst"; then
+          [[ -f "$dst" ]] && cp -f "$dst" "$dst.prev.new" && mv -f "$dst.prev.new" "$dst.prev"
+          # Never cp onto $dst: that rewrites the inode every running
+          # DreadGame process has mapped, swapping its mod code mid-match
+          # (battle-20261014-213618 crashed in wer.dll 16 s after a deploy).
+          # Write a new file and rename it over; live processes keep the old inode.
+          cp -f "$MODDIR/build-linux/dn_host_loadout.dll" "$dst.new" && mv -f "$dst.new" "$dst"
+        fi
+        echo "$(src_fingerprint mod) $(cd "$REPO" && git rev-parse --short HEAD) $(date +%FT%T)" > "$RUN/.stamps/mod"
+        echo "ok  $(cd "$REPO" && git rev-parse --short HEAD)  -> wer.dll $(sha256sum "$dst" | cut -c1-12)"
+      else
+        rc=1; echo "FAILED"; echo "$out" | grep -iE 'error' | head -15 | sed 's/^/      /'
+      fi
+      continue
+    elif [[ "$svc" == dn-dedicated ]]; then
+      out="$(cd "$REPO/dn-dedicated" && GOWORK=off go build -o "$RUN/dn-dedicated.new" . 2>&1)"
+    else
+      # -buildvcs=false: the embedded commit made every build differ, so the
+      # identical-bytes check below never kept gateway's setcap'd file
+      out="$(cd "$REPO" && go build -buildvcs=false -o "$RUN/$svc.new" "./$svc" 2>&1)"
+    fi
+    if [[ -z "$out" && -f "$RUN/$svc.new" ]]; then
+      # Identical bytes: keep the old file (and its file capabilities).
+      # Otherwise rename over it -- a running process keeps its inode -- but a
+      # new file has NO capabilities: gateway binds 80/443 only via setcap,
+      # and silently loses them.
+      local caps; caps="$(getcap "$RUN/$svc" 2>/dev/null | awk '{print $2}')"
+      if cmp -s "$RUN/$svc.new" "$RUN/$svc"; then
+        rm -f "$RUN/$svc.new"
+      else
+        mv -f "$RUN/$svc.new" "$RUN/$svc"
+      fi
+      [[ "$svc" == gateway && -z "$(getcap "$RUN/$svc" 2>/dev/null)" ]] && caps_needed+=("$svc:${caps:-cap_net_bind_service=ep}")
+      echo "$(src_fingerprint "$svc") $(cd "$REPO" && git rev-parse --short HEAD) $(date +%FT%T)" > "$RUN/.stamps/$svc"
+      echo "ok  $(cd "$REPO" && git rev-parse --short HEAD)"
+    else
+      rm -f "$RUN/$svc.new"; rc=1
+      echo "FAILED"; echo "$out" | head -15 | sed 's/^/      /'
+    fi
+  done
+  echo "  (running processes keep the old binary until: dn restart)"
+  local c
+  for c in "${caps_needed[@]}"; do
+    echo "  !! ${c%%:*} has no file capabilities (ports 80/443 will fail). Run once, then dn restart:"
+    echo "       sudo setcap ${c#*:} $RUN/${c%%:*}"
+  done
+  return $rc
+}
+
+# One line per service: is the run/ binary built from the current source, and
+# is the running process that binary?
+stamp_report() {
+  local svc
+  for svc in "${SERVICES[@]}"; do
+    local f="$RUN/.stamps/$svc" st
+    if [[ ! -f "$f" ]]; then st="UNSTAMPED (built outside dn deploy)"
+    else
+      local now; now="$(src_fingerprint "$svc")"
+      local rec; rec="$(cut -d' ' -f1-$(($(wc -w <<<"$now"))) "$f")"
+      if [[ "$rec" == "$now" ]]; then st="current"; else st="STALE vs source -> dn deploy $svc"; fi
+      st="$st  [$(awk '{print $(NF-1), $NF}' "$f")]"
+    fi
+    if [[ "$svc" == gateway && -f "$RUN/gateway" && -z "$(getcap "$RUN/gateway" 2>/dev/null)" ]]; then
+      st="$st  NO CAP_NET_BIND_SERVICE (:80/:443 fail) -> sudo setcap cap_net_bind_service=+ep $RUN/gateway"
+    fi
+    if [[ "$svc" == mod ]] && ! cmp -s "$MODDIR/build-linux/dn_host_loadout.dll" "$(dirname "$EXE")/wer.dll"; then
+      st="$st  DEPLOYED wer.dll != build output"
+    fi
+    local pid; pid="$(pgrep -f "run/$svc\$" | head -1)"
+    if [[ -n "$pid" ]] && [[ "$(readlink "/proc/$pid/exe")" == *"(deleted)" ]]; then
+      st="$st  RUNNING OLD BINARY -> dn restart"
+    fi
+    printf '  %-14s %s\n' "$svc" "$st"
+  done
+}
+
+cmd_restart() {
+  # takes no arguments: `dn restart --help` once restarted the whole stack
+  # (and with it a gateway whose setcap a deploy had just dropped)
+  if [[ $# -gt 0 ]]; then echo "usage: dn restart   (no arguments; restarts every service)" >&2; return 2; fi
+  echo "== stop =="; bash "$REPO/scripts/stop-services.sh" 2>&1 | tail -5
+  sleep 3
+  echo "== start =="; bash "$REPO/scripts/start-services.sh" 2>&1 | tail -5
+  sleep 8
+  echo "== health =="
+  for p in 8081 8082 8083 8084 8085; do
+    printf '  :%s %s\n' "$p" "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$p/health" 2>/dev/null)"
+  done
+  # A switch set in secrets.env but not in the process looks identical to a
+  # switch that did nothing -- read the live environ, not the file.
+  local pid; pid="$(pgrep -f 'run/mmogbrain$' | head -1)"
+  if [[ -n "$pid" ]]; then
+    echo "== live mmogbrain DN_ switches (pid $pid) =="
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DN_' | sort | sed 's/^/  /' \
+      || echo "  (none set)"
+  else
+    echo "== mmogbrain not running =="
+  fi
+}
+
+cmd_rva() {
+  [[ $# -gt 0 ]] || { echo "scripts in $RVA_DIR:"; ls "$RVA_DIR"/*.py 2>/dev/null | xargs -n1 basename | sed 's/^/  /'; return 0; }
+  local s="$1"; shift
+  [[ -f "$RVA_DIR/$s" ]] || s="$s.py"
+  [[ -f "$RVA_DIR/$s" ]] || die "no such RVA script: $s"
+  [[ -f "$EXE" ]] || die "game exe not found: $EXE (set DREADGAME_EXE)"
+  # disasm needs capstone, which lives in the oci venv, not system python
+  local py=python3; [[ -x "$HOME/.local/oci-venv/bin/python" ]] && py="$HOME/.local/oci-venv/bin/python"
+  ( cd "$RVA_DIR" && PYTHONPATH="$RVA_DIR" "$py" "$s" "$@" )
+}
+
+cmd_sql() {
+  local q="${1:-}"; [[ -n "$q" ]] || die "usage: dn sql \"<query>\" [--db mmog|auth|legacy|master]"
+  local db="mmog"; shift || true
+  while [[ $# -gt 0 ]]; do case "$1" in --db) db="$2"; shift 2 ;; *) shift ;; esac; done
+  local f
+  case "$db" in
+    mmog|auth|legacy|master) f="$RUN/$db.db" ;;
+    *) f="$db" ;;
+  esac
+  [[ -r "$f" ]] || die "cannot read db: $f"
+  sqlite3 -header -column "$f" "$q"
+}
+
+cmd_help() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-help}" in
+  env)      shift; cmd_env "$@" ;;
+  status|st) shift; cmd_status "$@" ;;
+  logs|log) shift; cmd_logs "$@" ;;
+  grep|g)   shift; cmd_grep "$@" ;;
+  build)    shift; cmd_build "$@" ;;
+  deploy)   shift; cmd_deploy "$@" ;;
+  cycle|c)  shift; python3 "$REPO/scripts/cycle.py" "${@:-list}" ;;
+  cycles)   shift; python3 "$REPO/scripts/cycle.py" list ;;
+  headless|hl) shift; python3 "$REPO/scripts/cycle.py" headless "$@" ;;
+  headless-stop) python3 "$REPO/scripts/cycle.py" headless-stop ;;
+  live)     shift; python3 "$REPO/scripts/live.py" "$@" ;;
+  restart)  shift; cmd_restart "$@" ;;
+  rva)      shift; cmd_rva "$@" ;;
+  sql)      shift; cmd_sql "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *) die "unknown command '$1' -- dn help" ;;
+esac
