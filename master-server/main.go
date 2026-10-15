@@ -108,7 +108,7 @@ func requireInternalKey(log *logrus.Logger) string {
 	if key == "" {
 		key = os.Getenv("ADMIN_KEY")
 	}
-	if key == "" || key == "changeme-admin-key" {
+	if key == "" || key == "changeme-admin-key" || key == "changeme-internal-api-key" {
 		log.Fatal(`INTERNAL_API_KEY (or ADMIN_KEY) must be set to a real secret (not empty or the placeholder "changeme-admin-key")`)
 	}
 	return key
