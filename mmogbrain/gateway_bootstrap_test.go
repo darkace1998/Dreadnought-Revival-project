@@ -135,8 +135,8 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 		if !ok {
 			t.Fatalf("entities has unexpected type %T", payload["entities"])
 		}
-		// The item catalogs send "entities" empty since 2026-10-15 (only its
-		// presence is checked by the client); their entries are Items.
+		// With DN_CATALOG_ENTITIES=empty the item catalogs send "entities"
+		// empty (only its presence is checked); their entries are Items.
 		if len(entities) == 0 {
 			if items, ok := payload["Items"].([]any); ok && len(items) > 0 {
 				return items

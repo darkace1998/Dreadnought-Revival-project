@@ -531,7 +531,18 @@ func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 	// price as 0 and buys nothing ("cost 0", 2026-10-10). Compressed when the
 	// client asks for it; every fetch is logged with what it took, so a
 	// download that a slow connection never finishes is visible.
-	gzipped := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+	// NOT gzipped, whatever the client says it accepts (CHANGED 2026-10-15).
+	// It sends "Accept-Encoding: application/gzip" on the login fetch, but it
+	// cannot read the result: every gzipped catalog logged "Could not turn
+	// response into json object. / Could not handle response. Unknown
+	// response." (client log 2026-10-15), so the login round of the market
+	// never completed and the market was built only by the uncompressed
+	// re-fetch on entering the hangar. Where that one failed (slow link, the
+	// old 15 s cut) or never happened (a reconnect straight into a match),
+	// every price stayed 0 until a restart. The 2026-10-10 "verified" gzip
+	// purchase was paid from that hangar re-fetch, not the gzipped one.
+	// DN_CATALOG_GZIP=1 turns it back on for experiments.
+	gzipped := os.Getenv("DN_CATALOG_GZIP") == "1" && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 	// The server's 15 s WriteTimeout covers the whole response, and it is too
 	// short for this one: every client fetches the catalog a second time
 	// without asking for compression (the full ~10 MB), and on slow links

@@ -215,17 +215,17 @@ func gatewayItemCatalogCollection(entities []any) map[string]any {
 	// with Items fully populated. Every item is offered, at the price 0 that
 	// gatewayMarketEntity already reports.
 	//
-	// "entities" goes EMPTY (CHANGED 2026-10-15). The catalog parser
-	// (0x142a34700) never reads it; MarketManager's completion check
-	// (FUN_1403dac50) only needs the key present, and an empty array passes --
-	// the currency catalogs have always sent one. As a third copy of the same
-	// ~3.4 MB of offers it only made the download longer: clients on slow
-	// links never finished the uncompressed re-fetch inside the write timeout
-	// and were left with no prices ("cost 0", "insufficient credits" until a
-	// restart). DN_CATALOG_ENTITIES=full sends the copy again.
-	listed := []any{}
-	if os.Getenv("DN_CATALOG_ENTITIES") == "full" {
-		listed = entities
+	// "entities" carries the offers too. REVERTED 2026-10-15 (same evening):
+	// it went out empty for ~2 h (only its presence is checked by
+	// MarketManager's completion FUN_1403dac50) and the tech tree's price
+	// after a research read 0 again, which it had not on 2026-10-14 with the
+	// full list. GUESS: the "Concatenating item catalog..." step builds the
+	// offer list the tech tree prices from out of "entities". Unproven either
+	// way; the full list is the last state verified live.
+	// DN_CATALOG_ENTITIES=empty sends it empty again.
+	listed := entities
+	if os.Getenv("DN_CATALOG_ENTITIES") == "empty" {
+		listed = []any{}
 	}
 	return map[string]any{
 		"entities":    listed,
