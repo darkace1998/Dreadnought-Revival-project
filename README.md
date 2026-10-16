@@ -382,6 +382,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The short version: this is a server for 
 - **Legojedi** — the launcher icon.
 - **gwog** ([@SyST3MDeV](https://github.com/SyST3MDeV)) — the Dreadnought SDK from the original [Dreadnought Revival Patch](https://github.com/SyST3MDeV/Dreadnought), which much of the client reverse engineering here builds on.
 - **House of Bards** ([@HouseOfBards101](https://github.com/HouseOfBards101)) — the client-side half of the work in [AGENT-CHAT.md](AGENT-CHAT.md): reverse engineering of the game client, the injected test mod (DreadnoughtTestBench), and in-match client behaviour.
+- **starveil-bunny** ([@starveil-bunny](https://github.com/starveil-bunny)) — fixes from [PR #80](https://github.com/darkace1998/Dreadnought-Revival-project/pull/80): service key hardening, the gateway idle timeout, ending dead matches after a restart, owned bundles, captain appearance in matches, Turbo TDM modifiers, and the Linux (clang) build of the battle-server mod.
 - **The Dreadnought community on Discord** — testing, bug reports and advice.
 
 ## Licence

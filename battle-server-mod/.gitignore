@@ -1,2 +1,3 @@
-# build.bat output
+# build.bat / build-linux.sh output
 build/
+build-linux/

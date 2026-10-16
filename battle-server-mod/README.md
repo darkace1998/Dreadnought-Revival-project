@@ -217,8 +217,18 @@ The first version did teams at `PostLogin` through the `ProcessEvent` hook and
 `AYPlayerController::SetTeam`. With it, only the last player to join got his
 own loadout; with it off both players' fits registered. It is gone.
 
+- **Captains** (`dn_host_no_captain.txt` turns just this off; added
+  2026-10-16, from PR #80). `GET /battle/player` also answers
+  `captain=<display info>` (the string the client saved with
+  `YA_SavePlayerDisplayInformation`). The mod writes it into
+  `AYPlayerReplicationInfo::m_captainDisplayInformation` (`+0x758`, replicated
+  with RepNotify, SDK), which the login-less host left empty, so other players'
+  captains drew as the default. Not verified live: that the clients redraw the
+  captain from the replicated value.
+
 Logs: `team sync: controller … TEAM=1 -- player state 0 -> 1, …`,
 `names: controller … is now "…" (from mmogbrain)`,
+`captain: player state … +0x758 = "GENDER_…"`,
 `bot balance: 3 human(s) on team 1; team size 8 -> team 1 bots 8 -> 5`.
 Not verified live yet.
 
@@ -736,6 +746,10 @@ and running exactly as before.
 Built ...\battle-server-mod\build\dn_host_loadout.dll
 ```
 
+On Linux, `bash build-linux.sh` cross-compiles the same source with clang
+(`build-linux/dn_host_loadout.dll`; rename to `wer.dll`). Smoke-tested under
+Wine 2026-10-16 (all hooks installed, match reached InProgress).
+
 `build.bat` finds the toolset with `vswhere` if you are not already in a
 Developer Command Prompt. The only dependency is
 [MinHook](https://github.com/TsudaKageyu/minhook) (BSD 2-clause), vendored under
@@ -1007,6 +1021,27 @@ score-based daily contracts. The offsets are NOT verified live.
 
 Expected log: the `match result:` line now shows `score N healing N`; in
 mmogbrain's log, `statistics: match recorded` with `from_mod=true`.
+
+## Turbo TDM modifiers (on, TurboTDM hosts only; `dn_host_no_game_modifiers.txt` turns it off; added 2026-10-16)
+
+Turbo TDM's only difference from TDM is three feats on every ship, from
+`DN_GameModifiers_DT` row `YGMT_TURBO_TDM`: `ModifierSpeed` (+600%
+forward/reverse, +300% vertical/steer), `ModifierDamage` (+50%) and
+`ModifierFireRate` (-50% cooldowns and reloads), as defined in
+`DN_Feats_Custom_Modifiers_OTS_DT`. The code that gave ships the row's feats
+was in the original server build, so Turbo TDM played as plain TDM.
+
+The mod hooks the feats component's setup (`0x34BB30`) and, when its owner is
+a pawn, adds the three feats through the game's own `AddFeat` (`0x337850`, the
+body behind the `AddFeat` exec thunk `0x73EDF0`). Feats replicate through
+`UYFeatsComponent::m_replicatedFeats` (Net, RepNotify `OnRep_Feats`). From PR
+#80.
+
+Logs: `turbo modifiers: AddFeat(ModifierSpeed) on … -> added` (first 16
+pawns, and every failure). Verified: the hook installs on a TurboTDM host.
+NOT verified: feats on a live ship, and that clients move with the speed feat
+without position corrections. If ships stutter or snap back in Turbo, create
+`dn_host_no_game_modifiers.txt`.
 
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 

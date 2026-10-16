@@ -15,7 +15,7 @@ func TestEveryOfferHasADescription(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
 	setCredits(t, pid, 0)
-	seeds := append(gatewayItemCatalogSeeds(pid), gatewayBundleCatalogSeeds()...)
+	seeds := append(gatewayItemCatalogSeeds(pid), gatewayBundleCatalogSeeds(pid)...)
 	for _, seed := range seeds {
 		e := gatewayMarketEntity(seed, true)
 		text := ""

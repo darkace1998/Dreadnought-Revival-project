@@ -15,7 +15,7 @@ import (
 // Every documented bundle resolves its heroes from the client's data, is
 // Featured, references its contents, and costs more GP than nothing.
 func TestMarketBundlesAreRealAndFeatured(t *testing.T) {
-	seeds := marketBundleCatalogSeeds()
+	seeds := marketBundleCatalogSeeds("")
 	if len(seeds) != len(marketBundles) {
 		t.Fatalf("%d bundle offers for %d bundles", len(seeds), len(marketBundles))
 	}
@@ -233,6 +233,46 @@ func TestEveryBundleIsListedForTheBundlesSection(t *testing.T) {
 		}
 		if !listed[id] {
 			t.Errorf("bundle %q is not listed, so the client drops it", id)
+		}
+	}
+}
+
+// A bundle reads as owned once every ship and cosmetic in it is (the same
+// ownership grantMarketBundle checks): otherwise the Hero Ships tab offered a
+// bundle a player already had in full, and buying it only bought the credits.
+func TestBoughtBundleIsListedAsOwned(t *testing.T) {
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "650dd79476a1484b8adcd01ac2f17354"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := marketBundleByID(marketBundleIDBase + 2)
+	ownedFlag := func() bool {
+		for _, s := range marketBundleCatalogSeeds(pid) {
+			if s.itemID == b.id {
+				return s.owned
+			}
+		}
+		t.Fatalf("bundle %d not listed", b.id)
+		return false
+	}
+	if ownedFlag() {
+		t.Fatal("bundle owned before buying it")
+	}
+	if _, err := database.Exec(`UPDATE player_state SET premium_currency=? WHERE user_id=?`, b.priceGP(), pid); err != nil {
+		t.Fatal(err)
+	}
+	req := protocol.AppendStringField(nil, "RT", "YA_PurchaseItem")
+	req = append(req, protocol.AppendStringField(nil, "offer", "999"+strconv.Itoa(int(b.id)))...)
+	if got := protocol.ExtractStringField(buildMmogPurchasePayload("YA_PurchaseItem", pid, protocol.AppendRootEnd(req)), "result"); got != "bought" {
+		t.Fatalf("bundle purchase: %q", got)
+	}
+	if !ownedFlag() {
+		t.Error("bundle not owned after buying everything in it")
+	}
+	for _, s := range marketBundleCatalogSeeds("") {
+		if s.owned {
+			t.Errorf("bundle %d owned with no player", s.itemID)
 		}
 	}
 }

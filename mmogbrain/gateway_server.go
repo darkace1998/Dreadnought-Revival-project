@@ -115,6 +115,13 @@ func startGatewayServer(ctx context.Context, log *logrus.Logger, addr, certFile,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
+		// Must outlive the client's keep-alive pool. Unset, Go idles a
+		// connection out after ReadTimeout (15 s), while the client touches its
+		// session every 30 s. Wine's wininet keeps idle connections ~60 s and
+		// does not retry one the server closed, so under Wine/Proton the touch
+		// can pick a dead socket ("No response received for [Touch session]").
+		// From PR #80; the operator's Windows client shows no such failures.
+		IdleTimeout: 3 * time.Minute,
 	}
 
 	go func() {

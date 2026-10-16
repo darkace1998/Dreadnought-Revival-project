@@ -3373,6 +3373,64 @@ static void __fastcall HookVehicleViewCull(void *movementComp) {
 }
 
 // ---------------------------------------------------------------------------
+// Turbo TDM modifiers (on, TurboTDM hosts only; dn_host_no_game_modifiers.txt
+// turns it off). From PR #80, addresses re-checked 2026-10-16.
+//
+// Turbo TDM's whole effect is three feats on every ship. DN_GameModifiers_DT
+// row YGMT_TURBO_TDM: m_feats "ModifierSpeed;ModifierDamage;ModifierFireRate",
+// m_affectedTeam YHMAT_ALL (the only row with feats; YGMT_TDM's is empty).
+// DN_Feats_Custom_Modifiers_OTS_DT: ModifierSpeed +600% forward/reverse, +300%
+// vertical/steer; ModifierDamage +50%; ModifierFireRate -50% cooldowns/reloads.
+// Nothing on the host applied them (the code that handed the row's feats to
+// ships was in the original server build), so Turbo TDM played as plain TDM.
+//
+// 0x34BB30 (.pdata 0x34BB30-0x34BCFC): the feats component's setup -- reads
+// its owner (+0xA8), binds "&UYFeatsComponent::OnPawnPossessed". After it, the
+// row's feats are added with the game's own AddFeat body 0x337850(comp, FName)
+// (.pdata 0x337850-0x337953; exec thunk 0x73EDF0 is registered as "AddFeat"
+// and reads one FName). On the authority it adds locally; the AddFeatServer
+// RPC (0x5DFC40) is only taken when the caller lacks authority.
+// NOT verified live: that the feats replicate and the client's movement uses
+// ModifierSpeed (if it does not, expect position corrections in Turbo).
+#define RVA_FEATS_COMPONENT_BEGIN 0x34BB30
+#define RVA_FEATS_ADD_FEAT 0x337850
+typedef void(__fastcall *tFeatsBegin)(void *featsComp);
+typedef bool(__fastcall *tAddFeat)(void *featsComp, uint64_t featName);
+static tFeatsBegin g_origFeatsBegin = nullptr;
+
+static const wchar_t *const kTurboTdmFeats[] = {L"ModifierSpeed", L"ModifierDamage",
+                                                L"ModifierFireRate"};
+
+static bool HostIsTurboTDM() {
+  const wchar_t *cmd = GetCommandLineW();
+  return cmd && wcsstr(cmd, L"-GameMode=TurboTDM ") != nullptr;
+}
+
+static void __fastcall HookFeatsBegin(void *featsComp) {
+  g_origFeatsBegin(featsComp);
+  uint8_t *fc = (uint8_t *)featsComp;
+  void *owner = IsReadable(fc + OFF_COMPONENT_OWNER, 8) ? *(void **)(fc + OFF_COMPONENT_OWNER) : nullptr;
+  if (!owner || !ClassChainContains((UObjectMin *)owner, "Pawn"))
+    return;
+  static volatile LONG s_logged = 0;
+  bool logIt = InterlockedIncrement(&s_logged) <= 16;
+  for (const wchar_t *feat : kTurboTdmFeats) {
+    FNameMin name{};
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&name, feat, 1 /* FNAME_Add */);
+    bool ok = false;
+    __try {
+      ok = ((tAddFeat)(g_base + RVA_FEATS_ADD_FEAT))(featsComp, *(uint64_t *)&name);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+      Logf("turbo modifiers: AddFeat(%ls) faulted on %p", feat, featsComp);
+      return;
+    }
+    if (logIt || !ok)
+      Logf("turbo modifiers: AddFeat(%ls) on %s -> %s", feat, ClassNameOf(owner),
+           ok ? "added" : "FAILED");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Stack overflow at match end (always on)
 //
 // Verified 2026-09-24 by scraping the overflowed game-thread stack of a host
@@ -3653,6 +3711,11 @@ static LONG CALLBACK HostCrashHandler(EXCEPTION_POINTERS *ep) {
   CONTEXT *c = ep->ContextRecord;
   wsprintfA(g_crashLine, "  rax=%I64X rbx=%I64X rcx=%I64X rdx=%I64X rsi=%I64X rdi=%I64X\r\n",
             c->Rax, c->Rbx, c->Rcx, c->Rdx, c->Rsi, c->Rdi);
+  ProbeWrite(g_crashLine);
+  // Separate line: both in one would be up to 298 chars in this 256-byte
+  // buffer (wsprintfA does not bound it). r8-r15 from PR #80.
+  wsprintfA(g_crashLine, "  r8=%I64X r9=%I64X r10=%I64X r11=%I64X r12=%I64X r13=%I64X r14=%I64X r15=%I64X\r\n",
+            c->R8, c->R9, c->R10, c->R11, c->R12, c->R13, c->R14, c->R15);
   ProbeWrite(g_crashLine);
   int shown = 0;
   uintptr_t limit = rsp + (code == EXCEPTION_STACK_OVERFLOW ? 4096 : 65536);
@@ -4475,16 +4538,49 @@ static PlayerSeen *SeenFor(void *pc) {
   return freeSlot;
 }
 
+// Captain appearance. AYPlayerReplicationInfo::m_captainDisplayInformation is
+// a replicated FString with RepNotify at +0x758 (SDK DreadGame_Classes.h: Net,
+// Transient, RepNotify). On a client OnRep_CaptainData builds the captain from
+// it ("GENDER_x;#iiS=..#iiH=.."). The login-less host never fills it, so every
+// client drew the other players with the default captain. The string is the
+// player's saved one from mmogbrain (/battle/player captain=), data the
+// original server had. From PR #80 (they resolved the offset by reflection).
+// NOT verified live: that clients re-render the captain from the OnRep alone.
+// Switch: dn_host_no_captain.txt / DN_HOST_NO_CAPTAIN.
+#define OFF_PRI_CAPTAIN_DISPLAY 0x758
+static void SetCaptainDisplayInfo(uint8_t *pc, const char *body) {
+  if (SwitchOn("DN_HOST_NO_CAPTAIN", "dn_host_no_captain.txt"))
+    return;
+  char v[512];
+  if (!FieldValue(body, "captain", v, sizeof(v)) || !v[0] || strlen(v) >= sizeof(v) - 1)
+    return;
+  uint8_t *pri = IsReadable(pc + OFF_PC_PLAYER_STATE, 8) ? *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) : nullptr;
+  if (!pri || !IsReadable(pri + OFF_PRI_CAPTAIN_DISPLAY, sizeof(FStringMin))) {
+    Logf("captain: no player state on controller %p", pc);
+    return;
+  }
+  static wchar_t w[512];
+  int wl = MultiByteToWideChar(CP_UTF8, 0, v, -1, w, 512);
+  if (wl <= 1)
+    return;
+  FStringMin tmp = {w, wl, wl};
+  ((tAssign)(g_base + RVA_FSTRING_ASSIGN))(pri + OFF_PRI_CAPTAIN_DISPLAY, &tmp);
+  Logf("captain: player state %p +0x%x = \"%s\"", pri, OFF_PRI_CAPTAIN_DISPLAY, v);
+}
+
 static void NamePlayer(uint8_t *gm, uint8_t *pc, PlayerSeen *seen) {
   seen->named = true; // one attempt per player, logged either way
   static wchar_t name[64];
   name[0] = 0;
   const char *source = "mmogbrain";
-  char pid[80], path[160], body[256], v[128];
+  char pid[80], path[160], body[1024], v[128];
   if (PlayerPIDForController(pc, pid, sizeof(pid))) {
     _snprintf_s(path, sizeof(path), _TRUNCATE, "/battle/player?pid=%s", pid);
-    if (HttpGetLoopback(path, body, sizeof(body)) && FieldValue(body, "name", v, sizeof(v)) && v[0])
-      MultiByteToWideChar(CP_UTF8, 0, v, -1, name, 32);
+    if (HttpGetLoopback(path, body, sizeof(body))) {
+      if (FieldValue(body, "name", v, sizeof(v)) && v[0])
+        MultiByteToWideChar(CP_UTF8, 0, v, -1, name, 32);
+      SetCaptainDisplayInfo(pc, body);
+    }
   }
   if (!name[0]) {
     source = "join URL";
@@ -5223,7 +5319,7 @@ static void InstallPostLoginHook() {
   }
   void *processEvent = vtable[VF_PROCESS_EVENT];
 
-  if (MH_CreateHook(processEvent, &HookProcessEvent,
+  if (MH_CreateHook((LPVOID)processEvent, (LPVOID)&HookProcessEvent,
                     (LPVOID *)&g_origProcessEvent) != MH_OK ||
       MH_EnableHook(processEvent) != MH_OK) {
     Logf("post-login: failed to hook ProcessEvent at %p. Not hooking.",
@@ -5293,7 +5389,7 @@ static DWORD WINAPI Startup(LPVOID) {
   }
 
   void *target = (void *)(g_base + RVA_FIND_LOADOUT_BY_ID);
-  if (MH_CreateHook(target, &HookFindLoadoutByID,
+  if (MH_CreateHook((LPVOID)target, (LPVOID)&HookFindLoadoutByID,
                     (LPVOID *)&g_origFindLoadoutByID) != MH_OK ||
       MH_EnableHook(target) != MH_OK) {
     Logf("failed to hook FindLoadoutByID at RVA 0x%X. Standing down.",
@@ -5316,7 +5412,7 @@ static DWORD WINAPI Startup(LPVOID) {
   // GetNetMode the orbit code asks is answered the same way.
   if (DedicatedNetModeEnabled()) {
     void *nm = (void *)(g_base + RVA_NETDRIVER_GET_NET_MODE);
-    if (MH_CreateHook(nm, &HookGetNetMode, (LPVOID *)&g_origGetNetMode) != MH_OK ||
+    if (MH_CreateHook((LPVOID)nm, (LPVOID)&HookGetNetMode, (LPVOID *)&g_origGetNetMode) != MH_OK ||
         MH_EnableHook(nm) != MH_OK) {
       Logf("net mode: FAILED to hook UNetDriver::GetNetMode at RVA 0x%X (%p). "
            "The host stays a listen server and players will stay in orbit.",
@@ -5403,6 +5499,15 @@ static DWORD WINAPI Startup(LPVOID) {
   if (!SwitchOn("DN_HOST_NO_ONS_GUN_ROWS", "dn_host_no_ons_gun_rows.txt"))
     InstallSwitchedHook("command ship gun rows (LoadWeaponDataTableRow)", RVA_WEAPON_GROUP_LOAD_ROW,
                         (void *)&HookWeaponGroupLoadRow, (void **)&g_origWeaponGroupLoadRow);
+
+  if (!HostIsTurboTDM())
+    ;
+  else if (SwitchOn("DN_HOST_NO_GAME_MODIFIERS", "dn_host_no_game_modifiers.txt"))
+    Logf("turbo modifiers: OFF (dn_host_no_game_modifiers.txt / "
+         "DN_HOST_NO_GAME_MODIFIERS=1). Turbo TDM plays as plain TDM.");
+  else
+    InstallSwitchedHook("turbo modifiers (UYFeatsComponent setup)", RVA_FEATS_COMPONENT_BEGIN,
+                        (void *)&HookFeatsBegin, (void **)&g_origFeatsBegin);
 
   if (ShipPhysicsEnabled())
     InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",

@@ -412,7 +412,7 @@ func TestGatewayMarketEntitiesCarryBothNameFields(t *testing.T) {
 	if len(seeds) == 0 {
 		t.Fatal("market item catalog is empty")
 	}
-	seeds = append(seeds, gatewayBundleCatalogSeeds()...)
+	seeds = append(seeds, gatewayBundleCatalogSeeds("")...)
 	for _, seed := range seeds {
 		entity := gatewayMarketEntity(seed, true)
 		display, ok := entity["Name"].(string)

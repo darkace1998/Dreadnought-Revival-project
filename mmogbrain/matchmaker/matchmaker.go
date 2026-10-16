@@ -426,7 +426,14 @@ func (m *Matchmaker) pollBattleServers() {
 				Debug("instance poll failed; YA_Connect will fall back to the fixed delay")
 			continue
 		}
-		if state.gone && m.seenInstance[p.instanceID] {
+		if state.gone && (m.seenInstance[p.instanceID] || p.alreadyReady) {
+			// alreadyReady is persisted evidence of the same kind seenInstance
+			// holds in memory: server_ready_at is only ever written after a
+			// real 200-and-ready poll, so a stamped match whose instance now
+			// 404s was once live. After a stack restart seenInstance is empty,
+			// so without this a match whose host died with the old process
+			// stayed 'active' and its players' next logins were pushed
+			// YA_Connect at a dead address (180 s loading timeout). From PR #80.
 			m.endMatchWithNoHost(p.matchID, p.instanceID)
 			continue
 		}

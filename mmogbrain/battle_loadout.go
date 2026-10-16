@@ -102,11 +102,21 @@ func battlePlayerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "pid is required", http.StatusBadRequest)
 		return
 	}
-	name := strings.TrimSpace(mmogPlayerStateForPID(pid).displayName)
+	state := mmogPlayerStateForPID(pid)
+	name := strings.TrimSpace(state.displayName)
 	if name == "" || name == "Local" {
 		http.Error(w, "no name for this player", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "name=%s\n", name)
+	// captain= is the saved captain appearance (YA_SavePlayerDisplayInformation
+	// "disp", the same string YA_GetPlayersInformation returns as DisplayInfo).
+	// The host copies it into AYPlayerReplicationInfo::m_captainDisplayInformation
+	// (replicated FString +0x758, RepNotify), which a login-less battle server
+	// otherwise leaves empty, so every other player is drawn with the default
+	// captain. From PR #80.
+	if captain := strings.TrimSpace(state.displayInfo); captain != "" && !strings.ContainsAny(captain, "\r\n") {
+		_, _ = fmt.Fprintf(w, "captain=%s\n", captain)
+	}
 }
