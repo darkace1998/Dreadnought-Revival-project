@@ -3390,8 +3390,8 @@ static void __fastcall HookVehicleViewCull(void *movementComp) {
 // (.pdata 0x337850-0x337953; exec thunk 0x73EDF0 is registered as "AddFeat"
 // and reads one FName). On the authority it adds locally; the AddFeatServer
 // RPC (0x5DFC40) is only taken when the caller lacks authority.
-// NOT verified live: that the feats replicate and the client's movement uses
-// ModifierSpeed (if it does not, expect position corrections in Turbo).
+// VERIFIED live 2026-10-16: feats added on every ship (player + bots), and the
+// client moved faster and smoothly (operator: "faster and smooth no stutter").
 #define RVA_FEATS_COMPONENT_BEGIN 0x34BB30
 #define RVA_FEATS_ADD_FEAT 0x337850
 typedef void(__fastcall *tFeatsBegin)(void *featsComp);
@@ -4076,33 +4076,95 @@ static void MaybeAnnounceRibbon(void *pri, uint32_t event, unsigned count) {
     SendRibbonAchievement(pri, event);
 }
 
+// The in-match ribbon popup (on; dn_host_no_ribbon_popup.txt /
+// DN_HOST_NO_RIBBON_POPUP=1 turns it off). Added 2026-10-16.
+//
+// ClientAddAchievement (above) only files the ribbon into the client's
+// scoring component list (the client's +0x350 is 0x4171E0 itself: type 2 ->
+// 0x413740, no UI). The popup is a different RPC:
+// AYPlayerReplicationInfo::ClientEventResult(FYEventResponse) -- sender stub
+// 0x5E5280 (FName 0x3E101C8), client body 0x5AFEA0 (PRI vtable +0x698). The
+// client takes the row's RIBBON name when m_ribbonAchieved (+0x04) is set,
+// broadcasts it (0x5C59C0, isRibbon = that byte, points = eventScore +
+// ribbonScore) to AYHUD::OnPlayerRepScoringEvent -> 0x494950 ->
+// UYHUDWidget_ScoringEvents::BP_EventAddScoringEvent(text, level,
+// isRibbonEvent, ribbonTexture), and plays "#Scoring_<name>".
+//
+// The host sends it already: PRI::ScoreEvent 0x5B30D0 fills the
+// FYEventResponse (0x426DC0), calls AssignScoringReward (this hook) on it,
+// then sends ClientEventResult if m_requiresHUDUpdate (+0x28) and the row's
+// HUD flag (+0xB0) are set. It never sets the ribbon half. So, BEFORE the
+// original runs, when this event completes a ribbon:
+//   +0x04 m_ribbonAchieved = 1, +0x10 m_ribbonScore = the row's RibbonScore
+//   (AssignScoringReward adds eventScore + ribbonScore to the score, as the
+//   original server's did), +0x28 m_requiresHUDUpdate = 1 (0x426DC0 sets it
+//   only for rows with an event score; GUESS: a ribbon also shows).
+// Ribbon XP (+0x18) and credits (+0x20) stay 0: mmogbrain pays them from ev=.
+// FYEventResponse (SDK): +0 m_id, +4 m_ribbonAchieved, +8 m_shipId,
+// +0xC m_eventScore, +0x10 m_ribbonScore, +0x14 m_eventReward,
+// +0x18 m_ribbonReward, +0x1C m_eventCredits, +0x20 m_ribbonCredits,
+// +0x24 m_visibility, +0x28 m_requiresHUDUpdate.
+static bool RibbonPopupEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_RIBBON_POPUP", "dn_host_no_ribbon_popup.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
 static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
-  g_origAssignScoringReward(pri, reward);
+  bool tracked = false, ribbon = false;
+  uint32_t event = SCORING_EVENT_COUNT;
   __try {
-    if (!pri || !IsReadable(reward, 9 * sizeof(int32_t)) ||
-        !IsReadable((uint8_t *)pri + 0x148, 1) || ((uint8_t *)pri)[0x148] != 3)
-      return;
-    int32_t xp = reward[5] + reward[6], cr = reward[7] + reward[8];
-    uint32_t event = (uint32_t)reward[0] & 0xff; // record +0x00: the row's Id byte
-    AcquireSRWLockExclusive(&g_eventTotalsLock);
-    EventTotals *slot = nullptr;
-    for (auto &t : g_eventTotals) {
-      if (t.pri == pri) { slot = &t; break; }
-      if (!slot && !t.pri) slot = &t;
-    }
-    unsigned count = 0;
-    if (slot) {
-      slot->pri = pri;
-      if (event < SCORING_EVENT_COUNT && slot->counts[event] < 0xFFFF)
-        count = ++slot->counts[event];
-      if (xp > 0 || cr > 0) {
-        slot->xp += xp > 0 ? xp : 0;
-        slot->credits += cr > 0 ? cr : 0;
-        slot->events++;
+    if (pri && IsReadable(reward, 0x2C) && IsReadable((uint8_t *)pri + 0x148, 1) &&
+        ((uint8_t *)pri)[0x148] == 3) {
+      tracked = true;
+      event = (uint32_t)reward[0] & 0xff; // m_id: the row's Id byte
+      unsigned count = 0;
+      AcquireSRWLockExclusive(&g_eventTotalsLock);
+      EventTotals *slot = nullptr;
+      for (auto &t : g_eventTotals) {
+        if (t.pri == pri) { slot = &t; break; }
+        if (!slot && !t.pri) slot = &t;
+      }
+      if (slot) {
+        slot->pri = pri;
+        if (event < SCORING_EVENT_COUNT && slot->counts[event] < 0xFFFF)
+          count = ++slot->counts[event];
+      }
+      ReleaseSRWLockExclusive(&g_eventTotalsLock);
+      ribbon = LiveRibbonsEnabled() && event < SCORING_EVENT_COUNT && count > 0 &&
+               g_ribbonRules[event].n > 0 && count % (unsigned)g_ribbonRules[event].n == 0;
+      if (ribbon && RibbonPopupEnabled()) {
+        ((uint8_t *)reward)[0x04] = 1;
+        reward[4] = g_ribbonRules[event].score;
+        ((uint8_t *)reward)[0x28] = 1;
       }
     }
-    ReleaseSRWLockExclusive(&g_eventTotalsLock);
-    MaybeAnnounceRibbon(pri, event, count);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    tracked = ribbon = false;
+  }
+  g_origAssignScoringReward(pri, reward);
+  if (!tracked)
+    return;
+  __try {
+    int32_t xp = reward[5] + reward[6], cr = reward[7] + reward[8];
+    if (xp > 0 || cr > 0) {
+      AcquireSRWLockExclusive(&g_eventTotalsLock);
+      for (auto &t : g_eventTotals)
+        if (t.pri == pri) {
+          t.xp += xp > 0 ? xp : 0;
+          t.credits += cr > 0 ? cr : 0;
+          t.events++;
+          break;
+        }
+      ReleaseSRWLockExclusive(&g_eventTotalsLock);
+    }
+    if (ribbon) {
+      SendRibbonAchievement(pri, event);
+      if (RibbonPopupEnabled())
+        Logf("ribbons: event %u -> ribbon popup (ClientEventResult m_ribbonAchieved, ribbon score %d)",
+             event, g_ribbonRules[event].score);
+    }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
 }

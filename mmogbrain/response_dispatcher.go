@@ -92,6 +92,8 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		return buildMmogBoosterDataPayload()
 	case "YA_GetPlayerScores":
 		return buildMmogPlayerScoresPayloadForPlayer(playerPID)
+	case "YA_GetLeaderboardData":
+		return buildMmogLeaderboardPayload(playerPID, payload)
 	case "YA_GetPlayerStatistics":
 		return buildMmogPlayerStatisticsPayload(playerPID, payload)
 	case "YA_FleetEligibility":

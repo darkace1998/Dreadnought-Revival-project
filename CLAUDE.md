@@ -102,6 +102,8 @@ cd auth-server && go build -o ../run/auth-server .   # build a single service
 bash scripts/start-services.sh                # start the stack (logs in run/<service>.log)
 bash scripts/stop-services.sh                 # stop it
 curl http://127.0.0.1:8081/health             # health checks: 8081-8085 per service
+
+cd battle-server-mod && bash build-linux.sh   # the host mod DLL, clang cross-build (smoke-test + deploy: dreadnought-stack skill)
 ```
 
 ### Tests and lint — must run per-module, not from the workspace root

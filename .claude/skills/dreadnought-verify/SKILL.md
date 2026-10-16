@@ -54,6 +54,26 @@ weapons, VFX, persistence, matchmaking. So any bug that survives `DN_INERT=1` is
 the server's, and any bug that disappears is ours. Check this **before**
 investigating, not after.
 
+## Server side: what a smoke host proves, and what it doesn't
+
+On this Linux box a battle-server DLL is smoke-tested by running one headless
+host under Wine (recipe in `dreadnought-stack`). That proves the DLL loads, every
+hook installs, and the match reaches `InProgress`. It does **not** prove
+anything that needs a pawn or a player: with nobody joined, the pre-match
+countdown never runs and no bots spawn. The Turbo TDM feats hook installed in
+the smoke test and was only shown to work by a played match.
+
+So report a smoke test as "loads and installs", then name the exact mod log line
+the operator's match will produce (for example
+`turbo modifiers: AddFeat(ModifierSpeed) on … -> added`, or
+`ribbons: event N -> ribbon popup`). For anything on screen, ask the operator
+what they saw.
+
+Server-side confirmation without the player: compare the host's per-host log
+(`run/battle-logs/battle-*-portN.log`) with mmogbrain's `battle result` line
+and the database row. For ribbons, the host's `ribbons: event N -> … sent`,
+mmogbrain's `ribbons=map[...]` and `player_ribbons.updated_at` must agree.
+
 ## The headless harness
 
 `scripts/bisect.ps1` hosts a map with no renderer and reports whether the

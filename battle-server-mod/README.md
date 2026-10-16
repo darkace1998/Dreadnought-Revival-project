@@ -981,6 +981,28 @@ Expected log: `ribbons: N ribbon rules loaded for mode "TDM"` per match and
 NOT verified live: whether the client shows the ribbon (popup / end-of-match
 list) from this RPC.
 
+## Ribbon popup in the match (on; `dn_host_no_ribbon_popup.txt` turns it off; added 2026-10-16)
+
+`ClientAddAchievement` (above) only files a ribbon into the client's scoring
+list; the client's handler for it is the same `0x4171E0` and calls no UI. The
+popup is `AYPlayerReplicationInfo::ClientEventResult(FYEventResponse)`
+(sender `0x5E5280`, client body `0x5AFEA0`): when `m_ribbonAchieved` is set,
+the client takes the row's ribbon name, plays `#Scoring_<name>` and calls
+`UYHUDWidget_ScoringEvents::BP_EventAddScoringEvent(text, level,
+isRibbonEvent, ribbonTexture)`.
+
+The host already sends `ClientEventResult` for every scoring event
+(`0x5B30D0`: fill, `AssignScoringReward`, send), but never sets the ribbon
+half. The `AssignScoringReward` hook now counts the event before the original
+runs and, when it completes a ribbon, sets `m_ribbonAchieved` (+0x04),
+`m_ribbonScore` (+0x10, the row's RibbonScore, added to the player's score
+like the original) and `m_requiresHUDUpdate` (+0x28; GUESS that ribbons show
+even on rows without an event score). Ribbon XP and credits stay 0 there:
+mmogbrain pays them.
+
+Log: `ribbons: event N -> ribbon popup (ClientEventResult m_ribbonAchieved,
+ribbon score S)`. Not verified live yet.
+
 ## MVP and Man Of The Day ribbons (on, added 2026-10-15)
 
 Switch off with `dn_host_no_eom_ribbons.txt` / `DN_HOST_NO_EOM_RIBBONS=1`.
@@ -1038,10 +1060,11 @@ body behind the `AddFeat` exec thunk `0x73EDF0`). Feats replicate through
 #80.
 
 Logs: `turbo modifiers: AddFeat(ModifierSpeed) on … -> added` (first 16
-pawns, and every failure). Verified: the hook installs on a TurboTDM host.
-NOT verified: feats on a live ship, and that clients move with the speed feat
-without position corrections. If ships stutter or snap back in Turbo, create
-`dn_host_no_game_modifiers.txt`.
+pawns, and every failure). VERIFIED live 2026-10-16 (Gorge): all three feats
+added to the player's ship and every bot class, and the operator reported the
+match "faster and smooth, no stutter" -- the client moves with the replicated
+speed feat, no position corrections. `dn_host_no_game_modifiers.txt` turns it
+off.
 
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 

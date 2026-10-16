@@ -164,6 +164,37 @@ Worked example, the in-match spawn fix:
 3. Hooking `0x370970` covered both paths with one hook. Hooking the logger would
    have covered neither.
 
+### When `callers.py` says `none`: the function is virtual
+
+RPC `_Implementation`s, `OnRep_`s and engine overrides are only reached through
+a vtable. The build has **no RTTI**, so classes can't be named from their
+tables; go through the exec thunk instead:
+
+```console
+$ python vtslot.py 5AFEA0
+0x5AFEA0: vtable at rva 0x2FD3C68 (279 entries), slot 0x698
+$ grep -rl "\*param_1 + 0x698))(param_1" <decompile>/functions/7*/   # exec thunks live ~0x73xxxx-0x77xxxx
+.../74/140745200_FUN_140745200.c
+$ grep -rh "FUN_140745200" <decompile> | grep d03140
+  thunk_FUN_140d03140(uVar1,"ClientEventResult",FUN_140745200);
+```
+
+So `0x5AFEA0` is `ClientEventResult_Implementation`. The same trick in reverse
+answers "what does the client do when this RPC arrives?". Read the thunk's
+`*param_1 + SLOT` call, then `vtslot.py` the function you suspect, or read the
+slot of the class's vtable directly. On the client, `ClientAddAchievement`
+(slot `0x350`) turned out to be the same `0x4171E0` the server runs, which
+files the ribbon without touching the UI.
+
+**To find who sends an RPC or calls a Blueprint event**, use its FName global:
+`strxref.py <Name>` finds a LEA of the UTF-16 literal inside the static-init
+region (around `0xCB000-0xD0000`, `NO UNWIND RECORD`). Disassembling there
+shows `lea rcx, [global]` before `jmp FName ctor`. Grep the decompile for
+`DAT_14<global>`: the hit is the sender stub (`FindFunction(FName)` +
+`ProcessEvent` through `vtable +0x1A8`), and its callers are the real senders.
+That is how `BP_EventAddScoringEvent` (HUD popup) led back to
+`ClientEventResult` (sender `0x5E5280`).
+
 ## 3. Batch decompile with headless Ghidra
 
 `DumpFuncs.java` decompiles **and** disassembles a list of RVAs in one run.

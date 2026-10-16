@@ -125,5 +125,14 @@ converges.
       more paths with one hook?
 - [ ] Call the original first and only substitute on a null/failed result, so
       the engine is never second-guessed when it was right.
+  Exception: when the original *consumes* a struct that you need to fill in,
+  write it before calling the original, and check with `callers.py` that every
+  caller passes that same struct. Example: the ribbon fields of
+  `FYEventResponse` in the `AssignScoringReward` hook (`0x5AD140`, one caller,
+  `0x5B30D0`).
 - [ ] Gated behind an environment switch so it can be bisected without a
       rebuild (see `dreadnought-verify`).
+- [ ] Pass detours to MinHook with explicit casts:
+      `MH_CreateHook((LPVOID)target, (LPVOID)&Hook, (LPVOID *)&g_orig)`. MSVC
+      accepts a bare function pointer as `LPVOID`; clang (`build-linux.sh`)
+      rejects it with "no matching function for call to 'MH_CreateHook'".

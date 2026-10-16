@@ -23,8 +23,10 @@ uploads logs**; you read them. So:
 4. Read the uploaded log, and label every claim **verified** (naming the
    measurement) or **theory**. This is a standing instruction from the operator.
 
-Battle-server DLL changes are slower still: this box cannot build Windows/MSVC,
-so the operator builds and copies it. Bundle host-side changes accordingly.
+Battle-server DLL changes are built and deployed here too (since 2026-10-16;
+before that the operator built them with MSVC). See "Battle-server mod: build,
+smoke-test, deploy" below. The operator still has to play a match to verify
+anything a player sees.
 
 ## Build, deploy, restart
 
@@ -87,12 +89,52 @@ The mod's log is NOT in `run/`. `$GAME_BINARY`'s directory
 files (`dn_host_dedicated.txt`, `dn_host_bc_ai.txt`, `dn_host_ship_physics.txt`,
 `dn_host_player_loadouts.txt`, and off-switches such as `dn_host_no_eom_stats.txt`)
 and `wer.dll`, which is how the mod is side-loaded. `battle-server-mod/build.bat`
-writes `build.log` next to itself -- ask for that file when a build fails.
+(MSVC, Windows) writes `build.log` next to itself; `build-linux.sh` writes
+`build-linux/build.log`.
 
 **Check the client log's timestamps before analysing it.** It is uploaded
 manually and is often an older run than you assume; client clock ran 2h behind
 server clock in past sessions. Correlate against `run/mmogbrain.log` timestamps
 before concluding a fix did or did not take.
+
+## Battle-server mod: build, smoke-test, deploy
+
+```bash
+cd battle-server-mod && nice -n 19 bash build-linux.sh   # -> build-linux/dn_host_loadout.dll
+```
+
+clang (`apt-get install clang lld`) cross-compiles for x86_64-windows-gnu with
+`-fms-extensions`, so `__try/__except` work. It links `msvcrt.dll` and exports
+the same four `Wer*` functions as the MSVC build. clang rejects implicit
+function-pointer to `LPVOID` conversions that MSVC accepts, so cast MinHook
+arguments explicitly.
+
+**Smoke-test before deploying.** Run one headless host from a mirror directory
+(symlinks to the exe, `Content/`, `Engine/` and the switch files, with the new
+DLL copied in as `wer.dll`) and a COPY of the Wine prefix (`cp -a ~/.wine`).
+Then neither the live mod log nor the live prefix's wineserver is touched. The
+prefix's services inherit the stdout pipe of the first process that starts
+them, which once kept a finished instance "running". Run it at low priority on allowed CPUs (the
+cpuset is `0-7,12-15`, so `taskset -c 14,15`), under a timeout:
+
+```bash
+WINEPREFIX=$S/prefix DISPLAY=:99 WINEDEBUG=-all timeout -k 10 150 nice -n 19 taskset -c 14,15 \
+  wine DreadGame-Win64-Shipping.exe "/Game/Maps/MP/Highlands/MP_Highlands_P?listen?game=TDM" \
+  -server -port=7990 -maxplayers=10 -GameMode=TDM -MatchID=smoke -nullrhi -unattended -nosplash \
+  -nop4 -nosound -noeac -NoSteam -forcelogflush -stdout -AllowStdOutLogVerbosity > $S/host.out 2>&1
+WINEPREFIX=$S/prefix wineserver -k
+```
+
+Pass means: every `installed:` line in the mirror's `dn_host_loadout.log`, the
+scoring table and ribbon rules loaded, and `Match State Changed ... InProgress`
+in `host.out`. With no player, bots never spawn (the pre-match countdown never
+runs), so per-pawn hooks are NOT exercised by a smoke test.
+
+**Deploy:** copy the DLL beside the live `wer.dll` as `wer.dll.new` and then
+`mv` it over, so the swap is atomic. A running host keeps its mapped copy; the
+next host loads the new one. Never `cp` straight over a DLL a host has mapped.
+Keep a backup (`wer.dll.bak-*`), and refresh `/root/projects/output/wer.dll` and
+`output/battle-server-mod-src.zip`.
 
 ## Services
 

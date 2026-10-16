@@ -114,6 +114,29 @@ detailed JSON request log goes to `mmogbrain.log` **at the repo root**, because
 mmogbrain opens it relative to its working directory. Grep the latter when
 tracing client requests.
 
+## Building and deploying the battle-server mod
+
+`battle-server-mod/` is built on this box with clang since 2026-10-16:
+
+```bash
+cd battle-server-mod && nice -n 19 bash build-linux.sh   # -> build-linux/dn_host_loadout.dll
+```
+
+- **Needs** `clang` and `lld` (apt) plus the mingw-w64 headers. The output links
+  `msvcrt.dll` and exports the same four `Wer*` functions as the MSVC
+  `build.bat` build.
+- **clang is stricter than MSVC** about function pointers: MinHook arguments
+  need `(LPVOID)` casts.
+- **Smoke-test every build before deploying:** a headless host from a mirror
+  directory and a copy of the Wine prefix. The recipe is in the
+  `dreadnought-stack` skill.
+- **Deploy** by writing `wer.dll.new` beside the game exe and `mv`-ing it over
+  `wer.dll` (atomic; running hosts keep their copy). Keep a backup.
+- **After any mod change**, refresh `/root/projects/output/wer.dll` and
+  `/root/projects/output/battle-server-mod-src.zip`.
+- **Every new host feature gets an off switch** (`dn_host_no_*.txt` beside the
+  exe) and a section in `battle-server-mod/README.md`.
+
 ## Running the game client yourself
 
 `bash scripts/wine-client.sh [seconds] [output-log]` runs the real client against
