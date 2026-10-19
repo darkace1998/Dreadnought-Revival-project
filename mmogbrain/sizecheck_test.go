@@ -74,7 +74,11 @@ var targetSizes = map[string]int{
 	"YA_GetBoosterData":        1856,
 	// 382 -> 1257 (+875): one progress entry per goal of the rebuilt careers.
 	"YA_GetCareerProgression": 1257,
-	"YA_GetPlayerScores":      277,
+	// 277 -> 265 (-12): root "result" is now the ARRAY of {GameMode, TimeSpan,
+	// Score} the reply's reader (dispatcher 0x2A25B4B -> 0x2A73250) parses --
+	// HAVOC LIFETIME / LIFETIMESUM / WEEKLY (havoc.go) -- instead of a
+	// leaderboard-shaped object it skipped.
+	"YA_GetPlayerScores": 265,
 	// Was 39062, +360 after fixing int32-blindness in appendMmogItemPriceDataFields
 	// (m_realCurrency/m_hardCurrency/m_softCurrency/m_freeXP/m_shipXP now
 	// numeric strings, matching the rest of this payload's m_-prefixed fields).

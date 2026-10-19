@@ -16,6 +16,11 @@ type HavocReward struct {
 	Description string `json:"m_description"`
 	IconPath    string `json:"m_iconPath"`
 	RowName     string `json:"-"` // The row name from the DataTable
+	// The milestone: a run scoring at least Highscore pays Value of
+	// RewardType (EYHavocRewardType::YHRT_FREEXP / YHRT_CREDITS / YHRT_ITEM).
+	Highscore  int32  `json:"m_highscore"`
+	RewardType string `json:"m_rewardType"`
+	Value      int32  `json:"m_value"`
 }
 
 // havocRewardsData holds the loaded Havoc reward data
@@ -53,6 +58,9 @@ func LoadHavocRewards() error {
 				Description: rowData.GetString("m_description"),
 				IconPath:    rowData.GetString("m_iconPath"),
 				RowName:     rowName,
+				Highscore:   rowData.GetInt32("m_highscore"),
+				RewardType:  rowData.GetString("m_rewardType"),
+				Value:       rowData.GetInt32("m_value"),
 			}
 			rewards = append(rewards, reward)
 		}

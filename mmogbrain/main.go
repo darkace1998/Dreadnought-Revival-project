@@ -375,6 +375,8 @@ func newRouter(h *handlers.Handler, secret []byte, adminKey, internalAPIKey stri
 	// login. Loopback only; see scoring_table.go.
 	r.HandleFunc("/battle/scoring", battleScoringHandler).Methods(http.MethodGet)
 	r.HandleFunc("/battle/ribbons", battleRibbonsHandler).Methods(http.MethodGet)
+	// Battle-server mod: a Havoc run at Game Over (havoc.go). Loopback only.
+	r.HandleFunc("/battle/havoc", battleHavocHandler).Methods(http.MethodGet)
 	r.HandleFunc("/online", onlineHandler).Methods(http.MethodGet)
 
 	// Admin dashboard (admin_dashboard.go): registered before the /admin

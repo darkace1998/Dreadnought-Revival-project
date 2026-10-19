@@ -1066,6 +1066,115 @@ match "faster and smooth, no stutter" -- the client moves with the replicated
 speed feat, no position corrections. `dn_host_no_game_modifiers.txt` turns it
 off.
 
+## Havoc (on, Havoc hosts only; `dn_host_no_havoc_director.txt` turns it off; added 2026-10-19)
+
+Havoc is the wave-defence mode (`GameMode_Havoc_BP`, a Horde subclass,
+`YGMT_HAVOC`) on `HVC_Map1` / `HVC_Map2`. The client's mode list
+(`GlobalUI.uasset`) has its own `HAVOC` tile; mmogbrain lists it only with
+`DN_HAVOC=1`. Without the mod, Havoc loads and fighter swarms fight, but no wave
+ever starts: the server half of the wave loop is compiled out of this build
+(Horde `StartFirstWave` / `EndCurrentWave` / `CheckWaveOver` and the Havoc
+timers all share the empty exec thunk `0x74C640`). Ported from PR #80
+(starveil-bunny), whose author played waves, wave XP, upgrades and the kill XP
+pickup live on their build.
+
+What the mod does, all from the game-mode timer (1 s) and four hooks:
+
+- **Wave director.** Starts PvE (horde manager as event manager,
+  `OnPVEModeStarted`, PvE difficulty, combat scene `StartCombat` `0x2681A0`),
+  then cycles WaveStarting -> WaveInProgress -> WaveComplete ->
+  UpgradeSelection through the game state's own `EnterNewState` `0x36BC00` and
+  `OnRep_WaveStateChanged` body `0x39E010`. A wave ends when everything that
+  spawned is dead (GUESS: 15 s spawn grace; 120 s with nothing alive ends it).
+  Upgrade selection ends when every human readied (`ServerReadyUpPlayerForNextWave`
+  thunk `0x772650`) or after `m_upgradeSelectionDuration`.
+- **Enemy list and kills.** `AddNPCToEnemyList` (shared int thunk `0x742E90`,
+  replaced: it does the thunk's own `FFrame::Step` + `P_FINISH`) records the
+  wave's enemies; a listed enemy that dies broadcasts `OnAnyNPCKilled`, which
+  makes the BP drop the Havoc XP pickup.
+- **XP.** `AddXPForGroup` and `AddXPWithContributerPlayer/Pawn` (thunk
+  `0x740AF0`) are compiled out; the mod writes the game state's wave/total XP
+  and every human's `m_currentXP` (PRI `+0xA28`). GUESS: team XP, every player
+  gets the full grant.
+- **Upgrades.** On UpgradeSelection each player is offered one boost per
+  category from `DN_HavocBoosts_DT` (all 38 rows, checked against the table
+  2026-10-19), weighted by `m_weight`, via `ClientReceiveRandSelectedUpgrades`.
+  The pick (`ServerReceiveSelectedUpgradeIndex_Implementation` `0x406040`,
+  which only logs) is paid with the game's `DeductXP` `0x3F34F0` and the boost's
+  feat goes on the ship with `AddFeat`, again on every respawned ship (the
+  feats-component hook is shared with Turbo TDM). GUESS: the selection rule.
+- **Respawn ship switch** (`dn_host_no_havoc_respawn_gate.txt` turns only this
+  off). Havoc clears the loadout filter, so `0x33C680` rejects every Havoc ship
+  on respawn; the gate answers TRUE for exactly the loadout being activated.
+  NOT verified in PR #80 either.
+
+**Verified 2026-10-19.** Offsets: 22 native ones read off their property
+registration in the exe, and all 25 reflected ones checked at runtime against
+the engine's reflection on every Havoc host (`havoc: offsets checked against
+reflection: 25 OK, 0 MISMATCH`); the scene flag +0x444 and loadout manager
++0x200/+0x208 from the code that uses them. Live run (HVC_Map1, one player):
+wave 1 (3 enemies) killed, `AddXPForGroup(750)` from the BP at the clear, an
+offer, a 600 XP shield boost bought and its feat added, ready-up, wave 2
+started.
+
+Stage 2 (2026-10-19), from GameState_Havoc_BP / PVE_HordeManager_BP bytecode
+(`tools/bpdump`), the client's code and the Havoc tables:
+
+- **Wave over** when the BP says so: its CheckWaveOver calls the compiled-out
+  `SetSpecialWaveConditionsFulfilled(true)` (bool thunk `0x777000`, hooked)
+  once the enemies are dead AND every XP drop is picked up or gone. GUESS
+  fallbacks: 60 s after the last kill, 120 s with nothing spawned.
+- **XP**: `StarterXP` 750 once (a DoOnce in the BP), XP drops 275 / boss 750
+  (pickup BPs), and `m_monsterKillXP` 25 per wave enemy killed (the scoring
+  row HavocXPKill scores the same 25; GUESS: paid to the group).
+- **Wave index** follows the game state, so the horde manager's loop
+  (`SetWaveIndex` back to `WaveToLoopBackTo`) works; `m_wavesReached` is left
+  to the BP's real `IncrementWavesReached`.
+- **Wave modifiers**: 2 per wave from `DN_HavocModifiers_DT` (weights, wave
+  range, excludes; "BossWave" on 7/12/17/22; GUESS: weighted random), sent with
+  `ClientUpdateActiveWaveModifier`, feats on the affected side's ships for the
+  wave (`AddFeat` / `RemoveFeat` `0x359770`). **Permanent enemy modifiers**
+  (`DN_HavocPermanentEnemyModifiers_DT`, from wave 3) on every enemy ship.
+- **Game over**: no connected player with a living ship for 3 s during a wave
+  (GUESS), or the BP's
+  PlayersWin / PlayersLose. The director enters GameOver, reports each run to
+  mmogbrain (`/battle/havoc`: score = the team's total XP, as
+  YEOMHavocProgressionData m_teamTotalXP; weekly milestones from
+  `DN_HavocRewards_DT` paid there), sends `ClientUpdateHighscore` /
+  `ClientUpdateWeeklyScoreResetTime`, sets `m_isInEndOfMatchDataFinalized`,
+  and ends the match 6 s later (EndMatch, enemy team wins).
+
+Smoke-tested headless (`dn_host_havoc_smoke.txt` + `dn_host_havoc_fast_waves.txt`,
+test switches): 3 waves with modifiers on/off every enemy, permanent boosts from
+wave 3, game over and EndMatch without a fault; the host then loaded
+`Launch_P` 6 s after EndMatch (not seen on PvP hosts; to watch with players).
+
+Stage 3 (2026-10-19):
+
+- **Ship tier upgrades** (`dn_host_no_havoc_ship_upgrades.txt` turns them
+  off). On a wave in the loadout rows' `m_waveAppearances` (3, 6, 12) the
+  client's PrepareUpgradesForUI (`0x37B2D0`) reads the offered names as
+  `DN_HavocLoadouts_DT` rows, and their cost is left 0 (free). The director
+  offers one ship per category from the rows of that wave, the player's own
+  line holding its next tier (GUESS: the selection). A pick registers the
+  ship's class (path from ItemIDRegister) with the player's loadout manager,
+  activates it and calls SpawnPlayer (`0x5998A0`) with the last-pawn pointer
+  (PC +0xBB0) on the current ship -- the game's own Havoc respawn-in-place,
+  which spawns at that ship's transform and destroys it. Boosts and
+  modifiers follow to the new ship. Smoke host: all 53 classes load, each
+  default object's loadout id FName is `Default__<asset>_C`.
+- **Respawn blocking** (`dn_host_no_havoc_respawn_block.txt` turns it off).
+  SpawnPlayer asks the game mode's spawn gate first (vtable +0x870 =
+  `0x368380` on GameMode_Havoc_BP, read live) and keeps the spawn pending
+  when it says no. A player whose ship is destroyed during a wave is
+  eliminated: the hooked gate refuses them until the wave ends, then the
+  director calls SpawnPlayer for each held respawn. With it, the game-over
+  rule (no living player ship for 3 s) is the real one for groups too.
+
+**Not done yet:** the hero ship unlockable (a market purchase type,
+`YPIT_HAVOC_UNLOCKABLE_HERO_SHIP`), the HUD's eliminated-player list
+(`ClientHavocPlayersChanged`).
+
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 
 The PvE season events (mmogbrain `pve_seasons.go`) run the episode maps

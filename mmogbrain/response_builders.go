@@ -5495,28 +5495,26 @@ func buildMmogPlayerScoresPayloadForPlayer(playerPID string) []byte {
 	var b []byte
 	var stack []int
 
+	// The reply is dispatched by request id (slot +0x3610; 0x2A25B4B), which
+	// reads the root "result" as an ARRAY of {GameMode, TimeSpan, Score}
+	// objects (0x2A73250) into FYPlayerScoreData. The client looks up only
+	// ("HAVOC", "LIFETIME") and ("HAVOC", "LIFETIMESUM") -- see havoc.go. The
+	// old reply sent a leaderboard-shaped "result" OBJECT, which the array read
+	// skipped, so the score data never initialized ("Player score data not
+	// initialized").
+	lifetime, sum, weekly := havocPlayerScores(playerPID)
 	b = protocol.AppendStringField(b, "RT", "YA_GetPlayerScores")
-	b = protocol.AppendStringField(b, "modename", "TeamElimination")
-	b = protocol.AppendInt32Field(b, "fleettier", 1)
-	b = protocol.AppendStringField(b, "timespan", "alltime")
-	b = protocol.AppendBoolField(b, "prevweek", false)
-	b, stack = protocol.AppendObjectStart(b, stack, "result")
-	b, stack = protocol.AppendArrayStart(b, stack, "leaderboard")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendObjectStart(b, stack, "playerrank")
-	// The client's per-entry parser (FUN_142a6f280) reads PID/Rank/SID/Score,
-	// not UserName (which it never looks up). The decompile suggests PID is
-	// read there as int64, but this protocol has no confirmed int64 wire tag
-	// anywhere (parser.go only decodes string/bool/int32/object/array), and
-	// playerPID is a string identifier elsewhere in this codebase (e.g. the
-	// "PID" field in buildMmogPlayerDataPayload) — sending it as a string
-	// here matches that established, working convention rather than
-	// guessing at an unconfirmed wire type.
-	b = protocol.AppendStringField(b, "PID", playerPID)
-	b = protocol.AppendInt32Field(b, "Rank", 0)
-	b = protocol.AppendStringField(b, "SID", "local_session")
-	b = protocol.AppendInt32Field(b, "Score", 0)
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	b, stack = protocol.AppendArrayStart(b, stack, "result")
+	for _, e := range []struct {
+		span  string
+		score int32
+	}{{"LIFETIME", lifetime}, {"LIFETIMESUM", sum}, {"WEEKLY", weekly}} {
+		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
+		b = protocol.AppendStringField(b, "GameMode", havocGameModeKey)
+		b = protocol.AppendStringField(b, "TimeSpan", e.span)
+		b = protocol.AppendInt32Field(b, "Score", e.score)
+		b, stack = protocol.AppendObjectEnd(b, stack)
+	}
 	b, _ = protocol.AppendObjectEnd(b, stack)
 	return b
 }

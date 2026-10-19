@@ -65,9 +65,9 @@ var gameModeAliases = map[string]string{
 	"TeamElimination":  "TE",
 	"TerritoryControl": "TER",
 	"BootCamp":         "BC",
-	"HAVOC":            "Onslaught",
+	"HAVOC":            HavocGameMode,
 	"PvE_Standard":     "Onslaught",
-	"PvE_Havoc":        "Onslaught",
+	"PvE_Havoc":        HavocGameMode,
 	"PvE_Onslaught":    "Onslaught",
 	"PvE_Coop":         "Onslaught",
 	"Training":         "BC",
@@ -79,6 +79,7 @@ var validGameModes = buildValidGameModes()
 func buildValidGameModes() map[string]bool {
 	modes := make(map[string]bool, len(clientGameModeConfigs)+len(gameModeAliases)+1)
 	modes[PvEGameMode] = true
+	modes[HavocGameMode] = true
 	for _, mode := range clientGameModeConfigs {
 		modes[mode.Name] = true
 	}
@@ -162,6 +163,7 @@ var mapsByGameMode = map[string][]GameMap{
 	"TER":       conquestMaps,
 	"Territory": conquestMaps,
 	"PodTDM":    {{Name: "Space02", Path: "/Game/Maps/MP/Space02/MP_Space02_P"}},
+	"Havoc":     havocMaps,
 }
 
 var pveMaps = []GameMap{
@@ -190,8 +192,35 @@ func GameModeConfigs() []GameModeConfig {
 	if _, ok := ActivePvEEvent(); ok {
 		out = append(out, GameModeConfig{Name: PvEGameMode, TeamSize: pveTeamSize})
 	}
+	if havocListed() {
+		out = append(out, GameModeConfig{Name: havocClientName, TeamSize: pveTeamSize})
+	}
 	return out
 }
+
+// Havoc: the wave-defence mode (GameMode_Havoc_BP, YGMT_HAVOC). The client's
+// own mode list (GlobalUI.uasset) has an entry named "HAVOC" with
+// UI_GameMode_Icon_Havoc and an m_havocMaps list; the tile unlocks when the
+// server lists that name, and the client queues as "HAVOC". It used to alias
+// Onslaught and was never listed, so the tile stayed locked. From PR #80.
+// Listed only with DN_HAVOC=1 until a client has played it through here: the
+// wave loop is server code this exe lacks, rebuilt by the battle-server mod's
+// Havoc director.
+// GUESS: team size 5 like the PvE episodes; the client data read so far does
+// not say how many played a Havoc run.
+const (
+	HavocGameMode   = "Havoc"
+	havocClientName = "HAVOC"
+)
+
+// GlobalUI's m_havocMaps also names HVC_Map3_P, but no Map3 package ships in
+// the build -- only Map1 and Map2 exist under /Game/Maps/Havoc.
+var havocMaps = []GameMap{
+	{Name: "HVC_Map1", Path: "/Game/Maps/Havoc/Map1/HVC_Map1_P"},
+	{Name: "HVC_Map2", Path: "/Game/Maps/Havoc/Map2/HVC_Map2_P"},
+}
+
+func havocListed() bool { return os.Getenv("DN_HAVOC") == "1" }
 
 // PvE season events (mmogbrain's pve_seasons.go).
 //
@@ -624,7 +653,7 @@ func (m *Matchmaker) tick() error {
 			continue
 		}
 		maxSize := m.PlayersPerMatch
-		if b.GameMode == PvEGameMode && maxSize > pveTeamSize {
+		if (b.GameMode == PvEGameMode || b.GameMode == HavocGameMode) && maxSize > pveTeamSize {
 			maxSize = pveTeamSize // one cooperative team
 		}
 		size := maxSize
@@ -1234,7 +1263,7 @@ func battleServerIPv4(host string, log *logrus.Logger) string {
 // alternate 1, 2.
 func matchTeam(gameMode string, i int) int {
 	switch gameMode {
-	case "BC", "Onslaught", "TM", PvEGameMode:
+	case "BC", "Onslaught", "TM", PvEGameMode, HavocGameMode:
 		return 1
 	}
 	return i%2 + 1

@@ -1621,6 +1621,7 @@ static bool g_botsBCOnly = false;
 static void FlushPendingEomStats();
 
 static void OnslaughtCreepTick(uint8_t *gm);
+static void HavocDirectorTick(uint8_t *gm);
 static void ConquestTick(uint8_t *gm);
 static void ReportFarAway(uint8_t *pawn, const char *what);
 static void NpcAiStartTick(uint8_t *gm);
@@ -1688,6 +1689,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   }
   g_origGameModeTimer(gameMode);
   OnslaughtCreepTick(gm);
+  HavocDirectorTick(gm);
   ConquestTick(gm);
   NpcAiStartTick(gm);
   PlayersTick(gm);
@@ -3406,11 +3408,20 @@ static bool HostIsTurboTDM() {
   return cmd && wcsstr(cmd, L"-GameMode=TurboTDM ") != nullptr;
 }
 
+// Havoc records every ship's feats component here, for the boosts its
+// players buy between waves (HavocApplyBoosts).
+static void RecordFeatsComp(void *pawn, void *comp);
+static bool g_featsTurbo = false, g_featsHavoc = false;
+
 static void __fastcall HookFeatsBegin(void *featsComp) {
   g_origFeatsBegin(featsComp);
   uint8_t *fc = (uint8_t *)featsComp;
   void *owner = IsReadable(fc + OFF_COMPONENT_OWNER, 8) ? *(void **)(fc + OFF_COMPONENT_OWNER) : nullptr;
   if (!owner || !ClassChainContains((UObjectMin *)owner, "Pawn"))
+    return;
+  if (g_featsHavoc)
+    RecordFeatsComp(owner, featsComp);
+  if (!g_featsTurbo)
     return;
   static volatile LONG s_logged = 0;
   bool logIt = InterlockedIncrement(&s_logged) <= 16;
@@ -5261,6 +5272,2113 @@ static bool ShipPhysicsEnabled() {
 }
 
 // Installs one single-argument hook and reports it either way.
+// ===========================================================================
+// Havoc (from PR #80, starveil-bunny). Wave director, wave and kill XP,
+// between-wave upgrades, respawn ship switch. Installed only on hosts started
+// with -GameMode=Havoc; dn_host_no_havoc_director.txt /
+// DN_HOST_NO_HAVOC_DIRECTOR=1 turns all of it off.
+// ===========================================================================
+#define RVA_SCENE_START_COMBAT 0x2681A0    // (sceneMgr, bool notifyLevelScript); no-op unless +0x444
+#define OFF_SCENE_COMBAT_NOT_STARTED 0x444 // byte; tick spawns nothing while set
+typedef void(__fastcall *tSceneStartCombat)(void *scene, uint8_t notifyLevelScript);
+typedef void(__fastcall *tExecThunk)(void *ctx, uint8_t *stack, void *result);
+static inline int HvcMax(int a, int b) { return a > b ? a : b; }
+
+// ---------------------------------------------------------------------------
+// Havoc respawn ship (UYLoadoutManager::ActivateLoadout, 0x336C90)
+//
+// Picking another ship on the Havoc respawn screen shows its icon but
+// respawns the old one; the host logs "ActivateLoadout | Loadout
+// [Default__VH_HVC_UTI_AssaultM_Loadout_T2_BP_C] is not valid" per attempt.
+// ActivateLoadout(mgr, loadout, bool r8b) (.pdata ENTRY 0x336C90-0x336D9A)
+// bails unless 0x33C680(mgr, loadout) is true; on success it stores the
+// loadout at mgr+0x208 (0x336DBB).
+//
+// 0x33C680:
+//   1. scan every manager group (+0x108 array, count +0x110, 0x30-byte
+//      entries: TArray of loadout ptrs, type byte +0x28) for the loadout;
+//   2. no filter (mgr+0x200 null): found in a type-4 group (0x33C840
+//      collects type 4, 0x33C8C0 hit -> 0x33C825) -> FALSE; not found ->
+//      0x33CA66 -> TRUE;
+//   3. with a filter: found in a type-2 group and filter+0x28 == 0 -> FALSE;
+//      otherwise switch on loadout+0xD8 (ship class, 1..15, table 0x33CA90):
+//      each case needs two filter bytes in +0x29..+0x3C (family + class
+//      allow flags) -> true only if both set; out of range -> TRUE.
+// Havoc clears the filter at match start ("ClearLoadoutFilter | In Havoc we
+// do not want to reactivate the previous loadout ID here!"), and the five
+// Havoc ships sit in a type-4 group (LoadLoadoutFilterLoadouts, "Loading
+// loadout filter VH_LoadoutFilter_Havoc_DA"), so every respawn pick fails
+// step 2. With the filter still set, the first pick passes. Whatever the
+// original server did on respawn (restore the filter or bypass the gate) is
+// not in this exe.
+//
+// The loadout object is a native YShipLoadout named Default__VH_HVC_*_C, so
+// a class or name-prefix test does not identify it. The hook keys on the
+// failing arm instead: gate FALSE with no filter. While the original
+// ActivateLoadout runs, the gate is hooked to answer TRUE for exactly that
+// loadout. Installed only on Havoc hosts. Logs every call (first 40).
+// ---------------------------------------------------------------------------
+#define RVA_ACTIVATE_LOADOUT 0x336C90
+#define RVA_LOADOUT_IS_REGISTERED 0x33C680
+#define OFF_LOADOUT_MGR_FILTER 0x200
+#define OFF_LOADOUT_MGR_ACTIVE 0x208
+typedef void(__fastcall *tActivateLoadout)(void *mgr, void *loadout, uint8_t flag);
+static tActivateLoadout g_origActivateLoadout = nullptr;
+
+typedef bool(__fastcall *tLoadoutGate)(void *mgr, void *loadout);
+static tLoadoutGate g_origLoadoutGate = nullptr;
+static void *volatile g_forceValidLoadout = nullptr;
+
+static bool __fastcall HookLoadoutGate(void *mgr, void *loadout) {
+  if (loadout && loadout == g_forceValidLoadout)
+    return true;
+  return g_origLoadoutGate(mgr, loadout);
+}
+
+static void __fastcall HookActivateLoadout(void *mgr, void *loadout, uint8_t flag) {
+  static int s_logged = 0;
+  uint8_t *m = (uint8_t *)mgr;
+  if (!m || !loadout || !IsReadable(m + OFF_LOADOUT_MGR_ACTIVE, 8) || !IsReadable(loadout, sizeof(UObjectMin))) {
+    g_origActivateLoadout(mgr, loadout, flag);
+    return;
+  }
+  bool valid = g_origLoadoutGate(mgr, loadout);
+  void *filter = *(void **)(m + OFF_LOADOUT_MGR_FILTER);
+  const char *name = NameText(((UObjectMin *)loadout)->Name);
+  const char *fname = filter && IsReadable(filter, sizeof(UObjectMin)) ? NameText(((UObjectMin *)filter)->Name) : nullptr;
+  // The respawn screen offers only the five VH_HVC_* ships the filter's
+  // m_specialLoadouts lists.
+  // GUESS: no non-Havoc-ship ActivateLoadout reaches here with filter null.
+  bool force = !valid && !filter;
+  if (force)
+    g_forceValidLoadout = loadout;
+  g_origActivateLoadout(mgr, loadout, flag);
+  if (force)
+    g_forceValidLoadout = nullptr;
+  if (s_logged < 40) {
+    ++s_logged;
+    void *active = *(void **)(m + OFF_LOADOUT_MGR_ACTIVE);
+    const char *an = active && IsReadable(active, sizeof(UObjectMin)) ? NameText(((UObjectMin *)active)->Name) : nullptr;
+    Logf("loadout: ActivateLoadout(%p, %s, %u) gate %d, filter %s, class byte %u%s -> active %s", mgr,
+         name ? name : "?", flag, valid, fname ? fname : (filter ? "?" : "none"), ((uint8_t *)loadout)[0xD8],
+         force ? ", gate forced for Havoc ship" : "", an ? an : "?");
+  }
+}
+
+// Offset_Internal (+0x50) of the reflected property `name` on obj's class
+// chain, or -1.
+static int PropOffset(UObjectMin *obj, const char *name) {
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return -1;
+  for (UObjectMin *cls = obj->Class; cls && IsReadable(cls, 0x40); cls = *(UObjectMin **)((uint8_t *)cls + OFF_USTRUCT_SUPER))
+    for (UObjectMin *f = *(UObjectMin **)((uint8_t *)cls + 0x38); f && IsReadable(f, 0x58); f = *(UObjectMin **)((uint8_t *)f + 0x28)) {
+      const char *fn = NameText(f->Name);
+      if (fn && !strcmp(fn, name) && strcmp(ClassNameOf(f), "Function"))
+        return (int)*(uint32_t *)((uint8_t *)f + 0x50);
+    }
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
+// Havoc wave director (on by default on Havoc hosts; dn_host_no_havoc_director.txt
+// / DN_HOST_NO_HAVOC_DIRECTOR=1 turns it off).
+//
+// Without this, Havoc loads and fighter swarms fight, but no wave ever starts
+// (no big ships, no wave timer). The server half of the wave
+// loop is compiled out of this build: AYGameMode_Horde StartFirstWave /
+// EndCurrentWave / CheckWaveOver and AYGameMode_Havoc OnWaveStartDelayTimerOver
+// / OnWaveCompleteTimerOver all share the empty exec thunk 0x74C640 (UFunction
+// Func +0xB0, runtime reflection dump), and OnSwitchToState's body
+// is the bare `ret` at 0x1AA9450. What survives is the game-state side:
+//   AYGameState_Havoc::EnterNewState(gs, state) 0x36BC00 -- fires the BP
+//     OnEnter*State events of GameState_Havoc_BP and ClientHavocStateChanged
+//     (0x5E5440); 0 UpgradeSelection, 1 WaveStarting, 2 WaveInProgress,
+//     3 WaveComplete, 4 GameOver.
+//   AYGameState_Horde OnRep_WaveStateChanged body 0x39E010(gs) -- reads
+//     m_currentWaveState and fires the level script OnHordeWaveStarting /
+//     Started / Ended events, then BP HordeWaveStateChanged.
+// Property offsets (UProperty Offset_Internal +0x50, reflection dump, the
+// Horde ones match the disassembly of 0x39E010):
+#define OFF_HVC_GM_WAVE_COMPLETE_DUR 0xA70  // float m_waveCompleteDuration
+#define OFF_HVC_GM_UPGRADE_DUR 0xA74        // int   m_upgradeSelectionDuration
+#define OFF_HVC_GM_WAVE_START_DELAY 0xA78   // int   m_waveStartDelayDuration
+#define OFF_HVC_GM_PVE_EVENT_MANAGER 0xA10  // m_pveEventManager
+#define OFF_HVC_GS_IS_MATCH_STARTED 0x569   // AYGameState::m_isMatchStarted
+#define OFF_HVC_GS_NUM_ALIVE 0x1E58         // AYGameState_PVE::m_numAliveEnemies
+#define OFF_HVC_GS_KILLED 0x1F40            // m_numEnemiesKilledThisWave
+#define OFF_HVC_GS_MAX_WAVE_ENEMIES 0x1F44  // m_maxWaveEnemies
+#define OFF_HVC_GS_MAX_WAVES 0x1F48         // m_maxNumberOfWaves
+#define OFF_HVC_GS_WAVE_INDEX 0x1F4C        // m_currentWaveIndex
+#define OFF_HVC_GS_WAVE_STATE 0x1F50        // m_currentWaveState (EYHordeWaveState)
+#define OFF_HVC_GS_WAVE_DURATION 0x1F58     // m_currentWaveDuration
+#define OFF_HVC_GS_HAVOC_STATE 0x2018       // m_currentHavocState
+#define OFF_HVC_GS_WAVES_REACHED 0x2024     // m_wavesReached
+#define OFF_HVC_GS_EVENT_STARTED 0x2120     // GameState_Havoc_BP EventStarted
+#define OFF_HVC_GS_HORDE_MANAGER 0x2128     // GameState_Havoc_BP HordeManager
+#define OFF_HVC_GM_ON_PVE_MODE_STARTED 0xA00 // AYGameMode_PVE::OnPVEModeStarted (multicast)
+// AYGameMode_PVE::OnAnyNPCKilled (multicast, +0x9E0). GameState_Havoc_BP binds
+// OnAnyNPCKilled_Event(KilledYPawn obj @0, KilledNPCID int @8; parms 12 B) to
+// it; when EnableEnemiesDropXP has opened the gate, the event spawns
+// AlliedBuffPod_HavocXP_Pickup_Standard_BP (boss: _Boss_B) at the pawn's
+// transform, and picking that up calls GameMode_Havoc.AddXPForGroup(HavocXP)
+// -- the per-kill XP. Nothing on the host broadcast it (the server-side
+// death path went with the server build), so kills gave no XP and +0x1F40
+// stayed 0.
+#define OFF_HVC_GM_ON_ANY_NPC_KILLED 0x9E0
+#define OFF_HVC_GS_PVE_EVENT_MANAGER 0x1E68 // AYGameState_PVE::m_pveEventManager
+#define OFF_HVC_GS_ON_WAVE_STATE_CHANGED 0x1F20 // AYGameState_Horde::OnHordeWaveStateChanged
+#define OFF_HVC_HM_GAME_MODE 0x4B8          // PVE_HordeManager_BP GameMode
+// YPVEEventManager::m_combatSceneManager (reflection: ObjectProperty +0x3C0).
+// PVE_HordeManager_BP.SpawnWaveInitialEnemies hands it to
+// PVE_EnemyGroupSpawn_Component.SpawnPVEEnemyGroupEvent, whose only spawn is
+// CombatSceneManager.AddNPCSpawnByDataset (bytecode via tools/bpdump +
+// bpcompact.py) -- a null context would skip the call silently.
+// Not the no-spawn cause: the field is already set to the world's
+// YAICombatSceneManager before the director runs; the fill below is a guard.
+#define OFF_PVE_EM_COMBAT_SCENE_MANAGER 0x3C0
+#define OFF_HVC_HM_WAVES 0x4A8              // PVE_HordeManager_BP Waves (TArray)
+#define RVA_MULTICAST_BROADCAST_NOPARMS 0x2322A0 // (delegate*, parms*): EnterNewState's own broadcasts
+#define RVA_HVC_ENTER_NEW_STATE 0x36BC00
+#define RVA_HORDE_WAVE_STATE_CHANGED 0x39E010
+
+// Calls a parameterless UFunction (BP event) by name through ProcessEvent.
+static bool CallNoParms(void *obj, const wchar_t *name) {
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return false;
+  FNameMin n = {};
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, name, 1 /* FNAME_Add */);
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(obj, *(uint64_t *)&n);
+  if (!fn)
+    return false;
+  alignas(16) uint8_t parms[256] = {};
+  void **vt = *(void ***)obj;
+  ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(obj, fn, parms);
+  return true;
+}
+
+// Calls a UFunction whose parameters are a wave state (byte/enum) and a wave
+// index (int), filled by type from the function's own parameter list.
+static bool CallWaveEvent(void *obj, const wchar_t *name, int state, int wave) {
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return false;
+  FNameMin n = {};
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, name, 1 /* FNAME_Add */);
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(obj, *(uint64_t *)&n);
+  if (!fn || !IsReadable((uint8_t *)fn + 0x92, 2))
+    return false;
+  alignas(16) uint8_t parms[256] = {};
+  char desc[160] = "";
+  int o = 0;
+  UObjectMin *pp = *(UObjectMin **)((uint8_t *)fn + 0x38);
+  for (int j = 0; pp && j < 8 && IsReadable(pp, 0x58); ++j) {
+    uint32_t off = *(uint32_t *)((uint8_t *)pp + 0x50);
+    const char *pc = ClassNameOf(pp);
+    if (off < sizeof parms - 4) {
+      if (!strcmp(pc, "ByteProperty") || !strcmp(pc, "EnumProperty"))
+        parms[off] = (uint8_t)state;
+      else if (!strcmp(pc, "IntProperty"))
+        *(int32_t *)(parms + off) = wave;
+    }
+    const char *pn = NameText(pp->Name);
+    o += snprintf(desc + o, sizeof desc - o > 0 ? sizeof desc - o : 0, " %s:%s@%x", pn ? pn : "?", pc, off);
+    pp = *(UObjectMin **)((uint8_t *)pp + 0x28);
+  }
+  void **vt = *(void ***)obj;
+  ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(obj, fn, parms);
+  static int s_logged = 0;
+  if (s_logged++ < 8)
+    Logf("havoc: called %ls(%d, %d) on %s; parms%s", name, state, wave, ClassNameOf(obj), desc);
+  return true;
+}
+
+static int DelegateBound(const uint8_t *p) { return IsReadable(p + 8, 4) ? *(const int32_t *)(p + 8) : -1; }
+
+// The compiled-out natives the BPs still call. Their exec thunk 0x74C640
+// (P_FINISH, then the bare `ret` 0x1AA9450) is shared by every parameterless
+// stub; CalledNativeName names the UFunction being run. Each call is
+// logged once per name and recorded for the director.
+#define RVA_EMPTY_EXEC_THUNK 0x74C640
+static volatile LONG g_hvcBpEnd = 0; // 1 PlayersWin, 2 PlayersLose: the BP asked the run to end
+static tExecThunk g_origEmptyExecThunk = nullptr;
+static volatile LONG g_hvcEndWaveCalls = 0, g_hvcPlayersWinCalls = 0, g_hvcPlayersLoseCalls = 0;
+
+// Which native is running. A script call hands the native the CALLER's
+// FFrame, so FFrame::Node (+0x10) is the calling function, not the stub. The
+// callee is the EX_FinalFunction / EX_CallMath
+// operand, the UFunction* just before the parameters: Code (+0x20) - 8 on
+// entry. Falls back to Node when that is not a readable *Function object
+// (an EX_VirtualFunction carries an FName there instead).
+static const char *CalledNativeName(uint8_t *stack) {
+  uint8_t *code = IsReadable(stack + 0x20, 8) ? *(uint8_t **)(stack + 0x20) : nullptr;
+  if (code && IsReadable(code - 8, 8)) {
+    UObjectMin *fn = *(UObjectMin **)(code - 8);
+    if (IsReadable(fn, sizeof(UObjectMin)) && IsReadable(fn->Class, sizeof(UObjectMin))) {
+      const char *cn = NameText(fn->Class->Name);
+      if (cn && strstr(cn, "Function"))
+        return NameText(fn->Name);
+    }
+  }
+  UObjectMin *node = IsReadable(stack + 0x10, 8) ? *(UObjectMin **)(stack + 0x10) : nullptr;
+  return IsReadable(node, sizeof(UObjectMin)) ? NameText(node->Name) : nullptr;
+}
+
+static void __fastcall HookEmptyExecThunk(void *ctx, uint8_t *stack, void *result) {
+  const char *n = CalledNativeName(stack);
+  g_origEmptyExecThunk(ctx, stack, result);
+  if (!n)
+    return;
+  if (!strcmp(n, "EndCurrentWave"))
+    InterlockedIncrement(&g_hvcEndWaveCalls);
+  else if (!strcmp(n, "PlayersWin") || !strcmp(n, "PlayersLose")) {
+    // The run's end. Compiled out like the wave loop, so nothing ends the
+    // match yet: logged on every call to learn when the BP decides it.
+    LONG c = InterlockedIncrement(!strcmp(n, "PlayersWin") ? &g_hvcPlayersWinCalls : &g_hvcPlayersLoseCalls);
+    InterlockedCompareExchange(&g_hvcBpEnd, !strcmp(n, "PlayersWin") ? 1 : 2, 0);
+    uint8_t *gs = IsReadable((uint8_t *)ctx + OFF_GM_GAMESTATE, 8) ? *(uint8_t **)((uint8_t *)ctx + OFF_GM_GAMESTATE) : nullptr;
+    bool havocGs = gs && IsReadable(gs + OFF_HVC_GS_WAVES_REACHED, 4) && ClassChainContains((UObjectMin *)gs, "YGameState_Havoc");
+    Logf("havoc: BP called %s on %s (call %ld; wave %d of %d, waves reached %d) -- the director ends the run", n,
+         ClassNameOf(ctx), c, havocGs ? *(int32_t *)(gs + OFF_HVC_GS_WAVE_INDEX) : -1,
+         havocGs ? *(int32_t *)(gs + OFF_HVC_GS_MAX_WAVES) : -1, havocGs ? *(int32_t *)(gs + OFF_HVC_GS_WAVES_REACHED) : -1);
+  }
+  static char s_seen[16][48];
+  static int s_nseen = 0;
+  for (int i = 0; i < s_nseen; ++i)
+    if (!strcmp(s_seen[i], n))
+      return;
+  if (s_nseen < 16)
+    snprintf(s_seen[s_nseen++], sizeof s_seen[0], "%s", n);
+  Logf("havoc: BP called compiled-out native %s on %s (first call)", n, ClassNameOf(ctx));
+}
+
+// AddNPCToEnemyList(int npcId), which PVE_EnemyGroupSpawn_Component calls on
+// YGameMode_PVE right after AddNPCSpawnByDataset for every enemy that
+// CountForWave, is compiled out too: its exec thunk 0x742E90 reads the int and
+// calls the bare `ret` 0x1AA9450. That thunk is shared by 34 one-int natives
+// (LEA r8 refs in the StaticRegisterNatives blocks), so the hook does the
+// thunk's own work -- FFrame::Step (0xD5D250: stack, stack->Object +0x18,
+// &result) when Code (+0x20) is set, else StepExplicitProperty (0xD5D280) on
+// PropertyChainForCompiledIn (+0x80, advanced by Next +0x28); P_FINISH
+// (Code += Code != 0) -- and then records the id when the called native
+// (CalledNativeName) is AddNPCToEnemyList. Nothing else in the exe writes AYGameState_PVE
+// m_numAliveEnemies (+0x1E58; the two writers are constructors), so the
+// director derives it from these ids. GUESS: the server build's list
+// semantics (removal on death, what else it fed) are unknown.
+#define RVA_INT_PARM_EXEC_THUNK 0x742E90
+#define RVA_FFRAME_STEP 0xD5D250
+#define RVA_FFRAME_STEP_EXPLICIT_PROPERTY 0xD5D280
+static tExecThunk g_origIntParmExecThunk = nullptr;
+static volatile LONG g_hvcEnemyIds[256];
+static volatile LONG g_hvcEnemyCount = 0;
+
+// Havoc XP. AYGameMode_Havoc AddXPForGroup(int) (int thunk above) and
+// AddXPWithContributerPlayer/Pawn(int, object) (thunk 0x740AF0, below) are
+// compiled out like the wave loop, and nothing in the exe writes AYGameState
+// _Havoc m_playerWaveXP (+0x201C) or m_totalXP (+0x2020) -- the only writer is
+// the constructor 0x363680. The getters are plain loads: GetTotalXP 0x372730
+// = +0x2020, GetPlayerWaveXP 0x371AC0 = +0x201C, GetWaveXP 0x372F60 = +0x2020
+// - +0x2038 (+0x2038 has no writer at all; reads 0). Both fields are
+// replicated (CPF_Net). Without this, GameMode_Havoc_BP's AddXPForGroup(750)
+// at a wave clear left the client at 0 wave XP and 0 upgrade currency. GUESS: the original split between the two fields is
+// unknown; every grant goes to both, and m_playerWaveXP restarts each wave.
+#define OFF_HVC_GS_PLAYER_WAVE_XP 0x201C
+#define OFF_HVC_GS_TOTAL_XP 0x2020
+// Per-player spendable XP. The upgrade panel's XP counter and the purchase
+// gate both read AYPlayerReplicationInfo_Havoc m_currentXP: 0x3FC7D0 (PC
+// +0x3E0 -> PRI cast -> +0xA28), called by the activate path 0x448240 which
+// compares it with the upgrade's cost before SendSelectedUpgrade. Field
+// offsets from the property registration 0x958150..0x958963: m_currentXP
+// +0xA28, m_currentContributedXP +0xA2C, m_lastWaveContributedXP +0xA30.
+// DeductXP 0x3F34F0 (pri, xp) is real code (`sub [pri+0xA28], xp`); AddXP is
+// compiled out (only its log format string "AddXP | Player %s | XP %i |
+// Contributer %i" survives, no LEA to it), so grants write the field here.
+// GUESS: Havoc is co-op and the GS XP is team XP, so every connected human
+// gets the full grant; the contributor (if any) also gets it in
+// m_currentContributedXP. The original split is unknown.
+#define OFF_HVC_PRI_CURRENT_XP 0xA28
+#define OFF_HVC_PRI_CONTRIBUTED_XP 0xA2C
+#define RVA_HVC_PRI_DEDUCT_XP 0x3F34F0
+static int HavocHumanPCs(uint8_t *gs, uint8_t **out, int max) {
+  if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return 0;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return 0;
+  int n = 0;
+  for (int i = 0; i < count && n < max; ++i) {
+    uint8_t *pri = arr[i];
+    if (!IsReadable(pri, OFF_HVC_PRI_CONTRIBUTED_XP + 4))
+      continue;
+    uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+    if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+        !*(void **)(pc + OFF_PC_NETCONNECTION) || *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) != pri ||
+        !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo_Havoc"))
+      continue;
+    out[n++] = pc;
+  }
+  return n;
+}
+
+// The PRI behind a contributor object (a pawn, a controller or a PRI).
+static uint8_t *HavocContributorPri(void *obj) {
+  uint8_t *o = (uint8_t *)obj;
+  if (!IsReadable(o, sizeof(UObjectMin)))
+    return nullptr;
+  if (ClassChainContains((UObjectMin *)o, "Pawn"))
+    o = IsReadable(o + OFF_PAWN_CONTROLLER, 8) ? *(uint8_t **)(o + OFF_PAWN_CONTROLLER) : nullptr;
+  if (o && ClassChainContains((UObjectMin *)o, "Controller"))
+    o = IsReadable(o + OFF_PC_PLAYER_STATE, 8) ? *(uint8_t **)(o + OFF_PC_PLAYER_STATE) : nullptr;
+  return o && IsReadable(o, OFF_HVC_PRI_CONTRIBUTED_XP + 4) &&
+                 ClassChainContains((UObjectMin *)o, "YPlayerReplicationInfo_Havoc") ? o : nullptr;
+}
+
+static void HavocAddXP(uint8_t *gm, int xp, const char *why, void *contributor = nullptr) {
+  if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
+    return;
+  uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+  if (!IsReadable(gs + OFF_HVC_GS_TOTAL_XP, 4) || !ClassChainContains((UObjectMin *)gs, "YGameState_Havoc"))
+    return;
+  if (xp <= 0 || xp > 1000000)
+    return;
+  *(int32_t *)(gs + OFF_HVC_GS_PLAYER_WAVE_XP) += xp;
+  *(int32_t *)(gs + OFF_HVC_GS_TOTAL_XP) += xp;
+  uint8_t *pcs[16];
+  int npc = HavocHumanPCs(gs, pcs, 16);
+  for (int i = 0; i < npc; ++i)
+    *(int32_t *)(*(uint8_t **)(pcs[i] + OFF_PC_PLAYER_STATE) + OFF_HVC_PRI_CURRENT_XP) += xp;
+  if (uint8_t *cpri = HavocContributorPri(contributor))
+    *(int32_t *)(cpri + OFF_HVC_PRI_CONTRIBUTED_XP) += xp;
+  static int s_logged = 0;
+  if (s_logged++ < 40)
+    Logf("havoc: %s(%d): wave xp %d, total xp %d, %d player(s) credited%s", why, xp,
+         *(int32_t *)(gs + OFF_HVC_GS_PLAYER_WAVE_XP), *(int32_t *)(gs + OFF_HVC_GS_TOTAL_XP), npc,
+         contributor ? " (+contributor)" : "");
+}
+
+// FFrame::Step for one parameter, as the generated exec thunks do it.
+static void StepParm(uint8_t *stack, void *out) {
+  if (*(void **)(stack + 0x20))
+    ((void(__fastcall *)(void *, void *, void *))(g_base + RVA_FFRAME_STEP))(stack, *(void **)(stack + 0x18), out);
+  else {
+    uint8_t *prop = *(uint8_t **)(stack + 0x80);
+    *(void **)(stack + 0x80) = *(void **)(prop + 0x28);
+    ((void(__fastcall *)(void *, void *, void *))(g_base + RVA_FFRAME_STEP_EXPLICIT_PROPERTY))(stack, out, prop);
+  }
+}
+
+// Exec thunk 0x740AF0: (int, object) -> bare `ret` 0x1AA9450; read both
+// parameters the way it does (StepParm x2, P_FINISH), then act by callee.
+#define RVA_INT_OBJ_PARM_EXEC_THUNK 0x740AF0
+static tExecThunk g_origIntObjParmExecThunk = nullptr;
+static void __fastcall HookIntObjParmExecThunk(void *ctx, uint8_t *stack, void *result) {
+  const char *n = CalledNativeName(stack);
+  int32_t v = 0;
+  void *obj = nullptr;
+  StepParm(stack, &v);
+  StepParm(stack, &obj);
+  if (*(uint8_t **)(stack + 0x20))
+    ++*(uint8_t **)(stack + 0x20);
+  if (!n)
+    return;
+  if (!strcmp(n, "AddXPWithContributerPlayer") || !strcmp(n, "AddXPWithContributerPawn")) {
+    HavocAddXP((uint8_t *)ctx, v, n, obj);
+    return;
+  }
+  static char s_seen[16][48];
+  static int s_nseen = 0;
+  for (int i = 0; i < s_nseen; ++i)
+    if (!strcmp(s_seen[i], n))
+      return;
+  if (s_nseen < 16)
+    snprintf(s_seen[s_nseen++], sizeof s_seen[0], "%s", n);
+  Logf("havoc: BP called compiled-out native %s(%d, %s) on %s (first call)", n, v,
+       obj ? ClassNameOf((UObjectMin *)obj) : "null", ClassNameOf(ctx));
+}
+
+// Ready-up. AYPlayerController_Havoc::ServerReadyUpPlayerForNextWave's exec
+// thunk 0x772650 (no parameters; _Validate at vtable +0x1068, body at
+// +0x1070) is unique to the RPC. The body's effect is unknown (the game
+// state's ClientUpdatePlayerReadyForNextWave is never sent), and the director
+// waited the full m_upgradeSelectionDuration (60 s) regardless. The hook
+// records the controller; the director ends upgrade selection early once
+// every connected human has readied. GUESS: the original rule (all players?
+// a vote?) is unknown.
+#define RVA_HVC_READY_UP_THUNK 0x772650
+static tExecThunk g_origHavocReadyUpThunk = nullptr;
+static void *volatile g_hvcReady[16];
+static volatile LONG g_hvcReadyCount = 0;
+static void __fastcall HookHavocReadyUpThunk(void *ctx, uint8_t *stack, void *result) {
+  g_origHavocReadyUpThunk(ctx, stack, result);
+  LONG n = g_hvcReadyCount;
+  for (LONG i = 0; i < n && i < 16; ++i)
+    if (g_hvcReady[i] == ctx)
+      return;
+  if (n < 16) {
+    g_hvcReady[n] = ctx;
+    InterlockedIncrement(&g_hvcReadyCount);
+  }
+  Logf("havoc: ServerReadyUpPlayerForNextWave from %p %s (%ld ready)", ctx, ClassNameOf(ctx), g_hvcReadyCount);
+}
+
+// Match ready-up (pre-match lineup toggle) is not handled, on purpose. In
+// Havoc each client's card shows its own tick and the other players' X, and
+// the lineup ends on its timer. AYPlayerController::ServerPlayerReadyUpForMatch
+// (exec thunk 0x772380, body 0x592210) stores the bool at PC+0xC44 and calls gm
+// vt+0x960(PC) only if gs vt+0x7D8 (0x39E3D0, `movzx eax, byte [gs+0x1C3C]`)
+// is true. gs+0x1C3C is the reflected m_useWaveSpawning, copied from the game
+// mode's m_useWaveSpawning (gm+0x899) by 0x379D60; both are 0 in
+// GameMode_Havoc_BP. Stock game-mode data, not missing server state; forcing
+// the flag would also switch the spawn rules it is named for.
+
+// Connected humans (player controllers with a net connection), as PlayersTick
+// counts them; -1 when the player array is unreadable.
+static int HavocHumanCount(uint8_t *gs, int *readyOut) {
+  *readyOut = 0;
+  if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return -1;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return -1;
+  int humans = 0;
+  for (int i = 0; i < count; ++i) {
+    uint8_t *pri = arr[i];
+    if (!IsReadable(pri, OFF_ACTOR_OWNER + 8))
+      continue;
+    uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+    if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+        !*(void **)(pc + OFF_PC_NETCONNECTION))
+      continue;
+    ++humans;
+    for (LONG j = 0; j < g_hvcReadyCount && j < 16; ++j)
+      if (g_hvcReady[j] == pc) {
+        ++*readyOut;
+        break;
+      }
+  }
+  return humans;
+}
+
+// ---------------------------------------------------------------------------
+// Havoc upgrade offers. Server side of the between-wave upgrade panel, all of
+// it compiled out of this build:
+//  - offer: AYPlayerController_Havoc::ClientReceiveRandSelectedUpgrades
+//    (TArray<FName>) -- its RPC wrapper 0x7463E0 has no callers. The client
+//    side is intact: _Implementation 0x3F25F0 hands the names to
+//    UYHavocProgressionComponent::StoreSelectedUpgradesReceivedFromServer
+//    0x3AAAE0 (PC +0x1148, slots at comp +0x30) and the HUD's
+//    PrepareUpgradesForUI 0x37B2D0 loads them for UI_HUD_HavocProgressionMenu.
+//  - pick: the panel's ActivateSelectedUpgrade (0x448240) checks m_currentXP
+//    >= the upgrade's cost, then SendSelectedUpgrade 0x405900 turns the FName
+//    back into its slot (0x39B800) and calls ServerReceiveSelectedUpgradeIndex
+//    (int), whose _Implementation 0x406040 only logs "Selected slot index is
+//    %d" -- hooked below.
+//  - apply: UYHavocProgressionComponent::AddNewBoost and
+//    OnApplyBoostAndModifiersData (0x3A25C0) only log; the boost's m_feats go
+//    onto the ship here with the game's own UYFeatsComponent::AddFeat (as the
+//    Turbo TDM modifiers do), again on every respawned ship.
+// Boost rows: data/datatables/Progression/Havoc/DN_HavocBoosts_DT.json (row
+// name, m_feats, m_cost, m_weight, m_category), verbatim. Five rows' m_feats
+// differ from their row name (typos in the table, kept). Feat definitions:
+// DN_Feats_Havoc_Boosts_Shared_OTS_DT.
+// GUESS: the selection rule is unknown. One boost per category (offensive /
+// defensive / utility), weighted by m_weight (weight-0 rows never offered);
+// each slot can be bought once per selection phase. Loadout (ship tier)
+// upgrades from DN_HavocLoadouts_DT are NOT offered yet.
+// NOT verified against a live client: the panel showing the offer, the
+// purchase result, the feats replicating to the client's ship.
+struct HavocBoost {
+  const wchar_t *id, *feat;
+  int cost, weight;
+  char cat; // 'O' offensive, 'D' defensive, 'U' utility
+};
+static const HavocBoost kHavocBoosts[] = {
+    {L"HVC_Boost_Def_HpInc_Large", L"HVC_Boost_Def_HpInc_Large", 1000, 2, 'D'},
+    {L"HVC_Boost_Def_HpInc_Small", L"HVC_Boost_Def_HpInc_Small", 300, 2, 'D'},
+    {L"HVC_Boost_Def_HpInc_Medium", L"HVC_Boost_Def_HpInc_Medium", 600, 5, 'D'},
+    {L"HCV_Boost_Def_RegtimeDec_Medium", L"HVC_Boost_Def_HPRegtimeDec_Medium", 600, 5, 'D'},
+    {L"HVC_Boost_Def_HPRegInc_Small", L"HVC_Boost_Def_HPRegInc_Small", 350, 2, 'D'},
+    {L"HVC_Boost_Def_HPRegInc_Medium", L"HVC_Boost_Def_HPRegInc_Medium", 600, 5, 'D'},
+    {L"HVC_Boost_Def_HPRegInc_Large", L"HVC_Boost_Def_HPRegInc_Large", 1000, 2, 'D'},
+    {L"HVC_Boost_Def_ArInc_Small", L"HVC_Boost_Def_ArInc_Small", 350, 2, 'D'},
+    {L"HVC_Boost_Def_ArInc_Medium", L"HVC_Boost_Def_ArInc_Medium", 600, 5, 'D'},
+    {L"HVC_Boost_Def_ArInc_Large", L"HVC_Boost_Def_ArInc_Large", 1000, 2, 'D'},
+    {L"HVC_Boost_DefArIncFr_Medium", L"HVC_Boost_Def_ArIncFr_Medium", 600, 0, 'D'},
+    {L"HVC_Boost_Def_ArIncSid_Medium", L"HVC_Boost_Def_ArIncSid_Medium", 600, 0, 'D'},
+    {L"HVC_Boost_Def_ArincBk_Medium", L"HVC_Boost_Def_ArIncBk_Medium", 600, 0, 'D'},
+    {L"HVC_Boost_Def_ShieldEnDec_Medium", L"HVC_Boost_Def_ShieldEnDec_Medium", 600, 5, 'D'},
+    {L"HVC_Boost_Off_DmgInc_Small", L"HVC_Boost_Off_DmgInc_Small", 350, 2, 'O'},
+    {L"HVC_Boost_Off_DmgInc_Medium", L"HVC_Boost_Off_DmgInc_Medium", 600, 5, 'O'},
+    {L"HVC_Boost_Off_DmgInc_Large", L"HVC_Boost_Off_DmgInc_Large", 1000, 2, 'O'},
+    {L"HVC_Boost_Off_AbiInc_Large", L"HVC_Boost_Off_AbiInc_Large", 1000, 2, 'O'},
+    {L"HVC_Boost_Off_AbiInc_Small", L"HVC_Boost_Off_AbiInc_Small", 350, 2, 'O'},
+    {L"HVC_Boost_Off_AbiInc_Medium", L"HVC_Boost_Off_AbiInc_Medium", 600, 5, 'O'},
+    {L"HVC_Boost_Off_RldTDec_Medium", L"HVC_Boost_Off_RldTDec_Medium", 600, 5, 'O'},
+    {L"HVC_Boost_Off_WpnEnDec", L"HVC_Boost_Off_WpnEnDec", 600, 5, 'O'},
+    {L"HVC_Boost_Off_WpnEnRelDec_Medium", L"HVC_Boost_Off_WpnEnRelDec_Medium", 600, 2, 'D'},
+    {L"HVC_Boost_Def_ThrustEnArmInc_Medium", L"HVC_Boost_Def_ThrustEnArmInc_Medium", 600, 2, 'D'},
+    {L"HVC_Boost_Util_EnInc_Large", L"HVC_Boost_Util_EnInc_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_EnInc_Medium", L"HVC_Boost_Util_EnInc_Medium", 600, 5, 'U'},
+    {L"HVC_Boost_Util_EnInc_Small", L"HVC_Boost_Util_EnInc_Small", 350, 2, 'U'},
+    {L"HVC_Boost_Util_SpdInc_Small", L"HVC_Boost_Util_SpdInc_Small", 350, 2, 'U'},
+    {L"HVC_Boost_Util_SpdInc_Medium", L"HVC_Boost_Util_SpdInc_Medium", 600, 5, 'U'},
+    {L"HVC_Boost_Util_SpdInc_Large", L"HVC_Boost_Util_SpdInc_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_SpdIncFwd_Large", L"HVC_Boost_Util_SpdIncFwd_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_SpdIncStr_Large", L"HVC_Boost_Util_SpdIncStr_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_SpdIncVert_Large", L"HVC_Boost_Util_SpdIncVert_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_SpdIncBk_Large", L"HVC_Boost_Util_SpdIncBk_Large", 1000, 2, 'U'},
+    {L"HVC_Boost_Util_EnRegInc_Medium", L"HVC_Boost_Util_EnReginc_Medium", 600, 5, 'U'},
+    {L"HCV_Boost_Util_EnThrustSpdInc_Medium", L"HVC_Boost_Util_EnThrustSpdInc_Medium", 600, 2, 'D'},
+    {L"HVC_Boost_Util_AbiTDec_Medium", L"HVC_Boost_Util_AbiTDec_Medium", 600, 5, 'U'},
+    {L"HVC_Boost_Util_ThrustEnDec", L"HVC_Boost_Util_ThrustEnDec", 600, 5, 'U'},
+};
+static const int kHavocBoostCount = (int)(sizeof kHavocBoosts / sizeof kHavocBoosts[0]);
+
+struct HavocPlayer {
+  void *pc;
+  int offer[3];     // kHavocBoosts index, -1 = none / already bought
+  int offerShip[3]; // kHavocShips index on a ship-upgrade wave, else -1
+  FNameMin offerNames[3];
+  int owned[128], nOwned;
+  void *appliedPawn;
+  int nApplied;
+};
+static HavocPlayer g_hvcPlayers[16];
+
+static HavocPlayer *HavocPlayerFor(void *pc, bool create) {
+  for (HavocPlayer &p : g_hvcPlayers)
+    if (p.pc == pc)
+      return &p;
+  if (!create)
+    return nullptr;
+  for (HavocPlayer &p : g_hvcPlayers)
+    if (!p.pc) {
+      memset(&p, 0, sizeof p);
+      p.pc = pc;
+      p.offer[0] = p.offer[1] = p.offer[2] = -1;
+      p.offerShip[0] = p.offerShip[1] = p.offerShip[2] = -1;
+      return &p;
+    }
+  return nullptr;
+}
+
+// Calls a UFunction by name, letting `fill` write each parameter by its
+// property class and offset; logs the parameter list the first few times.
+typedef void (*tParmFill)(uint8_t *parms, const char *propClass, uint32_t off, void *ctx);
+static bool CallFilled(void *obj, const wchar_t *name, tParmFill fill, void *ctx) {
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return false;
+  FNameMin n = {};
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, name, 1 /* FNAME_Add */);
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(obj, *(uint64_t *)&n);
+  if (!fn || !IsReadable((uint8_t *)fn + 0x40, 8))
+    return false;
+  alignas(16) uint8_t parms[256] = {};
+  char desc[160] = "";
+  int o = 0;
+  UObjectMin *pp = *(UObjectMin **)((uint8_t *)fn + 0x38);
+  for (int j = 0; pp && j < 8 && IsReadable(pp, 0x58); ++j) {
+    uint32_t off = *(uint32_t *)((uint8_t *)pp + 0x50);
+    const char *pc = ClassNameOf(pp);
+    if (fill && off < sizeof parms - 16)
+      fill(parms, pc, off, ctx);
+    const char *pn = NameText(pp->Name);
+    o += snprintf(desc + o, sizeof desc - o > 0 ? sizeof desc - o : 0, " %s:%s@%x", pn ? pn : "?", pc, off);
+    pp = *(UObjectMin **)((uint8_t *)pp + 0x28);
+  }
+  void **vt = *(void ***)obj;
+  ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(obj, fn, parms);
+  static int s_logged = 0;
+  if (s_logged++ < 12)
+    Logf("havoc: called %ls on %s; parms%s", name, ClassNameOf(obj), desc[0] ? desc : " (none)");
+  return true;
+}
+
+static void FillNameArray(uint8_t *parms, const char *pc, uint32_t off, void *ctx) {
+  if (!strcmp(pc, "ArrayProperty")) {
+    HavocPlayer *p = (HavocPlayer *)ctx;
+    *(void **)(parms + off) = p->offerNames;
+    *(int32_t *)(parms + off + 8) = 3;
+    *(int32_t *)(parms + off + 12) = 3;
+  }
+}
+// ClientReceiveBoostPurchaseResult(FName purchasedBoostID @0, bool isSuccessful
+// @8); parameter list read at runtime.
+struct HavocPurchaseResult { FNameMin id; uint8_t ok; };
+static void FillPurchaseResult(uint8_t *parms, const char *pc, uint32_t off, void *ctx) {
+  HavocPurchaseResult *r = (HavocPurchaseResult *)ctx;
+  if (!strcmp(pc, "NameProperty"))
+    memcpy(parms + off, &r->id, sizeof r->id);
+  else if (!strcmp(pc, "BoolProperty"))
+    parms[off] = r->ok;
+}
+
+static int HavocPickBoost(char cat) {
+  static uint32_t s_rng = 0;
+  if (!s_rng)
+    s_rng = GetTickCount() | 1;
+  int total = 0;
+  for (const HavocBoost &b : kHavocBoosts)
+    if (b.cat == cat)
+      total += b.weight;
+  if (total <= 0)
+    return -1;
+  s_rng ^= s_rng << 13, s_rng ^= s_rng >> 17, s_rng ^= s_rng << 5;
+  int r = (int)(s_rng % (uint32_t)total);
+  for (int i = 0; i < kHavocBoostCount; ++i)
+    if (kHavocBoosts[i].cat == cat && (r -= kHavocBoosts[i].weight) < 0)
+      return i;
+  return -1;
+}
+
+// On entering UpgradeSelection: a fresh offer for every connected human.
+static uint32_t HavocRand();
+// ---------------------------------------------------------------------------
+// Havoc ship tier upgrades (stage 3, 2026-10-19; dn_host_no_havoc_ship_upgrades
+// .txt turns them off).
+//
+// Offer. AYGameState_Havoc::PrepareUpgradesForUI (0x37B2D0) asks the data
+// manager IsWaveWithLoadoutUpgrades(m_currentWaveIndex) (0x3A0830: the wave is
+// one of the loadout rows' m_waveAppearances -- 3, 6, 12); on such a wave it
+// reads every offered name as a DN_HavocLoadouts_DT ROW (GetLoadoutByID
+// 0x39A1B0) instead of a boost, and shows the ship. The cost the panel checks
+// (upgrade data +0x1A8, ActivateSelectedUpgrade 0x448240) is filled from
+// m_cost for a boost and left 0 for a ship: a ship upgrade costs no XP.
+// GUESS: one ship per category (offensive / defensive / utility) from the rows
+// that appear on this wave, the slot of the player's own line holding its next
+// tier (m_loadoutItemIDNextTier of the row whose item id is the active
+// loadout's m_precastLoadoutID).
+//
+// Swap. AYPlayerController::SpawnPlayer (0x5998A0) has a Havoc path: with the
+// last pawn weak pointer (PC +0xBB0) valid and PC +0xCA0 clear, it spawns the
+// ACTIVE loadout (loadout manager *(*(PC+0x958)+0x28), +0x208) at that pawn's
+// transform and destroys it ("GameState is Havoc. Respawn location should be
+// the last known pawn position before it get's destroyed!"). Its own caller
+// (ServerSpawnNearActorPostLoadPawnWork 0x592C40) sets the pending flag PC
+// +0xB88 first. So the pick: register the ship's loadout with the player's
+// manager (its class from ItemIDRegister, as the precasts are), activate it
+// (ActivateLoadout 0x336C90), point +0xBB0 at the current ship, set +0xB88,
+// call SpawnPlayer. Boosts and modifiers follow onto the new ship (their
+// per-pawn bookkeeping sees a new pawn).
+struct HavocShip {
+  const wchar_t *row;
+  int itemId, nextTierId, wave;
+  char cat; // 'O' offensive, 'D' defensive, 'U' utility
+  const char *asset;
+  const wchar_t *path;
+};
+// DN_HavocLoadouts_DT, verbatim (generated 2026-10-19), with each m_loadoutItemID's
+// asset from ItemIDRegister: row, item id, next-tier item id, m_waveAppearances
+// (0 = "none", the starting T2 ships), category, asset name, class path.
+static const HavocShip kHavocShips[] = {
+    {L"HVCDEFDN_M(T2)", 33489354, 33489355, 0, 'D', "VH_HVC_DEF_DreadM_Loadout_T2_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadM_Loadout_T2_BP.VH_HVC_DEF_DreadM_Loadout_T2_BP_C"},
+    {L"HVCDEFSU_M(T2)", 33489363, 33489364, 0, 'D', "VH_HVC_DEF_SupportM_Loadout_T2_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportM_Loadout_T2_BP.VH_HVC_DEF_SupportM_Loadout_T2_BP_C"},
+    {L"HVCUTIAS_M(T2)", 33489370, 33489367, 0, 'U', "VH_HVC_UTI_AssaultM_Loadout_T2_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_AssaultM_Loadout_T2_BP.VH_HVC_UTI_AssaultM_Loadout_T2_BP_C"},
+    {L"HVCOFFSC_L(T2)", 33489386, 33489387, 0, 'O', "VH_HVC_OFF_ScoutL_Loadout_T2_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutL_Loadout_T2_BP.VH_HVC_OFF_ScoutL_Loadout_T2_BP_C"},
+    {L"HVCOFFSN_M(T2)", 33489394, 33489395, 0, 'O', "VH_HVC_OFF_SniperM_Loadout_T2_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperM_Loadout_T2_BP.VH_HVC_OFF_SniperM_Loadout_T2_BP_C"},
+    {L"HVCDEFAS_H(T3)", 33489432, 33489349, 3, 'D', "VH_HVC_DEF_AssaultH_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultH_Loadout_T3_BP.VH_HVC_DEF_AssaultH_Loadout_T3_BP_C"},
+    {L"HVCDEFDN_M(T3)", 33489355, 33489356, 3, 'D', "VH_HVC_DEF_DreadM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadM_Loadout_T3_BP.VH_HVC_DEF_DreadM_Loadout_T3_BP_C"},
+    {L"HVCDEFSU_M(T3)", 33489364, 33489365, 3, 'D', "VH_HVC_DEF_SupportM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportM_Loadout_T3_BP.VH_HVC_DEF_SupportM_Loadout_T3_BP_C"},
+    {L"HVCUTIAS_M(T3)", 33489367, 33489368, 3, 'U', "VH_HVC_UTI_AssaultM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_AssaultM_Loadout_T3_BP.VH_HVC_UTI_AssaultM_Loadout_T3_BP_C"},
+    {L"HVCUTISU_L(T3)", 33489374, 33489371, 3, 'U', "VH_HVC_UTI_SupportL_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SupportL_Loadout_T3_BP.VH_HVC_UTI_SupportL_Loadout_T3_BP_C"},
+    {L"HVCUTISN_L(T3)", 33489382, 33489381, 3, 'U', "VH_HVC_UTI_SniperL_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SniperL_Loadout_T3_BP.VH_HVC_UTI_SniperL_Loadout_T3_BP_C"},
+    {L"HVCUTISC_H(T3)", 33489383, 33489384, 3, 'U', "VH_HVC_UTI_ScoutH_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_ScoutH_Loadout_T3_BP.VH_HVC_UTI_ScoutH_Loadout_T3_BP_C"},
+    {L"HVCOFFSC_L(T3)", 33489387, 33489388, 3, 'O', "VH_HVC_OFF_ScoutL_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutL_Loadout_T3_BP.VH_HVC_OFF_ScoutL_Loadout_T3_BP_C"},
+    {L"HVCOFFSC_M(T3)", 33489390, 33489391, 3, 'O', "VH_HVC_OFF_ScoutM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutM_Loadout_T3_BP.VH_HVC_OFF_ScoutM_Loadout_T3_BP_C"},
+    {L"HVCOFFSN_M(T3)", 33489395, 33489396, 3, 'O', "VH_HVC_OFF_SniperM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperM_Loadout_T3_BP.VH_HVC_OFF_SniperM_Loadout_T3_BP_C"},
+    {L"HVCOFFDN_L(T3)", 33489404, 33489403, 3, 'O', "VH_HVC_OFF_DreadL_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_DreadL_Loadout_T3_BP.VH_HVC_OFF_DreadL_Loadout_T3_BP_C"},
+    {L"HVCDEFAS_H(T4)", 33489349, 33489350, 6, 'D', "VH_HVC_DEF_AssaultH_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultH_Loadout_T4_BP.VH_HVC_DEF_AssaultH_Loadout_T4_BP_C"},
+    {L"HVCDEFAS_M(T3)", 33489351, 33489352, 3, 'D', "VH_HVC_DEF_AssaultM_Loadout_T3_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultM_Loadout_T3_BP.VH_HVC_DEF_AssaultM_Loadout_T3_BP_C"},
+    {L"HVCDEFAS_M(T4)", 33489352, 33489353, 6, 'D', "VH_HVC_DEF_AssaultM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultM_Loadout_T4_BP.VH_HVC_DEF_AssaultM_Loadout_T4_BP_C"},
+    {L"HVCDEFDN_M(T4)", 33489356, 33489357, 6, 'D', "VH_HVC_DEF_DreadM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadM_Loadout_T4_BP.VH_HVC_DEF_DreadM_Loadout_T4_BP_C"},
+    {L"HVCDEFDN_H(T4)", 33489358, 33489359, 6, 'D', "VH_HVC_DEF_DreadH_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadH_Loadout_T4_BP.VH_HVC_DEF_DreadH_Loadout_T4_BP_C"},
+    {L"HVCDEFSU_H(T4)", 33489361, 33489362, 6, 'D', "VH_HVC_DEF_SupportH_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportH_Loadout_T4_BP.VH_HVC_DEF_SupportH_Loadout_T4_BP_C"},
+    {L"HVCDEFSU_M(T4)", 33489365, 33489366, 6, 'D', "VH_HVC_DEF_SupportM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportM_Loadout_T4_BP.VH_HVC_DEF_SupportM_Loadout_T4_BP_C"},
+    {L"HVCUTIAS_M(T4)", 33489368, 33489369, 6, 'U', "VH_HVC_UTI_AssaultM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_AssaultM_Loadout_T4_BP.VH_HVC_UTI_AssaultM_Loadout_T4_BP_C"},
+    {L"HVCUTISU_L(T4)", 33489371, 33489372, 6, 'U', "VH_HVC_UTI_SupportL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SupportL_Loadout_T4_BP.VH_HVC_UTI_SupportL_Loadout_T4_BP_C"},
+    {L"HVCUTIDN_L(T4)", 33489378, 33489379, 6, 'U', "VH_HVC_UTI_DreadL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_DreadL_Loadout_T4_BP.VH_HVC_UTI_DreadL_Loadout_T4_BP_C"},
+    {L"HVCUTISN_L(T4)", 33489381, 33489380, 6, 'U', "VH_HVC_UTI_SniperL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SniperL_Loadout_T4_BP.VH_HVC_UTI_SniperL_Loadout_T4_BP_C"},
+    {L"HVCUTISC_H(T4)", 33489384, 33489385, 6, 'U', "VH_HVC_UTI_ScoutH_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_ScoutH_Loadout_T4_BP.VH_HVC_UTI_ScoutH_Loadout_T4_BP_C"},
+    {L"HVCOFFSC_L(T4)", 33489388, 33489389, 6, 'O', "VH_HVC_OFF_ScoutL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutL_Loadout_T4_BP.VH_HVC_OFF_ScoutL_Loadout_T4_BP_C"},
+    {L"HVCOFFSC_M(T4)", 33489391, 33489392, 6, 'O', "VH_HVC_OFF_ScoutM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutM_Loadout_T4_BP.VH_HVC_OFF_ScoutM_Loadout_T4_BP_C"},
+    {L"HVCOFFSN_M(T4)", 33489396, 33489397, 6, 'O', "VH_HVC_OFF_SniperM_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperM_Loadout_T4_BP.VH_HVC_OFF_SniperM_Loadout_T4_BP_C"},
+    {L"HVCOFFSN_H(T4)", 33489398, 33489399, 6, 'O', "VH_HVC_OFF_SniperH_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperH_Loadout_T4_BP.VH_HVC_OFF_SniperH_Loadout_T4_BP_C"},
+    {L"HVCOFFAS_L(T4)", 33489401, 33489402, 6, 'O', "VH_HVC_OFF_AssaultL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_AssaultL_Loadout_T4_BP.VH_HVC_OFF_AssaultL_Loadout_T4_BP_C"},
+    {L"HVCOFFDN_L(T4)", 33489403, 33489405, 6, 'O', "VH_HVC_OFF_DreadL_Loadout_T4_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_DreadL_Loadout_T4_BP.VH_HVC_OFF_DreadL_Loadout_T4_BP_C"},
+    {L"HVCOFFAS_L(T5)", 33489402, 33489402, 12, 'O', "VH_HVC_OFF_AssaultL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_AssaultL_Loadout_T5_BP.VH_HVC_OFF_AssaultL_Loadout_T5_BP_C"},
+    {L"HVCOFFDN_L(T5)", 33489405, 33489405, 12, 'O', "VH_HVC_OFF_DreadL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_DreadL_Loadout_T5_BP.VH_HVC_OFF_DreadL_Loadout_T5_BP_C"},
+    {L"HVCDEFAS_H(T5)", 33489350, 33489350, 12, 'D', "VH_HVC_DEF_AssaultH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultH_Loadout_T5_BP.VH_HVC_DEF_AssaultH_Loadout_T5_BP_C"},
+    {L"HVCDEFAS_M(T5)", 33489353, 33489353, 12, 'D', "VH_HVC_DEF_AssaultM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_AssaultM_Loadout_T5_BP.VH_HVC_DEF_AssaultM_Loadout_T5_BP_C"},
+    {L"HVCDEFDN_M(T5)", 33489357, 33489357, 12, 'D', "VH_HVC_DEF_DreadM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadM_Loadout_T5_BP.VH_HVC_DEF_DreadM_Loadout_T5_BP_C"},
+    {L"HVCDEFDN_H(T5)", 33489359, 33489359, 12, 'D', "VH_HVC_DEF_DreadH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_DreadH_Loadout_T5_BP.VH_HVC_DEF_DreadH_Loadout_T5_BP_C"},
+    {L"HVCOFFSN_H(T5)", 33489399, 33489399, 12, 'O', "VH_HVC_OFF_SniperH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperH_Loadout_T5_BP.VH_HVC_OFF_SniperH_Loadout_T5_BP_C"},
+    {L"HVCDEFSN_H(T5)", 33489360, 33489360, 12, 'D', "VH_HVC_DEF_SniperH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SniperH_Loadout_T5_BP.VH_HVC_DEF_SniperH_Loadout_T5_BP_C"},
+    {L"HVCDEFSU_H(T5)", 33489362, 33489362, 12, 'D', "VH_HVC_DEF_SupportH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportH_Loadout_T5_BP.VH_HVC_DEF_SupportH_Loadout_T5_BP_C"},
+    {L"HVCDEFSU_M(T5)", 33489366, 33489366, 12, 'D', "VH_HVC_DEF_SupportM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_DEF_SupportM_Loadout_T5_BP.VH_HVC_DEF_SupportM_Loadout_T5_BP_C"},
+    {L"HVCUTIAS_M(T5)", 33489369, 33489369, 12, 'U', "VH_HVC_UTI_AssaultM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_AssaultM_Loadout_T5_BP.VH_HVC_UTI_AssaultM_Loadout_T5_BP_C"},
+    {L"HVCUTISU_L(T5)", 33489372, 33489372, 12, 'U', "VH_HVC_UTI_SupportL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SupportL_Loadout_T5_BP.VH_HVC_UTI_SupportL_Loadout_T5_BP_C"},
+    {L"HVCUTIDN_M(T5)", 33489373, 33489373, 12, 'U', "VH_HVC_UTI_DreadM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_DreadM_Loadout_T5_BP.VH_HVC_UTI_DreadM_Loadout_T5_BP_C"},
+    {L"HVCOFFSN_M(T5)", 33489397, 33489397, 12, 'O', "VH_HVC_OFF_SniperM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_SniperM_Loadout_T5_BP.VH_HVC_OFF_SniperM_Loadout_T5_BP_C"},
+    {L"HVCUTIDN_L(T5)", 33489379, 33489379, 12, 'U', "VH_HVC_UTI_DreadL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_DreadL_Loadout_T5_BP.VH_HVC_UTI_DreadL_Loadout_T5_BP_C"},
+    {L"HVCUTISN_L(T5)", 33489380, 33489380, 12, 'U', "VH_HVC_UTI_SniperL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_SniperL_Loadout_T5_BP.VH_HVC_UTI_SniperL_Loadout_T5_BP_C"},
+    {L"HVCUTISC_H(T5)", 33489385, 33489385, 12, 'U', "VH_HVC_UTI_ScoutH_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_UTI_ScoutH_Loadout_T5_BP.VH_HVC_UTI_ScoutH_Loadout_T5_BP_C"},
+    {L"HVCOFFSC_L(T5)", 33489389, 33489389, 12, 'O', "VH_HVC_OFF_ScoutL_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutL_Loadout_T5_BP.VH_HVC_OFF_ScoutL_Loadout_T5_BP_C"},
+    {L"HVCOFFSC_M(T5)", 33489392, 33489392, 12, 'O', "VH_HVC_OFF_ScoutM_Loadout_T5_BP", L"/Game/Generic/Loadouts/Precast/Havoc/VH_HVC_OFF_ScoutM_Loadout_T5_BP.VH_HVC_OFF_ScoutM_Loadout_T5_BP_C"},
+};
+static const int kHavocShipCount = (int)(sizeof kHavocShips / sizeof kHavocShips[0]);
+#define RVA_SPAWN_PLAYER 0x5998A0       // AYPlayerController::SpawnPlayer(pc)
+#define RVA_WEAK_PTR_SET 0xD64B60       // TWeakObjectPtr = obj (index +0xC, serial)
+#define OFF_PC_LOADOUT_HOLDER 0x958     // -> +0x28 the loadout manager (0x5B7A60)
+#define OFF_PC_SPAWN_PENDING 0xB88      // byte; SpawnPlayer clears it
+#define OFF_PC_LAST_PAWN 0xBB0          // TWeakObjectPtr<YPawn>
+#define OFF_PC_NO_INPLACE_SPAWN 0xCA0   // byte; set -> no spawn at the last pawn
+typedef void(__fastcall *tSpawnPlayer)(void *pc);
+typedef void(__fastcall *tWeakSet)(void *weak, void *obj);
+
+static bool HavocShipUpgradesOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_HAVOC_SHIP_UPGRADES", "dn_host_no_havoc_ship_upgrades.txt") ? 0 : 1;
+  return s_on == 1;
+}
+static bool HavocIsShipWave(int wave) {
+  for (const HavocShip &s : kHavocShips)
+    if (s.wave > 0 && s.wave == wave)
+      return true;
+  return false;
+}
+static int HavocShipByItem(int itemId) {
+  for (int i = 0; i < kHavocShipCount; ++i)
+    if (kHavocShips[i].itemId == itemId)
+      return i;
+  return -1;
+}
+static void *HavocLoadoutManager(void *pc) {
+  uint8_t *h = IsReadable((uint8_t *)pc + OFF_PC_LOADOUT_HOLDER, 8) ? *(uint8_t **)((uint8_t *)pc + OFF_PC_LOADOUT_HOLDER) : nullptr;
+  return h && IsReadable(h + 0x28, 8) ? *(void **)(h + 0x28) : nullptr;
+}
+// The kHavocShips row of the active loadout, or -1. By its
+// m_precastLoadoutID when set; else by its loadout id FName (+0xB0), which on
+// these classes is the default object's name, "Default__<asset>_C" (smoke
+// host 2026-10-19: every Havoc CDO has m_precastLoadoutID 0 and that FName);
+// else by its class name.
+static int HavocCurrentShipRow(void *pc) {
+  uint8_t *mgr = (uint8_t *)HavocLoadoutManager(pc);
+  uint8_t *lo = mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(uint8_t **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+  if (!lo || !IsReadable(lo, 0xB8))
+    return -1;
+  int off = PropOffset((UObjectMin *)lo, "m_precastLoadoutID");
+  int id = off > 0 && IsReadable(lo + off, 4) ? *(int32_t *)(lo + off) : 0;
+  int row = id > 0 ? HavocShipByItem(id) : -1;
+  if (row >= 0)
+    return row;
+  const char *fname = NameText(*(FNameMin *)(lo + 0xB0));
+  const char *cls = ClassNameOf(lo);
+  char want[160];
+  for (int i = 0; i < kHavocShipCount; ++i) {
+    _snprintf_s(want, sizeof want, _TRUNCATE, "Default__%s_C", kHavocShips[i].asset);
+    if (fname && !strcmp(fname, want))
+      return i;
+    if (cls && !strcmp(cls, want + 9))
+      return i;
+  }
+  static int s_logged = 0;
+  if (s_logged++ < 4)
+    Logf("havoc: active loadout %p not a Havoc ship (precast id %d, id FName %s, class %s)", lo, id, fname ? fname : "?",
+         cls ? cls : "?");
+  return -1;
+}
+static int HavocCurrentShipItem(void *pc) {
+  int row = HavocCurrentShipRow(pc);
+  return row >= 0 ? kHavocShips[row].itemId : -1;
+}
+// One ship of the category from the rows appearing on this wave; `prefer`
+// wins when it is one of them.
+static int HavocPickShip(char cat, int wave, int prefer) {
+  if (prefer >= 0 && kHavocShips[prefer].cat == cat && kHavocShips[prefer].wave == wave)
+    return prefer;
+  int n = 0;
+  for (const HavocShip &s : kHavocShips)
+    if (s.cat == cat && s.wave == wave)
+      ++n;
+  if (!n)
+    return -1;
+  int r = (int)(HavocRand() % (uint32_t)n);
+  for (int i = 0; i < kHavocShipCount; ++i)
+    if (kHavocShips[i].cat == cat && kHavocShips[i].wave == wave && r-- == 0)
+      return i;
+  return -1;
+}
+
+// Smoke test (dn_host_havoc_smoke.txt): every ship class loads, and its
+// default object's loadout id FName is "Default__<asset>_C".
+static void HavocVerifyShipClasses() {
+  int ok = 0, bad = 0;
+  for (const HavocShip &s : kHavocShips) {
+    PrecastPath pp = {s.asset, s.path};
+    UObjectMin *cdo = ResolvePrecastByName(&pp);
+    const char *fname = cdo && IsReadable((uint8_t *)cdo + 0xB0, 8) ? NameText(*(FNameMin *)((uint8_t *)cdo + 0xB0)) : nullptr;
+    char want[160];
+    _snprintf_s(want, sizeof want, _TRUNCATE, "Default__%s_C", s.asset);
+    if (cdo && fname && !strcmp(fname, want))
+      ++ok;
+    else {
+      ++bad;
+      Logf("havoc: ship class %s -> cdo %p, id FName %s (want %s)", s.asset, cdo, fname ? fname : "?", want);
+    }
+  }
+  Logf("havoc: ship classes checked: %d OK, %d wrong or missing", ok, bad);
+}
+
+static bool HavocSwapShip(void *pc, int row) {
+  const HavocShip &s = kHavocShips[row];
+  void *mgr = HavocLoadoutManager(pc);
+  if (!mgr) {
+    Logf("havoc: ship upgrade %ls for %p -- no loadout manager", s.row, pc);
+    return false;
+  }
+  PrecastPath pp = {s.asset, s.path};
+  UObjectMin *cdo = ResolvePrecastByName(&pp);
+  if (!cdo || !IsReadable((uint8_t *)cdo + 0xB8, 8)) {
+    Logf("havoc: ship upgrade %ls -- class %ls did not load", s.row, s.path);
+    return false;
+  }
+  void *loadout = g_origFindLoadoutByID ? g_origFindLoadoutByID(mgr, (void **)((uint8_t *)cdo + 0xB0), 0) : nullptr;
+  if (!loadout) {
+    bool added = AddLoadoutGuarded(mgr, cdo);
+    loadout = g_origFindLoadoutByID ? g_origFindLoadoutByID(mgr, (void **)((uint8_t *)cdo + 0xB0), 0) : nullptr;
+    Logf("havoc: ship upgrade %ls -- registered %s with manager %p -> %s, found %p", s.row, s.asset, mgr,
+         added ? "ok" : "EXCEPTION", loadout);
+  }
+  if (!loadout)
+    return false;
+  uint8_t *p = (uint8_t *)pc;
+  void *pawn = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
+  int before = HavocCurrentShipItem(pc);
+  __try {
+    ((tActivateLoadout)(g_base + RVA_ACTIVATE_LOADOUT))(mgr, loadout, 1);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("havoc: ship upgrade %ls -- EXCEPTION in ActivateLoadout", s.row);
+    return false;
+  }
+  int after = HavocCurrentShipItem(pc);
+  if (!pawn) {
+    Logf("havoc: ship upgrade %ls for %p -- active loadout %d -> %d; no ship now, the next spawn uses it", s.row, pc,
+         before, after);
+    return after == s.itemId;
+  }
+  uint8_t noInPlace = p[OFF_PC_NO_INPLACE_SPAWN];
+  __try {
+    ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))(p + OFF_PC_LAST_PAWN, pawn);
+    p[OFF_PC_SPAWN_PENDING] = 1;
+    ((tSpawnPlayer)(g_base + RVA_SPAWN_PLAYER))(pc);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("havoc: ship upgrade %ls -- EXCEPTION in SpawnPlayer", s.row);
+    return false;
+  }
+  void *now = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
+  Logf("havoc: ship upgrade %ls (%s) for %p -- active loadout %d -> %d, ship %p %s -> %p %s (pending %u, no-in-place %u)",
+       s.row, s.asset, pc, before, after, pawn, ClassNameOf(pawn), now, now ? ClassNameOf(now) : "-",
+       p[OFF_PC_SPAWN_PENDING], noInPlace);
+  return after == s.itemId && now && now != pawn;
+}
+
+static void HavocOfferUpgrades(uint8_t *gs) {
+  uint8_t *pcs[16];
+  int npc = HavocHumanPCs(gs, pcs, 16);
+  for (int i = 0; i < npc; ++i) {
+    HavocPlayer *p = HavocPlayerFor(pcs[i], true);
+    if (!p)
+      continue;
+    static const char kCats[3] = {'O', 'D', 'U'};
+    int wave = *(int32_t *)(gs + OFF_HVC_GS_WAVE_INDEX);
+    bool ships = HavocShipUpgradesOn() && HavocIsShipWave(wave);
+    int cur = ships ? HavocShipByItem(HavocCurrentShipItem(pcs[i])) : -1;
+    int next = cur >= 0 ? HavocShipByItem(kHavocShips[cur].nextTierId) : -1;
+    for (int k = 0; k < 3; ++k) {
+      p->offer[k] = ships ? -1 : HavocPickBoost(kCats[k]);
+      p->offerShip[k] = ships ? HavocPickShip(kCats[k], wave, next) : -1;
+      p->offerNames[k] = {};
+      const wchar_t *nm = p->offer[k] >= 0 ? kHavocBoosts[p->offer[k]].id
+                          : p->offerShip[k] >= 0 ? kHavocShips[p->offerShip[k]].row : nullptr;
+      if (nm)
+        ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&p->offerNames[k], nm, 1);
+    }
+    bool ok = CallFilled(pcs[i], L"ClientReceiveRandSelectedUpgrades", FillNameArray, p);
+    uint8_t *pri = *(uint8_t **)(pcs[i] + OFF_PC_PLAYER_STATE);
+    if (ships) {
+      Logf("havoc: wave %d is a ship-upgrade wave -- offered %ls / %ls / %ls to %p (now %ls, next tier %ls)%s", wave,
+           p->offerShip[0] >= 0 ? kHavocShips[p->offerShip[0]].row : L"-",
+           p->offerShip[1] >= 0 ? kHavocShips[p->offerShip[1]].row : L"-",
+           p->offerShip[2] >= 0 ? kHavocShips[p->offerShip[2]].row : L"-", pcs[i],
+           cur >= 0 ? kHavocShips[cur].row : L"unknown", next >= 0 ? kHavocShips[next].row : L"-", ok ? "" : " -- RPC NOT FOUND");
+      continue;
+    }
+    Logf("havoc: offered %ls / %ls / %ls to %p (xp %d)%s", p->offer[0] >= 0 ? kHavocBoosts[p->offer[0]].id : L"-",
+         p->offer[1] >= 0 ? kHavocBoosts[p->offer[1]].id : L"-", p->offer[2] >= 0 ? kHavocBoosts[p->offer[2]].id : L"-",
+         pcs[i], *(int32_t *)(pri + OFF_HVC_PRI_CURRENT_XP), ok ? "" : " -- RPC NOT FOUND");
+  }
+}
+
+#define RVA_HVC_SERVER_SELECTED_UPGRADE_IMPL 0x406040
+typedef void(__fastcall *tHvcSelectedUpgrade)(void *pc, int32_t slot);
+static tHvcSelectedUpgrade g_origHvcSelectedUpgrade = nullptr;
+static void __fastcall HookHvcSelectedUpgrade(void *pc, int32_t slot) {
+  g_origHvcSelectedUpgrade(pc, slot);
+  HavocPlayer *p = HavocPlayerFor(pc, false);
+  uint8_t *pri = IsReadable((uint8_t *)pc + OFF_PC_PLAYER_STATE, 8) ? *(uint8_t **)((uint8_t *)pc + OFF_PC_PLAYER_STATE) : nullptr;
+  int b = p && slot >= 0 && slot < 3 ? p->offer[slot] : -1;
+  int ship = p && slot >= 0 && slot < 3 ? p->offerShip[slot] : -1;
+  if (ship >= 0) {
+    // A ship costs no XP (see HavocSwapShip); one ship per upgrade phase.
+    bool swapped = HavocSwapShip(pc, ship);
+    if (swapped)
+      p->offerShip[0] = p->offerShip[1] = p->offerShip[2] = -1;
+    Logf("havoc: %p picked slot %d (ship %ls) -> %s", pc, slot, kHavocShips[ship].row, swapped ? "swapped" : "FAILED");
+    HavocPurchaseResult r = {};
+    r.ok = swapped ? 1 : 0;
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&r.id, kHavocShips[ship].row, 1);
+    CallFilled(pc, L"ClientReceiveBoostPurchaseResult", FillPurchaseResult, &r);
+    return;
+  }
+  uint8_t ok = 0;
+  int xp = -1;
+  if (b >= 0 && pri && IsReadable(pri, OFF_HVC_PRI_CONTRIBUTED_XP + 4) &&
+      ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo_Havoc")) {
+    xp = *(int32_t *)(pri + OFF_HVC_PRI_CURRENT_XP);
+    if (xp >= kHavocBoosts[b].cost && p->nOwned < (int)(sizeof p->owned / sizeof p->owned[0])) {
+      ((void(__fastcall *)(void *, int32_t))(g_base + RVA_HVC_PRI_DEDUCT_XP))(pri, kHavocBoosts[b].cost);
+      p->owned[p->nOwned++] = b;
+      p->offer[slot] = -1;
+      ok = 1;
+    }
+  }
+  Logf("havoc: %p picked slot %d (%ls, cost %d) with xp %d -> %s", pc, slot, b >= 0 ? kHavocBoosts[b].id : L"none",
+       b >= 0 ? kHavocBoosts[b].cost : 0, xp, ok ? "bought" : "refused");
+  // AYPlayerReplicationInfo_Havoc::ClientXPDeducted ("Update upgrades panel",
+  // 0x4030F2) is NOT a reflected UFunction: FindFunctionChecked on it kills
+  // the host ("Failed to find function ClientXPDeducted in
+  // YPlayerReplicationInfo_Havoc"). m_currentXP replicates by itself.
+  HavocPurchaseResult r = {};
+  r.ok = ok;
+  if (b >= 0)
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&r.id, kHavocBoosts[b].id, 1);
+  CallFilled(pc, L"ClientReceiveBoostPurchaseResult", FillPurchaseResult, &r);
+}
+
+// Feats components by ship, recorded at UYFeatsComponent begin-play.
+// modGen/modsOn/permApplied: the Havoc wave and permanent enemy modifiers
+// already on this ship (HavocApplyModifiers). 256 slots: every wave enemy
+// has a feats component too.
+struct FeatsByPawn {
+  void *pawn, *comp;
+  LONG modGen;
+  int modsOn[2];
+  int permApplied;
+};
+static FeatsByPawn g_featsByPawn[256];
+static void RecordFeatsComp(void *pawn, void *comp) {
+  int freeAt = -1;
+  for (int i = 0; i < 256; ++i) {
+    if (g_featsByPawn[i].pawn == pawn) {
+      if (g_featsByPawn[i].comp != comp)
+        g_featsByPawn[i] = {pawn, comp, -1, {-1, -1}, 0};
+      return;
+    }
+    if (freeAt < 0 && !IsReadable(g_featsByPawn[i].comp, OFF_COMPONENT_OWNER + 8))
+      freeAt = i;
+  }
+  static int s_next = 0;
+  if (freeAt < 0)
+    freeAt = s_next++ % 256;
+  g_featsByPawn[freeAt] = {pawn, comp, -1, {-1, -1}, 0};
+}
+static void *FeatsCompOf(void *pawn) {
+  for (FeatsByPawn &e : g_featsByPawn)
+    if (e.pawn == pawn && IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) &&
+        *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) == pawn)
+      return e.comp;
+  return nullptr;
+}
+
+// Every director tick: put each player's bought boosts on their current ship.
+static void HavocApplyBoosts() {
+  for (HavocPlayer &p : g_hvcPlayers) {
+    if (!p.pc || !p.nOwned || !IsReadable((uint8_t *)p.pc + OFF_CONTROLLER_PAWN, 8))
+      continue;
+    void *pawn = *(void **)((uint8_t *)p.pc + OFF_CONTROLLER_PAWN);
+    if (!pawn)
+      continue;
+    if (pawn != p.appliedPawn)
+      p.appliedPawn = pawn, p.nApplied = 0;
+    if (p.nApplied >= p.nOwned)
+      continue;
+    void *comp = FeatsCompOf(pawn);
+    if (!comp)
+      continue;
+    for (; p.nApplied < p.nOwned; ++p.nApplied) {
+      const HavocBoost &b = kHavocBoosts[p.owned[p.nApplied]];
+      FNameMin name{};
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&name, b.feat, 1);
+      bool ok = false;
+      __try {
+        ok = ((tAddFeat)(g_base + RVA_FEATS_ADD_FEAT))(comp, *(uint64_t *)&name);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Logf("havoc: AddFeat(%ls) faulted on %p", b.feat, comp);
+      }
+      Logf("havoc: boost feat %ls on %s for %p -> %s", b.feat, ClassNameOf(pawn), p.pc, ok ? "added" : "FAILED");
+    }
+  }
+}
+
+static void __fastcall HookIntParmExecThunk(void *ctx, uint8_t *stack, void *result) {
+  const char *n = CalledNativeName(stack);
+  int32_t v = 0;
+  if (*(void **)(stack + 0x20))
+    ((void(__fastcall *)(void *, void *, void *))(g_base + RVA_FFRAME_STEP))(stack, *(void **)(stack + 0x18), &v);
+  else {
+    uint8_t *prop = *(uint8_t **)(stack + 0x80);
+    *(void **)(stack + 0x80) = *(void **)(prop + 0x28);
+    ((void(__fastcall *)(void *, void *, void *))(g_base + RVA_FFRAME_STEP_EXPLICIT_PROPERTY))(stack, &v, prop);
+  }
+  if (*(uint8_t **)(stack + 0x20))
+    ++*(uint8_t **)(stack + 0x20);
+  if (!n)
+    return;
+  if (!strcmp(n, "AddNPCToEnemyList")) {
+    LONG i = InterlockedIncrement(&g_hvcEnemyCount) - 1;
+    if (i < 256)
+      g_hvcEnemyIds[i] = v;
+    else
+      InterlockedDecrement(&g_hvcEnemyCount);
+    Logf("havoc: AddNPCToEnemyList(%d) on %s (list %ld)", v, ClassNameOf(ctx), g_hvcEnemyCount);
+    return;
+  }
+  if (!strcmp(n, "AddXPForGroup")) {
+    HavocAddXP((uint8_t *)ctx, v, "AddXPForGroup");
+    return;
+  }
+  static char s_seen[16][48];
+  static int s_nseen = 0;
+  for (int i = 0; i < s_nseen; ++i)
+    if (!strcmp(s_seen[i], n))
+      return;
+  if (s_nseen < 16)
+    snprintf(s_seen[s_nseen++], sizeof s_seen[0], "%s", n);
+  Logf("havoc: BP called compiled-out native %s(%d) on %s (first call)", n, v, ClassNameOf(ctx));
+}
+
+// ---------------------------------------------------------------------------
+// Havoc, stage 2 (2026-10-19): the rules the PR's director guessed or left
+// out, from GameState_Havoc_BP / PVE_HordeManager_BP bytecode (tools/bpdump),
+// the client's own code and the Havoc data tables.
+//
+// Wave over. GameState_Havoc_BP CheckWaveOver: when GetNumberOfRemainingWave
+// Enemies <= 0 AND m_numEnemiesKilledThisWave >= m_maxWaveEnemies + the
+// bridgehead spawns, it sets god mode and -- once every XP drop is picked up
+// or gone (AllXPDropsPickedUp, set by the pickups' CompleteBuffPodObjective
+// IfAllRetrieved) and 2 s later -- calls SetSpecialWaveConditionsFulfilled
+// (true). That native is compiled out (bool exec thunk 0x777000 -> the bare
+// `ret` 0x1AA9450, same shape as the int thunk 0x742E90), so the hook below
+// records it and the director ends the wave on it.
+#define RVA_BOOL_PARM_EXEC_THUNK 0x777000
+static tExecThunk g_origBoolParmExecThunk = nullptr;
+static volatile LONG g_hvcWaveConditions = 0;
+static const char *CalledNativeName(uint8_t *stack);
+static void StepParm(uint8_t *stack, void *out);
+
+static void __fastcall HookBoolParmExecThunk(void *ctx, uint8_t *stack, void *result) {
+  const char *n = CalledNativeName(stack);
+  int32_t v = 0;
+  StepParm(stack, &v);
+  if (*(uint8_t **)(stack + 0x20))
+    ++*(uint8_t **)(stack + 0x20);
+  if (!n)
+    return;
+  if (!strcmp(n, "SetSpecialWaveConditionsFulfilled")) {
+    LONG before = InterlockedExchange(&g_hvcWaveConditions, v ? 1 : 0);
+    if (before != (v ? 1 : 0))
+      Logf("havoc: BP SetSpecialWaveConditionsFulfilled(%d) on %s", v ? 1 : 0, ClassNameOf(ctx));
+    return;
+  }
+  static char s_seen[16][48];
+  static int s_nseen = 0;
+  for (int i = 0; i < s_nseen; ++i)
+    if (!strcmp(s_seen[i], n))
+      return;
+  if (s_nseen < 16)
+    snprintf(s_seen[s_nseen++], sizeof s_seen[0], "%s", n);
+  Logf("havoc: BP called compiled-out native %s(%d) on %s (first call)", n, v, ClassNameOf(ctx));
+}
+
+// Kill XP. GameMode_Havoc_BP m_monsterKillXP = 25 (DefaultHavoc.ini says 10;
+// the BP default wins), and the scoring table's HavocXPKill row scores the
+// same 25. The native that paid it is compiled out with the rest of the
+// server's death path. GUESS: every listed wave enemy's death pays it to the
+// group (AddXPForGroup's rule); the killer is not known here.
+static int HavocMonsterKillXP(uint8_t *gm) {
+  static void *s_for = nullptr;
+  static int s_xp = 0;
+  if (s_for != gm) {
+    s_for = gm;
+    int off = PropOffset((UObjectMin *)gm, "m_monsterKillXP");
+    s_xp = off > 0 && IsReadable(gm + off, 4) ? *(int32_t *)(gm + off) : 0;
+    if (s_xp < 0 || s_xp > 10000)
+      s_xp = 0;
+    Logf("havoc: kill XP %d per enemy (m_monsterKillXP)", s_xp);
+  }
+  return s_xp;
+}
+static void HavocAddXP(uint8_t *gm, int xp, const char *why, void *contributor);
+static void HavocOnEnemyKilled(uint8_t *gm) {
+  int xp = HavocMonsterKillXP(gm);
+  if (xp > 0)
+    HavocAddXP(gm, xp, "enemy kill (m_monsterKillXP)", nullptr);
+}
+
+// Enemies on the list still alive: entry not yet spawned (the scene tick will
+// spawn it), or its pawn live and not in state 2/3 (OFF_PAWN_STATE, the AI's
+// own dead/dying filter 0x57BD10). Dead ids drop off the list.
+static int HavocCountAliveEnemies(uint8_t *gm, uint8_t *gs) {
+  uint8_t *scene = (uint8_t *)((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+  if (!scene || !IsReadable(scene + OFF_SCENE_NPCS, 16))
+    return -1;
+  uint8_t *arr = *(uint8_t **)(scene + OFF_SCENE_NPCS);
+  int cnt = *(int32_t *)(scene + OFF_SCENE_NPCS_COUNT);
+  int n = (int)g_hvcEnemyCount, alive = 0, keep = 0;
+  for (int i = 0; i < n && i < 256; ++i) {
+    int id = (int)g_hvcEnemyIds[i];
+    bool live = false;
+    if (arr && id >= 0 && id < cnt && IsReadable(arr + (size_t)id * NPC_SPAWN_SIZE, NPC_SPAWN_SIZE)) {
+      uint8_t *e = arr + (size_t)id * NPC_SPAWN_SIZE;
+      if (!e[OFF_NPCSPAWN_INSTANCED])
+        live = true;
+      else {
+        uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(e + OFF_NPCSPAWN_PAWN);
+        live = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3;
+        if (!live) {
+          // A listed id leaves the list exactly once, so this counts each kill
+          // once. A pawn already destroyed (weak ptr null) is counted but not
+          // broadcast: the BP spawns the pickup at KilledYPawn's transform and
+          // a null pawn would drop it at the origin.
+          *(int32_t *)(gs + OFF_HVC_GS_KILLED) += 1;
+          HavocOnEnemyKilled(gm);
+          if (pawn) {
+            struct { void *pawn; int32_t npcId; int32_t pad; } parms = {pawn, id, 0};
+            // GUESS: KilledNPCID is the combat-scene spawn index (the id the
+            // enemy-list hook records); the BP only forwards it, the XP pickup
+            // path does not read it.
+            ((void (*)(void *, void *))(g_base + RVA_MULTICAST_BROADCAST_NOPARMS))(gm + OFF_HVC_GM_ON_ANY_NPC_KILLED,
+                                                                                  &parms);
+          }
+          Logf("havoc: enemy %d died (pawn %p) -> killed %d%s", id, pawn, *(int32_t *)(gs + OFF_HVC_GS_KILLED),
+               pawn ? ", OnAnyNPCKilled broadcast" : ", pawn gone: no XP drop");
+        }
+      }
+    }
+    if (live) {
+      g_hvcEnemyIds[keep++] = id;
+      ++alive;
+    }
+  }
+  // ids appended by the hook while we pruned stay at the tail
+  LONG now = g_hvcEnemyCount;
+  for (LONG i = n; i < now && i < 256; ++i)
+    g_hvcEnemyIds[keep++] = g_hvcEnemyIds[i];
+  InterlockedExchange(&g_hvcEnemyCount, keep);
+  return alive;
+}
+
+static bool HostIsHavoc() {
+  const wchar_t *cmd = GetCommandLineW();
+  return cmd && wcsstr(cmd, L"-GameMode=Havoc ") != nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Havoc wave modifiers (stage 2). The wave modifier component's server half is
+// compiled out; the client half is intact: AYGameState_Havoc::
+// ClientUpdateActiveWaveModifier(activeModifierNames, activePermanentEnemy
+// ModifierNames) (thunk 0x7479B0, two TArray<FName>; parameter names from the
+// UFunction construction 0x8D5071) fills the HUD's modifier list.
+// Rules from the data: YHavocWaveModifierComponent m_desiredModifierSlotsNum
+// = 2 (DefaultHavoc.ini), "NoModifier" fills an empty slot, "BossWave" marks
+// a boss wave (DN_HavocBossWaves_DT 7/12/17/22). A row is eligible when
+// m_minWave <= wave <= m_maxWave (-1 = open; 999 = never), weight > 0, and no
+// chosen row lists it in m_excludes (or it a chosen row). Its m_feats go on
+// the ships of m_affectedTeam for the wave and come off at its end.
+// Permanent enemy modifiers (DN_HavocPermanentEnemyModifiers_DT): every row
+// with m_wave <= the wave applies to every enemy ship; AddFeat (0x337850)
+// stacks a feat the ship already has when the feat allows it (existing +0x51,
+// 0x14033F060), which is how the repeated HVC_PEM_EnemyDamageBoost5 rows add up.
+// GUESS: the selection is weighted random without repeats; boss waves get only
+// "BossWave". The original's selection code is not in this exe.
+struct HavocModifier {
+  const wchar_t *id, *feats, *excludes;
+  int minWave, maxWave, weight;
+  char team; // 'A' all, 'P' players, 'E' enemies, 'N' none
+};
+struct HavocEnemyBoost {
+  const wchar_t *id, *feat;
+  int wave;
+};
+// DN_HavocModifiers_DT, verbatim (generated 2026-10-19): row, m_feats, m_excludes,
+// m_minWave, m_maxWave, m_weight, m_affectedTeam (A all / P players / E enemies /
+// N none). Feats and excludes are ";"-separated, as in the table.
+static const HavocModifier kHavocModifiers[] = {
+    {L"NoModifier", L"", L"", 0, 0, 1, 'N'},
+    {L"BossWave", L"", L"", 999, 1, 0, 'A'},
+    {L"HVC_enemies_damageresistanceFrontFull_damageresistanceBackNegative", L"HVC_damageresistanceFrontFull_damageresistanceBackNegative_1;HVC_damageresistanceFrontFull_damageresistanceBackNegative_2", L"", 1, -1, 1, 'A'},
+    {L"HVC_global_abilitiesDamageHigh_abilitiesCooldownHigh", L"HVC_abilitiesDamageHigh_abilitiesCooldownHigh", L"HVC_global_abilitiesDamageLow_abilitiesCooldownLow", 1, -1, 1, 'A'},
+    {L"HVC_global_abilitiesDamageLow_abilitiesCooldownLow", L"HVC_abilitiesDamageLow_abilitiesCooldownLow", L"HVC_global_abilitiesDamageHigh_abilitiesCooldownHigh", 1, -1, 1, 'A'},
+    {L"HVC_global_damageresistanceBackNegative", L"HVC_damageresistanceBackNegative", L"", 1, -1, 1, 'A'},
+    {L"HVC_global_energyNone", L"HVC_energyNone", L"HVC_global_energyRegenFast_energyCooldownLow_energyMaxLow;HVC_global_energyRegenHit_abilitiesCooldownHit;HVC_global_energyRegenNone_energyMaxHigh;HVC_players_energyFullKill_energyRegenNone;HVC_players_movementNone_movementFast;", 1, -1, 1, 'A'},
+    {L"HVC_global_energyRegenFast_energyCooldownLow_energyMaxLow", L"HVC_energyRegenFast_energyCooldownLow_energyMaxLow", L"HVC_global_energyNone;HVC_players_energyFullKill_energyRegenNone;HVC_global_energyRegenNone_energyMaxHigh;", 1, -1, 1, 'A'},
+    {L"HVC_global_energyRegenHit_abilitiesCooldownHit", L"HVC_energyRegenHit_abilitiesCooldownHit", L"HVC_global_energyNone", 1, -1, 1, 'A'},
+    {L"HVC_global_energyRegenNone_energyMaxHigh", L"HVC_energyRegenNone_energyMaxHigh", L"HVC_global_energyNone;HVC_global_energyRegenFast_energyCooldownLow_energyMaxLow;HVC_players_energyFullKill_energyRegenNone;", 1, -1, 1, 'A'},
+    {L"HVC_global_energyUnlimted_healthDecreaseHit", L"HVC_energyUnlimted_healthDecreaseHit_1;HVC_energyUnlimted_healthDecreaseHit_2;", L"", 999, -1, 1, 'A'},
+    {L"HVC_global_healthRegenFast_healthCooldownHigh", L"HVC_healthRegenFast_healthCooldownHigh", L"HVC_global_healthRegenHit_healthRegenSlow;HVC_global_healthRegenNone_healthMaxHigh;HVC_players_healthFullKill_healthRegenNone;", 1, -1, 1, 'A'},
+    {L"HVC_global_healthRegenHit_healthRegenSlow", L"HVC_healthRegenHit_healthRegenSlow_1;HVC_healthRegenHit_healthRegenSlow_2", L"HVC_global_healthRegenFast_healthCooldownHigh;HVC_players_healthFullKill_healthRegenNone", 1, -1, 1, 'A'},
+    {L"HVC_global_healthRegenNone_healthMaxHigh", L"HVC_healthRegenNone_healthMaxHigh", L"HVC_global_healthRegenFast_healthCooldownHigh;HVC_players_healthFullKill_healthRegenNone", 1, -1, 1, 'A'},
+    {L"HVC_global_weaponFirerateLow_weaponDamageHigh", L"HVC_weaponFirerateLow_weaponDamageHigh", L"", 1, -1, 1, 'A'},
+    {L"HVC_players_abilitiesCooldownResetKill", L"HVC_abilitiesCooldownResetKill", L"", 1, -1, 1, 'A'},
+    {L"HVC_players_aimLowWhileMoving_movementForwardFast", L"HVC_aimLowWhileMoving_movementForwardFast", L"", 1, -1, 1, 'A'},
+    {L"HVC_players_movementNone_movementFast", L"HVC_movementNone_movementFast_1;HVC_movementNone_movementFast_2;", L"HVC_global_energyNone", 1, -1, 1, 'P'},
+    {L"HVC_players_energyFullKill_energyRegenNone", L"HVC_energyFullKill_energyRegenNone_1;HVC_energyFullKill_energyRegenNone_2;", L"HVC_global_energyRegenNone_energyMaxHigh;HVC_global_energyRegenFast_energyCooldownLow_energyMaxLow;HVC_global_energyNone;", 1, -1, 1, 'A'},
+    {L"HVC_players_energyMaxDecreaseKill", L"HVC_energyMaxDecreaseKill", L"", 999, -1, 1, 'A'},
+    {L"HVC_players_energyUnlimted_wheelRestrictions_healthRegenNone", L"HVC_energyUnlimted_wheelRestrictions", L"", 999, -1, 1, 'A'},
+    {L"HVC_players_healingNone_healingDamageresistanceFull", L"HVC_healingNone_healingDamageresistanceFull_1;HVC_healingNone_healingDamageresistanceFull_2;HVC_healingNone_healingDamageresistanceFull_3;", L"", 1, -1, 1, 'P'},
+    {L"HVC_players_healthFullKill_healthRegenNone", L"HVC_healthFullKill_healthRegenNone_1;HVC_healthFullKill_healthRegenNone_2;", L"HVC_global_healthRegenNone_healthMaxHigh;HVC_global_healthRegenHit_healthRegenSlow;HVC_global_healthRegenFast_healthCooldownHigh;", 1, -1, 1, 'A'},
+    {L"HVC_players_healthMaxDecreaseKill", L"HVC_healthMaxDecreaseKill", L"", 999, -1, 1, 'A'},
+    {L"HVC_players_healthMaxIncreaseHeal", L"HVC_healthMaxIncreaseHeal", L"", 999, -1, 1, 'A'},
+    {L"HVC_players_movementVerticalNone", L"HVC_movementVerticalNone", L"", 999, -1, 1, 'A'},
+};
+// DN_HavocPermanentEnemyModifiers_DT, verbatim: row, m_feats, m_wave.
+static const HavocEnemyBoost kHavocEnemyBoosts[] = {
+    {L"EnemyBoost_01_Damage", L"HVC_PEM_EnemyDamageBoost5", 3},
+    {L"EnemyBoost_01_Health", L"HVC_PEM_EnemyHealthBoost5", 3},
+    {L"EnemyBoost_02_Damage", L"HVC_PEM_EnemyDamageBoost5", 4},
+    {L"EnemyBoost_02_Health", L"HVC_PEM_EnemyHealthBoost5", 4},
+    {L"EnemyBoost_03_Damage", L"HVC_PEM_EnemyDamageBoost5", 5},
+    {L"EnemyBoost_03_Health", L"HVC_PEM_EnemyHealthBoost5", 5},
+    {L"EnemyBoost_04_Damage", L"HVC_PEM_EnemyDamageBoost5", 6},
+    {L"EnemyBoost_04_Health", L"HVC_PEM_EnemyHealthBoost5", 6},
+    {L"EnemyBoost_05_Damage", L"HVC_PEM_EnemyDamageBoost5", 8},
+    {L"EnemyBoost_05_Health", L"HVC_PEM_EnemyHealthBoost5", 8},
+    {L"EnemyBoost_06_Damage", L"HVC_PEM_EnemyDamageBoost5", 9},
+    {L"EnemyBoost_06_Health", L"HVC_PEM_EnemyHealthBoost5", 9},
+    {L"EnemyBoost_07_Damage", L"HVC_PEM_EnemyDamageBoost10", 10},
+    {L"EnemyBoost_07_Health", L"HVC_PEM_EnemyHealthBoost10", 10},
+    {L"EnemyBoost_08_Damage", L"HVC_PEM_EnemyDamageBoost10", 11},
+    {L"EnemyBoost_08_Health", L"HVC_PEM_EnemyHealthBoost10", 11},
+    {L"EnemyBoost_09_Damage", L"HVC_PEM_EnemyDamageBoost10", 13},
+    {L"EnemyBoost_09_Health", L"HVC_PEM_EnemyHealthBoost10", 13},
+    {L"EnemyBoost_10_Damage", L"HVC_PEM_EnemyDamageBoost10", 14},
+    {L"EnemyBoost_10_Health", L"HVC_PEM_EnemyHealthBoost10", 14},
+    {L"EnemyBoost_11_Damage", L"HVC_PEM_EnemyDamageBoost10", 15},
+    {L"EnemyBoost_11_Health", L"HVC_PEM_EnemyHealthBoost10", 15},
+    {L"EnemyBoost_12_Damage", L"HVC_PEM_EnemyDamageBoost10", 16},
+    {L"EnemyBoost_12_Health", L"HVC_PEM_EnemyHealthBoost10", 16},
+    {L"EnemyBoost_13_Damage", L"HVC_PEM_EnemyDamageBoost15", 18},
+    {L"EnemyBoost_13_Health", L"HVC_PEM_EnemyHealthBoost15", 18},
+    {L"EnemyBoost_14_Damage", L"HVC_PEM_EnemyDamageBoost15", 19},
+    {L"EnemyBoost_14_Health", L"HVC_PEM_EnemyHealthBoost15", 19},
+    {L"EnemyBoost_15_Damage", L"HVC_PEM_EnemyDamageBoost15", 20},
+    {L"EnemyBoost_15_Health", L"HVC_PEM_EnemyHealthBoost15", 20},
+    {L"EnemyBoost_16_Damage", L"HVC_PEM_EnemyDamageBoost15", 21},
+    {L"EnemyBoost_16_Health", L"HVC_PEM_EnemyHealthBoost15", 21},
+    {L"EnemyBoost_17_Damage", L"HVC_PEM_EnemyDamageBoost15", 23},
+    {L"EnemyBoost_17_Health", L"HVC_PEM_EnemyHealthBoost15", 23},
+};
+// DN_HavocBossWaves_DT m_waveNumber.
+static const int kHavocBossWaves[] = {7, 12, 17, 22};
+static const int kHavocModifierCount = (int)(sizeof kHavocModifiers / sizeof kHavocModifiers[0]);
+static const int kHavocEnemyBoostCount = (int)(sizeof kHavocEnemyBoosts / sizeof kHavocEnemyBoosts[0]);
+#define RVA_FEATS_REMOVE_FEAT 0x359770 // (featsComp, FName): RemoveFeat thunk 0x76ECE0's body
+typedef void(__fastcall *tRemoveFeat)(void *featsComp, uint64_t featName);
+
+static int g_hvcActiveMods[2] = {-1, -1}; // kHavocModifiers index
+static volatile LONG g_hvcModGen = 0;      // bumped per wave: pawns re-check their feats
+static int g_hvcModWave = 0;               // the wave the active modifiers are for
+
+static int HavocModifierIndex(const wchar_t *id) {
+  for (int i = 0; i < kHavocModifierCount; ++i)
+    if (!wcscmp(kHavocModifiers[i].id, id))
+      return i;
+  return -1;
+}
+static bool HavocListHas(const wchar_t *list, const wchar_t *id) {
+  size_t n = wcslen(id);
+  for (const wchar_t *p = list; p && *p;) {
+    const wchar_t *e = wcschr(p, L';');
+    size_t len = e ? (size_t)(e - p) : wcslen(p);
+    if (len == n && !wcsncmp(p, id, n))
+      return true;
+    p = e ? e + 1 : nullptr;
+  }
+  return false;
+}
+static bool HavocIsBossWave(int wave) {
+  for (int w : kHavocBossWaves)
+    if (w == wave)
+      return true;
+  return false;
+}
+static uint32_t HavocRand() {
+  static uint32_t s = 0;
+  if (!s)
+    s = GetTickCount() | 1;
+  s ^= s << 13, s ^= s >> 17, s ^= s << 5;
+  return s;
+}
+
+// Calls a UFunction, filling each parameter by its NAME (and class).
+typedef void (*tNamedFill)(uint8_t *parms, const char *propClass, const char *propName, uint32_t off, void *ctx);
+static bool CallNamed(void *obj, const wchar_t *name, tNamedFill fill, void *ctx) {
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return false;
+  FNameMin n = {};
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, name, 1 /* FNAME_Add */);
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(obj, *(uint64_t *)&n);
+  if (!fn || !IsReadable((uint8_t *)fn + 0x40, 8))
+    return false;
+  alignas(16) uint8_t parms[256] = {};
+  UObjectMin *pp = *(UObjectMin **)((uint8_t *)fn + 0x38);
+  for (int j = 0; pp && j < 8 && IsReadable(pp, 0x58); ++j) {
+    uint32_t off = *(uint32_t *)((uint8_t *)pp + 0x50);
+    const char *pn = NameText(pp->Name);
+    if (fill && off < sizeof parms - 16)
+      fill(parms, ClassNameOf(pp), pn ? pn : "", off, ctx);
+    pp = *(UObjectMin **)((uint8_t *)pp + 0x28);
+  }
+  void **vt = *(void ***)obj;
+  __try {
+    ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(obj, fn, parms);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("havoc: EXCEPTION in %ls on %s", name, ClassNameOf(obj));
+    return false;
+  }
+  return true;
+}
+
+struct HavocNameArrays {
+  FNameMin active[4];
+  int nActive;
+  FNameMin permanent[64];
+  int nPermanent;
+};
+static void FillModifierArrays(uint8_t *parms, const char *pc, const char *pn, uint32_t off, void *ctx) {
+  HavocNameArrays *a = (HavocNameArrays *)ctx;
+  if (strcmp(pc, "ArrayProperty"))
+    return;
+  bool perm = strstr(pn, "Permanent") != nullptr;
+  *(void **)(parms + off) = perm ? (void *)a->permanent : (void *)a->active;
+  *(int32_t *)(parms + off + 8) = perm ? a->nPermanent : a->nActive;
+  *(int32_t *)(parms + off + 12) = perm ? a->nPermanent : a->nActive;
+}
+
+// Picks the wave's modifiers and tells every client.
+static void HavocStartWaveModifiers(uint8_t *gs, int wave) {
+  g_hvcActiveMods[0] = g_hvcActiveMods[1] = -1;
+  if (HavocIsBossWave(wave)) {
+    g_hvcActiveMods[0] = HavocModifierIndex(L"BossWave");
+  } else {
+    for (int slot = 0; slot < 2; ++slot) {
+      int total = 0;
+      int ok[64], nok = 0;
+      for (int i = 0; i < kHavocModifierCount && nok < 64; ++i) {
+        const HavocModifier &m = kHavocModifiers[i];
+        if (m.team == 'N' || m.weight <= 0 || wave < m.minWave || (m.maxWave >= 0 && wave > m.maxWave))
+          continue;
+        bool clash = false;
+        for (int s = 0; s < slot; ++s) {
+          int c = g_hvcActiveMods[s];
+          if (c == i || (c >= 0 && (HavocListHas(kHavocModifiers[c].excludes, m.id) ||
+                                    HavocListHas(m.excludes, kHavocModifiers[c].id))))
+            clash = true;
+        }
+        if (!clash)
+          ok[nok++] = i, total += m.weight;
+      }
+      if (total <= 0)
+        break;
+      int r = (int)(HavocRand() % (uint32_t)total);
+      for (int k = 0; k < nok; ++k)
+        if ((r -= kHavocModifiers[ok[k]].weight) < 0) {
+          g_hvcActiveMods[slot] = ok[k];
+          break;
+        }
+    }
+  }
+  g_hvcModWave = wave;
+  InterlockedIncrement(&g_hvcModGen);
+  HavocNameArrays a = {};
+  for (int s = 0; s < 2; ++s) {
+    const wchar_t *id = g_hvcActiveMods[s] >= 0 ? kHavocModifiers[g_hvcActiveMods[s]].id : L"NoModifier";
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&a.active[a.nActive++], id, 1);
+  }
+  for (int i = 0; i < kHavocEnemyBoostCount && a.nPermanent < 64; ++i)
+    if (kHavocEnemyBoosts[i].wave <= wave)
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&a.permanent[a.nPermanent++], kHavocEnemyBoosts[i].id, 1);
+  bool sent = CallNamed(gs, L"ClientUpdateActiveWaveModifier", FillModifierArrays, &a);
+  Logf("havoc: wave %d modifiers %ls / %ls, %d permanent enemy modifier(s)%s", wave,
+       g_hvcActiveMods[0] >= 0 ? kHavocModifiers[g_hvcActiveMods[0]].id : L"NoModifier",
+       g_hvcActiveMods[1] >= 0 ? kHavocModifiers[g_hvcActiveMods[1]].id : L"NoModifier", a.nPermanent,
+       sent ? "" : " -- ClientUpdateActiveWaveModifier NOT FOUND");
+}
+
+// Every feat of a ";" list, one call each.
+static int HavocForEachFeat(const wchar_t *list, void *comp, bool add, const char *what, void *pawn) {
+  int done = 0;
+  wchar_t buf[128];
+  for (const wchar_t *p = list; p && *p;) {
+    const wchar_t *e = wcschr(p, L';');
+    size_t len = e ? (size_t)(e - p) : wcslen(p);
+    if (len > 0 && len < 128) {
+      memcpy(buf, p, len * sizeof(wchar_t));
+      buf[len] = 0;
+      FNameMin name{};
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&name, buf, 1);
+      bool ok = true;
+      __try {
+        if (add)
+          ok = ((tAddFeat)(g_base + RVA_FEATS_ADD_FEAT))(comp, *(uint64_t *)&name);
+        else
+          ((tRemoveFeat)(g_base + RVA_FEATS_REMOVE_FEAT))(comp, *(uint64_t *)&name);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+      }
+      static int s_logged = 0;
+      if (s_logged++ < 60 || !ok)
+        Logf("havoc: %s feat %ls %s %s -> %s", what, buf, add ? "on" : "off", ClassNameOf(pawn), ok ? "ok" : "FAILED");
+      ++done;
+    }
+    p = e ? e + 1 : nullptr;
+  }
+  return done;
+}
+
+// Puts the wave's modifiers and the permanent enemy modifiers on every ship
+// that does not have them yet (new enemies, respawned players). Each director
+// tick, so a ship spawned mid-wave is covered within a second.
+static bool HavocPawnIsPlayer(void *pawn) {
+  uint8_t *ctrl = IsReadable((uint8_t *)pawn + OFF_PAWN_CONTROLLER, 8) ? *(uint8_t **)((uint8_t *)pawn + OFF_PAWN_CONTROLLER) : nullptr;
+  return ctrl && IsReadable(ctrl, sizeof(UObjectMin)) && ClassChainContains((UObjectMin *)ctrl, "PlayerController");
+}
+static void HavocApplyModifiers() {
+  LONG gen = g_hvcModGen;
+  for (FeatsByPawn &e : g_featsByPawn) {
+    if (!e.pawn || !IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) || *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) != e.pawn)
+      continue;
+    uint8_t *ctrl = IsReadable((uint8_t *)e.pawn + OFF_PAWN_CONTROLLER, 8) ? *(uint8_t **)((uint8_t *)e.pawn + OFF_PAWN_CONTROLLER) : nullptr;
+    if (!ctrl)
+      continue; // not possessed yet: its side is not known
+    bool player = HavocPawnIsPlayer(e.pawn);
+    if (e.modGen != gen) {
+      e.modGen = gen;
+      for (int s = 0; s < 2; ++s) {
+        e.modsOn[s] = -1;
+        int m = g_hvcActiveMods[s];
+        if (m < 0)
+          continue;
+        char t = kHavocModifiers[m].team;
+        if (t == 'A' || (t == 'P' && player) || (t == 'E' && !player)) {
+          HavocForEachFeat(kHavocModifiers[m].feats, e.comp, true, "wave modifier", e.pawn);
+          e.modsOn[s] = m;
+        }
+      }
+    }
+    if (!player)
+      for (; e.permApplied < kHavocEnemyBoostCount && kHavocEnemyBoosts[e.permApplied].wave <= g_hvcModWave; ++e.permApplied)
+        HavocForEachFeat(kHavocEnemyBoosts[e.permApplied].feat, e.comp, true, "permanent enemy modifier", e.pawn);
+  }
+}
+// At a wave's end the wave modifiers come off every ship that has them.
+static void HavocEndWaveModifiers() {
+  for (FeatsByPawn &e : g_featsByPawn) {
+    if (!e.pawn || !IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) || *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) != e.pawn)
+      continue;
+    for (int s = 0; s < 2; ++s)
+      if (e.modsOn[s] >= 0) {
+        HavocForEachFeat(kHavocModifiers[e.modsOn[s]].feats, e.comp, false, "wave modifier", e.pawn);
+        e.modsOn[s] = -1;
+      }
+  }
+  g_hvcActiveMods[0] = g_hvcActiveMods[1] = -1;
+  InterlockedIncrement(&g_hvcModGen);
+}
+
+// ---------------------------------------------------------------------------
+// Havoc game over (stage 2). PlayersWin / PlayersLose are compiled out (empty
+// thunk 0x74C640). PVE_HordeManager_BP calls PlayersWin 4 s after the last
+// wave of Waves when the map has no WaveToLoopBackTo; Havoc maps loop
+// (SetWaveIndex back to that wave), so a run ends only when it is lost.
+// Nothing in the cooked BPs calls PlayersLose: the rule was server code.
+// YHavocHUDTeamInfo carries m_eliminated per player, and the team refills
+// respawns only after a wave (m_refillPlayerTeamRespawnsAfterWave = 1,
+// m_respawnsToRefill = 0): a ship lost during a wave is out until it ends.
+// GUESS: the run is lost when no connected player has a living ship for 3 s
+// during a wave. Respawns during a wave are NOT blocked yet (the host's
+// respawn request is not traced), so in a group a destroyed player can come
+// back early; solo, the rule is exact.
+//
+// At game over the director: EnterNewState(GameOver) (GameState_Havoc_BP plays
+// its outro), reports each player's run to mmogbrain (GET /battle/havoc: the
+// run's score is the team's total XP, m_totalXP -- YEOMHavocProgressionData
+// m_teamTotalXP), sends the answer to the player's client --
+// AYPlayerReplicationInfo_Havoc::ClientUpdateHighscore(lifetimePlayerScore,
+// weeklyPlayerScore, matchScore) and ClientUpdateWeeklyScoreResetTime -- which
+// the end-of-match screen reads (+0xA4C / +0xA48 / +0xA44 / +0xA58, 0x449470;
+// it waits while +0xA44 is -1), marks the player's Havoc EOM data finalized
+// (m_isInEndOfMatchDataFinalized, the byte AYPlayerController_Havoc::
+// IsInEndOfMatchDataFinalized 0x401D20 checks), and ends the match 6 s later
+// through EndMatch (vtable +0x668) with the enemy team as the winner.
+
+static int64_t HavocField(const char *body, const char *key) {
+  char k[32];
+  _snprintf_s(k, sizeof k, _TRUNCATE, "%s=", key);
+  for (const char *p = body; p && *p;) {
+    if (!strncmp(p, k, strlen(k)))
+      return _atoi64(p + strlen(k));
+    p = strchr(p, '\n');
+    if (p)
+      ++p;
+  }
+  return -1;
+}
+struct HavocHighscore { int32_t lifetime, weekly, match; int64_t reset; };
+static void FillHighscore(uint8_t *parms, const char *pc, const char *pn, uint32_t off, void *ctx) {
+  HavocHighscore *h = (HavocHighscore *)ctx;
+  if (!strcmp(pn, "lifetimePlayerScore"))
+    *(int32_t *)(parms + off) = h->lifetime;
+  else if (!strcmp(pn, "weeklyPlayerScore"))
+    *(int32_t *)(parms + off) = h->weekly;
+  else if (!strcmp(pn, "matchScore"))
+    *(int32_t *)(parms + off) = h->match;
+  else if (!strcmp(pn, "weeklyScoreResetTime")) {
+    if (!strcmp(pc, "Int64Property"))
+      *(int64_t *)(parms + off) = h->reset;
+    else
+      *(int32_t *)(parms + off) = (int32_t)h->reset;
+  }
+}
+
+static void HavocReportRuns(uint8_t *gs) {
+  int score = *(int32_t *)(gs + OFF_HVC_GS_TOTAL_XP);
+  int waves = *(int32_t *)(gs + OFF_HVC_GS_WAVES_REACHED);
+  char match[96];
+  if (!MatchIDFromCommandLine(match, sizeof match)) {
+    Logf("havoc: game over -- no -MatchID= on the command line; runs not reported");
+    return;
+  }
+  uint8_t *pcs[16];
+  int npc = HavocHumanPCs(gs, pcs, 16);
+  for (int i = 0; i < npc; ++i) {
+    uint8_t *pri = *(uint8_t **)(pcs[i] + OFF_PC_PLAYER_STATE);
+    char pid[80];
+    if (!PlayerPIDForController(pcs[i], pid, sizeof pid) && !RememberedControllerPID(pcs[i], pid, sizeof pid)) {
+      Logf("havoc: game over -- controller %p has no DNPID; run not reported", pcs[i]);
+      continue;
+    }
+    char path[512], body[1024];
+    _snprintf_s(path, sizeof path, _TRUNCATE, "/battle/havoc?match=%s&pid=%s&score=%d&waves=%d", match, pid, score, waves);
+    bool ok = HttpGetLoopback(path, body, sizeof body);
+    HavocHighscore h = {0, 0, score, 0};
+    if (ok) {
+      int64_t v;
+      if ((v = HavocField(body, "lifetime")) >= 0) h.lifetime = (int32_t)v;
+      if ((v = HavocField(body, "weekly")) >= 0) h.weekly = (int32_t)v;
+      if ((v = HavocField(body, "reset")) >= 0) h.reset = v;
+    }
+    bool sentScore = CallNamed(pri, L"ClientUpdateHighscore", FillHighscore, &h);
+    bool sentReset = CallNamed(pri, L"ClientUpdateWeeklyScoreResetTime", FillHighscore, &h);
+    int fin = PropOffset((UObjectMin *)pri, "m_isInEndOfMatchDataFinalized");
+    if (fin > 0 && IsReadable(pri + fin, 1))
+      pri[fin] = 1;
+    for (char *c = body; *c; ++c)
+      if (*c == '\n') *c = ' ';
+    Logf("havoc: game over -- %s score %d waves %d -> %s%s; highscore sent %d, reset sent %d, EOM finalized byte +0x%X",
+         pid, score, waves, ok ? "mmogbrain: " : "mmogbrain UNREACHABLE", ok ? body : "", sentScore, sentReset, fin);
+  }
+}
+
+// Living ships of connected players; -1 when there is no connected player or
+// one of them has not had a living ship yet this run (still choosing one, or
+// in the orbit intro) -- the run cannot be lost before everyone is in.
+static void *g_hvcSeenAlive[16];
+static int HavocPlayersAlive(uint8_t *gs, int *humansOut) {
+  uint8_t *pcs[16];
+  int npc = HavocHumanPCs(gs, pcs, 16), alive = 0;
+  bool allSeen = true;
+  *humansOut = npc;
+  for (int i = 0; i < npc; ++i) {
+    uint8_t *pawn = IsReadable(pcs[i] + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(pcs[i] + OFF_CONTROLLER_PAWN) : nullptr;
+    bool up = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 &&
+              pawn[OFF_PAWN_STATE] != 3 && ClassChainContains((UObjectMin *)pawn, "YPawn");
+    int slot = -1, freeSlot = -1;
+    for (int k = 0; k < 16; ++k) {
+      if (g_hvcSeenAlive[k] == pcs[i])
+        slot = k;
+      else if (!g_hvcSeenAlive[k] && freeSlot < 0)
+        freeSlot = k;
+    }
+    if (up) {
+      ++alive;
+      if (slot < 0 && freeSlot >= 0)
+        g_hvcSeenAlive[freeSlot] = pcs[i];
+    } else if (slot < 0)
+      allSeen = false;
+  }
+  return npc && allSeen ? alive : -1;
+}
+
+// ---------------------------------------------------------------------------
+// Havoc respawn blocking (stage 3; dn_host_no_havoc_respawn_block.txt turns it
+// off). A ship lost during a wave stays out until the wave ends:
+// YHavocHUDTeamInfo m_eliminated, m_refillPlayerTeamRespawnsAfterWave 1 with
+// m_respawnsToRefill 0. The gate: AYPlayerController::SpawnPlayer (0x5998A0)
+// first asks the game mode (vtable +0x870 -- on GameMode_Havoc_BP 0x368380,
+// read live 2026-10-19: allowed while the player's respawn count is under
+// gm+0x6A4, 0 = unlimited) and returns WITHOUT spawning, leaving the pending
+// flag PC +0xB88 set, when it says no. Nothing retries, so at the wave's end
+// the director calls SpawnPlayer for every eliminated player still pending.
+// GUESS: a player is eliminated when their ship is destroyed while a wave is
+// in progress; one destroyed between waves respawns at once.
+#define RVA_GM_SPAWN_GATE 0x368380
+typedef uint32_t(__fastcall *tSpawnGate)(void *gm, void *pc);
+static tSpawnGate g_origSpawnGate = nullptr;
+static void *volatile g_hvcEliminated[16];
+
+static bool HavocRespawnBlockOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_HAVOC_RESPAWN_BLOCK", "dn_host_no_havoc_respawn_block.txt") ? 0 : 1;
+  return s_on == 1;
+}
+static bool HavocIsEliminated(void *pc) {
+  for (void *e : g_hvcEliminated)
+    if (e && e == pc)
+      return true;
+  return false;
+}
+
+static uint32_t __fastcall HookSpawnGate(void *gm, void *pc) {
+  if (pc && HavocIsEliminated(pc)) {
+    static void *s_lastLogged = nullptr;
+    if (s_lastLogged != pc) {
+      s_lastLogged = pc;
+      Logf("havoc: respawn of %p held -- eliminated until the wave ends", pc);
+    }
+    return 0;
+  }
+  return g_origSpawnGate(gm, pc);
+}
+
+// During a wave: a player seen with a living ship who now has none is out.
+static void HavocTrackEliminations(uint8_t *gs) {
+  if (!HavocRespawnBlockOn())
+    return;
+  uint8_t *pcs[16];
+  int npc = HavocHumanPCs(gs, pcs, 16);
+  for (int i = 0; i < npc; ++i) {
+    uint8_t *pawn = IsReadable(pcs[i] + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(pcs[i] + OFF_CONTROLLER_PAWN) : nullptr;
+    bool up = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3;
+    bool seen = false;
+    for (void *s : g_hvcSeenAlive)
+      seen |= s == pcs[i];
+    if (up || !seen || HavocIsEliminated(pcs[i]))
+      continue;
+    for (auto &e : g_hvcEliminated)
+      if (!e) {
+        e = pcs[i];
+        Logf("havoc: %p eliminated -- ship lost during the wave, no respawn until it ends", pcs[i]);
+        break;
+      }
+  }
+}
+
+// At the wave's end: everyone is back in; held spawns go through now.
+static void HavocReleaseEliminated() {
+  for (auto &e : g_hvcEliminated) {
+    void *pc = e;
+    e = nullptr;
+    if (!pc || !IsReadable((uint8_t *)pc + OFF_PC_SPAWN_PENDING, 1))
+      continue;
+    uint8_t *p = (uint8_t *)pc;
+    void *pawn = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
+    bool pending = p[OFF_PC_SPAWN_PENDING] != 0;
+    if (pending) {
+      __try {
+        ((tSpawnPlayer)(g_base + RVA_SPAWN_PLAYER))(pc);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Logf("havoc: EXCEPTION releasing the held respawn of %p", pc);
+      }
+    }
+    void *now = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
+    Logf("havoc: %p back in -- %s (ship %p -> %p)", pc,
+         pending ? "held respawn released" : "no respawn was requested yet", pawn, now);
+  }
+}
+
+// One-time check of every reflected offset the director uses against the
+// engine's own reflection (PropOffset: UProperty Offset_Internal). The native
+// ones were also read off their property registration in the exe
+// (2026-10-19); the Blueprint ones (GameState_Havoc_BP, PVE_HordeManager_BP)
+// exist only in the cooked assets, so this is their only check. A MISMATCH
+// means the constant is wrong for this build: the director writes there.
+static void HavocCheckOffsets(uint8_t *gm, uint8_t *gs) {
+  struct Want { int which; const char *name; int off; };
+  static const Want kWant[] = {
+      {0, "m_waveCompleteDuration", OFF_HVC_GM_WAVE_COMPLETE_DUR}, {0, "m_upgradeSelectionDuration", OFF_HVC_GM_UPGRADE_DUR},
+      {0, "m_waveStartDelayDuration", OFF_HVC_GM_WAVE_START_DELAY}, {0, "m_pveEventManager", OFF_HVC_GM_PVE_EVENT_MANAGER},
+      {0, "OnPVEModeStarted", OFF_HVC_GM_ON_PVE_MODE_STARTED}, {0, "OnAnyNPCKilled", OFF_HVC_GM_ON_ANY_NPC_KILLED},
+      {1, "m_isMatchStarted", OFF_HVC_GS_IS_MATCH_STARTED}, {1, "m_numAliveEnemies", OFF_HVC_GS_NUM_ALIVE},
+      {1, "m_numEnemiesKilledThisWave", OFF_HVC_GS_KILLED}, {1, "m_maxWaveEnemies", OFF_HVC_GS_MAX_WAVE_ENEMIES},
+      {1, "m_maxNumberOfWaves", OFF_HVC_GS_MAX_WAVES}, {1, "m_currentWaveIndex", OFF_HVC_GS_WAVE_INDEX},
+      {1, "m_currentWaveState", OFF_HVC_GS_WAVE_STATE}, {1, "m_currentWaveDuration", OFF_HVC_GS_WAVE_DURATION},
+      {1, "m_currentHavocState", OFF_HVC_GS_HAVOC_STATE}, {1, "m_wavesReached", OFF_HVC_GS_WAVES_REACHED},
+      {1, "m_playerWaveXP", OFF_HVC_GS_PLAYER_WAVE_XP}, {1, "m_totalXP", OFF_HVC_GS_TOTAL_XP},
+      {1, "m_pveEventManager", OFF_HVC_GS_PVE_EVENT_MANAGER}, {1, "OnHordeWaveStateChanged", OFF_HVC_GS_ON_WAVE_STATE_CHANGED},
+      {1, "EventStarted", OFF_HVC_GS_EVENT_STARTED}, {1, "HordeManager", OFF_HVC_GS_HORDE_MANAGER},
+      {2, "GameMode", OFF_HVC_HM_GAME_MODE}, {2, "Waves", OFF_HVC_HM_WAVES},
+      {2, "m_combatSceneManager", OFF_PVE_EM_COMBAT_SCENE_MANAGER},
+  };
+  int hmOff = PropOffset((UObjectMin *)gs, "HordeManager");
+  uint8_t *hm = hmOff > 0 && IsReadable(gs + hmOff, 8) ? *(uint8_t **)(gs + hmOff) : nullptr;
+  uint8_t *objs[3] = {gm, gs, hm};
+  int ok = 0, bad = 0, missing = 0;
+  for (const Want &w : kWant) {
+    uint8_t *o = objs[w.which];
+    int got = o ? PropOffset((UObjectMin *)o, w.name) : -2;
+    if (got == w.off)
+      ++ok;
+    else if (got < 0) {
+      ++missing;
+      Logf("havoc: offsets: %s.%s not reflected%s (constant 0x%X unchecked)", o ? ClassNameOf(o) : "?", w.name,
+           o ? "" : " -- object missing", w.off);
+    } else {
+      ++bad;
+      Logf("havoc: offsets: MISMATCH %s.%s is +0x%X, constant +0x%X", ClassNameOf(o), w.name, got, w.off);
+    }
+  }
+  Logf("havoc: offsets checked against reflection: %d OK, %d MISMATCH, %d not reflected", ok, bad, missing);
+}
+
+// One-time dump of the game mode's / game state's own Havoc rule settings
+// (reflected names from the class registrations; values are the BP defaults
+// of GameMode_Havoc_BP / GameState_Havoc_BP plus DefaultHavoc.ini). The
+// director should follow these rather than its own guesses.
+static void HavocLogRules(uint8_t *gm, uint8_t *gs) {
+  static const char *const kGm[] = {"m_firstWaveDelay", "m_automaticallyStartFirstWave", "m_waveStartDelayDuration",
+                                    "m_waveStartDuration", "m_waveEndDuration", "m_waveCompleteDuration",
+                                    "m_upgradeSelectionDuration", "m_monsterKillXP", "m_waveScoreXPMultiplier",
+                                    "m_killFighterJetsOnWaveEnd", "m_refillPlayerTeamRespawnsAfterWave",
+                                    "m_respawnsToRefill", "m_forceRespawnInWave", "m_respawningWaveTime",
+                                    "m_respawningWaveGracePeriodTime", "m_canPlayersRespawnAsCapitalShipsAfterWave",
+                                    "m_maxPlayersPerTeam"};
+  static const char *const kGs[] = {"m_maxNumberOfWaves", "m_maxWaveEnemies", "m_waveRespawningTime",
+                                    "m_allowCancelWaveSpawning", "m_useWaveSpawning", "m_endOfMatchDuration",
+                                    "m_maxModifiers", "m_pveDifficulty"};
+  for (int pass = 0; pass < 2; ++pass) {
+    uint8_t *o = pass ? gs : gm;
+    const char *const *names = pass ? kGs : kGm;
+    int n = pass ? (int)(sizeof kGs / sizeof *kGs) : (int)(sizeof kGm / sizeof *kGm);
+    for (int i = 0; i < n; ++i) {
+      int off = PropOffset((UObjectMin *)o, names[i]);
+      if (off < 0 || !IsReadable(o + off, 4)) {
+        Logf("havoc: rule %s.%s not reflected", ClassNameOf(o), names[i]);
+        continue;
+      }
+      Logf("havoc: rule %s.%s +0x%X = int %d / float %g / byte %u", ClassNameOf(o), names[i], off,
+           *(int32_t *)(o + off), *(float *)(o + off), o[off]);
+    }
+  }
+}
+
+static void HavocDirectorTick(uint8_t *gm) {
+  static void *s_for = nullptr;
+  static int s_on = 0, s_phase = -1, s_wave = 0, s_secs = 0, s_waitStart = 0, s_peakAlive = 0;
+  if (s_for != gm) {
+    s_for = gm;
+    s_on = ClassChainContains((UObjectMin *)gm, "YGameMode_Havoc") &&
+           !SwitchOn("DN_HOST_NO_HAVOC_DIRECTOR", "dn_host_no_havoc_director.txt");
+    s_phase = -1, s_wave = 0, s_secs = 0, s_waitStart = 0, s_peakAlive = 0;
+    if (s_on)
+      Logf("havoc: director on for %p (start delay %d s, complete %.0f s, upgrade %d s)", gm,
+           *(int32_t *)(gm + OFF_HVC_GM_WAVE_START_DELAY), *(float *)(gm + OFF_HVC_GM_WAVE_COMPLETE_DUR),
+           *(int32_t *)(gm + OFF_HVC_GM_UPGRADE_DUR));
+  }
+  if (!s_on || !IsReadable(gm + OFF_GM_GAMESTATE, 8))
+    return;
+  uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+  if (!IsReadable(gs, OFF_HVC_GS_HORDE_MANAGER + 8) || !ClassChainContains((UObjectMin *)gs, "YGameState_Havoc"))
+    return;
+  static void *s_checked = nullptr;
+  if (s_checked != gs) {
+    s_checked = gs;
+    HavocCheckOffsets(gm, gs);
+    HavocLogRules(gm, gs);
+    {
+      void **vt = *(void ***)gm;
+      Logf("havoc: game mode vtable +0x870 (SpawnPlayer's spawn gate) -> RVA 0x%llX",
+           (unsigned long long)((uintptr_t)vt[0x870 / 8] - g_base));
+    }
+  }
+  uintptr_t base = (uintptr_t)GetModuleHandleA(nullptr);
+  auto enterState = (void (*)(uint8_t *, uint8_t))(base + RVA_HVC_ENTER_NEW_STATE);
+  auto waveChanged = (void (*)(uint8_t *))(base + RVA_HORDE_WAVE_STATE_CHANGED);
+  {
+    int listed = HavocCountAliveEnemies(gm, gs);
+    if (listed >= 0)
+      *(int32_t *)(gs + OFF_HVC_GS_NUM_ALIVE) = listed;
+  }
+  int alive = *(int32_t *)(gs + OFF_HVC_GS_NUM_ALIVE);
+  auto go = [&](int havoc, int horde) {
+    s_phase = havoc, s_secs = 0;
+    gs[OFF_HVC_GS_HAVOC_STATE] = (uint8_t)havoc;
+    if (horde >= 0) {
+      *(int32_t *)(gs + OFF_HVC_GS_WAVE_INDEX) = s_wave;
+      gs[OFF_HVC_GS_WAVE_STATE] = (uint8_t)horde;
+      waveChanged(gs);
+      // The horde manager's YHordeEventManager::OnWaveStateChanged is a
+      // native-called event; its caller went with the server code.
+      CallWaveEvent(*(void **)(gs + OFF_HVC_GS_HORDE_MANAGER), L"OnWaveStateChanged", horde, s_wave);
+    }
+    enterState(gs, (uint8_t)havoc);
+    void *hmGm = IsReadable(*(uint8_t **)(gs + OFF_HVC_GS_HORDE_MANAGER), OFF_HVC_HM_GAME_MODE + 8)
+                     ? *(void **)(*(uint8_t **)(gs + OFF_HVC_GS_HORDE_MANAGER) + OFF_HVC_HM_GAME_MODE) : nullptr;
+    Logf("havoc: wave %d -> havoc state %d, horde wave state %d (alive %d, killed %d, max %d, EventStarted %d, "
+         "hm.GameMode %p)", s_wave, havoc, horde, *(int32_t *)(gs + OFF_HVC_GS_NUM_ALIVE), *(int32_t *)(gs + OFF_HVC_GS_KILLED),
+         *(int32_t *)(gs + OFF_HVC_GS_MAX_WAVE_ENEMIES), gs[OFF_HVC_GS_EVENT_STARTED], hmGm);
+  };
+  ++s_secs;
+  HavocApplyBoosts();
+  HavocApplyModifiers();
+  // Game over: the run is reported, the clients get their scores, and the
+  // match ends 6 s later (GameState_Havoc_BP's outro is 4 s).
+  if (s_phase == 4) {
+    if (s_secs == 6) {
+      int win = g_hvcBpEnd == 1;
+      gs[OFF_GS_WINNING_TEAM] = (uint8_t)(win ? 1 : 2);
+      Logf("havoc: ending the match (%s, wave %d, waves reached %d, team XP %d)", win ? "won" : "lost", s_wave,
+           *(int32_t *)(gs + OFF_HVC_GS_WAVES_REACHED), *(int32_t *)(gs + OFF_HVC_GS_TOTAL_XP));
+      void **vt = *(void ***)gm;
+      ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+    }
+    return;
+  }
+  auto gameOver = [&](const char *why) {
+    Logf("havoc: GAME OVER at wave %d (%s)", s_wave, why);
+    HavocEndWaveModifiers();
+    for (auto &e : g_hvcEliminated)
+      e = nullptr;
+    s_phase = 4, s_secs = 0;
+    gs[OFF_HVC_GS_HAVOC_STATE] = 4;
+    enterState(gs, 4);
+    HavocReportRuns(gs);
+  };
+  static int s_smokeEnd = -1;
+  if (s_smokeEnd < 0)
+    s_smokeEnd = SwitchOn("DN_HOST_HAVOC_SMOKE", "dn_host_havoc_smoke.txt") ? 1 : 0;
+  if (s_smokeEnd && s_wave >= 3 && s_phase == 0 && s_secs >= 5) {
+    HavocVerifyShipClasses();
+    gameOver("smoke test switch after wave 3");
+    return;
+  }
+  if (s_phase >= 0 && g_hvcBpEnd) {
+    gameOver(g_hvcBpEnd == 1 ? "the horde manager called PlayersWin" : "the BP called PlayersLose");
+    return;
+  }
+  // Lost: no connected player has a living ship for 3 s during a wave.
+  static int s_downSecs = 0;
+  if (s_phase == 2)
+    HavocTrackEliminations(gs);
+  if (s_phase == 1 || s_phase == 2) {
+    int humans = 0, up = HavocPlayersAlive(gs, &humans);
+    s_downSecs = up == 0 ? s_downSecs + 1 : 0;
+    if (s_downSecs == 1)
+      Logf("havoc: no living player ship (%d connected) -- game over in 3 s unless one comes back", humans);
+    if (s_downSecs >= 3) {
+      s_downSecs = 0;
+      gameOver("every player's ship was destroyed during the wave");
+      return;
+    }
+  } else
+    s_downSecs = 0;
+  if (s_phase < 0) {
+    // Wave 1 starts m_firstWaveDelay after the match starts: the game mode's
+    // own value, 18 s in GameMode_Havoc_BP (read 2026-10-19 by reflection;
+    // the PR waited a guessed 20 s). GUESS: the trigger. The BP also has
+    // m_automaticallyStartFirstWave = false, so the original server may have
+    // waited for something else (a ready-up?) before counting.
+    // Test switch for a headless host with no player (dn_host_havoc_smoke.txt):
+    // start without m_isMatchStarted and, after wave 3, force game over --
+    // exercises modifiers, enemy boosts, the multicast and EndMatch. Use with
+    // dn_host_havoc_fast_waves.txt.
+    static int s_smoke = -1;
+    if (s_smoke < 0)
+      s_smoke = SwitchOn("DN_HOST_HAVOC_SMOKE", "dn_host_havoc_smoke.txt") ? 1 : 0;
+    if (!gs[OFF_HVC_GS_IS_MATCH_STARTED] && !s_smoke)
+      return;
+    if (++s_waitStart == 1) {
+      UObjectMin *hm = *(UObjectMin **)(gs + OFF_HVC_GS_HORDE_MANAGER);
+      UObjectMin *em = IsReadable(gm + OFF_HVC_GM_PVE_EVENT_MANAGER, 8) ? *(UObjectMin **)(gm + OFF_HVC_GM_PVE_EVENT_MANAGER) : nullptr;
+      Logf("havoc: match started; HordeManager %p %s, event manager %p %s", hm, ClassNameOf(hm), em, ClassNameOf(em));
+      // The PvE start the server build would have run: register the map's
+      // horde manager as the event manager, then OnPVEModeStarted. GameState
+      // _Havoc_BP's EventStarted and the manager's wave spawning hang off it.
+      Logf("havoc: before start: hm.GameMode %p, hm.Waves %d, bound OnPVEModeStarted %d, "
+           "OnHordeWaveStateChanged %d", IsReadable(hm, OFF_HVC_HM_GAME_MODE + 8) ? *(void **)((uint8_t *)hm + OFF_HVC_HM_GAME_MODE) : nullptr,
+           DelegateBound((uint8_t *)hm + OFF_HVC_HM_WAVES), DelegateBound(gm + OFF_HVC_GM_ON_PVE_MODE_STARTED),
+           DelegateBound(gs + OFF_HVC_GS_ON_WAVE_STATE_CHANGED));
+      if (hm && ClassChainContains(hm, "YPVEEventManager")) {
+        void **csm = (void **)((uint8_t *)hm + OFF_PVE_EM_COMBAT_SCENE_MANAGER);
+        void *scene = ((tGetSceneManager)(g_base + RVA_COMBAT_SCENE_MANAGER))();
+        Logf("havoc: hm.m_combatSceneManager %p, world scene manager %p %s", *csm, scene,
+             scene ? ClassNameOf((UObjectMin *)scene) : "");
+        if (!*csm && scene)
+          *csm = scene;
+        // PvE difficulty. PVE_EnemyGroupSpawn_Component picks the enemy name by
+        // YGameState_PVE::GetPVEDifficulty (1 Recruit / 2 Veteran / 3 Legendary);
+        // 0 has no case, so PawnIdToSpawn stays None and the group stalls with
+        // GroupSpawnInProgress set (m_pveDifficulty is 0 on the host). First the manager's own native InitializePVEDifficulty (real
+        // code, 0x75D7A0 -> vtable +0x108); if that leaves 0, the manager's
+        // m_previewDifficulty -- the map's own value, 1 on HVC_Map1.
+        // GUESS: the server build's source of the lobby-chosen difficulty is unknown.
+        int dOff = PropOffset((UObjectMin *)gs, "m_pveDifficulty");
+        int pOff = PropOffset(hm, "m_previewDifficulty");
+        if (dOff > 0 && !gs[dOff]) {
+          bool called = CallNoParms(hm, L"InitializePVEDifficulty");
+          int after = gs[dOff];
+          if (!gs[dOff] && pOff > 0 && ((uint8_t *)hm)[pOff])
+            gs[dOff] = ((uint8_t *)hm)[pOff];
+          Logf("havoc: pve difficulty: InitializePVEDifficulty called %d -> %d; now %d (preview %d)", called, after,
+               gs[dOff], pOff > 0 ? ((uint8_t *)hm)[pOff] : -1);
+        }
+        // Start the combat scene manager. Its tick (0x2693A0) spawns entries only
+        // while +0x444 is 0; BeginPlay (0x23B83D) sets it to 1 when the net mode
+        // is 1, and only AYAICombatSceneManager::StartCombat (0x2681A0) clears it
+        // -- it also schedules each queued entry's spawn time (+0x00 = world time
+        // + the summed +0x80 delays). The game calls it only from the game mode's
+        // team fill (0x381FA0, at 0x3822C6, notify=false), which Havoc never
+        // runs, so AddNPCSpawnByDataset entries (time 0, pawn class resolved by
+        // the tick from the dataset id at +0x18 via 0x24FD00) sat unspawned.
+        // GUESS: where the server build started combat in PvE is unknown; this
+        // makes the same call the game makes, once, at PvE start.
+        if (scene && IsReadable((uint8_t *)scene + OFF_SCENE_COMBAT_NOT_STARTED, 1)) {
+          uint8_t before = ((uint8_t *)scene)[OFF_SCENE_COMBAT_NOT_STARTED];
+          int queued = *(int32_t *)((uint8_t *)scene + OFF_SCENE_NPCS_COUNT);
+          if (before)
+            ((tSceneStartCombat)(g_base + RVA_SCENE_START_COMBAT))(scene, 0);
+          Logf("havoc: scene manager StartCombat: not-started flag %u -> %u (%d entries queued)", before,
+               ((uint8_t *)scene)[OFF_SCENE_COMBAT_NOT_STARTED], queued);
+        }
+        if (!em)
+          *(UObjectMin **)(gm + OFF_HVC_GM_PVE_EVENT_MANAGER) = hm;
+        if (!*(void **)(gs + OFF_HVC_GS_PVE_EVENT_MANAGER))
+          *(UObjectMin **)(gs + OFF_HVC_GS_PVE_EVENT_MANAGER) = hm;
+        if (DelegateBound(gm + OFF_HVC_GM_ON_PVE_MODE_STARTED) > 0) {
+          ((void (*)(void *, void *))(base + RVA_MULTICAST_BROADCAST_NOPARMS))(gm + OFF_HVC_GM_ON_PVE_MODE_STARTED, nullptr);
+          Logf("havoc: OnPVEModeStarted broadcast");
+        } else {
+          bool a = CallNoParms(hm, L"OnPVEModeStarted");
+          bool b = CallNoParms(gs, L"OnPVEModeStarted_Event");
+          Logf("havoc: OnPVEModeStarted unbound -- called directly: manager %d, game state %d", a, b);
+        }
+        Logf("havoc: after start: EventStarted %d, bound OnHordeWaveStateChanged %d, hm.Waves %d",
+             gs[OFF_HVC_GS_EVENT_STARTED], DelegateBound(gs + OFF_HVC_GS_ON_WAVE_STATE_CHANGED),
+             DelegateBound((uint8_t *)hm + OFF_HVC_HM_WAVES));
+      }
+    }
+    static int s_firstDelay = -1;
+    if (s_firstDelay < 0) {
+      int off = PropOffset((UObjectMin *)gm, "m_firstWaveDelay");
+      float f = off > 0 && IsReadable(gm + off, 4) ? *(float *)(gm + off) : -1.0f;
+      s_firstDelay = f >= 1.0f && f <= 300.0f ? (int)(f + 0.5f) : 20;
+      Logf("havoc: first wave %d s after the match start (m_firstWaveDelay %g)", s_firstDelay, f);
+    }
+    if (s_waitStart < s_firstDelay)
+      return;
+    s_wave = 1;
+    HavocStartWaveModifiers(gs, s_wave);
+    go(1, 1);
+    return;
+  }
+  if (alive > s_peakAlive)
+    s_peakAlive = alive;
+  if (s_secs % 10 == 0)
+    Logf("havoc: wave %d state %d t+%d s: alive %d (peak %d), killed %d, max %d", s_wave, s_phase, s_secs, alive,
+         s_peakAlive, *(int32_t *)(gs + OFF_HVC_GS_KILLED), *(int32_t *)(gs + OFF_HVC_GS_MAX_WAVE_ENEMIES));
+  switch (s_phase) {
+  case 1: // WaveStarting
+    if (s_secs >= HvcMax(3, *(int32_t *)(gm + OFF_HVC_GM_WAVE_START_DELAY))) {
+      s_peakAlive = 0;
+      *(int32_t *)(gs + OFF_HVC_GS_KILLED) = 0;
+      *(int32_t *)(gs + OFF_HVC_GS_PLAYER_WAVE_XP) = 0;
+      InterlockedExchange(&g_hvcWaveConditions, 0);
+      go(2, 2);
+    }
+    break;
+  case 2: { // WaveInProgress
+    // GUESS: 15 s grace for the spawn-in; 120 s with nothing alive = nothing spawns.
+    // Test switch for unattended runs (nobody kills the enemies): the wave
+    // ends after 40 s with the 750 XP GameMode_Havoc_BP grants at a clear.
+    static int s_fastWaves = -1;
+    if (s_fastWaves < 0)
+      s_fastWaves = SwitchOn("DN_HOST_HAVOC_FAST_WAVES", "dn_host_havoc_fast_waves.txt") ? 1 : 0;
+    bool fastEnd = s_fastWaves && s_secs >= 40;
+    if (fastEnd) {
+      Logf("havoc: fast-waves test switch: ending wave %d with %d alive", s_wave, alive);
+      HavocAddXP(gm, 750, "fast-waves test switch");
+    }
+    // Over when GameState_Havoc_BP says so: SetSpecialWaveConditionsFulfilled
+    // (true) after its CheckWaveOver -- enemies dead and every XP drop picked
+    // up or expired (HookBoolParmExecThunk). GUESS fallbacks: 60 s after the
+    // last listed enemy died (a drop lives 40 s), or 120 s with nothing
+    // spawned. m_wavesReached is NOT written here: IncrementWavesReached is
+    // real code, called by the BP's OnEnterWaveStartingState.
+    static int s_clearSecs = 0;
+    s_clearSecs = s_peakAlive > 0 && alive == 0 ? s_clearSecs + 1 : 0;
+    bool bpOver = g_hvcWaveConditions != 0;
+    if (fastEnd || bpOver || s_clearSecs >= 60 || (s_peakAlive == 0 && s_secs >= 120)) {
+      Logf("havoc: wave %d over after %d s (%s)", s_wave, s_secs,
+           fastEnd ? "fast-waves test switch" : bpOver ? "BP: SetSpecialWaveConditionsFulfilled"
+           : s_peakAlive ? "fallback: 60 s after the last kill" : "fallback: nothing spawned");
+      s_clearSecs = 0;
+      *(int32_t *)(gs + OFF_HVC_GS_WAVE_DURATION) = s_secs;
+      HavocEndWaveModifiers();
+      HavocReleaseEliminated();
+      go(3, 3);
+    }
+    break;
+  }
+  case 3: // WaveComplete
+    if (s_secs >= HvcMax(3, (int)*(float *)(gm + OFF_HVC_GM_WAVE_COMPLETE_DUR))) {
+      InterlockedExchange(&g_hvcReadyCount, 0);
+      go(0, -1);
+      HavocOfferUpgrades(gs);
+    }
+    break;
+  case 0: { // UpgradeSelection
+    int ready = 0, humans = HavocHumanCount(gs, &ready);
+    bool allReady = humans > 0 && ready >= humans && s_secs >= 3;
+    if (allReady)
+      Logf("havoc: all %d human(s) ready after %d s -- starting wave %d", humans, s_secs, s_wave + 1);
+    if (allReady || s_secs >= HvcMax(5, *(int32_t *)(gm + OFF_HVC_GM_UPGRADE_DUR))) {
+      // The next wave follows the game state's index: at the last wave of
+      // Waves, PVE_HordeManager_BP sets it back to WaveToLoopBackTo - 1
+      // (AYGameState_Havoc::SetWaveIndex, real code) and the run loops.
+      int gsWave = *(int32_t *)(gs + OFF_HVC_GS_WAVE_INDEX);
+      if (gsWave != s_wave)
+        Logf("havoc: the horde manager moved the wave index %d -> %d (loop)", s_wave, gsWave);
+      s_wave = gsWave + 1;
+      HavocStartWaveModifiers(gs, s_wave);
+      go(1, 1);
+    }
+    break;
+  }
+  }
+}
+
 static void InstallSwitchedHook(const char *what, uintptr_t rva, void *detour,
                                 void **orig) {
   void *target = (void *)(g_base + rva);
@@ -5568,8 +7686,51 @@ static DWORD WINAPI Startup(LPVOID) {
     Logf("turbo modifiers: OFF (dn_host_no_game_modifiers.txt / "
          "DN_HOST_NO_GAME_MODIFIERS=1). Turbo TDM plays as plain TDM.");
   else
-    InstallSwitchedHook("turbo modifiers (UYFeatsComponent setup)", RVA_FEATS_COMPONENT_BEGIN,
-                        (void *)&HookFeatsBegin, (void **)&g_origFeatsBegin);
+    g_featsTurbo = true;
+
+  if (!HostIsHavoc())
+    ;
+  else if (SwitchOn("DN_HOST_NO_HAVOC_DIRECTOR", "dn_host_no_havoc_director.txt"))
+    Logf("havoc: OFF (dn_host_no_havoc_director.txt / DN_HOST_NO_HAVOC_DIRECTOR=1). "
+         "Fighters fight, but no wave ever starts.");
+  else {
+    g_featsHavoc = true;
+    InstallSwitchedHook("havoc director (compiled-out native exec thunk)", RVA_EMPTY_EXEC_THUNK,
+                        (void *)&HookEmptyExecThunk, (void **)&g_origEmptyExecThunk);
+    InstallSwitchedHook("havoc enemy list + wave xp (compiled-out int-parm exec thunk)", RVA_INT_PARM_EXEC_THUNK,
+                        (void *)&HookIntParmExecThunk, (void **)&g_origIntParmExecThunk);
+    InstallSwitchedHook("havoc kill xp (compiled-out int+object exec thunk)", RVA_INT_OBJ_PARM_EXEC_THUNK,
+                        (void *)&HookIntObjParmExecThunk, (void **)&g_origIntObjParmExecThunk);
+    InstallSwitchedHook("havoc wave over (compiled-out bool-parm exec thunk)", RVA_BOOL_PARM_EXEC_THUNK,
+                        (void *)&HookBoolParmExecThunk, (void **)&g_origBoolParmExecThunk);
+    InstallSwitchedHook("havoc ready up (ServerReadyUpPlayerForNextWave exec thunk)", RVA_HVC_READY_UP_THUNK,
+                        (void *)&HookHavocReadyUpThunk, (void **)&g_origHavocReadyUpThunk);
+    InstallSwitchedHook("havoc upgrade pick (ServerReceiveSelectedUpgradeIndex_Implementation)",
+                        RVA_HVC_SERVER_SELECTED_UPGRADE_IMPL, (void *)&HookHvcSelectedUpgrade,
+                        (void **)&g_origHvcSelectedUpgrade);
+    if (HavocRespawnBlockOn())
+      InstallSwitchedHook("havoc respawn block (game mode spawn gate, SpawnPlayer)", RVA_GM_SPAWN_GATE,
+                          (void *)&HookSpawnGate, (void **)&g_origSpawnGate);
+    else
+      Logf("havoc respawn block: OFF (dn_host_no_havoc_respawn_block.txt / DN_HOST_NO_HAVOC_RESPAWN_BLOCK=1)");
+    if (!HavocShipUpgradesOn())
+      Logf("havoc ship upgrades: OFF (dn_host_no_havoc_ship_upgrades.txt / DN_HOST_NO_HAVOC_SHIP_UPGRADES=1)");
+    // Not verified in PR #80 either: own switch, to bisect without a rebuild.
+    if (SwitchOn("DN_HOST_NO_HAVOC_RESPAWN_GATE", "dn_host_no_havoc_respawn_gate.txt"))
+      Logf("havoc respawn ship gate: OFF (dn_host_no_havoc_respawn_gate.txt / "
+           "DN_HOST_NO_HAVOC_RESPAWN_GATE=1). A respawn pick keeps the old ship.");
+    else {
+      InstallSwitchedHook("havoc respawn ship gate (UYLoadoutManager loadout validity)", RVA_LOADOUT_IS_REGISTERED,
+                          (void *)&HookLoadoutGate, (void **)&g_origLoadoutGate);
+      InstallSwitchedHook("havoc respawn ship (UYLoadoutManager::ActivateLoadout)", RVA_ACTIVATE_LOADOUT,
+                          (void *)&HookActivateLoadout, (void **)&g_origActivateLoadout);
+    }
+  }
+
+  if (g_featsTurbo || g_featsHavoc)
+    InstallSwitchedHook(g_featsTurbo ? "turbo modifiers (UYFeatsComponent setup)"
+                                     : "havoc boosts (UYFeatsComponent setup)",
+                        RVA_FEATS_COMPONENT_BEGIN, (void *)&HookFeatsBegin, (void **)&g_origFeatsBegin);
 
   if (ShipPhysicsEnabled())
     InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",
