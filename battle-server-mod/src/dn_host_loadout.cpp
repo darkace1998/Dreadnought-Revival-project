@@ -6764,10 +6764,20 @@ static bool HavocPawnIsPlayer(void *pawn) {
   uint8_t *ctrl = IsReadable((uint8_t *)pawn + OFF_PAWN_CONTROLLER, 8) ? *(uint8_t **)((uint8_t *)pawn + OFF_PAWN_CONTROLLER) : nullptr;
   return ctrl && IsReadable(ctrl, sizeof(UObjectMin)) && ClassChainContains((UObjectMin *)ctrl, "PlayerController");
 }
+// A recorded ship that still exists: its feats component is still owned by it
+// and it is a living YPawn. A destroyed ship's memory gets reused (live log
+// 2026-10-19: AddFeat "on None" / on a weapon actor -> FAILED), so all three.
+static bool HavocLiveShip(const FeatsByPawn &e) {
+  if (!e.pawn || !IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) || *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) != e.pawn)
+    return false;
+  uint8_t *pw = (uint8_t *)e.pawn;
+  return IsReadable(pw + OFF_PAWN_STATE, 1) && pw[OFF_PAWN_STATE] != 2 && pw[OFF_PAWN_STATE] != 3 &&
+         ClassChainContains((UObjectMin *)pw, "YPawn");
+}
 static void HavocApplyModifiers() {
   LONG gen = g_hvcModGen;
   for (FeatsByPawn &e : g_featsByPawn) {
-    if (!e.pawn || !IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) || *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) != e.pawn)
+    if (!HavocLiveShip(e))
       continue;
     uint8_t *ctrl = IsReadable((uint8_t *)e.pawn + OFF_PAWN_CONTROLLER, 8) ? *(uint8_t **)((uint8_t *)e.pawn + OFF_PAWN_CONTROLLER) : nullptr;
     if (!ctrl)
@@ -6795,8 +6805,10 @@ static void HavocApplyModifiers() {
 // At a wave's end the wave modifiers come off every ship that has them.
 static void HavocEndWaveModifiers() {
   for (FeatsByPawn &e : g_featsByPawn) {
-    if (!e.pawn || !IsReadable(e.comp, OFF_COMPONENT_OWNER + 8) || *(void **)((uint8_t *)e.comp + OFF_COMPONENT_OWNER) != e.pawn)
+    if (!HavocLiveShip(e)) {
+      e.modsOn[0] = e.modsOn[1] = -1;
       continue;
+    }
     for (int s = 0; s < 2; ++s)
       if (e.modsOn[s] >= 0) {
         HavocForEachFeat(kHavocModifiers[e.modsOn[s]].feats, e.comp, false, "wave modifier", e.pawn);
@@ -7019,6 +7031,113 @@ static void HavocReleaseEliminated() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Havoc team HUD (stage 4, 2026-10-19). AYGameState_Havoc::
+// ClientHavocPlayersChanged(teamsInfo) (thunk 0x745410, NetMulticast) carries
+// ONE YHavocHUDTeamInfo of parallel arrays (0x38 bytes: +0x08 TArray<FString>
+// m_playerID, +0x18 TArray<int32> m_classID, +0x28 TArray<uint8>
+// m_eliminated -- the thunk's copy); its _Implementation (GS vtable +0x888 =
+// 0x3689E0) hands the class and eliminated arrays to the HUD's team list
+// (0x5598B0). The client's own refresh (AYHUD::UpdateHavocTeamState 0x562C00)
+// builds the same two arrays from the player states (class = PRI +0x941;
+// eliminated when it is 0x10 or 0x13-0x15), but nothing on a login-less host
+// marks a player eliminated there, so the director sends the list itself:
+// one entry per connected player in PlayerArray order, the class the client
+// would read, eliminated from HavocTrackEliminations. Offsets are read from the
+// struct's reflection when found (logged once), else the thunk's.
+// GUESS: m_playerID is left empty -- the implementation does not read it.
+static void HavocTeamInfoLayout(UObjectMin *structProp, int *offId, int *offClass, int *offElim) {
+  static int s_id = -1, s_class = -1, s_elim = -1, s_done = 0;
+  if (!s_done && structProp) {
+    s_done = 1;
+    for (int k = 0x70; k <= 0x80; k += 8) {
+      UObjectMin *st = IsReadable((uint8_t *)structProp + k, 8) ? *(UObjectMin **)((uint8_t *)structProp + k) : nullptr;
+      if (!st || !IsReadable(st, 0x40) || strcmp(ClassNameOf(st), "ScriptStruct"))
+        continue;
+      for (UObjectMin *f = *(UObjectMin **)((uint8_t *)st + 0x38); f && IsReadable(f, 0x58);
+           f = *(UObjectMin **)((uint8_t *)f + 0x28)) {
+        const char *n = NameText(f->Name);
+        int off = (int)*(uint32_t *)((uint8_t *)f + 0x50);
+        if (n && !strcmp(n, "m_playerID")) s_id = off;
+        else if (n && !strcmp(n, "m_classID")) s_class = off;
+        else if (n && !strcmp(n, "m_eliminated")) s_elim = off;
+      }
+      Logf("havoc: YHavocHUDTeamInfo (struct at UStructProperty +0x%X): m_playerID +0x%X, m_classID +0x%X, "
+           "m_eliminated +0x%X", k, s_id, s_class, s_elim);
+      break;
+    }
+  }
+  *offId = s_id >= 0 ? s_id : 0x08;
+  *offClass = s_class >= 0 ? s_class : 0x18;
+  *offElim = s_elim >= 0 ? s_elim : 0x28;
+}
+
+struct HavocTeamInfoArgs {
+  int32_t classes[16];
+  uint8_t elim[16];
+  int n;
+};
+static void FillTeamInfo(uint8_t *parms, const char *pc, const char *pn, uint32_t off, void *ctx) {
+  HavocTeamInfoArgs *a = (HavocTeamInfoArgs *)ctx;
+  if (strcmp(pc, "StructProperty") || off + 0x38 > 256)
+    return;
+  extern UObjectMin *g_hvcTeamInfoProp;
+  int oId, oClass, oElim;
+  HavocTeamInfoLayout(g_hvcTeamInfoProp, &oId, &oClass, &oElim);
+  uint8_t *s = parms + off;
+  *(void **)(s + oId) = nullptr; // TArray<FString>: empty
+  *(int32_t *)(s + oId + 8) = 0;
+  *(int32_t *)(s + oId + 12) = 0;
+  *(void **)(s + oClass) = a->classes;
+  *(int32_t *)(s + oClass + 8) = a->n;
+  *(int32_t *)(s + oClass + 12) = a->n;
+  *(void **)(s + oElim) = a->elim;
+  *(int32_t *)(s + oElim + 8) = a->n;
+  *(int32_t *)(s + oElim + 12) = a->n;
+}
+UObjectMin *g_hvcTeamInfoProp = nullptr;
+
+// Sends the team list when it changed (players, classes or eliminations).
+static void HavocSendTeamInfo(uint8_t *gs, bool force) {
+  if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return;
+  HavocTeamInfoArgs a = {};
+  for (int i = 0; i < count && a.n < 16; ++i) {
+    uint8_t *pri = arr[i];
+    if (!IsReadable(pri, 0x948) || !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo"))
+      continue;
+    uint8_t *pc = IsReadable(pri + OFF_ACTOR_OWNER, 8) ? *(uint8_t **)(pri + OFF_ACTOR_OWNER) : nullptr;
+    if (!pc || !IsReadable(pc, OFF_PC_NETCONNECTION + 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+        !*(void **)(pc + OFF_PC_NETCONNECTION))
+      continue;
+    a.classes[a.n] = pri[0x941];
+    a.elim[a.n] = HavocIsEliminated(pc) ? 1 : 0;
+    ++a.n;
+  }
+  static uint32_t s_lastSig = 0xFFFFFFFF;
+  uint32_t sig = (uint32_t)a.n * 2654435761u;
+  for (int i = 0; i < a.n; ++i)
+    sig = (sig ^ (uint32_t)(a.classes[i] << 1 | a.elim[i])) * 16777619u;
+  if (!force && sig == s_lastSig)
+    return;
+  s_lastSig = sig;
+  if (!g_hvcTeamInfoProp) {
+    FNameMin n = {};
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"ClientHavocPlayersChanged", 1);
+    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gs, *(uint64_t *)&n);
+    g_hvcTeamInfoProp = fn && IsReadable((uint8_t *)fn + 0x40, 8) ? *(UObjectMin **)((uint8_t *)fn + 0x38) : nullptr;
+  }
+  bool sent = CallNamed(gs, L"ClientHavocPlayersChanged", FillTeamInfo, &a);
+  int out = 0;
+  for (int i = 0; i < a.n; ++i)
+    out += a.elim[i];
+  Logf("havoc: team HUD -> %d player(s), %d eliminated%s", a.n, out, sent ? "" : " -- ClientHavocPlayersChanged NOT FOUND");
+}
+
 // One-time check of every reflected offset the director uses against the
 // engine's own reflection (PropOffset: UProperty Offset_Internal). The native
 // ones were also read off their property registration in the exe
@@ -7192,6 +7311,8 @@ static void HavocDirectorTick(uint8_t *gm) {
   static int s_downSecs = 0;
   if (s_phase == 2)
     HavocTrackEliminations(gs);
+  if (s_phase >= 0)
+    HavocSendTeamInfo(gs, false);
   if (s_phase == 1 || s_phase == 2) {
     int humans = 0, up = HavocPlayersAlive(gs, &humans);
     s_downSecs = up == 0 ? s_downSecs + 1 : 0;

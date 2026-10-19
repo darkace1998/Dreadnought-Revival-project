@@ -185,7 +185,7 @@ func TestCosmeticsComeAfterModules(t *testing.T) {
 func TestPurchaseQuantityCannotOverflowThePrice(t *testing.T) {
 	useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000001"
-	hull := heroShipLoadouts[0].loadoutID // a 25000 hero the new player does not own
+	hull := plainHeroForTest() // a 25000 hero the new player does not own
 	price := purchasePriceForItem(hull)
 	if price <= 0 {
 		t.Fatalf("hull %d has no price", hull)

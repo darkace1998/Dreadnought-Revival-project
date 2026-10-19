@@ -6421,6 +6421,12 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	// A per-ship weapon/module is bought only AFTER it is researched: research
 	// with XP first, then buy with credits (the original game, per the
 	// operator). That is the claim path, which also covers YA_ClaimItem.
+	// A Havoc unlockable hero bought on its own: the same gate as its bundle.
+	if why := havocUnlockRefusal(pid, itemID); why != "" {
+		var balance int32
+		_ = database.QueryRow(`SELECT soft_currency FROM player_state WHERE user_id=?`, pid).Scan(&balance)
+		return reply("failed", why, 0, balance)
+	}
 	if bundle, ok := marketBundleByID(itemID); ok {
 		charged, heroes, reason := grantMarketBundle(database, pid, bundle)
 		var balance int32

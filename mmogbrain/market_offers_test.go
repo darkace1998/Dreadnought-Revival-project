@@ -173,7 +173,15 @@ func TestDocumentedMarketPrices(t *testing.T) {
 	if gatewayGpToCreditsRate != 105 {
 		t.Errorf("GP to credits rate %d, want 105", gatewayGpToCreditsRate)
 	}
-	if len(heroCatalogSeeds("")) != len(heroShipLoadouts) {
+	// Every hero is offered on its own except the Havoc unlockable, which is
+	// sold only as its Havoc bundle (havoc.go).
+	plain := 0
+	for _, h := range heroShipLoadouts {
+		if _, havoc := havocUnlockThreshold(h.loadoutID); !havoc {
+			plain++
+		}
+	}
+	if len(heroCatalogSeeds("")) != plain {
 		t.Error("not every hero ship is offered")
 	}
 }

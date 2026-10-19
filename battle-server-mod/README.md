@@ -1171,9 +1171,17 @@ Stage 3 (2026-10-19):
   director calls SpawnPlayer for each held respawn. With it, the game-over
   rule (no living player ship for 3 s) is the real one for groups too.
 
-**Not done yet:** the hero ship unlockable (a market purchase type,
-`YPIT_HAVOC_UNLOCKABLE_HERO_SHIP`), the HUD's eliminated-player list
-(`ClientHavocPlayersChanged`).
+- **Team HUD** (stage 4): `ClientHavocPlayersChanged` (one
+  YHavocHUDTeamInfo of parallel arrays; layout read by reflection on the
+  smoke host: m_playerID +0x08, m_classID +0x18, m_eliminated +0x28) is sent
+  whenever a player joins, leaves or is eliminated: per player the class byte
+  the client itself reads (PRI +0x941) and the eliminated flag.
+- **Hero ship unlockable** (mmogbrain, havoc.go / market_offers.go): the
+  Junkyard Prince is offered as a Havoc bundle flagged HavocReward
+  (PromotionFlags bit 7 -> client purchase type
+  YPIT_HAVOC_UNLOCKABLE_HERO_SHIP, `0x4FF770`), bought once the player's
+  summed Havoc score (LIFETIMESUM, which the purchase dialog `0x4C2920`
+  shows) reaches 10,000.
 
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 

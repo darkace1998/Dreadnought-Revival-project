@@ -16,6 +16,11 @@ type HavocUnlockable struct {
 	Description string `json:"m_description"`
 	IconPath    string `json:"m_iconPath"`
 	RowName     string `json:"-"` // The row name from the DataTable
+	// The unlock: once a player's Havoc score reaches Highscore, Value (an
+	// item id for EYHavocRewardType::YHRT_ITEM) can be bought.
+	Highscore  int32  `json:"m_highscore"`
+	RewardType string `json:"m_rewardType"`
+	Value      int32  `json:"m_value"`
 }
 
 // havocUnlockablesData holds the loaded Havoc unlockable data
@@ -53,6 +58,9 @@ func LoadHavocUnlockables() error {
 				Description: rowData.GetString("m_description"),
 				IconPath:    rowData.GetString("m_iconPath"),
 				RowName:     rowName,
+				Highscore:   rowData.GetInt32("m_highscore"),
+				RewardType:  rowData.GetString("m_rewardType"),
+				Value:       rowData.GetInt32("m_value"),
 			}
 			unlockables = append(unlockables, unlockable)
 		}

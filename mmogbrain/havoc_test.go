@@ -78,3 +78,79 @@ func TestHavocWeekStartsMonday(t *testing.T) {
 		t.Fatalf("week of Sunday 18th starts %s", got)
 	}
 }
+
+// The Havoc unlockable: the Junkyard Prince bundle carries HavocReward (bit 7,
+// which makes the client's offer a YPIT_HAVOC_UNLOCKABLE_HERO_SHIP), holds the
+// hero and the three Havoc cosmetics, is the only way to buy that hero, and is
+// refused until the player's summed Havoc score reaches 10,000.
+func TestHavocUnlockableHeroShip(t *testing.T) {
+	const junkyardPrince = 67043338
+	threshold, ok := havocUnlockThreshold(junkyardPrince)
+	if !ok || threshold != 10000 {
+		t.Fatalf("threshold %d %v, want 10000", threshold, ok)
+	}
+	var bundle marketBundle
+	for _, b := range marketBundles {
+		if b.havocUnlock {
+			bundle = b
+		}
+	}
+	heroes, vanity := bundle.contents()
+	if len(heroes) != 1 || heroes[0] != junkyardPrince || len(vanity) != 3 {
+		t.Fatalf("bundle contents heroes %v vanity %v", heroes, vanity)
+	}
+	found := false
+	for _, s := range marketBundleCatalogSeeds("") {
+		if s.itemID == bundle.id {
+			found = true
+			if s.promotionFlags&promotionFlagHavocReward == 0 || len(s.offerItemIDs) != 4 {
+				t.Fatalf("seed flags %d items %v", s.promotionFlags, s.offerItemIDs)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Havoc bundle not in the market")
+	}
+	for _, s := range heroCatalogSeeds("") {
+		if s.itemID == junkyardPrince {
+			t.Fatal("Junkyard Prince still sold as a plain hero ship")
+		}
+	}
+
+	database := useTempMmogPlayerStateDB(t)
+	const pid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := seedMmogPlayerState(database, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE player_state SET premium_currency=100000 WHERE user_id=?`, pid); err != nil {
+		t.Fatal(err)
+	}
+	if why := havocUnlockRefusal(pid, junkyardPrince); why == "" {
+		t.Fatal("bought with no Havoc score")
+	}
+	if _, _, reason := grantMarketBundle(database, pid, bundle); reason == "" {
+		t.Fatal("bundle granted with no Havoc score")
+	}
+	for i, score := range []int{6000, 4000} { // sums to 10,000 over two runs
+		if _, err := database.Exec(`INSERT INTO havoc_runs(match_id,user_id,score) VALUES(?,?,?)`, "r"+string(rune('0'+i)), pid, score); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if why := havocUnlockRefusal(pid, junkyardPrince); why != "" {
+		t.Fatalf("still refused at 10,000: %s", why)
+	}
+	if _, got, reason := grantMarketBundle(database, pid, bundle); reason != "" || len(got) != 1 {
+		t.Fatalf("bundle after unlock: heroes %v reason %q", got, reason)
+	}
+}
+
+// plainHeroForTest is a hero ship sold on its own: the first one that is not
+// a Havoc unlockable (heroShipLoadouts[0] is the Junkyard Prince, which is).
+func plainHeroForTest() int32 {
+	for _, h := range heroShipLoadouts {
+		if _, havoc := havocUnlockThreshold(h.loadoutID); !havoc {
+			return h.loadoutID
+		}
+	}
+	return 0
+}

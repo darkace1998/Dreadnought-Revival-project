@@ -339,7 +339,7 @@ func TestShipPurchasesFollowTheOriginalRules(t *testing.T) {
 	if len(heroShipLoadouts) == 0 {
 		t.Fatal("no hero ships")
 	}
-	hero := heroShipLoadouts[0].loadoutID
+	hero := plainHeroForTest()
 	if got := buy(hero); got != "bought" {
 		t.Fatalf("hero purchase: result %q, want bought", got)
 	}
@@ -409,7 +409,7 @@ func TestPurchaseReplyKeepsTheOwnedList(t *testing.T) {
 		req = append(req, protocol.AppendStringField(nil, "ItemID", strconv.Itoa(int(id)))...)
 		return buildMmogPurchasePayload("YA_PurchaseItem", pid, protocol.AppendRootEnd(req))
 	}
-	hero := heroShipLoadouts[0].loadoutID
+	hero := plainHeroForTest()
 	reply := buy(hero)
 	if protocol.ExtractStringField(reply, "result") != "bought" {
 		t.Fatalf("setup: hero purchase failed: %q", reply)

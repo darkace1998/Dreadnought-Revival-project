@@ -80,6 +80,10 @@ func heroCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 	}
 	seeds := make([]gatewayCatalogEntitySeed, 0, len(heroShipLoadouts))
 	for _, h := range heroShipLoadouts {
+		// A Havoc unlockable is sold only as its Havoc bundle.
+		if _, havoc := havocUnlockThreshold(h.loadoutID); havoc {
+			continue
+		}
 		seed := gatewayCatalogEntitySeed{
 			itemID:          h.loadoutID,
 			externalID:      "999" + strconv.Itoa(int(h.loadoutID)),
@@ -140,7 +144,14 @@ type marketBundle struct {
 	heroes          []string
 	vanity          []string // exact cosmetic names
 	vanityLike      []string // every cosmetic whose name contains this
+	// havocUnlock: a Havoc unlockable (havoc.go) -- flagged HavocReward,
+	// bought only once the player's summed Havoc score reaches the threshold.
+	havocUnlock bool
 }
+
+// promotionFlagHavocReward is EYMarketItemPromotionFlags::YMIPF_HavocReward
+// (7) as a bit: it makes a hero bundle a YPIT_HAVOC_UNLOCKABLE_HERO_SHIP.
+const promotionFlagHavocReward = 1 << 7
 
 // marketBundleIDBase keeps bundle ids in top byte 0, which claims no item
 // category (see realCatalogBucketIDBase).
@@ -183,6 +194,16 @@ var marketBundles = []marketBundle{
 		descriptionText: "VanguardBundleDescription",
 		description:     "Kick-start your career as a mercenary captain. Progress faster with 7 days of Elite Status, command the powerful PCF Silesia Hero Ship, and get 10,000 Credits to spend within your ships' tech trees! The Vanguard Bundle contains everything a new recruit needs to become a legend.",
 		heroes:          []string{"PCF Silesia"}},
+	// The Havoc unlockable (havoc.go): DN_HavocUnlockables_DT's hero, the
+	// Junkyard Prince (Sniper Medium), with the client's Havoc cosmetics --
+	// the Havoc coating, the Copper Skull Havoc emblem and the Sniper Medium
+	// Havoc forecastle. GUESS: the contents (the client's own Havoc set; no
+	// source lists the original bundle) and the price (the hero's tier-2 price,
+	// 1,500 GP, as heroPriceGP).
+	{id: marketBundleIDBase + 8, name: "Havoc: Junkyard Prince", priceEUR: 15, havocUnlock: true,
+		description: "Junkyard Prince Hero Ship (Tier-II Akula-Vektor artillery cruiser) with the Havoc coating, emblem and forecastle. Unlocked by scoring 10,000 points in Havoc.",
+		heroes:      []string{"Junkyard Prince"},
+		vanity:      []string{"VAN_PN_Havoc_DA", "VAN_EMB_CopperSkull_Havoc_DA", "VAN_H_SniperM_Forecastle_Havoc_DA"}},
 }
 
 // priceGP is the bundle's GP price. GUESS: the original euro price at 100 GP
@@ -279,6 +300,9 @@ func marketBundleCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 		if b.featured {
 			seed.promotionFlags = promotionFlagFeatured
 		}
+		if b.havocUnlock {
+			seed.promotionFlags |= promotionFlagHavocReward
+		}
 		if text, ok := dreadconfig.MarketString(b.descriptionText); ok {
 			seed.localizedDescription = text
 		}
@@ -308,6 +332,13 @@ func grantMarketBundle(database *sql.DB, pid string, b marketBundle) (charged in
 	}
 	for _, id := range ownedPurchaseItemIDs(pid) {
 		owned[id] = true
+	}
+	if b.havocUnlock {
+		for _, id := range heroes {
+			if why := havocUnlockRefusal(pid, id); why != "" {
+				return 0, nil, why
+			}
+		}
 	}
 	price := b.priceGP()
 	tx, err := database.Begin()
