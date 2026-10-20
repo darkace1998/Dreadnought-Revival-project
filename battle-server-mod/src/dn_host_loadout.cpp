@@ -5697,18 +5697,48 @@ static void __fastcall HookIntObjParmExecThunk(void *ctx, uint8_t *stack, void *
 
 // Ready-up. AYPlayerController_Havoc::ServerReadyUpPlayerForNextWave's exec
 // thunk 0x772650 (no parameters; _Validate at vtable +0x1068, body at
-// +0x1070) is unique to the RPC. The body's effect is unknown (the game
-// state's ClientUpdatePlayerReadyForNextWave is never sent), and the director
-// waited the full m_upgradeSelectionDuration (60 s) regardless. The hook
-// records the controller; the director ends upgrade selection early once
-// every connected human has readied. GUESS: the original rule (all players?
-// a vote?) is unknown.
+// +0x1070) is unique to the RPC. The _Implementation is compiled out: PC
+// vtable 0x2EF6678 +0x1070 (and ServerUnReadyPlayerForNextWave's, +0x1060) is
+// the stub 0x15FBF00 `mov al, 1; ret`. The hook records the controller; the
+// director ends upgrade selection early once every connected human has
+// readied. GUESS: the original rule (all players? a vote?) is unknown.
+//
+// The player's own ready state is AYPlayerReplicationInfo_Havoc
+// m_readyForNextWave (IsReadyForNextWave 0x401E50 = `return pri[0xA41]`),
+// replicated with OnRep_ReadyForNextWaveChanged -> AYHUD::UpdateHavocUpgrade
+// Panel (0x562E50), which greys the upgrades out (state 3) once the player is
+// ready. Nothing wrote it, so the panel never showed a ready player. The game
+// state's ClientUpdatePlayerReadyForNextWave(TArray<int32>) is still not sent:
+// its client half only stores the list (+0x2028) and fires a BP event that no
+// blueprint implements.
 #define RVA_HVC_READY_UP_THUNK 0x772650
+#define RVA_HVC_UNREADY_THUNK 0x774B40 // ServerUnReadyPlayerForNextWave exec thunk (78 B, unique)
+#define OFF_HVC_PRI_READY 0xA41
 static tExecThunk g_origHavocReadyUpThunk = nullptr;
+static tExecThunk g_origHavocUnReadyThunk = nullptr;
 static void *volatile g_hvcReady[16];
 static volatile LONG g_hvcReadyCount = 0;
+
+// Writes m_readyForNextWave on pc's Havoc PRI (offset by reflection, 0xA41
+// from the getter as the fallback).
+static void HavocSetReadyFlag(void *pc, bool ready) {
+  uint8_t *p = (uint8_t *)pc;
+  uint8_t *pri = IsReadable(p + OFF_PC_PLAYER_STATE, 8) ? *(uint8_t **)(p + OFF_PC_PLAYER_STATE) : nullptr;
+  if (!pri || !IsReadable(pri, OFF_HVC_PRI_READY + 1) ||
+      !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo_Havoc"))
+    return;
+  static int s_off = 0;
+  if (!s_off) {
+    int off = PropOffset((UObjectMin *)pri, "m_readyForNextWave");
+    s_off = off > 0 ? off : OFF_HVC_PRI_READY;
+    Logf("havoc: PRI m_readyForNextWave at +0x%X (reflection %d, getter 0x%X)", s_off, off, OFF_HVC_PRI_READY);
+  }
+  pri[s_off] = ready ? 1 : 0;
+}
+
 static void __fastcall HookHavocReadyUpThunk(void *ctx, uint8_t *stack, void *result) {
   g_origHavocReadyUpThunk(ctx, stack, result);
+  HavocSetReadyFlag(ctx, true);
   LONG n = g_hvcReadyCount;
   for (LONG i = 0; i < n && i < 16; ++i)
     if (g_hvcReady[i] == ctx)
@@ -5718,6 +5748,19 @@ static void __fastcall HookHavocReadyUpThunk(void *ctx, uint8_t *stack, void *re
     InterlockedIncrement(&g_hvcReadyCount);
   }
   Logf("havoc: ServerReadyUpPlayerForNextWave from %p %s (%ld ready)", ctx, ClassNameOf(ctx), g_hvcReadyCount);
+}
+
+static void __fastcall HookHavocUnReadyThunk(void *ctx, uint8_t *stack, void *result) {
+  g_origHavocUnReadyThunk(ctx, stack, result);
+  HavocSetReadyFlag(ctx, false);
+  LONG n = g_hvcReadyCount;
+  for (LONG i = 0; i < n && i < 16; ++i)
+    if (g_hvcReady[i] == ctx) {
+      g_hvcReady[i] = g_hvcReady[n - 1];
+      InterlockedDecrement(&g_hvcReadyCount);
+      break;
+    }
+  Logf("havoc: ServerUnReadyPlayerForNextWave from %p %s (%ld ready)", ctx, ClassNameOf(ctx), g_hvcReadyCount);
 }
 
 // Match ready-up (pre-match lineup toggle) is not handled, on purpose. In
@@ -7138,6 +7181,188 @@ static void HavocSendTeamInfo(uint8_t *gs, bool force) {
   Logf("havoc: team HUD -> %d player(s), %d eliminated%s", a.n, out, sent ? "" : " -- ClientHavocPlayersChanged NOT FOUND");
 }
 
+// The reflected property at byte offset off of obj's class chain: its name
+// and PropertyFlags (UProperty +0x38; CPF_Net = 0x20). For logging.
+static const char *PropAt(UObjectMin *obj, int off, uint64_t *flags) {
+  *flags = 0;
+  if (!IsReadable(obj, sizeof(UObjectMin)))
+    return nullptr;
+  for (UObjectMin *cls = obj->Class; cls && IsReadable(cls, 0x40); cls = *(UObjectMin **)((uint8_t *)cls + OFF_USTRUCT_SUPER))
+    for (UObjectMin *f = *(UObjectMin **)((uint8_t *)cls + 0x38); f && IsReadable(f, 0x58); f = *(UObjectMin **)((uint8_t *)f + 0x28))
+      if (*(int32_t *)((uint8_t *)f + 0x50) == off && strcmp(ClassNameOf(f), "Function")) {
+        *flags = *(uint64_t *)((uint8_t *)f + 0x38);
+        return NameText(f->Name);
+      }
+  return nullptr;
+}
+
+// Havoc HUD wave progress. AYGameState_Havoc::ClientUpdateWaveProgress
+// (NetMulticast, no parameters; thunk 0x747D60 -> GS vtable 0x2E9C9A0 +0x8A8
+// = 0x369600) reads the client's replicated copy of m_wavesReached (+0x2024),
+// m_maxWaveEnemies (+0x1F44), m_numEnemiesKilledThisWave (+0x1F40) and +0x1F54,
+// adds the DN_HavocBossWaves_DT flag, and hands them to the HUD (0x5598F0 ->
+// UI_HUD_GameModeHavoc_WBP BP_SetWaveProgress: the "WAVE n" text and the kill
+// progress bar). Its only sender was the server build, so the bar never moved
+// and wave 1 never got a number (the client sets the next wave's number only
+// on entering UpgradeSelection, ClientHavocStateChanged 0x536820).
+// Sent when the values change, during WaveInProgress and WaveComplete only:
+// in UpgradeSelection the HUD shows the NEXT wave, which this would overwrite.
+// The values must have replicated before the RPC lands (an RPC goes out at
+// once, properties at the next net update), so a change is sent one director
+// tick (1 s) after it is seen, if it held.
+// GUESS: when the original server sent it (per kill, per spawn?) is unknown.
+static void HavocSendWaveProgress(uint8_t *gs, int phase) {
+  static const int kOffs[4] = {OFF_HVC_GS_WAVES_REACHED, OFF_HVC_GS_MAX_WAVE_ENEMIES, OFF_HVC_GS_KILLED, 0x1F54};
+  static void *s_logged = nullptr;
+  if (s_logged != gs) {
+    s_logged = gs;
+    for (int off : kOffs) {
+      uint64_t fl = 0;
+      const char *n = PropAt((UObjectMin *)gs, off, &fl);
+      Logf("havoc: wave progress field +0x%X = %s, flags 0x%llX (%s)", off, n ? n : "?", (unsigned long long)fl,
+           fl & 0x20 ? "replicated" : "NOT replicated");
+    }
+  }
+  static uint64_t s_seen = ~0ull, s_sent = ~0ull;
+  if (phase != 2 && phase != 3) {
+    s_seen = ~0ull;
+    return;
+  }
+  uint64_t sig = 0;
+  for (int off : kOffs)
+    sig = sig << 16 | (uint16_t)*(int32_t *)(gs + off);
+  bool held = sig == s_seen;
+  s_seen = sig;
+  if (!held || sig == s_sent)
+    return;
+  s_sent = sig;
+  bool ok = CallNamed(gs, L"ClientUpdateWaveProgress", nullptr, nullptr);
+  Logf("havoc: wave progress -> wave %d, killed %d of %d (+%d)%s", *(int32_t *)(gs + kOffs[0]),
+       *(int32_t *)(gs + kOffs[2]), *(int32_t *)(gs + kOffs[1]), *(int32_t *)(gs + kOffs[3]),
+       ok ? "" : " -- ClientUpdateWaveProgress NOT SENT");
+}
+
+// Havoc next-wave countdown. AYGameState_Havoc::ClientUpdateTimeToNextWave
+// (int; thunk 0x747CD0 -> GS vtable +0x890 = 0x369580) feeds the upgrade
+// menu's wave info (0x5598D0 -> UI_HUD_HavocProgressionMenu_WaveInfo_WBP
+// BP_SetTimeUntilNextWave: "wave begins in {seconds}") and the controller.
+// The widget has no timer of its own -- it shows the number it is given and
+// hides the line on -1 (BP_GetTimeLeftHideTimerValue 0x2A1FC50 = `or eax, -1`)
+// -- so the server sent it every second. Never sent before: no countdown.
+// GUESS: whether the original counted to WaveStarting (here) or to the
+// enemies' arrival (+m_waveStartDelayDuration) is unknown.
+static void FillTimeToNextWave(uint8_t *parms, const char *pc, const char *, uint32_t off, void *ctx) {
+  if (!strcmp(pc, "IntProperty"))
+    *(int32_t *)(parms + off) = *(int *)ctx;
+}
+static void HavocSendTimeToNextWave(uint8_t *gs, int secs) {
+  static int s_last = -1;
+  if (secs < -1)
+    secs = 0;
+  if (secs == s_last)
+    return;
+  bool first = s_last == -1;
+  s_last = secs;
+  bool ok = CallNamed(gs, L"ClientUpdateTimeToNextWave", FillTimeToNextWave, &secs);
+  if (first || secs == -1 || !ok)
+    Logf("havoc: next-wave countdown -> %d s%s", secs, ok ? "" : " -- ClientUpdateTimeToNextWave NOT SENT");
+}
+
+// Havoc end-of-match rewards list. The client's Havoc end-of-match flow
+// (UYEndOfMatchManager::StartEndOfMatchFlow 0x454610 adds the pending step
+// "ApplyHavocProgressionData" for game mode 17) runs 0x449470, which waits
+// for TWO things, binding a delegate and returning while either is missing:
+//   - the PRI match score (+0xA44 != -1): ClientUpdateHighscore, sent at
+//     game over (HavocReportRuns);
+//   - the game state's reward list (+0x20D0, getter 0x36E940: TArray of 12-byte
+//     entries, an "available" bool at +0x20E0, a delegate at +0x20E8) --
+//     "PlayerScoreData not yet available. Bind function call to delegate."
+// Only AYGameState_Havoc::ClientUpdateRewards (thunk 0x747C30 -> GS vtable
+// +0x8A0 -> 0x373E40) fills it and sets "available", and nothing in this exe
+// sends it, so the step never completed: the end-of-match scene showed the
+// captain and stopped there. Its parameter is TArray<YHavocRewardDataTableRow>
+// (0x18 bytes, registration 0x9311F0: m_highscore int +0x08, m_rewardType
+// EYHavocRewardType byte +0x0C, m_value int +0x10) -- the DN_HavocRewards_DT
+// rows, which the server loaded from m_rewardsDataTableCfgPath
+// (DefaultHavoc.ini, an mmogbrain .cfg). 0x373E40 converts m_rewardType 0 and
+// 1 only (YHRT_FREEXP, YHRT_CREDITS, the first two names of the enum and the
+// only two types the table uses). The screen walks the list in order against
+// the weekly best and the match score, so it goes lowest score first.
+// The function is an UNRELIABLE multicast (flags 0x84C40, no NetReliable), so
+// it is sent at game over and twice more before EndMatch.
+// GUESS: when the original server sent it (match start?) is unknown.
+static const struct { int32_t highscore; uint8_t type; int32_t value; } kHavocRewardRows[] = {
+    // DN_HavocRewards_DT: Beginner, 2, 3, 4, 5, 6, 7 (0 = YHRT_FREEXP, 1 = YHRT_CREDITS)
+    {1000, 0, 500}, {1500, 1, 750}, {2500, 1, 1000}, {4500, 0, 2000},
+    {8500, 1, 2500}, {15000, 0, 5000}, {25000, 1, 7500},
+};
+#define HVC_REWARD_ROW_SIZE 0x18
+static void FillHavocRewards(uint8_t *parms, const char *pc, const char *, uint32_t off, void *ctx) {
+  if (strcmp(pc, "ArrayProperty"))
+    return;
+  int n = (int)(sizeof kHavocRewardRows / sizeof kHavocRewardRows[0]);
+  *(void **)(parms + off) = ctx;
+  *(int32_t *)(parms + off + 8) = n;
+  *(int32_t *)(parms + off + 12) = n;
+}
+// Checks the row layout above against reflection once (ArrayProperty Inner
+// +0x78 -> StructProperty Struct +0x78 -> fields, as the team-info struct
+// was found); false = do not send.
+static bool HavocRewardRowLayoutOK(uint8_t *gs) {
+  static int s_ok = -1;
+  if (s_ok >= 0)
+    return s_ok == 1;
+  s_ok = 0;
+  FNameMin n = {};
+  ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"ClientUpdateRewards", 1);
+  void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gs, *(uint64_t *)&n);
+  UObjectMin *arr = fn && IsReadable((uint8_t *)fn + 0x40, 8) ? *(UObjectMin **)((uint8_t *)fn + 0x38) : nullptr;
+  UObjectMin *inner = arr && IsReadable((uint8_t *)arr + 0x80, 8) ? *(UObjectMin **)((uint8_t *)arr + 0x78) : nullptr;
+  UObjectMin *st = inner && IsReadable((uint8_t *)inner + 0x80, 8) ? *(UObjectMin **)((uint8_t *)inner + 0x78) : nullptr;
+  int hs = -1, ty = -1, va = -1;
+  if (st && IsReadable(st, 0x40) && !strcmp(ClassNameOf(st), "ScriptStruct"))
+    for (UObjectMin *f = *(UObjectMin **)((uint8_t *)st + 0x38); f && IsReadable(f, 0x58); f = *(UObjectMin **)((uint8_t *)f + 0x28)) {
+      const char *fnm = NameText(f->Name);
+      int off = (int)*(uint32_t *)((uint8_t *)f + 0x50);
+      if (fnm && !strcmp(fnm, "m_highscore")) hs = off;
+      else if (fnm && !strcmp(fnm, "m_rewardType")) ty = off;
+      else if (fnm && !strcmp(fnm, "m_value")) va = off;
+    }
+  s_ok = hs == 0x08 && ty == 0x0C && va == 0x10 && inner && IsReadable((uint8_t *)inner + 0x34, 4) &&
+         *(int32_t *)((uint8_t *)inner + 0x34) == HVC_REWARD_ROW_SIZE;
+  Logf("havoc: YHavocRewardDataTableRow by reflection (%s %s, %s): element size %d, m_highscore +0x%X, "
+       "m_rewardType +0x%X, m_value +0x%X -> %s", arr ? ClassNameOf(arr) : "?", arr ? NameText(arr->Name) : "?",
+       st ? NameText(st->Name) : "?", inner && IsReadable((uint8_t *)inner + 0x34, 4) ? *(int32_t *)((uint8_t *)inner + 0x34) : -1,
+       hs, ty, va, s_ok ? "OK" : "MISMATCH, not sent");
+  return s_ok == 1;
+}
+
+static void HavocSendRewards(uint8_t *gs, const char *why) {
+  if (!HavocRewardRowLayoutOK(gs))
+    return;
+  static uint8_t s_rows[sizeof kHavocRewardRows / sizeof kHavocRewardRows[0]][HVC_REWARD_ROW_SIZE];
+  for (size_t i = 0; i < sizeof kHavocRewardRows / sizeof kHavocRewardRows[0]; ++i) {
+    memset(s_rows[i], 0, HVC_REWARD_ROW_SIZE);
+    *(int32_t *)(s_rows[i] + 0x08) = kHavocRewardRows[i].highscore;
+    s_rows[i][0x0C] = kHavocRewardRows[i].type;
+    *(int32_t *)(s_rows[i] + 0x10) = kHavocRewardRows[i].value;
+  }
+  bool ok = CallNamed(gs, L"ClientUpdateRewards", FillHavocRewards, s_rows);
+  uint8_t *avail = gs + 0x20E0;
+  Logf("havoc: reward list (%d DN_HavocRewards_DT rows) -> clients (%s)%s; host copy available %d",
+       (int)(sizeof kHavocRewardRows / sizeof kHavocRewardRows[0]), why, ok ? "" : " -- ClientUpdateRewards NOT SENT",
+       IsReadable(avail, 1) ? *avail : -1);
+}
+
+// Clears every connected player's ready flag (a new wave, a new choice).
+static void HavocClearReady(uint8_t *gs) {
+  uint8_t *pcs[16];
+  int n = HavocHumanPCs(gs, pcs, 16);
+  for (int i = 0; i < n; ++i)
+    HavocSetReadyFlag(pcs[i], false);
+  InterlockedExchange(&g_hvcReadyCount, 0);
+}
+
 // One-time check of every reflected offset the director uses against the
 // engine's own reflection (PropOffset: UProperty Offset_Internal). The native
 // ones were also read off their property registration in the exe
@@ -7275,6 +7500,8 @@ static void HavocDirectorTick(uint8_t *gm) {
   // Game over: the run is reported, the clients get their scores, and the
   // match ends 6 s later (GameState_Havoc_BP's outro is 4 s).
   if (s_phase == 4) {
+    if (s_secs == 2 || s_secs == 4)
+      HavocSendRewards(gs, "game over, resend");
     if (s_secs == 6) {
       int win = g_hvcBpEnd == 1;
       gs[OFF_GS_WINNING_TEAM] = (uint8_t)(win ? 1 : 2);
@@ -7287,6 +7514,7 @@ static void HavocDirectorTick(uint8_t *gm) {
   }
   auto gameOver = [&](const char *why) {
     Logf("havoc: GAME OVER at wave %d (%s)", s_wave, why);
+    HavocSendTimeToNextWave(gs, -1);
     HavocEndWaveModifiers();
     for (auto &e : g_hvcEliminated)
       e = nullptr;
@@ -7294,6 +7522,7 @@ static void HavocDirectorTick(uint8_t *gm) {
     gs[OFF_HVC_GS_HAVOC_STATE] = 4;
     enterState(gs, 4);
     HavocReportRuns(gs);
+    HavocSendRewards(gs, "game over");
   };
   static int s_smokeEnd = -1;
   if (s_smokeEnd < 0)
@@ -7311,8 +7540,10 @@ static void HavocDirectorTick(uint8_t *gm) {
   static int s_downSecs = 0;
   if (s_phase == 2)
     HavocTrackEliminations(gs);
-  if (s_phase >= 0)
+  if (s_phase >= 0) {
     HavocSendTeamInfo(gs, false);
+    HavocSendWaveProgress(gs, s_phase);
+  }
   if (s_phase == 1 || s_phase == 2) {
     int humans = 0, up = HavocPlayersAlive(gs, &humans);
     s_downSecs = up == 0 ? s_downSecs + 1 : 0;
@@ -7417,8 +7648,10 @@ static void HavocDirectorTick(uint8_t *gm) {
       s_firstDelay = f >= 1.0f && f <= 300.0f ? (int)(f + 0.5f) : 20;
       Logf("havoc: first wave %d s after the match start (m_firstWaveDelay %g)", s_firstDelay, f);
     }
-    if (s_waitStart < s_firstDelay)
+    if (s_waitStart < s_firstDelay) {
+      HavocSendTimeToNextWave(gs, s_firstDelay - s_waitStart);
       return;
+    }
     s_wave = 1;
     HavocStartWaveModifiers(gs, s_wave);
     go(1, 1);
@@ -7474,7 +7707,7 @@ static void HavocDirectorTick(uint8_t *gm) {
   }
   case 3: // WaveComplete
     if (s_secs >= HvcMax(3, (int)*(float *)(gm + OFF_HVC_GM_WAVE_COMPLETE_DUR))) {
-      InterlockedExchange(&g_hvcReadyCount, 0);
+      HavocClearReady(gs);
       go(0, -1);
       HavocOfferUpgrades(gs);
     }
@@ -7493,11 +7726,18 @@ static void HavocDirectorTick(uint8_t *gm) {
         Logf("havoc: the horde manager moved the wave index %d -> %d (loop)", s_wave, gsWave);
       s_wave = gsWave + 1;
       HavocStartWaveModifiers(gs, s_wave);
+      HavocClearReady(gs);
       go(1, 1);
     }
     break;
   }
   }
+  // The countdown to the next WaveStarting: WaveComplete + UpgradeSelection;
+  // -1 (hidden) otherwise.
+  int upgradeSecs = HvcMax(5, *(int32_t *)(gm + OFF_HVC_GM_UPGRADE_DUR));
+  int completeSecs = HvcMax(3, (int)*(float *)(gm + OFF_HVC_GM_WAVE_COMPLETE_DUR));
+  HavocSendTimeToNextWave(gs, s_phase == 0 ? upgradeSecs - s_secs
+                              : s_phase == 3 ? completeSecs - s_secs + upgradeSecs : -1);
 }
 
 static void InstallSwitchedHook(const char *what, uintptr_t rva, void *detour,
@@ -7826,6 +8066,8 @@ static DWORD WINAPI Startup(LPVOID) {
                         (void *)&HookBoolParmExecThunk, (void **)&g_origBoolParmExecThunk);
     InstallSwitchedHook("havoc ready up (ServerReadyUpPlayerForNextWave exec thunk)", RVA_HVC_READY_UP_THUNK,
                         (void *)&HookHavocReadyUpThunk, (void **)&g_origHavocReadyUpThunk);
+    InstallSwitchedHook("havoc unready (ServerUnReadyPlayerForNextWave exec thunk)", RVA_HVC_UNREADY_THUNK,
+                        (void *)&HookHavocUnReadyThunk, (void **)&g_origHavocUnReadyThunk);
     InstallSwitchedHook("havoc upgrade pick (ServerReceiveSelectedUpgradeIndex_Implementation)",
                         RVA_HVC_SERVER_SELECTED_UPGRADE_IMPL, (void *)&HookHvcSelectedUpgrade,
                         (void **)&g_origHvcSelectedUpgrade);

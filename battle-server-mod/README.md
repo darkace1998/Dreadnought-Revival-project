@@ -1183,6 +1183,49 @@ Stage 3 (2026-10-19):
   summed Havoc score (LIFETIMESUM, which the purchase dialog `0x4C2920`
   shows) reaches 10,000.
 
+Stage 5 (2026-10-20): the HUD feeds. The Havoc HUD is the client's UMG HUD;
+`AYHUD::shouldUseUMGhud` (`0x567C50`) picks it whenever the game mode type is
+17 instead of the Scaleform `UI_HUD.swf` every other mode uses. The PS4-only
+widgets inside it need `-hudForcePS4` (`0x499FE0`), and the upgrade menu's
+Square/X glyphs are baked into its widget. This is the PC Havoc HUD as
+shipped (exe built 2023-03-02), so the server cannot switch it. What the
+server can do is feed it. These game-state multicasts and server RPCs were
+server-build code:
+
+- **Wave progress**: `ClientUpdateWaveProgress` (no parameters; client
+  `0x369600` reads the replicated m_wavesReached, m_maxWaveEnemies,
+  m_numEnemiesKilledThisWave and m_numberOfRelevantEnemiesSpawnedFromBridgeheads,
+  all CPF_Net by reflection). It drives the "WAVE n" text and the kill bar.
+  It is sent during WaveInProgress / WaveComplete, one tick after the values
+  change.
+- **Next-wave countdown**: `ClientUpdateTimeToNextWave(int)` every second
+  before wave 1 and through WaveComplete + UpgradeSelection, then -1, which
+  hides the line (the widget has no timer of its own).
+- **Ready**: the `ServerReadyUpPlayerForNextWave` / `ServerUnReadyPlayerForNextWave`
+  implementations are the stub `0x15FBF00` (`mov al, 1; ret`). The mod now
+  sets the PRI's replicated m_readyForNextWave (+0xA41, reflection-confirmed),
+  which greys the upgrade panel out (`AYHUD::UpdateHavocUpgradePanel`), and
+  clears it at each upgrade phase. GameState_Havoc_BP itself calls UnReady on
+  entering UpgradeSelection (seen on the smoke host).
+
+- **End-of-match rewards list** (fixes "the match ends on the captain and
+  nothing else happens"). For game mode 17 the client's end-of-match flow
+  (`StartEndOfMatchFlow` `0x454610`) adds the pending step
+  `ApplyHavocProgressionData` (`0x449470`). That step waits for the PRI match
+  score (`ClientUpdateHighscore`, already sent) AND for the game state's reward
+  list (+0x20D0, getter `0x36E940`, "PlayerScoreData not yet available").
+  Only `ClientUpdateRewards` fills that list. The mod sends it with the seven
+  DN_HavocRewards_DT rows as `TArray<YHavocRewardDataTableRow>` (layout checked
+  by reflection on every host; on a mismatch it is not sent). It goes out at
+  game over and twice more before EndMatch, because the multicast is
+  unreliable (flags 0x84C40).
+
+Not sent, on purpose: `ClientUpdatePlayerReadyForNextWave`. Its client half
+only stores a list that no blueprint or HUD code reads. The PRI "last wave"
+kill/death/assist/XP getters are likewise not called by any widget. (An
+earlier note here put `ClientUpdateRewards` in this group. That was wrong: its
+reader is the getter `0x36E940`, which an offset search could not find.)
+
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 
 The PvE season events (mmogbrain `pve_seasons.go`) run the episode maps
