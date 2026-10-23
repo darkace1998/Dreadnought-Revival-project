@@ -47,6 +47,9 @@ const browserBridgeJS = `<script>
   window.dnInstallCert = () => dnCall('installCert');
   window.dnSignOut = () => dnCall('signOut');
   window.dnOpenLogs = () => dnCall('openLogs');
+  window.dnRemoveServer = (id) => dnCall('removeServer', [id]);
+  window.dnUseServer = (id) => { dnCall('useServer', [id]).then(dnServerResult, e => dnServerResult({ ok: false, error: String(e) })); };
+  window.dnAddServer = (n, a) => { dnCall('addServer', [n, a]).then(dnServerResult, e => dnServerResult({ ok: false, error: String(e) })); };
   window.dnSubmit = (m, u, i, p) => { dnCall('submit', [m, u, i, p]).then(dnAuthResult, e => dnAuthResult({ ok: false, error: String(e) })); };
   window.dnNews = () => { dnCall('news').then(dnNewsResult, e => dnNewsResult({ online: false, error: String(e) })); };
   window.dnPlay = () => {
@@ -148,6 +151,12 @@ func runBrowserLauncher(exeDir string, cfg Config) error {
 			out = api.News()
 		case "openLogs":
 			out = api.OpenLogs()
+		case "removeServer":
+			out = api.RemoveServer(str(0))
+		case "useServer":
+			out = api.UseServer(str(0))
+		case "addServer":
+			out = api.AddServer(str(0), str(1))
 		case "play":
 			res := api.Play()
 			if res["ok"] == true {

@@ -372,6 +372,9 @@ type Config struct {
 	// machine and user; set it to carry an account to another machine, or to
 	// recover one after the identity file was lost.
 	PlayerID string `json:"player_id"`
+	// caFile is the saved CA of a server picked in the launcher window
+	// (servers_windows.go); empty = ca.crt beside the launcher / built-in.
+	caFile string
 }
 
 // defaultServer is the server a distributed launcher points at when its
@@ -511,8 +514,8 @@ func main() {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 
-	cfg := loadConfig(exeDir)
-	if err := runMachineSetup(exeDir, &cfg); err != nil {
+	cfg, err := applySavedServer(exeDir, loadConfig(exeDir))
+	if err != nil {
 		fatalf("[!] Setting up this PC for the server failed: %v", err)
 	}
 

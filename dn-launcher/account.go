@@ -44,6 +44,10 @@ type storedCredentials struct {
 	IssuedAt   string `json:"issued_at"`
 }
 
+// credentialServer is the filename-safe key of the server picked in the
+// launcher window; empty for the default server (account.json, as before).
+var credentialServer string
+
 func credentialPath() (string, error) {
 	appData := os.Getenv("LOCALAPPDATA")
 	if appData == "" {
@@ -53,6 +57,11 @@ func credentialPath() (string, error) {
 	//nolint:gosec // Confined to this user's private launcher directory.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create account directory: %w", err)
+	}
+	if credentialServer != "" {
+		// Accounts live on a server, so each picked server keeps its own
+		// sign-in (servers_windows.go).
+		return filepath.Join(dir, "account-"+credentialServer+".json"), nil
 	}
 	return filepath.Join(dir, credentialFileName), nil
 }

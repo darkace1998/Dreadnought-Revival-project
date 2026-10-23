@@ -26,6 +26,10 @@ type launcherSettings struct {
 	// VerboseLog raises the client log to Verbose (see startGame), for bug
 	// reports. Much larger log files.
 	VerboseLog bool `json:"verbose_log"`
+	// Server is the server picked in the window (savedServer.id; empty =
+	// the default) and Servers the ones the player added (servers_windows.go).
+	Server  string        `json:"server,omitempty"`
+	Servers []savedServer `json:"servers,omitempty"`
 }
 
 func settingsPath() string {
