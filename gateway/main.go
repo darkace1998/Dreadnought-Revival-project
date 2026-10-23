@@ -125,6 +125,10 @@ func main() {
 	crashReceiverAddr := getenv("CRASH_RECEIVER_ADDR", ":57005")
 	crashReportDir := getenv("CRASH_REPORT_DIR", "crash-reports")
 	certFile := getenv("TLS_CERT", "certs/server.crt")
+	// CA_CERT: the CA that issued certFile, served at /dn/ca.crt. Missing =
+	// that path 404s (launchers then cannot add this server by address).
+	//nolint:gosec // operator-configured certificate path.
+	caCertPEM, _ := os.ReadFile(getenv("CA_CERT", "certs/ca.crt"))
 	keyFile := getenv("TLS_KEY", "certs/server.key")
 
 	// Route table — maps Host headers to internal services
@@ -183,6 +187,16 @@ func main() {
 		}
 		if r.URL.Path == "/metrics" {
 			promhttp.Handler().ServeHTTP(w, r)
+			return
+		}
+		// The server's CA, for a launcher pointed at this server from its
+		// server picker (dn-launcher/servers_windows.go). Public by nature --
+		// it is what players install; the key never leaves certs/. Any host,
+		// since such a launcher dials the IP.
+		if r.URL.Path == "/dn/ca.crt" && len(caCertPEM) > 0 {
+			w.Header().Set("Content-Type", "application/x-pem-file")
+			w.Header().Set("Content-Length", fmt.Sprint(len(caCertPEM)))
+			_, _ = w.Write(caCertPEM)
 			return
 		}
 

@@ -128,16 +128,33 @@ func readCACert(exeDir string) ([]byte, error) {
 			return nil, fmt.Errorf("built-in CA: %w", err)
 		}
 	}
+	return parseCACert(raw)
+}
+
+// readCAFile loads a server's saved CA (servers_windows.go); missing = nil.
+func readCAFile(path string) ([]byte, error) {
+	//nolint:gosec // the launcher's own per-server file under LOCALAPPDATA.
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return parseCACert(raw)
+}
+
+// parseCACert takes PEM or DER and insists on a CA certificate.
+func parseCACert(raw []byte) ([]byte, error) {
 	der := raw
 	if block, _ := pem.Decode(raw); block != nil {
 		der = block.Bytes
 	}
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, fmt.Errorf("ca.crt is not a certificate: %w", err)
+		return nil, fmt.Errorf("not a certificate: %w", err)
 	}
 	if !cert.IsCA {
-		return nil, errors.New("ca.crt is not a CA certificate")
+		return nil, errors.New("not a CA certificate")
 	}
 	return der, nil
 }
@@ -221,6 +238,8 @@ func installCA(der []byte) error {
 // runMachineSetup points the launcher and the game at cfg.Server. Nothing to
 // do without one (the old gateway_ip/hosts-file setup keeps working).
 func runMachineSetup(exeDir string, cfg *Config) error {
+	// Run again on every server switch (servers_windows.go): start clean.
+	serverDialIP, serverWebPort, serverCAPool, pendingCA = "", "", nil, nil
 	server := strings.TrimSpace(cfg.Server)
 	if server == "" {
 		return nil
@@ -248,12 +267,17 @@ func runMachineSetup(exeDir string, cfg *Config) error {
 		cfg.FirmamentHost = ip
 	}
 
-	der, err := readCACert(exeDir)
+	var der []byte
+	if cfg.caFile != "" {
+		der, err = readCAFile(cfg.caFile)
+	} else {
+		der, err = readCACert(exeDir)
+	}
 	if err != nil {
 		return err
 	}
 	if der == nil {
-		fmt.Println("[*] No ca.crt beside the launcher; assuming the server certificate is already trusted.")
+		fmt.Println("[*] No CA certificate for this server; assuming it is already trusted.")
 		return nil
 	}
 	cert, _ := x509.ParseCertificate(der) // validated by readCACert

@@ -49,7 +49,8 @@ func (a *launcherAPI) Init() map[string]any {
 	}
 	settings := loadSettings()
 	out := map[string]any{"signedIn": a.token != "", "username": a.username, "server": server,
-		"game": gameInfo(a.exeDir, a.cfg), "logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog}
+		"game": gameInfo(a.exeDir, a.cfg), "logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog,
+		"servers": a.serverInfo()}
 	if pendingCA != nil && !caTrusted(pendingCA) {
 		name, fp := caSummary(pendingCA)
 		out["cert"] = map[string]any{"name": name, "fingerprint": fp}

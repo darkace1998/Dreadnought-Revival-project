@@ -75,9 +75,17 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	_ = w.Bind("dnInstallCert", api.InstallCert)
 	_ = w.Bind("dnSignOut", api.SignOut)
 	_ = w.Bind("dnOpenLogs", api.OpenLogs)
+	_ = w.Bind("dnRemoveServer", api.RemoveServer)
 	// Network calls run off the UI thread and report back through a callback.
 	_ = w.Bind("dnSubmit", func(mode, username, identifier, password string) {
 		go func() { reply("dnAuthResult", api.Submit(mode, username, identifier, password)) }()
+	})
+	// Switching server resolves it and may fetch its certificate.
+	_ = w.Bind("dnUseServer", func(id string) {
+		go func() { reply("dnServerResult", api.UseServer(id)) }()
+	})
+	_ = w.Bind("dnAddServer", func(name, address string) {
+		go func() { reply("dnServerResult", api.AddServer(name, address)) }()
 	})
 	_ = w.Bind("dnNews", func() {
 		go func() { reply("dnNewsResult", api.News()) }()
@@ -216,6 +224,17 @@ const desktopPageHTML = `<!doctype html>
   .path.missing { color:#ff9b8f; }
   .path-src { font-size:11.5px; color:var(--dim); margin-top:-6px; }
   .link { background:none; border:0; color:var(--dim); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; padding:0; align-self:flex-start; }
+  /* server */
+  #server { align-items:center; justify-content:center; }
+  #server h2 { margin:0 0 10px; font-size:18px; color:#9fe4ff; letter-spacing:.04em; }
+  .srv { display:flex; align-items:center; gap:8px; width:100%; margin:0 0 6px; padding:8px 10px; font:inherit; text-align:left;
+    cursor:pointer; color:#d8e2ea; background:#0c1621; border:1px solid #24405a; border-radius:6px; }
+  .srv.on { border-color:#3d7fa8; background:#12293c; cursor:default; }
+  .srv span { flex:1; min-width:0; word-break:break-all; }
+  .srv small { display:block; color:var(--dim); font-size:11.5px; }
+  .srv b { font-weight:400; color:var(--dim); padding:0 4px; }
+  .srv b:hover { color:#ff9b8f; }
+  .signin-server { margin-top:14px; font-size:12.5px; color:var(--dim); }
 </style>
 <header>
   <h1>Dreadnought</h1><span class="sub">Private server</span>
@@ -223,6 +242,17 @@ const desktopPageHTML = `<!doctype html>
   <span class="pill" id="status">Connecting…</span>
 </header>
 <main>
+  <section class="view" id="server">
+    <div class="panel">
+      <h2>Server</h2>
+      <div id="srv-list"></div>
+      <label for="srv-addr">Add a server</label>
+      <input id="srv-addr" placeholder="Server IP/URL" spellcheck="false" onkeydown="if (event.key === 'Enter') addServer()">
+      <button class="go" id="srv-go" onclick="addServer()">Connect</button>
+      <div class="msg" id="srvmsg"></div>
+      <button class="link" id="srv-back" style="margin-top:8px" onclick="serverBack()">Back</button>
+    </div>
+  </section>
   <section class="view" id="cert">
     <div class="panel">
       <h2>Install the public testing certificate</h2>
@@ -258,6 +288,7 @@ const desktopPageHTML = `<!doctype html>
         <button class="go" id="go" type="submit">Sign in</button>
       </form>
       <div class="msg" id="msg"></div>
+      <div class="signin-server">Server: <span class="srvname"></span> · <button class="link" onclick="changeServer()">Change…</button></div>
     </div>
   </section>
   <section class="view" id="home">
@@ -266,7 +297,10 @@ const desktopPageHTML = `<!doctype html>
       <span class="who">Captain</span>
       <span class="name" id="name"></span>
       <button class="link" onclick="signOut()">Sign out</button>
-      <span class="who" style="margin-top:18px">Game folder</span>
+      <span class="who" style="margin-top:18px">Server</span>
+      <span class="path srvname"></span>
+      <button class="link" onclick="changeServer()">Change…</button>
+      <span class="who" style="margin-top:10px">Game folder</span>
       <span class="path" id="gamepath"></span>
       <span class="path-src" id="gamesrc"></span>
       <button class="link" onclick="pickGame()">Change…</button>
@@ -292,7 +326,7 @@ const desktopPageHTML = `<!doctype html>
   let mode = 'login';
   const $ = id => document.getElementById(id);
   function show(view) {
-    for (const v of ['cert', 'signin', 'home']) $(v).classList.toggle('shown', v === view);
+    for (const v of ['server', 'cert', 'signin', 'home']) $(v).classList.toggle('shown', v === view);
     if (view === 'signin') setTimeout(() => $(mode === 'register' ? 'username' : 'identifier').focus(), 50);
   }
   function say(el, text, kind) { $(el).textContent = text; $(el).className = 'msg ' + (kind || ''); }
@@ -378,6 +412,59 @@ const desktopPageHTML = `<!doctype html>
     else if (r.error) say('gamemsg', r.error, 'bad');
   }
   function afterCert() { if (state.signedIn) home(state.username); else show('signin'); }
+  function showCert(c) {
+    $('cert-name').textContent = c.name || 'the server certificate';
+    $('cert-fp').textContent = c.fingerprint;
+    show('cert');
+  }
+  let serverBusy = false;
+  function renderServers() {
+    const info = state.servers || { list: [] };
+    const list = $('srv-list');
+    list.textContent = '';
+    for (const s of info.list) {
+      const b = document.createElement('button');
+      b.className = 'srv' + (s.selected ? ' on' : '');
+      const t = document.createElement('span');
+      t.textContent = s.name;
+      if (s.address && s.address !== s.name) {
+        const a = document.createElement('small'); a.textContent = s.address; t.append(a);
+      }
+      b.append(t);
+      if (s.kind === 'custom') {
+        const x = document.createElement('b');
+        x.textContent = '×'; x.title = 'Remove';
+        x.onclick = async e => { e.stopPropagation(); if (!serverBusy) dnServerResult(await dnRemoveServer(s.id)); };
+        b.append(x);
+      }
+      b.onclick = () => { if (!s.selected && !serverBusy) useServer(s.id); };
+      list.append(b);
+    }
+    for (const el of document.querySelectorAll('.srvname')) el.textContent = info.current || '';
+    $('srv-back').hidden = !!info.unset;
+  }
+  function changeServer() { say('srvmsg', ''); renderServers(); show('server'); setTimeout(() => $('srv-addr').focus(), 50); }
+  function serverBack() { if (state.cert) showCert(state.cert); else afterCert(); }
+  function serverWorking(text) { serverBusy = true; $('srv-go').disabled = true; say('srvmsg', text); }
+  function useServer(id) { serverWorking('Connecting…'); dnUseServer(id); }
+  function addServer() {
+    if (serverBusy) return;
+    serverWorking('Connecting…');
+    dnAddServer('', $('srv-addr').value);
+  }
+  function dnServerResult(r) {
+    serverBusy = false;
+    $('srv-go').disabled = false;
+    if (!r.ok) { say('srvmsg', r.error || 'Could not switch server.', 'bad'); return; }
+    state = r;
+    $('srv-addr').value = '';
+    renderServers();
+    say('srvmsg', '');
+    dnNews();
+    if (r.servers && r.servers.unset) changeServer();
+    else if (r.cert) showCert(r.cert);
+    else afterCert();
+  }
   async function installCert() {
     $('cert-go').disabled = true;
     say('certmsg', 'Waiting for Windows…');
@@ -421,11 +508,10 @@ const desktopPageHTML = `<!doctype html>
     if (window.dnBrowser) $('gamedir-row').hidden = false;
     $('opt-logWindow').checked = !!s.logWindow;
     $('opt-verboseLog').checked = !!s.verboseLog;
-    if (s.cert) {
-      $('cert-name').textContent = s.cert.name || 'the server certificate';
-      $('cert-fp').textContent = s.cert.fingerprint;
-      show('cert');
-    } else afterCert();
+    renderServers();
+    if (s.servers && s.servers.unset) changeServer();
+    else if (s.cert) showCert(s.cert);
+    else afterCert();
     dnNews();
   })();
 </script>
