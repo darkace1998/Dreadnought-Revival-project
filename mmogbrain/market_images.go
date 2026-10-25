@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -32,14 +33,24 @@ func handleMarketImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // gatewayAbsoluteImageURLs makes the catalog's picture paths absolute on the
-// host and scheme the client fetched the catalog from -- the one origin it is
-// known to reach and to trust.
+// scheme and port the client fetched the catalog from, under the server's
+// public NAME (PUBLIC_HOST) when it has one, else the host the client used.
+//
+// CHANGED 2026-10-21: the host was always the request's, i.e. the outside IP
+// the launcher passes in -GatewayAddress. After that IP changed, the Market's
+// pictures stopped loading while login and the catalogs on the same address
+// kept working: a picture request was still "Processing" when the game closed
+// a minute later (operator log, 21:52 run), and none were outstanding on the
+// old IP (19 Oct run). GUESS: the picture downloader (DreadAsyncTaskDownloadImage
+// via the image loader) checks the certificate's name where the web-services
+// requests do not; the certificates name the old IP but carry PUBLIC_HOST as a
+// DNS name, which also follows every IP change.
 func gatewayAbsoluteImageURLs(payload map[string]any, r *http.Request) map[string]any {
 	scheme := "https"
 	if r.TLS == nil {
 		scheme = "http"
 	}
-	base := scheme + "://" + r.Host
+	base := scheme + "://" + marketImageHost(r)
 	for _, list := range payload {
 		entities, ok := list.([]any)
 		if !ok {
@@ -58,4 +69,22 @@ func gatewayAbsoluteImageURLs(payload map[string]any, r *http.Request) map[strin
 		}
 	}
 	return payload
+}
+
+// marketImageHost is host[:port] for picture URLs: PUBLIC_HOST with the
+// request's port, or the request's host when PUBLIC_HOST is unset or the
+// client came in over loopback (local tools and tests).
+func marketImageHost(r *http.Request) string {
+	name := strings.TrimSpace(getenv("PUBLIC_HOST", ""))
+	host, port, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		host, port = r.Host, ""
+	}
+	if ip := net.ParseIP(host); name == "" || ip != nil && ip.IsLoopback() || host == "localhost" {
+		return r.Host
+	}
+	if port == "" {
+		return name
+	}
+	return net.JoinHostPort(name, port)
 }

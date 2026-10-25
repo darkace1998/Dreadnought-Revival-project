@@ -284,3 +284,29 @@ func TestBoughtBundleIsListedAsOwned(t *testing.T) {
 		}
 	}
 }
+
+// Picture URLs go out under the server's public name, on the port the client
+// used: a name follows the outside IP and is in the certificate, the IP of the
+// day may not be (pictures stopped loading after an IP change, 2026-10-21).
+func TestMarketImageURLsUseThePublicName(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "https://198.51.100.7:65443/api/v1/bundles", nil)
+	t.Setenv("PUBLIC_HOST", "")
+	if got := marketImageHost(r); got != "198.51.100.7:65443" {
+		t.Errorf("without PUBLIC_HOST: %q", got)
+	}
+	t.Setenv("PUBLIC_HOST", "play.example.org")
+	if got := marketImageHost(r); got != "play.example.org:65443" {
+		t.Errorf("with PUBLIC_HOST: %q", got)
+	}
+	payload := gatewayAbsoluteImageURLs(map[string]any{"entities": []any{
+		map[string]any{"full_image_url": marketImagePath + "UI_ScoutL_Hermes.png", "Name": "x"},
+	}}, r)
+	e := payload["entities"].([]any)[0].(map[string]any)
+	if e["full_image_url"] != "https://play.example.org:65443"+marketImagePath+"UI_ScoutL_Hermes.png" {
+		t.Errorf("url %v", e["full_image_url"])
+	}
+	local := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:65443/api/v1/bundles", nil)
+	if got := marketImageHost(local); got != "127.0.0.1:65443" {
+		t.Errorf("loopback: %q", got)
+	}
+}
