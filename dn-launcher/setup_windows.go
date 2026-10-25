@@ -38,6 +38,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -47,8 +48,13 @@ import (
 
 var (
 	// serverDialIP, when set, is where every launcher connection goes,
-	// whatever host name the URL carries.
-	serverDialIP string
+	// whatever host name the URL carries. Re-resolved while the launcher runs
+	// (refreshServerIP), so it is read through dialIP().
+	serverDialIP   string
+	serverDialIPMu sync.Mutex
+	// serverConfigured: a server setting exists, so the launcher's own
+	// connections go to serverDialIP (or fail while it is unknown).
+	serverConfigured bool
 	// serverCAPool verifies the server's certificate when a ca.crt shipped.
 	serverCAPool *x509.CertPool
 	// serverWebPort replaces 443 when dialing serverDialIP (Config.WebPort).
@@ -64,39 +70,118 @@ func launcherTransport() *http.Transport {
 	} else {
 		t.TLSClientConfig = buildTLSConfig()
 	}
-	if serverDialIP != "" {
+	if serverConfigured {
 		dialer := &net.Dialer{Timeout: 15 * time.Second}
 		t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			_, port, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, err
 			}
+			if dialIP() == "" {
+				return nil, errors.New("the server's address could not be looked up")
+			}
 			if port == "443" && serverWebPort != "" {
 				port = serverWebPort
 			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(serverDialIP, port))
+			return dialer.DialContext(ctx, network, net.JoinHostPort(dialIP(), port))
 		}
 	}
 	return t
 }
 
+func dialIP() string {
+	serverDialIPMu.Lock()
+	defer serverDialIPMu.Unlock()
+	return serverDialIP
+}
+
+func setDialIP(ip string) {
+	serverDialIPMu.Lock()
+	serverDialIP = ip
+	serverDialIPMu.Unlock()
+}
+
+// publicResolvers are asked directly when Windows' own lookup fails (no DNS
+// server configured, a filtering resolver, a stale negative answer). A home
+// server's outside IP changes, and its DNS record (a dynamic-DNS name with a
+// short TTL) is the only place that knows the new one.
+var publicResolvers = []string{"1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"}
+
 // resolveServerIP turns the configured server (hostname or IP) into an IPv4
-// address.
+// address: Windows' resolver first (it honours the record's TTL, the hosts
+// file and a company network's own DNS), then the public resolvers.
 func resolveServerIP(server string) (string, error) {
 	server = strings.TrimSpace(server)
 	if ip := net.ParseIP(server); ip != nil {
 		return ip.String(), nil
 	}
-	addrs, err := net.LookupIP(server)
+	ip, err := lookupIPv4(net.DefaultResolver, server)
+	if err == nil {
+		return ip, nil
+	}
+	for _, ns := range publicResolvers {
+		r := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 3 * time.Second}
+			return d.DialContext(ctx, network, ns)
+		}}
+		if ip, perr := lookupIPv4(r, server); perr == nil {
+			fmt.Printf("[*] %s looked up through %s (Windows' lookup failed: %v)\n", server, ns, err)
+			return ip, nil
+		}
+	}
+	return "", fmt.Errorf("look up %s: %w", server, err)
+}
+
+func lookupIPv4(r *net.Resolver, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	addrs, err := r.LookupIPAddr(ctx, name)
 	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w", server, err)
+		return "", err
 	}
 	for _, a := range addrs {
-		if v4 := a.To4(); v4 != nil {
+		if v4 := a.IP.To4(); v4 != nil {
 			return v4.String(), nil
 		}
 	}
-	return "", fmt.Errorf("%s has no IPv4 address", server)
+	return "", fmt.Errorf("%s has no IPv4 address", name)
+}
+
+// refreshServerIP looks the server's name up again and points the launcher
+// and the game (cfg) at the answer. Called at start, for the news and before
+// every Play, so a launcher left open across a change of the server's outside
+// IP still starts the game at the new one. Nothing to do without a server
+// setting (the old gateway_ip/hosts-file setup).
+func refreshServerIP(cfg *Config) (string, error) {
+	server := strings.TrimSpace(cfg.Server)
+	if server == "" {
+		return cfg.GatewayIP, nil
+	}
+	ip, err := resolveServerIP(server)
+	if err != nil {
+		return dialIP(), err
+	}
+	if old := dialIP(); old != ip {
+		if old != "" {
+			fmt.Printf("[*] Server %s moved: %s -> %s\n", server, old, ip)
+		}
+		setDialIP(ip)
+	}
+	// The GAME gets the resolved IP, never the name. CORRECTED 2026-09-27:
+	// this passed the name, on the belief that the game resolves names itself.
+	// It does not for the web-services gateway: WebServiceSessionManager
+	// (0x14041D6E0) hands -GatewayAddress to FInternetAddr::SetIp (vtable +8),
+	// which parses dotted IPv4 only, and a live client logged "Invalid
+	// address: <name>, Port: 65443 ... Cannot init request".
+	//
+	// Firmament follows the server too. CHANGED 2026-10-21: a firmament_host
+	// in dn-launcher.json used to win here, and the dn-launcher.json handed to
+	// testers carried the server's outside IP of the day in it -- so after the
+	// IP changed, the game went to the new gateway but the OLD Firmament
+	// address. With a server setting, both now come from the DNS answer.
+	cfg.GatewayIP = ip
+	cfg.FirmamentHost = ip
+	return ip, nil
 }
 
 // ---- CA certificate -----------------------------------------------------------
@@ -225,27 +310,17 @@ func runMachineSetup(exeDir string, cfg *Config) error {
 	if server == "" {
 		return nil
 	}
-	ip, err := resolveServerIP(server)
-	if err != nil {
-		return err
+	serverConfigured = true
+	// A failed lookup is not fatal any more: the window says the server cannot
+	// be reached, and the news and Play look the name up again.
+	if ip, err := refreshServerIP(cfg); err != nil {
+		fmt.Printf("[!] %v -- trying again for the news and on Play\n", err)
+	} else {
+		fmt.Printf("[*] Server: %s (%s)\n", server, ip)
 	}
-	fmt.Printf("[*] Server: %s (%s)\n", server, ip)
-	serverDialIP = ip // the launcher's own connections, resolved fresh each start
 	if p := strings.TrimSpace(cfg.WebPort); p != "" && p != "443" {
 		serverWebPort = p
 		fmt.Printf("[*] Sign-in and news via port %s\n", p)
-	}
-	// The GAME gets the resolved IP, never the name. CORRECTED 2026-09-27: this
-	// passed the name, on the belief that the game resolves names itself. It
-	// does not for the web-services gateway: WebServiceSessionManager
-	// (0x14041D6E0) hands -GatewayAddress to FInternetAddr::SetIp (vtable +8),
-	// which parses dotted IPv4 only, and a live client logged "Invalid address:
-	// <name>, Port: 65443 ... Cannot init request". Resolving here, at every
-	// start, still follows a home connection's changing outside IP; the
-	// certificates carry the IP as a SAN (gen-certs.sh SERVER_IP).
-	cfg.GatewayIP = ip
-	if cfg.FirmamentHost == "" {
-		cfg.FirmamentHost = ip
 	}
 
 	der, err := readCACert(exeDir)

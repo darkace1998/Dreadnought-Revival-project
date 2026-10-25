@@ -20,7 +20,10 @@ echo "[*] Certificate will be valid for IP: $SERVER_IP (override with SERVER_IP=
 # this said the launcher hands the NAME to the game so a changing outside IP
 # would not matter. The game's gateway accepts only an IP (FInternetAddr::SetIp),
 # so the launcher passes the resolved IP -- and SERVER_IP must be the CURRENT
-# outside IP. If it changes, re-run this script (note: it also makes a new CA).
+# outside IP. If it changes, re-run this script with KEEP_CA=1 (without it, it
+# also makes a new CA). Whether the game checks the IP at all is UNVERIFIED:
+# the Firmament connection pins the issuer instead (see below); the gateway's
+# check was never tested with an IP missing from the certificate.
 SERVER_NAME="${SERVER_NAME:-${PUBLIC_HOST:-}}"
 NAME_SAN=""
 if [ -n "$SERVER_NAME" ]; then
@@ -39,11 +42,22 @@ for ip in $(echo "${EXTRA_IPS:-}" | tr ',' ' '); do
   echo "[*] Certificate will also be valid for IP: $ip"
 done
 
-echo "[*] Generating CA key and certificate..."
-openssl genrsa -out "$CERT_DIR/ca.key" 4096
-openssl req -new -x509 -days 3650 -key "$CERT_DIR/ca.key" \
-  -out "$CERT_DIR/ca.crt" \
-  -subj "/C=US/ST=Private/L=Server/O=Dreadnought Private Server/CN=Dreadnought PS CA"
+# KEEP_CA=1: re-issue only the server and Firmament certificates, signed by
+# the CA already in certs/ -- for a changed outside IP. Players keep the CA
+# they installed (a new CA means every player installs a certificate again
+# and every launcher with the old one built in must be rebuilt).
+if [ "${KEEP_CA:-}" = "1" ] && [ -f "$CERT_DIR/ca.crt" ] && [ -f "$CERT_DIR/ca.key" ]; then
+  echo "[*] Keeping the existing CA ($CERT_DIR/ca.crt)"
+else
+  if [ "${KEEP_CA:-}" = "1" ]; then
+    echo "[!] KEEP_CA=1 but no CA in $CERT_DIR; making a new one" >&2
+  fi
+  echo "[*] Generating CA key and certificate..."
+  openssl genrsa -out "$CERT_DIR/ca.key" 4096
+  openssl req -new -x509 -days 3650 -key "$CERT_DIR/ca.key" \
+    -out "$CERT_DIR/ca.crt" \
+    -subj "/C=US/ST=Private/L=Server/O=Dreadnought Private Server/CN=Dreadnought PS CA"
+fi
 
 echo "[*] Generating server key..."
 openssl genrsa -out "$CERT_DIR/server.key" 2048

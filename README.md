@@ -119,6 +119,18 @@ rm -rf certs/ && SERVER_IP=<your-lan-ip> bash scripts/gen-certs.sh
 mints a new CA, so redistribute the new `certs/ca.crt` to every client
 afterwards — the old one will no longer be trusted.
 
+When only the server's **outside IP changed**, keep the CA and re-issue the
+two server certificates, then restart the stack so the gateway and mmogbrain
+load them:
+
+```bash
+KEEP_CA=1 SERVER_IP=<new public ip> EXTRA_IPS=<lan ip> bash scripts/gen-certs.sh
+```
+
+Players keep the certificate they installed and need nothing new. (Whether the
+game checks the IP in the certificate at all is untested; the launcher itself
+checks the host name.)
+
 <details>
 <summary>Upgrading an install from before <code>certs/</code> was gitignored</summary>
 
@@ -150,6 +162,12 @@ and ship `certs/ca.crt` in the same folder:
 
 The launcher then:
 
+- looks the name up when it starts, for the news, and again right before it
+  starts the game, and gives the game the answer. A home server whose outside
+  IP changes only needs its DNS record to follow (a dynamic-DNS name). When
+  Windows' own lookup fails it asks 1.1.1.1, 8.8.8.8 and 9.9.9.9 directly. With
+  a `server` setting, `gateway_ip` and `firmament_host` from an older
+  `dn-launcher.json` are ignored;
 - passes the server's address to the game (`-GatewayAddress`,
   `-YFirmamentAddress`). The game resolves no backend by name, so it needs no
   DNS or hosts-file change;
@@ -234,6 +252,23 @@ PCs) with **Sign in** / **Create account**, then a home screen with the
 server's news tiles (legacy-api's `/v2/dreadnought/launcher/dn/tiles/`), a
 server status light and **Play**. The sign-in is kept, DPAPI-protected for that
 Windows user, so the next start goes straight to the home screen.
+
+The window is laid out like the original Dreadnought launcher: borderless
+1105x620, the logo and a menu (Settings, Game logs, Sign out) top left, PLAY
+GAME top right, the news carousel beside a news panel, and sign-in / create
+account as two boxes side by side. Its background, logo and fonts are the
+original ones, read at start from `DreadnoughtLauncher.exe` in the player's own
+game folder (`origassets_windows.go`; the file is a Solid State Networks skin
+archive the code decrypts with a password it finds in that same exe). Nothing
+of the original launcher is copied into this repository or into
+`dn-launcher.exe`; without that file the window keeps the same layout in plain
+colours.
+
+Display scaling: the exe is per-monitor DPI aware, so the window is 1105x620
+times the display's scale (e.g. 2486x1395 pixels at 225%), shrunk to fit above
+the taskbar when that is too tall, and the page scales its layout to the window
+(sharp text, nothing cut off). Moving it to a monitor with another scale
+resizes it for that monitor.
 
 Without WebView2 (detected before anything is created), or with `--console`,
 it falls back to the older flow: a console window and the same sign-in page in

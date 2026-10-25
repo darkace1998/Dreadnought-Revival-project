@@ -47,13 +47,14 @@ const browserBridgeJS = `<script>
   window.dnInstallCert = () => dnCall('installCert');
   window.dnSignOut = () => dnCall('signOut');
   window.dnOpenLogs = () => dnCall('openLogs');
+  window.dnAssets = () => dnCall('assets');
+  window.dnOpenURL = (url) => dnCall('openURL', [url]);
   window.dnSubmit = (m, u, i, p) => { dnCall('submit', [m, u, i, p]).then(dnAuthResult, e => dnAuthResult({ ok: false, error: String(e) })); };
   window.dnNews = () => { dnCall('news').then(dnNewsResult, e => dnNewsResult({ online: false, error: String(e) })); };
   window.dnPlay = () => {
     dnCall('play').then(r => {
       dnPlayResult(r);
-      if (r.ok) setTimeout(() => { document.querySelector('main').innerHTML =
-        '<p style="margin:auto;color:#8fe0a8">Dreadnought is starting. You can close this tab.</p>'; }, 2500);
+      if (r.ok) setTimeout(dnBrowserStarted, 2500);
     }, e => dnPlayResult({ ok: false, error: String(e) }));
   };
   // Tells the launcher the page is still open; it exits once nobody is.
@@ -148,6 +149,10 @@ func runBrowserLauncher(exeDir string, cfg Config) error {
 			out = api.News()
 		case "openLogs":
 			out = api.OpenLogs()
+		case "assets":
+			out = api.Assets()
+		case "openURL":
+			out = api.OpenURL(str(0))
 		case "play":
 			res := api.Play()
 			if res["ok"] == true {

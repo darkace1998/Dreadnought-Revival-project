@@ -49,7 +49,8 @@ func (a *launcherAPI) Init() map[string]any {
 	}
 	settings := loadSettings()
 	out := map[string]any{"signedIn": a.token != "", "username": a.username, "server": server,
-		"game": gameInfo(a.exeDir, a.cfg), "logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog}
+		"serverIP": a.serverIP(), "game": gameInfo(a.exeDir, a.cfg),
+		"logWindow": settings.LogWindow, "verboseLog": settings.VerboseLog}
 	if pendingCA != nil && !caTrusted(pendingCA) {
 		name, fp := caSummary(pendingCA)
 		out["cert"] = map[string]any{"name": name, "fingerprint": fp}
@@ -166,12 +167,64 @@ func (a *launcherAPI) SignOut() {
 	a.mu.Unlock()
 }
 
+// serverIP is the address the launcher and the game use: the last DNS answer
+// with a server setting, else gateway_ip.
+func (a *launcherAPI) serverIP() string {
+	if strings.TrimSpace(a.cfg.Server) != "" {
+		return dialIP()
+	}
+	return a.cfg.GatewayIP
+}
+
 func (a *launcherAPI) News() map[string]any {
+	// Looked up again, so the window shows the address Play will use and a
+	// lookup that failed at start gets another chance.
+	cfg := a.config()
+	if _, err := refreshServerIP(&cfg); err != nil {
+		return map[string]any{"online": false, "error": err.Error(), "serverIP": a.serverIP()}
+	}
 	tiles, err := fetchNews()
 	if err != nil {
-		return map[string]any{"online": false, "error": err.Error()}
+		return map[string]any{"online": false, "error": err.Error(), "serverIP": a.serverIP()}
 	}
-	return map[string]any{"online": true, "tiles": tiles}
+	return map[string]any{"online": true, "tiles": tiles, "serverIP": a.serverIP()}
+}
+
+func (a *launcherAPI) config() Config {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.cfg
+}
+
+// Assets is the original launcher's look for the page (origassets_windows.go),
+// read from DreadnoughtLauncher.exe in the game's folder or the launcher's.
+// No assets is not an error the page shows: it keeps its own styling.
+func (a *launcherAPI) Assets() map[string]any {
+	var dirs []string
+	if p := findGameBinary(a.exeDir, a.config()); p != "" {
+		dirs = append(dirs, gameInstallRoot(p))
+	}
+	dirs = append(dirs, a.exeDir)
+	assets, path, err := originalAssets(dirs...)
+	switch {
+	case err != nil:
+		fmt.Printf("[!] Original launcher look not available: %v\n", err)
+		return map[string]any{"error": err.Error()}
+	case assets == nil:
+		fmt.Println("[*] No " + originalLauncherExe + " found; the launcher uses its own look.")
+		return map[string]any{}
+	}
+	fmt.Printf("[*] Original launcher look from %s\n", path)
+	return map[string]any{"assets": assets, "source": path}
+}
+
+// OpenURL opens a news tile's link in the default browser.
+func (a *launcherAPI) OpenURL(url string) bool {
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		return false
+	}
+	openBrowser(url)
+	return true
 }
 
 // Play starts the game. ok means the game was started and the front end
@@ -191,10 +244,10 @@ func (a *launcherAPI) Play() map[string]any {
 	if token == "" || launcherTokenExpired(token) {
 		return map[string]any{"ok": false, "error": "Your sign-in has expired. Please sign in again.", "signIn": true}
 	}
-	if _, err := startGame(a.exeDir, a.cfg, token, username); err != nil {
-		return map[string]any{"ok": false, "error": capitalise(err.Error())}
+	if _, err := startGame(a.exeDir, a.config(), token, username); err != nil {
+		return map[string]any{"ok": false, "error": capitalise(err.Error()), "serverIP": a.serverIP()}
 	}
-	return map[string]any{"ok": true}
+	return map[string]any{"ok": true, "serverIP": a.serverIP()}
 }
 
 // gameLogFolders are where the game may write DreadGame.log: the per-user

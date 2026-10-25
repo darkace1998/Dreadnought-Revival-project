@@ -1,0 +1,538 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dreadnought</title>
+<!--
+  The launcher page, laid out like the original Dreadnought launcher (the
+  DIRECT 5 skin inside DreadnoughtLauncher.exe: main.html / main.css). Its
+  geometry is copied from that stylesheet: a 1105x620 borderless window, the
+  logo top left with the menu under it at y=105, the 151px box and the
+  minimize/close glyphs top right, PLAY GAME 348px wide at (742,70), the news
+  carousel 710x403 at (15,143) beside a 350x403 panel, the copyright line and
+  the right-hand footer at the bottom, and the account dialogs as two 432px
+  boxes side by side (#linkcreate). The background, logo and fonts are the
+  original files, read from the player's own DreadnoughtLauncher.exe
+  (origassets_windows.go, dnAssets); without that file the page keeps the
+  same layout in its own colours.
+-->
+<style>
+  :root { color-scheme: dark; --orange:#f23404; --orange-dark:#B22B0A; --dim:#636363; --teal:#235757; --ok:#6bdbdf; }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; height:100%; }
+  body { background:#040507; overflow:hidden; user-select:none; color:#fff;
+    font: 11px/1.5 "PlanerRegular", "Segoe UI", Helvetica, Arial, sans-serif; }
+  h1, h2, h3, .teko, button, .btn { font-family: "Teko", "Bahnschrift SemiCondensed", "Bahnschrift", "Arial Narrow", sans-serif; font-weight:300; }
+  h1, h2, h3, p { margin:0; }
+  body.browser { display:flex; align-items:center; justify-content:center; }
+  #frame { position:relative; width:1105px; height:620px; overflow:hidden; background-color:#040507;
+    background-image: radial-gradient(ellipse at 72% 28%, #1b2a33 0%, #0b1116 45%, #040507 100%);
+    background-repeat:no-repeat; background-size:100% auto; }
+  .skin #frame { background-image: var(--bg); }
+  body:not(.browser) #frame { transform-origin:0 0; }
+  body.browser #frame { box-shadow: 0 0 0 1px #1c1c1d, 0 20px 60px rgba(0,0,0,.6); }
+
+  /* icons: the original's icon font when present, plain characters without it */
+  .ic { font-style:normal; display:inline-block; }
+  .ic::before { content: attr(data-f); }
+  .skin .ic::before { content: attr(data-g); font-family:"dn-fonts"; }
+
+  /* header */
+  .brand { position:absolute; left:0; top:0; width:485px; height:88px; }
+  .skin .brand { background: var(--logo) no-repeat top left; background-size:auto 105px; }
+  .brand span { position:absolute; left:16px; top:6px; font:400 64px/1 "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif;
+    letter-spacing:.06em; text-transform:uppercase; color:#fff; }
+  .skin .brand span { display:none; }
+  #nav { position:absolute; top:105px; left:14px; margin:0; padding:0; list-style:none; display:flex; }
+  #nav li { margin-right:30px; }
+  #nav a { display:block; padding:5px; font:300 22px/1.2 "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif;
+    letter-spacing:1px; text-transform:uppercase; color:#fff; cursor:pointer; text-decoration:none; transition:color .5s; }
+  #nav a:hover, #nav a.active { color:var(--orange); }
+  .winbtn { position:absolute; width:35px; height:16px; background:transparent; border:0; color:#d8d8d8;
+    font-size:11px; line-height:16px; cursor:pointer; padding:0; z-index:4; }
+  .winbtn:hover { color:var(--orange); }
+  #minimize { right:43px; top:20px; }
+  #close { right:8px; top:22px; }
+  body.browser .winbtn { display:none; }
+  #status { position:absolute; right:85px; top:20px; width:151px; height:25px; padding:0 10px; border:1px solid var(--teal);
+    font-size:11px; line-height:23px; letter-spacing:1px; text-transform:uppercase; color:#d8d8d8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body.browser #status { right:15px; }
+  #status i { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:8px; background:#8a8a8a; vertical-align:1px; }
+  #status.on i { background:var(--ok); } #status.off i { background:var(--orange); }
+
+  /* buttons, as main.css .btn / .btn-primary / .btn-play */
+  .btn { font-size:30px; line-height:47px; text-transform:uppercase; text-align:center; color:#fff; border:0; cursor:pointer;
+    background:var(--orange); min-width:160px; padding:0 20px; transition:all .5s ease; }
+  .btn:hover { text-shadow:0 0 10px #ff714e, 0 0 10px #ff714e, 0 0 10px #F9DFD9; background:var(--orange-dark); }
+  .btn:disabled { cursor:default; background:#292929; color:#BFBFBF; text-shadow:none; }
+  .btn-cancel { background:transparent; }
+  .btn-cancel:hover { background:transparent; color:var(--orange); text-shadow:none; }
+  #play { position:absolute; left:742px; top:70px; width:348px; padding:5px 0 0; line-height:58px; }
+
+  /* the running view: carousel + right panel */
+  .view { display:none; }
+  .view.shown { display:block; }
+  #carousel { position:absolute; left:15px; top:143px; width:710px; height:403px; overflow:hidden; background:rgba(0,0,0,.35); }
+  .tile { position:absolute; inset:0; opacity:0; transition:opacity .6s ease-in-out; background-size:cover; background-position:bottom; background-repeat:no-repeat; }
+  .tile.active { opacity:1; z-index:1; }
+  .tile.link { cursor:pointer; }
+  .tile .body { position:absolute; left:0; right:0; top:0; bottom:56px; padding:34px 36px; }
+  .tile .body h2 { font-size:44px; line-height:1; text-transform:uppercase; margin-bottom:14px; }
+  .tile .body p { font-size:16px; line-height:1.55; color:#b9b9b9; white-space:pre-wrap; max-width:600px; }
+  .overlay { position:absolute; left:0; right:0; bottom:0; height:56px; background:rgba(0,0,0,.8); text-transform:uppercase; transition:color .5s; }
+  .tile.link:hover .overlay { color:var(--orange); }
+  .overlay h3 { position:absolute; left:10px; top:8px; right:180px; font-size:26px; line-height:40px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .overlay .more { position:absolute; right:40px; top:8px; font-size:26px; line-height:40px; }
+  .overlay .more + .ic { position:absolute; right:12px; top:19px; font-size:18px; }
+  #dots { position:absolute; left:0; right:0; bottom:72px; text-align:center; z-index:2; }
+  #dots b { display:inline-block; width:10px; height:10px; margin:1px; border:1px solid #fff; border-radius:10px; cursor:pointer; }
+  #dots b.active { width:12px; height:12px; margin:0; background:#fff; }
+  #panel { position:absolute; left:740px; top:143px; width:350px; height:403px; padding:10px 20px; overflow:hidden;
+    background:rgba(0,0,0,.35); border:1px solid #333; color:#888; font-size:15px; display:flex; flex-direction:column; }
+  #panel h1 { font-size:30px; line-height:1.3; text-transform:uppercase; font-weight:700; color:#9a9a9a; }
+  #panel .news p { margin-bottom:15px; white-space:pre-wrap; }
+  #panel .news a { color:#fff; text-decoration:none; cursor:pointer; }
+  #panel .news a:hover { color:var(--orange); }
+  #panel .spacer { flex:1; }
+  #panel .key { font-size:18px; line-height:24px; text-transform:uppercase; color:#888; }
+  #panel .captain { font-size:30px; line-height:1.1; text-transform:uppercase; color:#fff; word-break:break-all; }
+  .msg { min-height:24px; font:300 18px/24px "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif; text-transform:uppercase; color:#fff; }
+  .msg.bad { color:var(--orange); } .msg.good { color:var(--ok); }
+  #panel .msg { margin-top:6px; }
+  .loading { position:absolute; left:50%; top:50%; margin:-18px 0 0 -18px; font-size:36px; line-height:36px; opacity:.2; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .state-box { position:absolute; left:155px; top:80px; width:400px; padding:30px; text-align:center;
+    background:rgba(9,15,15,.91); border:1px solid rgba(108,108,108,.15); }
+  .state-box .ic { font-size:48px; display:block; margin-bottom:6px; }
+  .state-box h2 { font-size:30px; line-height:1.1; padding:6px 0 10px; }
+  .state-box p { font-size:13px; color:#9a9a9a; margin-bottom:16px; word-break:break-word; }
+
+  /* dialogs, as main.css .modal .content and #linkcreate */
+  .box { position:absolute; top:92px; padding:15px 42px; background:rgba(9,15,15,.66); border:1px solid rgba(108,108,108,.15); }
+  .box h1 { font-size:46px; line-height:1.2; text-transform:uppercase; text-align:center; border-bottom:1px solid rgba(108,108,108,.5); margin-bottom:16px; white-space:nowrap; }
+  .box label.key { display:block; font:300 18px/24px "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif; text-transform:uppercase; }
+  .box input[type=text], .box input[type=password], .box input[type=email] { display:block; width:344px; height:26px; margin-bottom:6px; padding:2px 6px;
+    font:15px Helvetica, Arial, sans-serif; color:#000; background:#fff; border:1px solid #a9a9a9; user-select:text; }
+  .box .error { min-height:24px; text-align:center; text-transform:uppercase; color:var(--orange); font:300 18px/24px "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif; }
+  .box .error.good { color:var(--ok); }
+  .account { width:432px; height:452px; }
+  .account .btn { position:absolute; bottom:16px; left:116px; min-width:200px; }
+  #login { left:80px; } #register { left:593px; }
+  #cert .box, #settings .box { left:252px; width:600px; }
+  #cert p, #settings p { font-size:14px; line-height:1.5; color:#d8d8d8; margin-bottom:12px; }
+  #cert b { color:#fff; font-weight:normal; }
+  .fp { font:12px/1.5 Consolas, monospace; color:#d8d8d8; word-break:break-all; user-select:text; background:rgba(0,0,0,.5);
+    border:1px solid #333; padding:8px 10px; margin:2px 0 12px; }
+  .buttons { display:flex; justify-content:center; gap:10px; margin-top:6px; }
+  #settings { position:absolute; inset:0; z-index:10; background:rgba(4,5,7,.55); display:none; }
+  #settings.shown { display:block; }
+  #settings .box { top:68px; background:rgba(9,15,15,.94); }
+  .path { font-size:14px; color:#fff; word-break:break-all; user-select:text; }
+  .path.missing { color:var(--orange); }
+  .small { font-size:12px; color:#8a8a8a; }
+  .links { margin:4px 0 12px; }
+  .linkbtn { background:none; border:0; padding:0; margin-right:16px; font:300 18px/24px "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif;
+    text-transform:uppercase; color:#fff; cursor:pointer; transition:color .5s; }
+  .linkbtn:hover { color:var(--orange); }
+  .option { display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; cursor:pointer; }
+  .option input { margin:5px 0 0; accent-color:var(--orange); }
+  .option span { font:300 18px/24px "Teko","Bahnschrift SemiCondensed","Bahnschrift",sans-serif; text-transform:uppercase; }
+  .option small { display:block; font:12px/1.4 "PlanerRegular","Segoe UI",sans-serif; text-transform:none; color:#8a8a8a; }
+  #gamedir-row input { width:100%; }
+
+  /* footer */
+  .copyright { position:absolute; left:18px; bottom:26px; color:var(--dim); letter-spacing:.02em; }
+  #where { position:absolute; right:15px; bottom:26px; color:var(--dim); text-align:right; max-width:520px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+</style>
+<div id="frame">
+  <h1 class="brand" data-drag><span>Dreadnought</span></h1>
+  <ul id="nav" hidden>
+    <li><a onclick="openSettings()">Settings</a></li>
+    <li><a onclick="openLogs()">Game logs</a></li>
+    <li><a onclick="signOut()">Sign out</a></li>
+  </ul>
+  <div id="status" title="">Connecting…</div>
+  <button class="winbtn" id="minimize" title="Minimize" onclick="dnWindow('minimize')"><i class="ic" data-g="&#xe63e;" data-f="&#x2014;"></i></button>
+  <button class="winbtn" id="close" title="Close" onclick="dnWindow('close')"><i class="ic" data-g="&#xe640;" data-f="&#x2715;"></i></button>
+
+  <!-- signed in: news and PLAY GAME -->
+  <section class="view" id="home">
+    <button class="btn" id="play" onclick="play()">Play game</button>
+    <div id="carousel">
+      <div id="tiles"></div>
+      <div id="dots"></div>
+      <i class="ic loading" id="loading" data-g="&#xe63d;" data-f="&#x2699;"></i>
+      <div class="state-box" id="offline" hidden>
+        <i class="ic" data-g="&#xe642;" data-f="!"></i>
+        <h2>Cannot reach the server</h2>
+        <p id="offline-why"></p>
+        <button class="btn" onclick="reloadNews()">Try again</button>
+      </div>
+    </div>
+    <div id="panel">
+      <div class="news" id="half"></div>
+      <div class="spacer"></div>
+      <div class="key">Captain</div>
+      <div class="captain" id="name"></div>
+      <div class="msg" id="playmsg"></div>
+    </div>
+  </section>
+
+  <!-- signed out: the two account boxes of the original #linkcreate -->
+  <section class="view" id="signin">
+    <form class="box account" id="login" onsubmit="submitForm(event, 'login')">
+      <h1>Sign in</h1>
+      <div class="error" id="login-msg"></div>
+      <label class="key" for="login-id">Email or captain name</label>
+      <input id="login-id" type="text" autocomplete="username" maxlength="254" spellcheck="false">
+      <label class="key" for="login-pw">Password</label>
+      <input id="login-pw" type="password" autocomplete="current-password" maxlength="256">
+      <button class="btn" id="login-go" type="submit">Sign in</button>
+    </form>
+    <form class="box account" id="register" onsubmit="submitForm(event, 'register')">
+      <h1>Create new account</h1>
+      <div class="error" id="register-msg"></div>
+      <label class="key" for="reg-name">Captain name</label>
+      <input id="reg-name" type="text" autocomplete="username" maxlength="32" spellcheck="false">
+      <label class="key" for="reg-email">Email</label>
+      <input id="reg-email" type="email" autocomplete="email" maxlength="254" spellcheck="false">
+      <label class="key" for="reg-pw">Password</label>
+      <input id="reg-pw" type="password" autocomplete="new-password" maxlength="256">
+      <button class="btn" id="register-go" type="submit">Create account</button>
+    </form>
+  </section>
+
+  <!-- first start: the server's certificate -->
+  <section class="view" id="cert">
+    <div class="box">
+      <h1>Server certificate</h1>
+      <p>This server uses its own certificate for its encrypted connections. Windows does
+        not know it yet, so the game refuses to connect until you trust it once.</p>
+      <p>Installing adds <b id="cert-name"></b> to <b>your</b> Windows user's trusted
+        certificates. No administrator rights are needed. Windows asks you to confirm;
+        choose <b>Yes</b>.</p>
+      <label class="key">SHA-256 fingerprint</label>
+      <div class="fp" id="cert-fp"></div>
+      <p class="small">To remove it later: run certmgr.msc, open Trusted Root Certification
+        Authorities, Certificates, and delete it.</p>
+      <div class="error" id="certmsg"></div>
+      <div class="buttons">
+        <button class="btn" id="cert-go" onclick="installCert()">Install certificate</button>
+        <button class="btn btn-cancel" onclick="afterCert()">Not now</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS: game folder, options, server -->
+  <section id="settings" onclick="if (event.target === this) closeSettings()">
+    <div class="box">
+      <h1>Settings</h1>
+      <label class="key">Game folder</label>
+      <div class="path" id="gamepath"></div>
+      <div class="small" id="gamesrc"></div>
+      <div class="links">
+        <button class="linkbtn" onclick="pickGame()">Change…</button>
+        <button class="linkbtn" id="autogame" onclick="autoGame()" hidden>Use automatic detection</button>
+      </div>
+      <div id="gamedir-row" hidden>
+        <input id="gamedir" type="text" placeholder="C:\Games\Dreadnought" spellcheck="false">
+        <div class="links"><button class="linkbtn" onclick="typedGameDir()">Use this folder</button></div>
+      </div>
+      <label class="option"><input type="checkbox" id="opt-logWindow" onchange="setOpt('logWindow', this)">
+        <span>Show the game's log window</span></label>
+      <label class="option"><input type="checkbox" id="opt-verboseLog" onchange="setOpt('verboseLog', this)">
+        <span>Detailed log<small>For bug reports. Makes the log file much larger.</small></span></label>
+      <label class="key" style="margin-top:8px">Server</label>
+      <div class="path" id="serverline"></div>
+      <div class="error" id="gamemsg"></div>
+      <div class="buttons"><button class="btn" onclick="closeSettings()">Close</button></div>
+    </div>
+  </section>
+
+  <div class="copyright">DREADNOUGHT COMMUNITY PRIVATE SERVER. Not affiliated with Grey Box, Six Foot or YAGER.</div>
+  <div id="where"></div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const desktop = typeof window.dnWindow === 'function' && !window.dnBrowser;
+  if (!desktop) { document.body.classList.add('browser'); window.dnWindow = () => {}; }
+
+  // ---- display scaling ----------------------------------------------------
+  // The layout is 1105x620 CSS pixels. The window is that at the display's
+  // scale, or smaller when that would not fit the screen (desktop_windows.go,
+  // fitWindow), so the frame is scaled to the window. A change of
+  // devicePixelRatio means the window went to a display with another scale:
+  // the launcher then resizes it for that display.
+  function fit() {
+    const s = Math.min(innerWidth / 1105, innerHeight / 620);
+    $('frame').style.transform = Math.abs(s - 1) < 0.002 ? '' : 'scale(' + s + ')';
+  }
+  function watchScale() {
+    matchMedia('(resolution: ' + devicePixelRatio + 'dppx)').addEventListener('change', () => {
+      dnWindow('fit');
+      watchScale();
+    }, { once: true });
+  }
+  if (desktop) { addEventListener('resize', fit); fit(); watchScale(); }
+  let state = {};
+  let server = { name: '', ip: '' };
+
+  // ---- the original skin --------------------------------------------------
+  async function loadSkin() {
+    if (typeof window.dnAssets !== 'function') return;
+    let r;
+    try { r = await dnAssets(); } catch (e) { return; }
+    if (!r || !r.assets) return;
+    const a = r.assets;
+    const style = document.createElement('style');
+    style.textContent =
+      '@font-face{font-family:"Teko";font-weight:300;src:url(' + a.teko + ') format("woff2")}' +
+      '@font-face{font-family:"PlanerRegular";src:url(' + a.planer + ') format("woff2")}' +
+      '@font-face{font-family:"dn-fonts";src:url(' + a.icons + ') format("woff")}' +
+      ':root{--bg:url(' + a.background + ');--logo:url(' + a.logo + ')}';
+    document.head.append(style);
+    document.body.classList.add('skin');
+  }
+
+  // ---- the borderless window: drag by the background ----------------------
+  document.addEventListener('mousedown', e => {
+    if (!desktop || e.button !== 0) return;
+    if (e.target.closest('button, a, input, select, textarea, label, .box, #panel, #carousel, #settings, .fp, .path')) return;
+    dnWindow('move');
+  });
+
+  // ---- views --------------------------------------------------------------
+  function show(view) {
+    for (const v of ['cert', 'signin', 'home']) $(v).classList.toggle('shown', v === view);
+    $('nav').hidden = view !== 'home';
+    if (view === 'signin') setTimeout(() => $('login-id').focus(), 50);
+  }
+  function say(el, text, kind) { $(el).textContent = text || ''; $(el).className = $(el).className.replace(/\s*\b(bad|good)\b/g, '') + (kind ? ' ' + kind : ''); }
+
+  // ---- account ------------------------------------------------------------
+  let pending = '';
+  function submitForm(e, mode) {
+    e.preventDefault();
+    pending = mode;
+    say('login-msg', ''); say('register-msg', '');
+    $(mode + '-go').disabled = true;
+    say(mode + '-msg', 'Contacting the server…', 'good');
+    if (mode === 'register') dnSubmit('register', $('reg-name').value, $('reg-email').value, $('reg-pw').value);
+    else dnSubmit('login', '', $('login-id').value, $('login-pw').value);
+  }
+  function dnAuthResult(r) {
+    const mode = pending || 'login';
+    $(mode + '-go').disabled = false;
+    if (!r.ok) { say(mode + '-msg', r.error || 'Sign-in failed.', 'bad'); return; }
+    say(mode + '-msg', '');
+    $('login-pw').value = ''; $('reg-pw').value = '';
+    home(r.username);
+  }
+  function home(username) {
+    state.signedIn = true; state.username = username;
+    $('name').textContent = username;
+    say('playmsg', '');
+    $('play').disabled = false;
+    show('home');
+  }
+  function signOut() { closeSettings(); dnSignOut(); state.signedIn = false; show('signin'); }
+
+  // ---- play ---------------------------------------------------------------
+  function play() {
+    $('play').disabled = true;
+    say('playmsg', 'Launching Dreadnought…');
+    dnPlay();
+  }
+  function dnPlayResult(r) {
+    if (r.serverIP) setServer(server.name, r.serverIP);
+    if (r.ok) { say('playmsg', 'Game started. Good hunting, Captain.', 'good'); return; }
+    say('playmsg', r.error, 'bad');
+    $('play').disabled = false;
+    if (r.cert) { say('certmsg', r.error); show('cert'); return; }
+    if (r.game) { openSettings(); $('gamepath').classList.add('missing'); say('gamemsg', r.error); return; }
+    if (r.signIn) signOut();
+  }
+  function dnBrowserStarted() { say('playmsg', 'Dreadnought is starting. You can close this tab.', 'good'); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSettings();
+    if (e.key === 'Enter' && $('home').classList.contains('shown') && !$('settings').classList.contains('shown') && !$('play').disabled) play();
+  });
+
+  // ---- certificate --------------------------------------------------------
+  function afterCert() { if (state.signedIn) home(state.username); else show('signin'); }
+  async function installCert() {
+    $('cert-go').disabled = true;
+    say('certmsg', 'Waiting for Windows…', 'good');
+    const r = await dnInstallCert();
+    $('cert-go').disabled = false;
+    if (!r.ok) { say('certmsg', r.error); return; }
+    say('certmsg', 'Installed.', 'good');
+    setTimeout(afterCert, 600);
+  }
+
+  // ---- settings -----------------------------------------------------------
+  const gameSources = {
+    'Steam': 'Found in your Steam library',
+    'chosen': 'Chosen by you',
+    'launcher folder': "The launcher's own folder",
+    'dn-launcher.json': 'Set in dn-launcher.json',
+    'Linux launcher': 'Found by the Linux launcher',
+  };
+  function openSettings() { say('gamemsg', ''); $('settings').classList.add('shown'); }
+  function closeSettings() { $('settings').classList.remove('shown'); }
+  function showGame(g) {
+    g = g || {};
+    $('gamepath').textContent = g.path || 'Not found. Choose the folder where Dreadnought is installed.';
+    $('gamepath').classList.toggle('missing', !g.path);
+    $('gamesrc').textContent = g.path ? (gameSources[g.source] || '') : '';
+    $('autogame').hidden = g.source !== 'chosen';
+  }
+  async function gameChanged(r, okText) {
+    if (r.ok) { showGame(r.game); say('playmsg', ''); say('gamemsg', okText, 'good'); loadSkin(); }
+    else if (r.error) say('gamemsg', r.error);
+  }
+  async function pickGame() { say('gamemsg', ''); gameChanged(await dnPickGame(), 'Saved.'); }
+  async function typedGameDir() { say('gamemsg', ''); gameChanged(await dnSetGameDir($('gamedir').value), 'Saved.'); }
+  async function autoGame() {
+    say('gamemsg', '');
+    const r = await dnAutoGame();
+    gameChanged(r, r.ok && r.game.path ? 'Using automatic detection.' : 'Not found automatically; choose the folder.');
+  }
+  async function openLogs() {
+    const r = await dnOpenLogs();
+    if (r.ok) say('playmsg', 'Opened the game log folder.', 'good');
+    else say('playmsg', r.error, 'bad');
+  }
+  async function setOpt(name, box) {
+    if (!(await dnSetOption(name, box.checked))) { box.checked = !box.checked; say('gamemsg', 'Could not save the option.'); }
+  }
+
+  // ---- server status and news ---------------------------------------------
+  function setServer(name, ip) {
+    server = { name: name || server.name, ip: ip || server.ip };
+    const text = server.ip && server.ip !== server.name ? server.name + '  \u00b7  ' + server.ip : server.name;
+    $('where').textContent = text ? 'SERVER  ' + text : '';
+    $('serverline').textContent = server.ip && server.ip !== server.name
+      ? server.name + ' \u2192 ' + server.ip + ' (looked up when the launcher starts and again on Play)'
+      : server.name;
+    $('status').title = text;
+  }
+  function setStatus(kind, text) {
+    $('status').className = kind;
+    $('status').innerHTML = '<i></i>';
+    $('status').append(text);
+  }
+  function reloadNews() {
+    $('offline').hidden = true;
+    $('loading').hidden = false;
+    setStatus('', 'Connecting…');
+    dnNews();
+  }
+  let slide = 0, timer = 0;
+  function showSlide(i) {
+    const tiles = $('tiles').children, dots = $('dots').children;
+    if (!tiles.length) return;
+    slide = (i + tiles.length) % tiles.length;
+    for (let k = 0; k < tiles.length; k++) {
+      tiles[k].classList.toggle('active', k === slide);
+      if (dots[k]) dots[k].classList.toggle('active', k === slide);
+    }
+  }
+  function openURL(url) {
+    if (!/^https?:\/\//i.test(url || '')) return;
+    if (typeof window.dnOpenURL === 'function') dnOpenURL(url); else window.open(url, '_blank', 'noopener');
+  }
+  // html_content of a half tile, as the original's ng-bind-html: text and a
+  // few harmless tags only.
+  function safeHTML(html) {
+    const allowed = new Set(['P', 'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'B', 'STRONG', 'EM', 'I', 'BR', 'A', 'SPAN']);
+    const src = new DOMParser().parseFromString(html, 'text/html').body;
+    const out = document.createDocumentFragment();
+    (function copy(from, to) {
+      for (const n of from.childNodes) {
+        if (n.nodeType === 3) { to.append(n.textContent); continue; }
+        if (n.nodeType !== 1) continue;
+        if (!allowed.has(n.tagName)) { copy(n, to); continue; }
+        const el = document.createElement(n.tagName);
+        if (n.tagName === 'A') { const href = n.getAttribute('href') || ''; el.onclick = () => openURL(href); }
+        copy(n, el);
+        to.append(el);
+      }
+    })(src, out);
+    return out;
+  }
+  function dnNewsResult(r) {
+    $('loading').hidden = true;
+    if (r.serverIP) setServer(server.name, r.serverIP);
+    setStatus(r.online ? 'on' : 'off', r.online ? 'Server online' : 'Server offline');
+    const tiles = $('tiles'), dots = $('dots'), half = $('half');
+    tiles.textContent = ''; dots.textContent = ''; half.textContent = '';
+    clearInterval(timer);
+    if (!r.online) {
+      $('offline-why').textContent = r.error || '';
+      $('offline').hidden = false;
+      return;
+    }
+    const all = r.tiles || [];
+    for (const t of all.filter(t => (t.section_size || 'full') !== 'half')) {
+      const el = document.createElement('div');
+      el.className = 'tile' + (t.url ? ' link' : '');
+      if (t.background_image_url) el.style.backgroundImage = 'url("' + String(t.background_image_url).replace(/["\\]/g, '') + '")';
+      else if (t.body) {
+        const body = document.createElement('div'); body.className = 'body';
+        const h = document.createElement('h2'); h.textContent = t.title || '';
+        const p = document.createElement('p'); p.textContent = t.body;
+        body.append(h, p); el.append(body);
+      }
+      // A picture tile carries its title in the bar, as the original's did; a
+      // text tile already shows it above its text.
+      if (t.background_image_url ? t.title : t.url) {
+        const o = document.createElement('div'); o.className = 'overlay';
+        const h = document.createElement('h3'); h.textContent = t.background_image_url ? t.title : ''; o.append(h);
+        if (t.url) {
+          const m = document.createElement('h3'); m.className = 'more'; m.textContent = 'Learn more';
+          const i = document.createElement('i'); i.className = 'ic'; i.dataset.g = '\ue603'; i.dataset.f = '\u203a';
+          o.append(m, i);
+        }
+        el.append(o);
+      }
+      if (t.url) el.onclick = () => openURL(t.url);
+      tiles.append(el);
+      const d = document.createElement('b'); const k = dots.children.length;
+      d.onclick = () => { showSlide(k); restart(); };
+      dots.append(d);
+    }
+    if (dots.children.length < 2) dots.textContent = '';
+    for (const t of all.filter(t => t.section_size === 'half')) {
+      const h = document.createElement('h1'); h.textContent = t.title || '';
+      half.append(h);
+      if (t.html_content) { const d = document.createElement('div'); d.append(safeHTML(t.html_content)); half.append(d); }
+      else if (t.body) { const p = document.createElement('p'); p.textContent = t.body; half.append(p); }
+    }
+    showSlide(0);
+    restart();
+  }
+  function restart() {
+    clearInterval(timer);
+    if ($('tiles').children.length > 1) timer = setInterval(() => showSlide(slide + 1), 6000);
+  }
+
+  // ---- start --------------------------------------------------------------
+  (async () => {
+    loadSkin();
+    const s = state = await dnInit();
+    setServer(s.server, s.serverIP);
+    showGame(s.game);
+    // The browser version can also take a typed path (the folder dialog it
+    // opens may appear behind the browser).
+    if (window.dnBrowser) $('gamedir-row').hidden = false;
+    $('opt-logWindow').checked = !!s.logWindow;
+    $('opt-verboseLog').checked = !!s.verboseLog;
+    if (s.signedIn) $('name').textContent = s.username;
+    if (s.cert) {
+      $('cert-name').textContent = s.cert.name || 'the server certificate';
+      $('cert-fp').textContent = s.cert.fingerprint;
+      show('cert');
+    } else afterCert();
+    dnNews();
+  })();
+</script>

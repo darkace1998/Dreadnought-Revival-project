@@ -556,6 +556,13 @@ func main() {
 // startGame hands the token to the game (registry, DPAPI) and starts it with
 // the server's addresses. Shared by the console flow and the desktop window.
 func startGame(exeDir string, cfg Config, jwtToken, username string) (int, error) {
+	// The server's name is looked up again right before the game starts: its
+	// outside IP may have changed since the launcher was opened.
+	if ip, err := refreshServerIP(&cfg); err != nil {
+		return 0, fmt.Errorf("could not look up the server %s: %w", cfg.Server, err)
+	} else if cfg.Server != "" {
+		fmt.Printf("[*] Server: %s (%s)\n", cfg.Server, ip)
+	}
 	fmt.Println("[*] Writing auth token to registry...")
 	if err := writeAuthToken(jwtToken); err != nil {
 		return 0, fmt.Errorf("could not store the sign-in for the game: %w", err)

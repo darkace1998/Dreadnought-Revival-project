@@ -13,11 +13,14 @@ package main
 // w.Dispatch(w.Eval(...)); a blocking call would freeze the window.
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
+	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
@@ -45,8 +48,8 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 			// Group icon #1 from winres/winres.json (rsrc_windows_amd64.syso);
 			// 0 would give the window the generic application icon.
 			IconId: 1,
-			Width:  980,
-			Height: 620,
+			Width:  launcherWidth,
+			Height: launcherHeight,
 			Center: true,
 		},
 	})
@@ -55,6 +58,7 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	}
 	defer w.Destroy()
 	hideConsole()
+	makeBorderless(uintptr(w.Window()))
 
 	api := newLauncherAPI(exeDir, cfg, func() uintptr { return uintptr(w.Window()) })
 
@@ -75,6 +79,28 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	_ = w.Bind("dnInstallCert", api.InstallCert)
 	_ = w.Bind("dnSignOut", api.SignOut)
 	_ = w.Bind("dnOpenLogs", api.OpenLogs)
+	_ = w.Bind("dnAssets", api.Assets)
+	_ = w.Bind("dnOpenURL", api.OpenURL)
+	// The window has no frame (as the original's "windowFrame": "Borderless"),
+	// so the page moves, minimizes and closes it.
+	_ = w.Bind("dnWindow", func(action string) {
+		hwnd := uintptr(w.Window())
+		switch action {
+		case "move":
+			// Hand the drag to Windows as if the press were on a title bar.
+			// Posted, not sent: the binding returns first, and the move loop
+			// then runs on this thread's message pump.
+			_, _, _ = procReleaseCapture.Call()
+			_, _, _ = procPostMessageW.Call(hwnd, wmNCLButtonDown, htCaption, 0)
+		case "fit":
+			// The display scale changed under the window (launcher.html).
+			fitWindow(hwnd, false)
+		case "minimize":
+			_, _, _ = procShowWindow.Call(hwnd, swMinimize)
+		case "close":
+			w.Terminate()
+		}
+	})
 	// Network calls run off the UI thread and report back through a callback.
 	_ = w.Bind("dnSubmit", func(mode, username, identifier, password string) {
 		go func() { reply("dnAuthResult", api.Submit(mode, username, identifier, password)) }()
@@ -98,12 +124,18 @@ func runDesktopLauncher(exeDir string, cfg Config) bool {
 	return true
 }
 
+// newsTile is one tile of the feed. url, background_image_url and
+// html_content are the original launcher's optional fields (its tiles.js and
+// main.html): a picture tile with a link, or a half tile's HTML.
 type newsTile struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	Active bool   `json:"active"`
-	Size   string `json:"section_size"`
+	ID                 string `json:"id"`
+	Title              string `json:"title"`
+	Body               string `json:"body"`
+	Active             bool   `json:"active"`
+	Size               string `json:"section_size"`
+	URL                string `json:"url,omitempty"`
+	BackgroundImageURL string `json:"background_image_url,omitempty"`
+	HTMLContent        string `json:"html_content,omitempty"`
 }
 
 // gameInfo is the install folder the launcher will use and how it was found,
@@ -150,286 +182,137 @@ func hideConsole() {
 	_, _, _ = proc.Call()
 }
 
-const desktopPageHTML = `<!doctype html>
-<meta charset="utf-8">
-<title>Dreadnought</title>
-<style>
-  :root { color-scheme: dark; --line:#21384d; --dim:#7f93a5; --accent:#6fd3ff; }
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; }
-  body {
-    font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color:#d8e2ea; user-select:none;
-    background: radial-gradient(120% 90% at 50% 0%, #16283a 0%, #0a1119 60%, #060a0f 100%);
-    display:flex; flex-direction:column;
-  }
-  header { display:flex; align-items:center; gap:14px; padding:16px 26px; border-bottom:1px solid var(--line); }
-  header h1 { margin:0; font-size:20px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); }
-  header .sub { color:var(--dim); font-size:12.5px; letter-spacing:.06em; }
-  header .spacer { flex:1; }
-  .pill { font-size:12px; padding:3px 10px; border-radius:99px; border:1px solid var(--line); color:var(--dim); }
-  .pill.on { color:#8fe0a8; border-color:#2e5a3f; }
-  .pill.off { color:#ff9b8f; border-color:#5a2e2e; }
-  main { flex:1; display:flex; min-height:0; }
-  .view { flex:1; display:none; min-height:0; }
-  .view.shown { display:flex; }
-  /* sign-in */
-  #signin { align-items:center; justify-content:center; }
-  .panel { width:min(400px,92vw); padding:28px 28px 22px; background:rgba(12,20,30,.82);
-    border:1px solid var(--line); border-radius:10px; box-shadow:0 18px 50px rgba(0,0,0,.55); }
-  .tabs { display:flex; gap:6px; margin-bottom:16px; }
-  .tabs button { flex:1; padding:9px 0; font:inherit; font-size:13px; cursor:pointer; background:transparent;
-    color:var(--dim); border:1px solid var(--line); border-radius:6px; }
-  .tabs button[aria-selected="true"] { background:#12293c; color:#9fe4ff; border-color:#2f5a78; }
-  label { display:block; margin:12px 0 5px; font-size:12px; color:#90a5b7; letter-spacing:.05em; }
-  input { width:100%; padding:10px 12px; font:inherit; color:#e6eef5; background:#0c1621;
-    border:1px solid #24405a; border-radius:6px; user-select:text; }
-  input:focus { outline:none; border-color:#3d7fa8; box-shadow:0 0 0 3px rgba(61,127,168,.18); }
-  .go { width:100%; margin-top:20px; padding:12px 0; font:inherit; font-weight:600; letter-spacing:.1em;
-    text-transform:uppercase; cursor:pointer; color:#04121c; background:linear-gradient(180deg,#7fd8ff,#3ba7d8);
-    border:0; border-radius:6px; }
-  .go:disabled { opacity:.55; cursor:default; }
-  .msg { margin-top:12px; min-height:19px; font-size:13px; }
-  .msg.bad { color:#ff9b8f; } .msg.good { color:#8fe0a8; }
-  /* certificate */
-  #cert { align-items:center; justify-content:center; }
-  #cert .panel { width:min(560px,94vw); }
-  #cert h2 { margin:0 0 10px; font-size:18px; color:#9fe4ff; letter-spacing:.04em; }
-  #cert p { margin:0 0 10px; color:#b8c7d3; font-size:13.5px; }
-  .fp { font:12px/1.5 Consolas, monospace; color:#9fb4c4; word-break:break-all; user-select:text;
-    background:#0c1621; border:1px solid #24405a; border-radius:6px; padding:8px 10px; margin:4px 0 6px; }
-  /* home */
-  #home { flex-direction:row; }
-  .news { flex:1; overflow:auto; padding:22px 26px; display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:start; }
-  .tile { background:rgba(12,20,30,.82); border:1px solid var(--line); border-radius:8px; padding:16px 18px; }
-  .tile.full { grid-column:1 / -1; }
-  .tile h3 { margin:0 0 6px; font-size:15px; color:#9fe4ff; letter-spacing:.04em; }
-  .tile p { margin:0; color:#b8c7d3; font-size:13.5px; white-space:pre-wrap; }
-  aside { width:300px; border-left:1px solid var(--line); padding:26px 24px; display:flex; flex-direction:column; gap:10px; }
-  aside .who { font-size:12px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
-  aside .name { font-size:22px; color:#e6eef5; margin-top:-6px; word-break:break-all; }
-  aside .spacer { flex:1; }
-  .play { padding:18px 0; font-size:20px; }
-  .opt { display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:#b8c7d3; cursor:pointer; margin:0; letter-spacing:0; }
-  .opt input { width:auto; margin:2px 0 0; accent-color:#3ba7d8; }
-  .opt small { display:block; color:var(--dim); font-size:11.5px; }
-  .path { font-size:12.5px; color:#b8c7d3; word-break:break-all; user-select:text; }
-  .path.missing { color:#ff9b8f; }
-  .path-src { font-size:11.5px; color:var(--dim); margin-top:-6px; }
-  .link { background:none; border:0; color:var(--dim); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; padding:0; align-self:flex-start; }
-</style>
-<header>
-  <h1>Dreadnought</h1><span class="sub">Private server</span>
-  <span class="spacer"></span>
-  <span class="pill" id="status">Connecting…</span>
-</header>
-<main>
-  <section class="view" id="cert">
-    <div class="panel">
-      <h2>Install the public testing certificate</h2>
-      <p>This server uses its own certificate for its encrypted connections. Windows does
-        not know it yet, so the game refuses to connect until you trust it once.</p>
-      <p>Installing adds <b id="cert-name"></b> to <b>your</b> Windows user's trusted
-        certificates. No administrator rights are needed. Windows asks you to confirm;
-        choose <b>Yes</b>.</p>
-      <label>SHA-256 fingerprint</label>
-      <div class="fp" id="cert-fp"></div>
-      <p style="font-size:12.5px;color:var(--dim)">To remove it later: run <b>certmgr.msc</b>, open
-        Trusted Root Certification Authorities, Certificates, and delete it.</p>
-      <button class="go" id="cert-go" onclick="installCert()">Install certificate</button>
-      <div class="msg" id="certmsg"></div>
-      <button class="link" style="margin-top:8px" onclick="afterCert()">Not now</button>
-    </div>
-  </section>
-  <section class="view" id="signin">
-    <div class="panel">
-      <div class="tabs" role="tablist">
-        <button role="tab" id="tab-login" aria-selected="true" onclick="pick('login')">Sign in</button>
-        <button role="tab" id="tab-register" aria-selected="false" onclick="pick('register')">Create account</button>
-      </div>
-      <form id="form" onsubmit="submitForm(event)">
-        <div id="username-row" hidden>
-          <label for="username">Callsign</label>
-          <input id="username" autocomplete="username" maxlength="32">
-        </div>
-        <label for="identifier" id="identifier-label">Email or callsign</label>
-        <input id="identifier" type="text" autocomplete="email">
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password">
-        <button class="go" id="go" type="submit">Sign in</button>
-      </form>
-      <div class="msg" id="msg"></div>
-    </div>
-  </section>
-  <section class="view" id="home">
-    <div class="news" id="news"></div>
-    <aside>
-      <span class="who">Captain</span>
-      <span class="name" id="name"></span>
-      <button class="link" onclick="signOut()">Sign out</button>
-      <span class="who" style="margin-top:18px">Game folder</span>
-      <span class="path" id="gamepath"></span>
-      <span class="path-src" id="gamesrc"></span>
-      <button class="link" onclick="pickGame()">Change…</button>
-      <button class="link" id="autogame" onclick="autoGame()" hidden>Use automatic detection</button>
-      <div id="gamedir-row" hidden>
-        <input id="gamedir" placeholder="C:\Games\Dreadnought" spellcheck="false">
-        <button class="link" onclick="typedGameDir()">Use this folder</button>
-      </div>
-      <div class="msg" id="gamemsg"></div>
-      <span class="who" style="margin-top:10px">Options</span>
-      <label class="opt"><input type="checkbox" id="opt-logWindow" onchange="setOpt('logWindow', this)">
-        <span>Show the game's log window</span></label>
-      <label class="opt"><input type="checkbox" id="opt-verboseLog" onchange="setOpt('verboseLog', this)">
-        <span>Detailed log<small>For bug reports. Makes the log file much larger.</small></span></label>
-      <button class="link" onclick="openLogs()">Open game log folder</button>
-      <span class="spacer"></span>
-      <div class="msg" id="playmsg"></div>
-      <button class="go play" id="play" onclick="play()">Play</button>
-    </aside>
-  </section>
-</main>
-<script>
-  let mode = 'login';
-  const $ = id => document.getElementById(id);
-  function show(view) {
-    for (const v of ['cert', 'signin', 'home']) $(v).classList.toggle('shown', v === view);
-    if (view === 'signin') setTimeout(() => $(mode === 'register' ? 'username' : 'identifier').focus(), 50);
-  }
-  function say(el, text, kind) { $(el).textContent = text; $(el).className = 'msg ' + (kind || ''); }
-  function pick(next) {
-    mode = next;
-    $('tab-login').setAttribute('aria-selected', next === 'login');
-    $('tab-register').setAttribute('aria-selected', next === 'register');
-    $('username-row').hidden = next !== 'register';
-    $('identifier-label').textContent = next === 'register' ? 'Email' : 'Email or callsign';
-    $('go').textContent = next === 'register' ? 'Create account' : 'Sign in';
-    say('msg', '');
-  }
-  function submitForm(e) {
-    e.preventDefault();
-    $('go').disabled = true;
-    say('msg', 'Contacting the server…');
-    dnSubmit(mode, $('username').value, $('identifier').value, $('password').value);
-  }
-  function dnAuthResult(r) {
-    $('go').disabled = false;
-    if (!r.ok) { say('msg', r.error || 'Sign-in failed.', 'bad'); return; }
-    $('password').value = '';
-    home(r.username);
-  }
-  function home(username) {
-    $('name').textContent = username;
-    say('playmsg', '');
-    $('play').disabled = false;
-    show('home');
-  }
-  function signOut() { dnSignOut(); pick('login'); show('signin'); }
-  function play() {
-    $('play').disabled = true;
-    say('playmsg', 'Launching Dreadnought…');
-    dnPlay();
-  }
-  function dnPlayResult(r) {
-    if (r.ok) { say('playmsg', 'Game started. Good hunting, Captain.', 'good'); return; }
-    say('playmsg', r.error, 'bad');
-    $('play').disabled = false;
-    if (r.cert) { say('certmsg', r.error, 'bad'); show('cert'); return; }
-    if (r.game) { $('gamepath').classList.add('missing'); return; }
-    if (r.signIn) signOut();
-  }
-  let state = {};
-  const gameSources = {
-    'Steam': 'Found in your Steam library',
-    'chosen': 'Chosen by you',
-    'launcher folder': "The launcher's own folder",
-    'dn-launcher.json': 'Set in dn-launcher.json',
-    'Linux launcher': 'Found by the Linux launcher',
-  };
-  function showGame(g) {
-    g = g || {};
-    $('gamepath').textContent = g.path || 'Not found. Choose the folder where Dreadnought is installed.';
-    $('gamepath').classList.toggle('missing', !g.path);
-    $('gamesrc').textContent = g.path ? (gameSources[g.source] || '') : '';
-    $('autogame').hidden = g.source !== 'chosen';
-  }
-  async function typedGameDir() {
-    say('gamemsg', '');
-    const r = await dnSetGameDir($('gamedir').value);
-    if (r.ok) { showGame(r.game); say('playmsg', ''); say('gamemsg', 'Saved.', 'good'); }
-    else say('gamemsg', r.error, 'bad');
-  }
-  async function autoGame() {
-    say('gamemsg', '');
-    const r = await dnAutoGame();
-    if (r.ok) { showGame(r.game); say('gamemsg', r.game.path ? 'Using automatic detection.' : 'Not found automatically; choose the folder.', r.game.path ? 'good' : 'bad'); }
-    else say('gamemsg', r.error, 'bad');
-  }
-  async function openLogs() {
-    const r = await dnOpenLogs();
-    say('gamemsg', r.ok ? 'Opened ' + r.path : r.error, r.ok ? 'good' : 'bad');
-  }
-  async function setOpt(name, box) {
-    if (!(await dnSetOption(name, box.checked))) { box.checked = !box.checked; say('gamemsg', 'Could not save the option.', 'bad'); }
-  }
-  async function pickGame() {
-    say('gamemsg', '');
-    const r = await dnPickGame();
-    if (r.ok) { showGame(r.game); say('playmsg', ''); say('gamemsg', 'Saved.', 'good'); }
-    else if (r.error) say('gamemsg', r.error, 'bad');
-  }
-  function afterCert() { if (state.signedIn) home(state.username); else show('signin'); }
-  async function installCert() {
-    $('cert-go').disabled = true;
-    say('certmsg', 'Waiting for Windows…');
-    const r = await dnInstallCert();
-    $('cert-go').disabled = false;
-    if (!r.ok) { say('certmsg', r.error, 'bad'); return; }
-    say('certmsg', 'Installed.', 'good');
-    setTimeout(afterCert, 600);
-  }
-  function dnNewsResult(r) {
-    const s = $('status');
-    s.textContent = r.online ? 'Server online' : 'Server unreachable';
-    s.className = 'pill ' + (r.online ? 'on' : 'off');
-    const news = $('news');
-    news.textContent = '';
-    for (const t of (r.tiles || [])) {
-      const el = document.createElement('article');
-      el.className = 'tile' + (t.section_size === 'full' ? ' full' : '');
-      const h = document.createElement('h3'); h.textContent = t.title;
-      const p = document.createElement('p'); p.textContent = t.body;
-      el.append(h, p);
-      news.append(el);
-    }
-    if (!r.online) {
-      const el = document.createElement('article');
-      el.className = 'tile full';
-      el.innerHTML = '<h3>Cannot reach the server</h3><p></p>';
-      el.querySelector('p').textContent = r.error || '';
-      news.append(el);
-    }
-  }
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && $('home').classList.contains('shown') && !$('play').disabled) play();
-  });
-  (async () => {
-    pick('login');
-    const s = state = await dnInit();
-    showGame(s.game);
-    // The browser version can also take a typed path (the folder dialog it
-    // opens may appear behind the browser).
-    if (window.dnBrowser) $('gamedir-row').hidden = false;
-    $('opt-logWindow').checked = !!s.logWindow;
-    $('opt-verboseLog').checked = !!s.verboseLog;
-    if (s.cert) {
-      $('cert-name').textContent = s.cert.name || 'the server certificate';
-      $('cert-fp').textContent = s.cert.fingerprint;
-      show('cert');
-    } else afterCert();
-    dnNews();
-  })();
-</script>
-`
+// The original launcher's window: main.json "minWidth": 1105, "minHeight":
+// 620, "windowFrame": "Borderless". launcher.html is laid out for exactly
+// this size in CSS pixels and scales itself to the window it is given.
+const (
+	launcherWidth  = 1105
+	launcherHeight = 620
+)
+
+var (
+	user32                = windows.NewLazySystemDLL("user32.dll")
+	procGetWindowLongPtrW = user32.NewProc("GetWindowLongPtrW")
+	procSetWindowLongPtrW = user32.NewProc("SetWindowLongPtrW")
+	procSetWindowPos      = user32.NewProc("SetWindowPos")
+	procGetWindowRect     = user32.NewProc("GetWindowRect")
+	procMonitorFromWindow = user32.NewProc("MonitorFromWindow")
+	procGetMonitorInfoW   = user32.NewProc("GetMonitorInfoW")
+	procGetDpiForWindow   = user32.NewProc("GetDpiForWindow")
+	procReleaseCapture    = user32.NewProc("ReleaseCapture")
+	procPostMessageW      = user32.NewProc("PostMessageW")
+	procShowWindow        = user32.NewProc("ShowWindow")
+	procGetDpiForMonitor  = windows.NewLazySystemDLL("shcore.dll").NewProc("GetDpiForMonitor")
+)
+
+const (
+	gwlStyle                = ^uintptr(15) // GWL_STYLE (-16)
+	wsCaption               = 0x00C00000
+	wsThickFrame            = 0x00040000
+	wsMaximizeBox           = 0x00010000
+	swpNoZOrder             = 0x0004
+	swpNoActivate           = 0x0010
+	swpFrameChanged         = 0x0020
+	wmNCLButtonDown         = 0x00A1
+	htCaption               = 2
+	swMinimize              = 6
+	monitorDefaultToNearest = 2
+)
+
+type winRect struct{ Left, Top, Right, Bottom int32 }
+
+func (r winRect) width() int32  { return r.Right - r.Left }
+func (r winRect) height() int32 { return r.Bottom - r.Top }
+
+type monitorInfo struct {
+	Size    uint32
+	Monitor winRect
+	Work    winRect
+	Flags   uint32
+}
+
+// makeBorderless drops the title bar and the sizing border, keeping the
+// window's taskbar button and minimize, then sizes it for its monitor.
+func makeBorderless(hwnd uintptr) {
+	style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlStyle)
+	style &^= wsCaption | wsThickFrame | wsMaximizeBox
+	_, _, _ = procSetWindowLongPtrW.Call(hwnd, gwlStyle, style)
+	fitWindow(hwnd, true)
+}
+
+// fitWindow sizes the window for the display it is on. The exe is per-monitor
+// DPI aware (winres.json), so sizes here are physical pixels: 1105x620 times
+// the display's scale, as Windows would size it -- but never larger than the
+// work area. At 225% on a 3440x1440 display the scaled height, 1395, does not
+// fit above a 108-pixel taskbar (1332 left), which a DPI-unaware window
+// (Windows stretching the 1105x620 bitmap) could not avoid; it overlapped the
+// taskbar and was blurred. The page scales its 1105x620 layout to the window
+// (launcher.html, fit), so a window smaller than the full scale still shows
+// all of it.
+//
+// center places it in the middle of the work area (the first fit); otherwise
+// it keeps its top-left corner, pulled back inside the work area (the page
+// asks for that when the display scale changes -- the window was moved to
+// another monitor).
+//
+// The size is set twice when it is unchanged: go-webview2 fits the page to the
+// client area on WM_SIZE, and a SetWindowPos to the size the window already
+// has may not send one -- needed after the frame was removed.
+func fitWindow(hwnd uintptr, center bool) {
+	var cur winRect
+	_, _, _ = procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&cur)))
+	mon, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
+	mi := monitorInfo{Size: uint32(unsafe.Sizeof(monitorInfo{}))}
+	if ok, _, _ := procGetMonitorInfoW.Call(mon, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+		mi.Work = winRect{0, 0, launcherWidth, launcherHeight}
+	}
+	r := fittedRect(windowDPI(hwnd, mon), mi.Work, cur, center)
+	if r.width() == cur.width() && r.height() == cur.height() {
+		_, _, _ = procSetWindowPos.Call(hwnd, 0, uintptr(r.Left), uintptr(r.Top), uintptr(r.width()), uintptr(r.height()+1), swpNoZOrder|swpNoActivate|swpFrameChanged)
+	}
+	_, _, _ = procSetWindowPos.Call(hwnd, 0, uintptr(r.Left), uintptr(r.Top), uintptr(r.width()), uintptr(r.height()), swpNoZOrder|swpNoActivate|swpFrameChanged)
+}
+
+// windowDPI is the window's display DPI (96 = 100%): GetDpiForWindow from
+// Windows 10 1607, the monitor's from Windows 8.1, else 96.
+func windowDPI(hwnd, mon uintptr) uint32 {
+	if procGetDpiForWindow.Find() == nil {
+		if dpi, _, _ := procGetDpiForWindow.Call(hwnd); dpi != 0 {
+			return uint32(dpi)
+		}
+	}
+	if procGetDpiForMonitor.Find() == nil {
+		var x, y uint32
+		if hr, _, _ := procGetDpiForMonitor.Call(mon, 0, uintptr(unsafe.Pointer(&x)), uintptr(unsafe.Pointer(&y))); hr == 0 && x != 0 {
+			return x
+		}
+	}
+	return 96
+}
+
+// fittedRect is the window rectangle for a display of the given DPI and work
+// area: the layout at the display's scale, shrunk (aspect kept) until it fits
+// in the work area.
+func fittedRect(dpi uint32, work, cur winRect, center bool) winRect {
+	scale := float64(dpi) / 96
+	scale = min(scale, float64(work.width())/launcherWidth, float64(work.height())/launcherHeight)
+	w := int32(math.Round(launcherWidth * scale))
+	h := int32(math.Round(launcherHeight * scale))
+	x, y := cur.Left, cur.Top
+	if center {
+		x = work.Left + (work.width()-w)/2
+		y = work.Top + (work.height()-h)/2
+	}
+	x = max(work.Left, min(x, work.Right-w))
+	y = max(work.Top, min(y, work.Bottom-h))
+	return winRect{x, y, x + w, y + h}
+}
+
+// desktopPageHTML is the launcher page (launcher.html), shared with the
+// browser version.
+//
+//go:embed launcher.html
+var desktopPageHTML string
 
 // webView2RuntimeVersion is Microsoft's documented detection for the Evergreen
 // WebView2 runtime: a non-empty "pv" under the EdgeUpdate client key, machine-
