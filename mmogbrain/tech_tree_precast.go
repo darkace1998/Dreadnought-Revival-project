@@ -148,10 +148,13 @@ func derivedShipTier(shipID int32) (int, bool) {
 // exception was Sniper Light T2 (Furia), assigned AkulaVektor where every
 // other SniperLight hull is Oberon.
 //
-// Hero loadouts deliberately do NOT go through this: the same document shows
-// heroes breaking the rule (Kore is Oberon and Tunmen JupiterArms, both
-// SniperHeavy), and their ids resolve to /Loadouts/Hero/ paths that carry no
-// class/size anyway, so they keep their seed value.
+// Hero loadouts do not go through this function: their ids resolve to
+// /Loadouts/Hero/ paths that carry no class/size, so they keep their seed
+// value. That value follows the same rule now (scripts/gen-base-ship-
+// loadouts.py derives it from the hull line). The reference had three heroes
+// breaking it -- Kore as Oberon, Outis and Outis Mk.2 as Jupiter Arms -- and
+// those were its errors: the operator places them the other way round
+// (2026-10-25), and Onager, the Jupiter T4 SniperHeavy, wears Kore's hull.
 var baseShipManufacturerByClassSize = map[string]string{
 	"AssaultLight": "Oberon", "AssaultMedium": "JupiterArms", "AssaultHeavy": "AkulaVektor",
 	"DreadnoughtLight": "Oberon", "DreadnoughtMedium": "AkulaVektor", "DreadnoughtHeavy": "JupiterArms",

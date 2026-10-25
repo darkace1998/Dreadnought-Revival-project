@@ -2507,6 +2507,14 @@ type techTreeItem struct {
 	// Sending 9 on everything is why the tree started rendering AND why every
 	// ship then read 0/0: proxyItems full, modules empty.
 	module bool
+	// shipPage is the ship (loadout id) on whose own page this entry is also
+	// drawn, 0 for none: the progression row under that ship's tree -- the
+	// next ships and the briefing it unlocks. Such an entry goes out in the
+	// full form with a UI child named after that ship and ProxyType -1. See
+	// techTreeShipPageLinks for the mechanism.
+	shipPage int32
+	// shipPageColumn is its place in that row.
+	shipPageColumn int32
 }
 
 // techTreeProxyTypeModule is the ProxyType that files an entry under a ship's
@@ -3238,6 +3246,7 @@ func techTreeBaseItemsWith(noModules bool) []techTreeItem {
 		parent := items[i].prereq[0]
 		items[i].techItemsRequired = min(techTreeShipUnlockModulesFor(tierOf[parent]), modulesOf[parent])
 	}
+	techTreeShipPageLinks(items)
 	return items
 }
 
@@ -3506,6 +3515,66 @@ func buildMmogTechTreeDocumentWith(noModules bool) []byte {
 	return protocol.AppendRootEnd(b)
 }
 
+// techTreeShipPageLinks puts every hull that has a parent on its parent's
+// own page: the progression row under a ship's tech tree.
+//
+// That row (UI_Screen_ShipTechTree's ProgressionPath, one
+// UI_ShipTechTree_Progression widget per entry: a ship, or a module such as a
+// briefing, with "modules owned / modules required" and a progress bar) is
+// filled from GetShipResearchData (0x1404EE820) -> composer 0x1404F3190,
+// filtered by 0x140A9FD10 to the entries whose m_numOfTechTreeItemsForClaiming
+// (FUIShipData +0x118, the record's NumTechTreeItemsRequired) is above 0 and
+// that are not the ship itself, and sorted by that count (0x140A905B0). The
+// composer takes such an entry only
+//
+//   - from the ship's record's MODULES array (ProxyType -1). In the other
+//     array a ProxyType 9 entry stands for the open ship itself, so it
+//     always fails the "not the ship itself" filter; and
+//   - when the entry has a UI child keyed with the ship's id (0x1404E1D80
+//     compares the UI record's +0x18, _wtoi of the child's name, with the
+//     page id; the overview asks for page 0).
+//
+// Our hulls were ProxyType 9 with one UI child "0", so every ship's row was
+// empty and the screen hid it (ProgressBox, ProgressionLength == 0) --
+// reported live as "next ship to unlock not shown in techtree" (operator,
+// 2026-10-25).
+//
+// So a hull with a parent goes out with ProxyType -1 and a second UI child
+// keyed with the parent. ProxyType is read by nothing else but the loader's
+// split (0x14040143D) and this composer, and the hull's ClassId already is
+// the parent, so the entry simply moves to the parent's other array. The
+// overview is unaffected: the manufacturer groups keep their items in one
+// array whatever the ProxyType (measured live 2026-08-01, see
+// techTreeProxyTypeShip). The readers of the modules array count only slot
+// types 2-6 (0x140541CD0) -- modules available 0xAA9570, purchased tech items
+// 0x542730, module purchase state 0xAA7E40 -- so a ship there is not a module
+// to them.
+//
+// One rule changes with it: IsItemVeteranStatus (0x140548A00) wants every
+// modules-array entry that has a visible UI child researched or owned. No
+// entry had one, so every ship counted as veteran; now a ship needs its next
+// ships researched and its briefing (officer_briefings.go) owned. Read from the
+// code, not seen live.
+//
+// Unowned, the entry is composed as a ship (0x1404F5780, which copies +0x38
+// into +0x118). NOT verified against a live client (2026-10-25).
+func techTreeShipPageLinks(items []techTreeItem) {
+	if techTreeNoShipPage {
+		return
+	}
+	column := map[int32]int32{}
+	for i := range items {
+		item := &items[i]
+		if item.module || item.hero || len(item.prereq) == 0 || item.techItemsRequired <= 0 {
+			continue
+		}
+		parent := item.prereq[0]
+		column[parent]++ // from 1: column 0 is the parent's briefing
+		item.shipPage = parent
+		item.shipPageColumn = column[parent]
+	}
+}
+
 // techTreeHullClassID returns the ClassId a hull node goes out with.
 //
 // It must NOT be the hull's own id. Found 2026-08-08 from a full-memory dump of
@@ -3732,6 +3801,12 @@ var techTreeNoLayoutRows = os.Getenv("DN_TECHTREE_NO_LAYOUT_ROWS") == "1"
 // over-budget tree is built stripped through buildMmogTechTreeDocumentWith.
 var techTreeNoModules = os.Getenv("DN_TECHTREE_NO_MODULES") == "1"
 
+// techTreeNoShipPage leaves the ship pages' progression rows empty again: hulls
+// back to ProxyType 9 with only the overview's UI child (techTreeShipPageLinks)
+// and briefings back in the minimal module form. For an A/B against the
+// 2026-10-25 change.
+var techTreeNoShipPage = os.Getenv("DN_TECHTREE_NO_SHIP_PAGE") == "1"
+
 // techTreeModulePrereq sends each module entry's hull as its Prereq (see
 // appendMmogTechTreeModuleItem). Off: it crashed the client.
 var techTreeModulePrereq = os.Getenv("DN_TECHTREE_MODULE_PREREQ") == "1"
@@ -3781,7 +3856,7 @@ func techTreeRowPrereqs(ship mmogShipSeed, rowIDs map[int32]bool) []string {
 }
 
 func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, []int) {
-	if item.module {
+	if item.module && item.shipPage == 0 {
 		return appendMmogTechTreeModuleItem(b, stack, item)
 	}
 	b, stack = protocol.AppendUnnamedObjectStart(b, stack)
@@ -3861,7 +3936,17 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	if item.hero {
 		uiX += techTreeHeroColumnOffset
 	}
-	b, stack = appendMmogTechTreeUI(b, stack, uiX, float64(item.tier)*techTreeGridY)
+	// The pages it is drawn on: the manufacturer overview (page 0) for a ship,
+	// and its parent's page for a ship or briefing that has one. That page's
+	// progression row is one horizontal box, so y stays 0 there.
+	var pages []techTreeUIChild
+	if !item.module {
+		pages = append(pages, techTreeUIChild{page: 0, x: uiX, y: float64(item.tier) * techTreeGridY})
+	}
+	if item.shipPage != 0 {
+		pages = append(pages, techTreeUIChild{page: item.shipPage, x: float64(item.shipPageColumn) * techTreeGridX})
+	}
+	b, stack = appendMmogTechTreeUI(b, stack, pages...)
 	b = protocol.AppendStringField(b, "XPCost", strconv.Itoa(int(item.xpCost)))
 	b = protocol.AppendStringField(b, "FPCost", "0")
 	// NumTechTreeItemsRequired is NOT the prerequisite count (it was sent as
@@ -3907,7 +3992,7 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	// somewhere earlier in the walk. On every node, any log line at all proves
 	// the loader reached an item, and silence rules the whole per-item path out.
 	proxyType := strconv.Itoa(techTreeProxyTypeShip)
-	if item.module {
+	if item.module || item.shipPage != 0 {
 		proxyType = strconv.Itoa(techTreeProxyTypeModule)
 	}
 	if techTreeCanaryEnabled {
@@ -3923,6 +4008,13 @@ func appendMmogTechTreeItem(b []byte, stack []int, item techTreeItem) ([]byte, [
 	prereqs := make([]string, 0, len(item.prereq))
 	for _, id := range item.prereq {
 		prereqs = append(prereqs, strconv.Itoa(int(id)))
+	}
+	// A module in the full form (a briefing on its ship's page) goes without
+	// its Prereq: module entries carrying one crashed the client on 2026-09-29
+	// (appendMmogTechTreeModuleItem), and the briefing's gate -- 2 of the
+	// ship's modules bought -- already needs the ship.
+	if item.module {
+		prereqs = prereqs[:0]
 	}
 	// Prereq goes out as a NAMED list, not a bare array. A bare array (0x0d)
 	// parses to a container that keeps its children but discards their names,
@@ -4106,14 +4198,31 @@ func techTreeCoord(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
-// appendMmogTechTreeUI writes the item's UI object: one layout child, named "0",
-// carrying the node's position on the tech tree canvas.
-func appendMmogTechTreeUI(b []byte, stack []int, x, y float64) ([]byte, []int) {
+// techTreeUIChild is one page an item is drawn on, and where.
+type techTreeUIChild struct {
+	page int32
+	x, y float64
+}
+
+// appendMmogTechTreeUI writes the item's UI object: one layout child per page
+// it is drawn on, each named after its page -- the loader keys the child on
+// _wtoi of its name, and a page takes only the children keyed with its id: 0
+// for the manufacturer overview (GetManufacturerData, 0x1404ED0C0), a ship's
+// loadout id for that ship's page (GetShipResearchData, 0x1404EE820).
+func appendMmogTechTreeUI(b []byte, stack []int, pages ...techTreeUIChild) ([]byte, []int) {
 	b, stack = protocol.AppendObjectStart(b, stack, "UI")
-	b, stack = protocol.AppendObjectStart(b, stack, "0")
+	for _, p := range pages {
+		b, stack = appendMmogTechTreeUIChild(b, stack, p)
+	}
+	b, stack = protocol.AppendObjectEnd(b, stack)
+	return b, stack
+}
+
+func appendMmogTechTreeUIChild(b []byte, stack []int, p techTreeUIChild) ([]byte, []int) {
+	b, stack = protocol.AppendObjectStart(b, stack, strconv.Itoa(int(p.page)))
 	b, stack = protocol.AppendObjectStart(b, stack, "Position")
-	b = protocol.AppendStringField(b, "x", techTreeCoord(x))
-	b = protocol.AppendStringField(b, "y", techTreeCoord(y))
+	b = protocol.AppendStringField(b, "x", techTreeCoord(p.x))
+	b = protocol.AppendStringField(b, "y", techTreeCoord(p.y))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b = protocol.AppendStringField(b, "Visible", "01")
 	// Wires are the connector polylines between nodes: each entry is an object
@@ -4125,7 +4234,6 @@ func appendMmogTechTreeUI(b []byte, stack []int, x, y float64) ([]byte, []int) {
 	// per-child record is appended whether or not any wire was parsed, so an
 	// empty Wires costs nothing structurally.
 	b, stack = protocol.AppendArrayStart(b, stack, "Wires")
-	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack
@@ -4185,7 +4293,7 @@ func appendMmogTechTreeLayoutRow(b []byte, stack []int, tier int32) ([]byte, []i
 	b = protocol.AppendStringField(b, "Id", strconv.Itoa(int(id)))
 	b = protocol.AppendStringField(b, "ClassId", strconv.Itoa(int(id)))
 	b = protocol.AppendStringField(b, "NumTechTreeItemsRequired", "0")
-	b, stack = appendMmogTechTreeUI(b, stack, 0, float64(tier)*techTreeGridY)
+	b, stack = appendMmogTechTreeUI(b, stack, techTreeUIChild{y: float64(tier) * techTreeGridY})
 	b = protocol.AppendStringField(b, "Tier", strconv.Itoa(int(techTreeWireTier(tier))))
 	b, stack = protocol.AppendObjectEnd(b, stack)
 	return b, stack

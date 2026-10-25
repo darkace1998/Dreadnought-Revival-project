@@ -118,6 +118,16 @@ const officerBriefingModulesRequired = 2
 
 // officerBriefingTechTreeItems is the briefing a ship unlocks, shown in its
 // tech tree under it. It costs no XP: it comes with buying the ship.
+//
+// It is drawn in the ship page's progression row, beside the next ships
+// (techTreeShipPageLinks has the mechanism): the client's module rows take
+// only slot types 2-6 (0x140A98F40), and a briefing is 7-10, so the
+// progression row is the only place a briefing appears on a ship's page. It
+// gets there with a UI child named after the ship and its
+// NumTechTreeItemsRequired, which the minimal module form left out -- why it
+// was never seen (operator, 2026-10-01 and 2026-10-25). The row is sorted by
+// that count, so the briefing (2) comes before the next ships (5-17).
+// NOT verified against a live client (2026-10-25).
 func officerBriefingTechTreeItems(hull baseShipLoadout, manufacturerID int32, fitted map[int32]bool, position int32) []techTreeItem {
 	var items []techTreeItem
 	for _, id := range officerBriefings() {
@@ -135,10 +145,20 @@ func officerBriefingTechTreeItems(hull baseShipLoadout, manufacturerID int32, fi
 			// the modules are bought (NumTechTreeItemsRequired).
 			techItemsRequired: officerBriefingModulesRequired,
 			module:            true,
+			shipPage:          briefingShipPage(hull.loadoutID),
+			// column 0; the next ships follow (techTreeShipPageLinks)
 		})
 		position++
 	}
 	return items
+}
+
+// briefingShipPage is the page a ship's briefing is drawn on: its own.
+func briefingShipPage(ship int32) int32 {
+	if techTreeNoShipPage {
+		return 0
+	}
+	return ship
 }
 
 // officerBriefingsOwnedThroughShips is every briefing the player owns by

@@ -42,6 +42,23 @@ MANUFACTURERS = {
     "Oberon": "Oberon",
 }
 
+# A ship's manufacturer is its hull line's: across every base loadout it is a
+# total function of <Class><Size> (baseShipManufacturerByClassSize in
+# mmogbrain/tech_tree_precast.go is the same table), and heroes follow it too.
+# The reference's own manufacturer text disagreed for three heroes -- Outis and
+# Outis Mk.2 "Jupiter Arms Corvette", Kore "Oberon Corvette" (Kore is not even
+# a corvette) -- and the operator, who played the original, places Outis with
+# Oberon and Kore with Jupiter (2026-10-25). The client agrees for Kore: the
+# Jupiter T4 SniperHeavy blueprint (Onager) wears Kore's hull parts. So the
+# line decides, and a disagreement is reported rather than emitted.
+LINE_MANUFACTURER = {
+    "AssaultLight": "Oberon", "AssaultMedium": "JupiterArms", "AssaultHeavy": "AkulaVektor",
+    "DreadnoughtLight": "Oberon", "DreadnoughtMedium": "AkulaVektor", "DreadnoughtHeavy": "JupiterArms",
+    "ScoutLight": "JupiterArms", "ScoutMedium": "Oberon", "ScoutHeavy": "AkulaVektor",
+    "SniperLight": "Oberon", "SniperMedium": "AkulaVektor", "SniperHeavy": "JupiterArms",
+    "SupportLight": "JupiterArms", "SupportMedium": "Oberon", "SupportHeavy": "AkulaVektor",
+}
+
 
 def walk(node):
     if isinstance(node, list):
@@ -257,16 +274,19 @@ def main():
         if is_hero and loadout_id in cooked_heroes:
             name, tier = cooked_heroes[loadout_id]
             named_by_client = True
+        line = hull.group(1) + hull.group(2)
+        manufacturer = LINE_MANUFACTURER.get(line, "")
+        stated = next((v for k, v in MANUFACTURERS.items() if entry["midclass"].startswith(k)), "")
+        if stated and stated != manufacturer:
+            print(f"note: {name}: reference says {stated}, hull line {line} is {manufacturer}; using the line", file=sys.stderr)
         (hero_rows if is_hero else rows).append(
             {
                 "id": loadout_id,
-                "line": hull.group(1) + hull.group(2),
+                "line": line,
                 "tier": tier,
                 "name": name,
                 "named_by_client": named_by_client,
-                "manufacturer": next(
-                    (v for k, v in MANUFACTURERS.items() if entry["midclass"].startswith(k)), ""
-                ),
+                "manufacturer": manufacturer,
                 "primary": resolved.get("PW", 0),
                 "secondary": resolved.get("SW", 0),
                 "abilities": [resolved.get(f"M{i}", 0) for i in range(1, 5)],
@@ -333,9 +353,10 @@ def main():
         )
     out.append("}")
     out.append("")
-    out.append("// heroShipLoadout is a hero ship. It carries its own manufacturer because")
-    out.append("// heroes do NOT follow the hull-line rule the base roster does -- the same")
-    out.append("// reference shows Kore as Oberon and Tunmen as Jupiter Arms, both SniperHeavy.")
+    out.append("// heroShipLoadout is a hero ship. Its manufacturer is its hull line's, like a")
+    out.append("// base ship's; the generator reports where the reference says otherwise (it")
+    out.append("// had Outis and Outis Mk.2 as Jupiter Arms and Kore as Oberon -- wrong, per the")
+    out.append("// operator and, for Kore, the client: Onager wears Kore's hull).")
     out.append("//")
     out.append("// These belong in the tech tree document: the client does not fetch heroes")
     out.append("// separately. GetHeroShipsFromManufacturerData reads the manufacturer's ordinary")

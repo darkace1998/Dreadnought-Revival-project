@@ -278,8 +278,9 @@ func TestOnlyWearableCaptainItems(t *testing.T) {
 
 // An owned hero lends its parts -- figurehead, forecastle, bridge, hull,
 // stern -- to the player's other ships of its line ("You can also use the
-// Trident's parts on any of your Jupiter Arms dreadnoughts", Grey Box), but a
-// hero of another manufacturer than its line's has no ship to lend them to.
+// Trident's parts on any of your Jupiter Arms dreadnoughts", Grey Box). Every
+// hero is its line's manufacturer's: until 2026-10-25 Kore (Jupiter Arms) and
+// Outis (Oberon) were given the other maker, and so lent nothing.
 func TestHeroShipLendsItsPartsToItsLine(t *testing.T) {
 	database := useTempMmogPlayerStateDB(t)
 	const pid = "00000000000000000000000000000002"
@@ -293,9 +294,16 @@ func TestHeroShipLendsItsPartsToItsLine(t *testing.T) {
 		t.Fatalf("no hero %s", name)
 		return heroShipLoadout{}
 	}
-	trident, kore := hero("Trident"), hero("Kore")
-	if n := len(heroShipPartIDs()[kore.loadoutID]); n != 0 {
-		t.Errorf("Kore (Oberon, on the Jupiter Arms SniperHeavy line) lends %d parts", n)
+	for _, h := range heroShipLoadouts {
+		if want := baseShipManufacturerByClassSize[h.hullLine]; h.manufacturer != want {
+			t.Errorf("hero %s is %s, its %s line is %s's", h.name, h.manufacturer, h.hullLine, want)
+		}
+	}
+	trident := hero("Trident")
+	for _, name := range []string{"Kore", "Outis"} {
+		if n := len(heroShipPartIDs()[hero(name).loadoutID]); n == 0 {
+			t.Errorf("%s lends no parts to its line", name)
+		}
 	}
 	parts := heroShipPartIDs()[trident.loadoutID]
 	if len(parts) < 5 {

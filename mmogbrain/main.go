@@ -317,6 +317,7 @@ var techTreeSwitches = []string{
 	"DN_TECHTREE_UNGATED",
 	"DN_TECHTREE_LIMIT",
 	"DN_TECHTREE_NO_MODULES",
+	"DN_TECHTREE_NO_SHIP_PAGE",
 }
 
 // logTechTreeSwitches prints the build stamp and every tech-tree switch at

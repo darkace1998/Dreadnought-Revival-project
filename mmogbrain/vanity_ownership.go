@@ -193,9 +193,10 @@ var shipOwnHullParts = sync.OnceValue(func() map[int32]bool {
 // hull LINE (the EYShipClass byte, see ownedVanityItemIDs), and a base line
 // is built by one manufacturer (baseShipManufacturerByClassSize), so a hero
 // of the line's manufacturer lends to the whole line. A hero of another
-// manufacturer (Kore, Oberon, on the Jupiter Arms SniperHeavy line; Outis,
-// Jupiter Arms, on the Oberon ScoutMedium line) has no ship to lend to: hero
-// ships themselves cannot be customised.
+// manufacturer would have no ship to lend to (hero ships themselves cannot be
+// customised); since 2026-10-25 there is none -- Kore (Jupiter Arms) and
+// Outis (Oberon) had been given the wrong maker, which is also what kept
+// their parts off their lines.
 var heroShipPartIDs = sync.OnceValue(func() map[int32][]int32 {
 	dir := func(v dreadconfig.VanityItem) string {
 		if i := strings.LastIndex(v.File, "/"); i >= 0 {

@@ -215,7 +215,15 @@ var targetSizes = map[string]int{
 	// all 20 on every tier III-V ship (~700 entries); corrected the same day
 	// to the game's rule -- each of 16 briefings is in the tree of the ONE
 	// ship that unlocks it (officer_briefings.go), 16 entries.
-	"YA_GetTechTree": 14502,
+	// 14502 -> 15872 (+1370): ship pages (2026-10-25). Every hull with a parent
+	// gains a second UI child keyed with that parent (and ProxyType -1), and
+	// the 16 briefings go out in the full form with a UI child keyed with
+	// their ship and NumTechTreeItemsRequired -- what a ship page's
+	// progression row needs (techTreeShipPageLinks): +1359. The other +11 is
+	// the heroes' maker fix -- Kore and Outis move to other manufacturer groups,
+	// and the reordered document compresses a little differently (14513 with
+	// DN_TECHTREE_NO_SHIP_PAGE=1).
+	"YA_GetTechTree": 15872,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

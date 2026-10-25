@@ -81,9 +81,10 @@ var baseShipLoadouts = []baseShipLoadout{
 	{loadoutID: 33489312, hullLine: "SupportMedium", tier: 5, name: "Feronia", clientNamed: true, primary: 100597874, secondary: 100597996, abilities: [4]int32{83820856, 83820894, 83820908, 83820842}, perks: [4]int32{117374979, 117374996, 117374991, 117374982}},
 }
 
-// heroShipLoadout is a hero ship. It carries its own manufacturer because
-// heroes do NOT follow the hull-line rule the base roster does -- the same
-// reference shows Kore as Oberon and Tunmen as Jupiter Arms, both SniperHeavy.
+// heroShipLoadout is a hero ship. Its manufacturer is its hull line's, like a
+// base ship's; the generator reports where the reference says otherwise (it
+// had Outis and Outis Mk.2 as Jupiter Arms and Kore as Oberon -- wrong, per the
+// operator and, for Kore, the client: Onager wears Kore's hull).
 //
 // These belong in the tech tree document: the client does not fetch heroes
 // separately. GetHeroShipsFromManufacturerData reads the manufacturer's ordinary
@@ -131,8 +132,7 @@ var heroShipLoadouts = []heroShipLoadout{
 	{loadoutID: 67043330, hullLine: "AssaultMedium", tier: 4, name: "Fall of Troy", clientNamed: true, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597782, abilities: [4]int32{83820982, 83820592, 83820934, 83820554}, perks: [4]int32{117374977, 117374993, 117374988, 117374986}},
 	{loadoutID: 67043340, hullLine: "SupportLight", tier: 4, name: "Hactar", clientNamed: true, manufacturer: "JupiterArms", primary: 100597949, secondary: 100597996, abilities: [4]int32{83820877, 83820547, 83820911, 83820835}, perks: [4]int32{117374980, 117374993, 117374990, 117374983}},
 	{loadoutID: 67043374, hullLine: "AssaultMedium", tier: 4, name: "Hammerhead", clientNamed: true, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597778, abilities: [4]int32{83820982, 83820599, 83820934, 83820549}, perks: [4]int32{117374980, 117374993, 117374992, 117374983}},
-	{loadoutID: 67043380, hullLine: "ScoutMedium", tier: 4, name: "Outis", clientNamed: true, manufacturer: "JupiterArms", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820712, 83820746, 83820707, 83820691}, perks: [4]int32{117374979, 117374995, 117374989, 117374983}},
-	{loadoutID: 67043335, hullLine: "ScoutMedium", tier: 4, name: "Outis - Vintage", clientNamed: true, manufacturer: "JupiterArms", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820720, 83820737, 83820950, 83820691}, perks: [4]int32{117374980, 117374995, 117374992, 117374983}},
+	{loadoutID: 67043336, hullLine: "SniperHeavy", tier: 4, name: "Kore", clientNamed: true, manufacturer: "JupiterArms", primary: 100597840, secondary: 100597860, abilities: [4]int32{83820809, 83820815, 83820930, 83820757}, perks: [4]int32{117374980, 117374994, 117374988, 117374982}},
 	{loadoutID: 67043345, hullLine: "AssaultMedium", tier: 4, name: "Samar", clientNamed: true, manufacturer: "JupiterArms", primary: 100597775, secondary: 100597778, abilities: [4]int32{83820571, 83820605, 83820934, 83820556}, perks: [4]int32{117374981, 117374997, 117374990, 117374982}},
 	{loadoutID: 67043378, hullLine: "DreadnoughtHeavy", tier: 4, name: "Trident", clientNamed: true, manufacturer: "JupiterArms", primary: 100597789, secondary: 100597804, abilities: [4]int32{83820653, 83820672, 83820623, 83820921}, perks: [4]int32{117374978, 117374993, 117374992, 117374984}},
 	{loadoutID: 67043331, hullLine: "DreadnoughtHeavy", tier: 4, name: "Trident - Vintage", clientNamed: true, manufacturer: "JupiterArms", primary: 100597789, secondary: 100597804, abilities: [4]int32{83820653, 83820661, 83820628, 83820614}, perks: [4]int32{117374981, 117374997, 117374988, 117374986}},
@@ -145,8 +145,9 @@ var heroShipLoadouts = []heroShipLoadout{
 	{loadoutID: 67043359, hullLine: "SupportMedium", tier: 4, name: "Akkoro", clientNamed: true, manufacturer: "Oberon", primary: 100597873, secondary: 100597878, abilities: [4]int32{83820864, 83820894, 83820850, 83820837}, perks: [4]int32{117374980, 117374993, 117374992, 117374984}},
 	{loadoutID: 67043341, hullLine: "SupportMedium", tier: 4, name: "Anansi", clientNamed: true, manufacturer: "Oberon", primary: 100597873, secondary: 100597766, abilities: [4]int32{83820856, 83820887, 83820850, 83820842}, perks: [4]int32{117374981, 117374996, 117374988, 117374984}},
 	{loadoutID: 67043391, hullLine: "AssaultLight", tier: 4, name: "Fenrir", clientNamed: true, manufacturer: "Oberon", primary: 100597768, secondary: 100597784, abilities: [4]int32{83820982, 83820592, 83820936, 83820975}, perks: [4]int32{117374998, 117374993, 117374990, 117374983}},
-	{loadoutID: 67043336, hullLine: "SniperHeavy", tier: 4, name: "Kore", clientNamed: true, manufacturer: "Oberon", primary: 100597840, secondary: 100597860, abilities: [4]int32{83820809, 83820815, 83820930, 83820757}, perks: [4]int32{117374980, 117374994, 117374988, 117374982}},
 	{loadoutID: 67043373, hullLine: "DreadnoughtLight", tier: 4, name: "Leviathan", clientNamed: true, manufacturer: "Oberon", primary: 100597794, secondary: 100597804, abilities: [4]int32{83820637, 83820661, 83820933, 83820616}, perks: [4]int32{117374978, 117374996, 117374992, 117374982}},
+	{loadoutID: 67043380, hullLine: "ScoutMedium", tier: 4, name: "Outis", clientNamed: true, manufacturer: "Oberon", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820712, 83820746, 83820707, 83820691}, perks: [4]int32{117374979, 117374995, 117374989, 117374983}},
+	{loadoutID: 67043335, hullLine: "ScoutMedium", tier: 4, name: "Outis - Vintage", clientNamed: true, manufacturer: "Oberon", primary: 100597825, secondary: 100597830, abilities: [4]int32{83820720, 83820737, 83820950, 83820691}, perks: [4]int32{117374980, 117374995, 117374992, 117374983}},
 	{loadoutID: 67043362, hullLine: "ScoutMedium", tier: 4, name: "Phoenix", clientNamed: true, manufacturer: "Oberon", primary: 100597825, secondary: 100597834, abilities: [4]int32{83820716, 83820753, 83820703, 83820690}, perks: [4]int32{117374981, 117374996, 117374990, 117374987}},
 	{loadoutID: 67043382, hullLine: "SniperLight", tier: 4, name: "Silesia", clientNamed: true, manufacturer: "Oberon", primary: 100597845, secondary: 100597856, abilities: [4]int32{83820804, 83820824, 83820780, 83820758}, perks: [4]int32{117374979, 117374994, 117374989, 117374987}},
 	{loadoutID: 67043337, hullLine: "SniperLight", tier: 4, name: "Silesia - Vintage", clientNamed: true, manufacturer: "Oberon", primary: 100597845, secondary: 100597856, abilities: [4]int32{83820804, 83820819, 83820927, 83820756}, perks: [4]int32{117374981, 117374995, 117374989, 117374986}},
