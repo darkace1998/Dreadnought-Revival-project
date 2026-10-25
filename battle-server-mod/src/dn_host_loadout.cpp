@@ -1628,6 +1628,11 @@ static void NpcAiStartTick(uint8_t *gm);
 
 static bool ClassChainContains(UObjectMin *obj, const char *needle);
 
+// Team Elimination rounds, defined with the Havoc code (they use its helpers).
+static void TeRoundsTick(uint8_t *gm);
+static void TeOnShipKilled(void *gameMode, void *victimCtrl, int victimClass);
+static void TeFixLeader(uint8_t *gm);
+
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
   if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
@@ -1690,6 +1695,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   g_origGameModeTimer(gameMode);
   OnslaughtCreepTick(gm);
   HavocDirectorTick(gm);
+  TeRoundsTick(gm);
   ConquestTick(gm);
   NpcAiStartTick(gm);
   PlayersTick(gm);
@@ -1760,6 +1766,9 @@ typedef void(__fastcall *tTdmKilled)(void *gm, void *killer, void *victimCtrl,
 static tTdmKilled g_origTdmKilled = nullptr;
 typedef void(__fastcall *tDetermineLeader)(void *gm);
 static tDetermineLeader g_origDetermineLeader = nullptr;
+// The Onslaught points rule's switch: its kill hook is also installed for Team
+// Elimination rounds, so it checks this before acting.
+static bool g_onsPointsOn = true;
 
 struct OnslaughtMatch {
   void *gm;
@@ -2017,7 +2026,7 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   uint8_t *gm = (uint8_t *)gameMode;
   uint8_t *gs = nullptr;
   __try {
-    gs = InvasionGameState(gm);
+    gs = g_onsPointsOn ? InvasionGameState(gm) : nullptr;
     if (gs) {
       if (g_ons.gm != gameMode) {
         memset(&g_ons, 0, sizeof(g_ons));
@@ -2053,6 +2062,13 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   }
   // The destroyed ship's class, read before the original runs (it may
   // destroy the pawn). Kill detail for daily contracts, see RecordKill.
+  // Team Elimination: the class of the ship lost, for TeOnShipKilled.
+  int teVictimClass = -1;
+  __try {
+    if (victimPawn && IsReadable((uint8_t *)victimPawn + OFF_PAWN_SHIP_CLASS, 1))
+      teVictimClass = ((uint8_t *)victimPawn)[OFF_PAWN_SHIP_CLASS];
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
   int victimClass = -1;
   if (KillDetailEnabled() && killer && killer != victimCtrl && victimPawn &&
       IsReadable((uint8_t *)victimPawn + OFF_PAWN_SHIP_CLASS, 1))
@@ -2098,6 +2114,11 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   }
   if (flagged)
     ((uint8_t *)victimPawn)[OFF_PAWN_IS_AI_TARGET] = 0;
+  __try {
+    TeOnShipKilled(gameMode, victimCtrl, teVictimClass);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("te: EXCEPTION handling a lost ship");
+  }
 
   if (!gs)
     return;
@@ -2151,6 +2172,10 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
 // "a team has no players" branches (+0x4F8/+0x4FC) are kept.
 static void __fastcall HookDetermineLeader(void *gameMode) {
   g_origDetermineLeader(gameMode);
+  __try {
+    TeFixLeader((uint8_t *)gameMode);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
   __try {
     uint8_t *gs = InvasionGameState((uint8_t *)gameMode);
     if (!gs || g_ons.gm != gameMode)
@@ -7075,6 +7100,403 @@ static void HavocReleaseEliminated() {
 }
 
 // ---------------------------------------------------------------------------
+// Team Elimination rounds (on; dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1
+// turns it off). Added 2026-10-25.
+//
+// The rules, from the game's own text (en DreadGame.locres): "Team Elimination
+// is played in rounds. The first team to win 2 rounds wins the match." and "The
+// team that won the previous round keeps the same ships." A destroyed ship is
+// out until the next round; its captain flies a fighter meanwhile -- the game
+// state's m_respawnFighterLoadoutFilter is the jets filter
+// (GameState_TE_BP: VH_LoadoutFilter_Jets_DA), and the 2015 previews describe
+// the same.
+//
+// Why the mod has to run them (verified in the exe, 2026-10-25):
+//   - YGameMode_TeamElimination (ctor 0x362790, vtable 0x2E9FBE8, parent TDM
+//     0x362560) overrides NOTHING it inherits but the destructor; its 29 new
+//     virtuals (+0x9D8..+0xAB8) are stubs and getters of at most 120 bytes,
+//     and nothing calls them. Its settings m_numberOfRoundsToWin +0xA50,
+//     m_maxRoundTime +0xA54, m_postRoundInitialDelay +0xA58,
+//     m_postRoundDuration +0xA5C, m_preRoundStartDuration +0xA60 (registration
+//     offsets) are read by no code; GameInfo_TE_BP sets only m_maxRoundTime 11.
+//     So a TE match was a 20-minute deathmatch (measured: 41 matches averaging
+//     9.9 min, the long ones ending at ~22).
+//   - YGameState_TE (ctor 0x389300, vtable 0x2EC2F08) and the client side ARE
+//     here: m_rounds +0x1E28 (TArray of 0x18-byte rounds: +0 number, +4 winner
+//     team, +8 an array -- read by 0x3A08C0 and 0x369BB0),
+//     m_IsPerformingRoundTransition +0x1E90 (0x3A2440 reads it),
+//     m_respawnFighterLoadoutFilter +0x1E98, and the controller RPCs
+//     ClientPostRoundEnd (impl 0x574BA0), ClientPreRoundStart (0x573B40: clears
+//     the loadout filter, shows the last round's result from m_rounds against
+//     the player's team), ClientNewRoundStarts (0x573CD0: round timer at
+//     pc+0xC3C), ClientRespawnTeamElimination (0x573860).
+//   - The fighter switch is native: SetLoadoutsFilter 0x35B090 (manager,
+//     filter) adds the filter's loadouts and activates the first allowed one
+//     when the active loadout is not; a null filter clears it (0x33CF50). The
+//     game state applies TE's jets filter itself only to late joiners
+//     (0x3A2440, vtable +0x798, from AYPlayerController::ReadyForJoining).
+//   - New round: AYPlayerController::ReplaceShipWithActiveLoadoutForNewRound,
+//     body 0x590B80, puts the player back in a ship of their active loadout.
+//
+// What runs here, on the game-mode timer: a round ends when one team has no
+// capital ship left (EYShipClass 1..15 in the global ship list 0x3E0E848;
+// respawn jets are 16+), or at the round time limit; the round is recorded in
+// m_rounds, the clients get ClientPostRoundEnd, then ClientPreRoundStart, then
+// everyone is put back in a ship (bots refill through the spawner) and
+// ClientNewRoundStarts; at 2 round wins the winner is set and the match ends.
+// A human whose capital ship is destroyed during a round gets the jets filter.
+//
+// GUESSES, marked where used: m_maxRoundTime in minutes (as m_maxMatchTime 20
+// is); round timeout winner = more capital ships left, equal = draw; the post-
+// and pre-round durations (8 s, 10 s) when the game mode's are 0; surviving bots
+// stay where they are; RPC parameter meanings (times in seconds).
+// NOT verified against a live client.
+#define OFF_GS_TE_ROUNDS 0x1E28
+#define TE_ROUND_SIZE 0x18
+#define OFF_GS_TE_TRANSITION 0x1E90
+#define OFF_GS_TE_FIGHTER_FILTER 0x1E98
+#define OFF_GM_TE_ROUNDS_TO_WIN 0xA50
+#define OFF_GM_TE_MAX_ROUND_TIME 0xA54
+#define OFF_GM_TE_POST_ROUND 0xA5C
+#define OFF_GM_TE_PRE_ROUND 0xA60
+#define RVA_SET_LOADOUTS_FILTER 0x35B090
+#define RVA_REPLACE_SHIP_NEW_ROUND 0x590B80
+#define RVA_SHIP_LIST 0x3E0E848      // TArray<YPawn*> of every ship (count at +8)
+#define RVA_FMEMORY_FREE 0xBFC9C0
+#define TE_ROUNDS_TO_WIN_TEXT 2      // "The first team to win 2 rounds wins the match."
+typedef void(__fastcall *tSetLoadoutsFilter)(void *mgr, void *filter);
+typedef void(__fastcall *tPcVoid)(void *pc);
+typedef void(__fastcall *tFMemoryFree)(void *p);
+
+enum { TE_WAIT, TE_ROUND, TE_POST, TE_PRE, TE_DONE };
+struct TeElim {
+  void *pc;
+  void *capital; // the active loadout when the capital ship was lost
+};
+struct TeMatch {
+  void *gm;
+  int phase, round, wins[2], rule;
+  DWORD phaseAt, botsOffAt;
+  bool seen[2]; // each team had a capital ship this round
+  TeElim elim[16];
+};
+static TeMatch g_te = {};
+
+static bool TeRoundsOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_TE_ROUNDS", "dn_host_no_te_rounds.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static uint8_t *TeGameState(uint8_t *gm) {
+  if (!gm || !IsReadable(gm + OFF_GM_GAMESTATE, 8))
+    return nullptr;
+  uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
+  if (!gs || !IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) || gs[OFF_GS_GAME_MODE_TYPE] != YGMT_TEAM_ELIMINATION ||
+      !IsReadable(gs + OFF_GS_TE_ROUNDS, OFF_GS_TE_FIGHTER_FILTER + 8 - OFF_GS_TE_ROUNDS))
+    return nullptr;
+  return gs;
+}
+
+// Capital ships alive per team, from the global ship list.
+static void TeCountShips(int alive[2]) {
+  alive[0] = alive[1] = 0;
+  uint8_t *base = (uint8_t *)g_base;
+  if (!IsReadable(base + RVA_SHIP_LIST, 16))
+    return;
+  void **arr = *(void ***)(base + RVA_SHIP_LIST);
+  int n = *(int32_t *)(base + RVA_SHIP_LIST + 8);
+  if (n <= 0 || n > 512 || !IsReadable(arr, (size_t)n * 8))
+    return;
+  for (int i = 0; i < n; ++i) {
+    uint8_t *p = (uint8_t *)arr[i];
+    if (!p || !IsReadable(p + OFF_SHIP_TEAM, 1) || !IsReadable(p + OFF_PAWN_STATE, 1))
+      continue;
+    int cls = p[OFF_PAWN_SHIP_CLASS], team = ShipTeam(p);
+    if (cls < 1 || cls > 15 || !team || p[OFF_PAWN_STATE] == 2 || p[OFF_PAWN_STATE] == 3)
+      continue;
+    alive[team - 1]++;
+  }
+}
+
+// Connected human controllers, from the game state's PlayerArray.
+static int TeHumanPCs(uint8_t *gs, uint8_t **out, int max) {
+  if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return 0;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return 0;
+  int n = 0;
+  for (int i = 0; i < count && n < max; ++i) {
+    uint8_t *pri = arr[i];
+    if (!IsReadable(pri, OFF_ACTOR_OWNER + 8))
+      continue;
+    uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+    if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+        !*(void **)(pc + OFF_PC_NETCONNECTION) || *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) != pri)
+      continue;
+    out[n++] = pc;
+  }
+  return n;
+}
+
+// RPC parameters by type, in order; the names are logged once per function.
+struct TeRpcArgs {
+  const wchar_t *fn;
+  int32_t ints[2];
+  int ni;
+  bool log;
+};
+// Logs a function's parameters the first time it is sent.
+static bool TeFirstSend(const wchar_t *fn) {
+  static const wchar_t *s_logged[8];
+  for (const wchar_t *&f : s_logged) {
+    if (f == fn)
+      return false;
+    if (!f) {
+      f = fn;
+      return true;
+    }
+  }
+  return false;
+}
+static void FillTeRpc(uint8_t *parms, const char *pc, const char *pn, uint32_t off, void *ctx) {
+  TeRpcArgs *a = (TeRpcArgs *)ctx;
+  if (a->log)
+    Logf("te: %ls parameter %s %s at +%u", a->fn, pc, pn, off);
+  int32_t v = a->ni < 2 ? a->ints[a->ni] : 0;
+  a->ni++;
+  if (!strcmp(pc, "IntProperty"))
+    *(int32_t *)(parms + off) = v;
+  else if (!strcmp(pc, "FloatProperty"))
+    *(float *)(parms + off) = (float)v;
+  else if (!strcmp(pc, "ByteProperty") || !strcmp(pc, "BoolProperty"))
+    parms[off] = (uint8_t)v;
+}
+static void TeSendAll(uint8_t *gs, const wchar_t *fn, int a0, int a1) {
+  uint8_t *pcs[16];
+  int n = TeHumanPCs(gs, pcs, 16), ok = 0;
+  for (int i = 0; i < n; ++i) {
+    TeRpcArgs a = {fn, {a0, a1}, 0, i == 0 && TeFirstSend(fn)};
+    ok += CallNamed(pcs[i], fn, FillTeRpc, &a) ? 1 : 0;
+  }
+  Logf("te: %ls(%d, %d) -> %d of %d players", fn, a0, a1, ok, n);
+}
+
+static void *TeLoadoutManager(void *pc) { return HavocLoadoutManager(pc); }
+
+// Appends the finished round to m_rounds (FMemory, as the engine's own arrays).
+static void TeRecordRound(uint8_t *gs, int number, int winner) {
+  uint8_t **data = (uint8_t **)(gs + OFF_GS_TE_ROUNDS);
+  int32_t *num = (int32_t *)(gs + OFF_GS_TE_ROUNDS + 8), *max = num + 1;
+  int n = *num;
+  if (n < 0 || n > 32)
+    return;
+  uint8_t *nb = (uint8_t *)((tFMemoryMalloc)(g_base + RVA_FMEMORY_MALLOC))((size_t)(n + 1) * TE_ROUND_SIZE, 0);
+  if (!nb)
+    return;
+  memset(nb, 0, (size_t)(n + 1) * TE_ROUND_SIZE);
+  if (n && *data && IsReadable(*data, (size_t)n * TE_ROUND_SIZE))
+    memcpy(nb, *data, (size_t)n * TE_ROUND_SIZE);
+  uint8_t *e = nb + (size_t)n * TE_ROUND_SIZE;
+  *(int32_t *)e = number;
+  e[4] = (uint8_t)winner;
+  uint8_t *old = *data;
+  *data = nb;
+  *num = n + 1;
+  *max = n + 1;
+  if (old)
+    ((tFMemoryFree)(g_base + RVA_FMEMORY_FREE))(old);
+}
+
+static void TeForceNetUpdate(uint8_t *actor) {
+  void **vt = *(void ***)actor;
+  ((tActorVoidFn)vt[0x580 / 8])(actor); // AActor::ForceNetUpdate
+}
+
+static int TeSeconds(uint8_t *gm, int off, int def) {
+  float v = IsReadable(gm + off, 4) ? *(float *)(gm + off) : 0.f;
+  return v > 0.5f && v < 120.f ? (int)v : def;
+}
+static int TeRoundTimeSecs(uint8_t *gm) {
+  // GUESS: minutes, as GameInfo_TE_BP's m_maxMatchTime 20 is (TE hosts end at ~20 min).
+  float v = IsReadable(gm + OFF_GM_TE_MAX_ROUND_TIME, 4) ? *(float *)(gm + OFF_GM_TE_MAX_ROUND_TIME) : 0.f;
+  return v > 0.5f && v < 60.f ? (int)(v * 60.f) : 11 * 60;
+}
+
+// A human's capital ship was destroyed during a round: fighters until the next.
+static void TeOnShipKilled(void *gameMode, void *victimCtrl, int victimClass) {
+  if (!TeRoundsOn() || g_te.gm != gameMode || g_te.phase != TE_ROUND || victimClass < 1 || victimClass > 15)
+    return;
+  uint8_t *gs = TeGameState((uint8_t *)gameMode);
+  uint8_t *pc = (uint8_t *)victimCtrl;
+  if (!gs || !pc || !IsReadable(pc + OFF_PC_NETCONNECTION, 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+      !*(void **)(pc + OFF_PC_NETCONNECTION))
+    return;
+  uint8_t *mgr = (uint8_t *)TeLoadoutManager(pc);
+  void *filter = *(void **)(gs + OFF_GS_TE_FIGHTER_FILTER);
+  if (!mgr || !filter || !IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8))
+    return;
+  TeElim *slot = nullptr;
+  for (auto &e : g_te.elim)
+    if (e.pc == pc || (!slot && !e.pc))
+      slot = &e;
+  if (slot && slot->pc != pc) {
+    slot->pc = pc;
+    slot->capital = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+  }
+  ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, filter);
+  TeRpcArgs a = {L"ClientRespawnTeamElimination", {0, 0}, 0, TeFirstSend(L"ClientRespawnTeamElimination")};
+  bool sent = CallNamed(pc, a.fn, FillTeRpc, &a); // GUESS: the original sent it here
+  Logf("te: round %d -- %p lost its ship (class %d): fighters until the next round (filter %p%s)", g_te.round, pc,
+       victimClass, filter, sent ? ", ClientRespawnTeamElimination sent" : "");
+}
+
+static void TeRestoreShips(uint8_t *gs) {
+  for (auto &e : g_te.elim) {
+    if (!e.pc)
+      continue;
+    uint8_t *mgr = (uint8_t *)TeLoadoutManager(e.pc);
+    if (mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8)) {
+      ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, nullptr);
+      if (e.capital && *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) != e.capital)
+        ((tActivateLoadout)(g_base + RVA_ACTIVATE_LOADOUT))(mgr, e.capital, 1);
+    }
+    e.pc = nullptr;
+    e.capital = nullptr;
+  }
+  (void)gs;
+}
+
+static void TeStartRound(uint8_t *gm, uint8_t *gs, DWORD now) {
+  g_te.round++;
+  g_te.phase = TE_ROUND;
+  g_te.phaseAt = now;
+  g_te.seen[0] = g_te.seen[1] = false;
+  gs[OFF_GS_TE_TRANSITION] = 0;
+  TeForceNetUpdate(gs);
+  TeSendAll(gs, L"ClientNewRoundStarts", TeRoundTimeSecs(gm), g_te.round);
+  Logf("te: round %d started (score %d-%d, %d s limit)", g_te.round, g_te.wins[0], g_te.wins[1], TeRoundTimeSecs(gm));
+}
+
+// Every second, from the game-mode timer.
+static void TeRoundsTick(uint8_t *gm) {
+  if (!TeRoundsOn())
+    return;
+  __try {
+    uint8_t *gs = TeGameState(gm);
+    if (!gs)
+      return;
+    DWORD now = GetTickCount();
+    if (g_te.gm != gm) {
+      memset(&g_te, 0, sizeof g_te);
+      g_te.gm = gm;
+      int r = IsReadable(gm + OFF_GM_TE_ROUNDS_TO_WIN, 4) ? *(int32_t *)(gm + OFF_GM_TE_ROUNDS_TO_WIN) : 0;
+      g_te.rule = r >= 1 && r <= 5 ? r : TE_ROUNDS_TO_WIN_TEXT;
+      Logf("te: match %p -- rounds armed: %d to win (game mode says %d), round limit %d s, post-round %d s, "
+           "pre-round %d s, kill limit %d lifted", gm, g_te.rule, r, TeRoundTimeSecs(gm),
+           TeSeconds(gm, OFF_GM_TE_POST_ROUND, 8), TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10),
+           *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING));
+      *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING) = ONS_KILL_LIMIT_OFF;
+    }
+    int alive[2];
+    TeCountShips(alive);
+    switch (g_te.phase) {
+    case TE_WAIT:
+      if (gs[OFF_GS_MATCH_RUNNING] && alive[0] > 0 && alive[1] > 0)
+        TeStartRound(gm, gs, now);
+      break;
+    case TE_ROUND: {
+      for (int t = 0; t < 2; ++t)
+        g_te.seen[t] |= alive[t] > 0;
+      if (g_te.botsOffAt && now - g_te.botsOffAt < 0x80000000u) {
+        gm[OFF_GM_ENABLE_SPAWN_AI] = 0;
+        g_te.botsOffAt = 0;
+        Logf("te: round %d -- bots refilled, spawner off again", g_te.round);
+      }
+      int winner = -1;
+      const char *why = nullptr;
+      bool settled = now - g_te.phaseAt > 15000 && g_te.seen[0] && g_te.seen[1];
+      if (settled && (alive[0] == 0 || alive[1] == 0)) {
+        winner = alive[0] ? 1 : alive[1] ? 2 : 0;
+        why = "eliminated";
+      } else if (now - g_te.phaseAt > (DWORD)TeRoundTimeSecs(gm) * 1000) {
+        winner = alive[0] > alive[1] ? 1 : alive[1] > alive[0] ? 2 : 0; // GUESS
+        why = "time";
+      }
+      if (winner < 0)
+        break;
+      TeRecordRound(gs, g_te.round, winner);
+      if (winner)
+        g_te.wins[winner - 1]++;
+      gs[OFF_GS_TE_TRANSITION] = 1;
+      TeForceNetUpdate(gs);
+      g_te.phase = TE_POST;
+      g_te.phaseAt = now;
+      Logf("te: round %d over (%s) -- %s; ships left %d-%d; score %d-%d", g_te.round, why,
+           winner ? (winner == 1 ? "team 1 wins it" : "team 2 wins it") : "draw", alive[0], alive[1], g_te.wins[0],
+           g_te.wins[1]);
+      TeSendAll(gs, L"ClientPostRoundEnd", TeSeconds(gm, OFF_GM_TE_POST_ROUND, 8), 0);
+      int champ = g_te.wins[0] >= g_te.rule ? 1 : g_te.wins[1] >= g_te.rule ? 2 : 0;
+      if (champ) {
+        g_te.phase = TE_DONE;
+        gs[OFF_GS_WINNING_TEAM] = (uint8_t)champ;
+        Logf("te: team %d wins the match %d-%d -- ending it", champ, g_te.wins[0], g_te.wins[1]);
+        void **vt = *(void ***)gm;
+        ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+      }
+      break;
+    }
+    case TE_POST:
+      if (now - g_te.phaseAt >= (DWORD)TeSeconds(gm, OFF_GM_TE_POST_ROUND, 8) * 1000) {
+        g_te.phase = TE_PRE;
+        g_te.phaseAt = now;
+        TeRestoreShips(gs);
+        gm[OFF_GM_ENABLE_SPAWN_AI] = 1; // refill the bots destroyed this round
+        TeSendAll(gs, L"ClientPreRoundStart", TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10), 0);
+      }
+      break;
+    case TE_PRE:
+      if (now - g_te.phaseAt >= (DWORD)TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10) * 1000) {
+        uint8_t *pcs[16];
+        int n = TeHumanPCs(gs, pcs, 16);
+        for (int i = 0; i < n; ++i) {
+          __try {
+            ((tPcVoid)(g_base + RVA_REPLACE_SHIP_NEW_ROUND))(pcs[i]);
+          } __except (EXCEPTION_EXECUTE_HANDLER) {
+            Logf("te: EXCEPTION putting %p back in a ship", pcs[i]);
+          }
+        }
+        Logf("te: %d players put back in a ship for round %d", n, g_te.round + 1);
+        g_te.botsOffAt = now + 15000;
+        TeStartRound(gm, gs, now);
+      }
+      break;
+    default:
+      break;
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("te: EXCEPTION in the round tick");
+  }
+}
+
+// The winner by rounds won (EndMatch and the match timer recompute it from kills).
+static void TeFixLeader(uint8_t *gm) {
+  if (!TeRoundsOn() || g_te.gm != gm || (!g_te.wins[0] && !g_te.wins[1]))
+    return;
+  uint8_t *gs = TeGameState(gm);
+  if (!gs)
+    return;
+  uint8_t byKills = gs[OFF_GS_WINNING_TEAM];
+  gs[OFF_GS_WINNING_TEAM] = g_te.wins[0] > g_te.wins[1] ? 1 : g_te.wins[1] > g_te.wins[0] ? 2 : 3;
+  if (gs[OFF_GS_WINNING_TEAM] != byKills)
+    Logf("te: leader by rounds %d (%d-%d), was %d by kills", gs[OFF_GS_WINNING_TEAM], g_te.wins[0], g_te.wins[1],
+         byKills);
+}
+
+// ---------------------------------------------------------------------------
 // Havoc team HUD (stage 4, 2026-10-19). AYGameState_Havoc::
 // ClientHavocPlayersChanged(teamsInfo) (thunk 0x745410, NetMulticast) carries
 // ONE YHavocHUDTeamInfo of parallel arrays (0x38 bytes: +0x08 TArray<FString>
@@ -8028,12 +8450,18 @@ static DWORD WINAPI Startup(LPVOID) {
 
   Logf("onslaught creeps: %s", OnslaughtCreepsEnabled() ? "ON (game-mode timer; Onslaught hosts only)"
        : "OFF (dn_host_no_onslaught_creeps.txt / DN_HOST_NO_ONSLAUGHT_CREEPS=1)");
-  if (!SwitchOn("DN_HOST_NO_ONSLAUGHT_POINTS", "dn_host_no_onslaught_points.txt")) {
-    InstallSwitchedHook("onslaught points (TDM Killed)", RVA_TDM_KILLED,
+  bool onsPoints = !SwitchOn("DN_HOST_NO_ONSLAUGHT_POINTS", "dn_host_no_onslaught_points.txt");
+  g_onsPointsOn = onsPoints;
+  Logf("te rounds: %s", TeRoundsOn() ? "ON (Team Elimination hosts: best of 3, fighters after a lost ship)"
+       : "OFF (dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1): Team Elimination plays as a deathmatch");
+  // Both modes ride on the same two hooks; each acts only on its own mode.
+  if (onsPoints || TeRoundsOn()) {
+    InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,
                         (void *)&HookTdmKilled, (void **)&g_origTdmKilled);
-    InstallSwitchedHook("onslaught winner by points (TDM leader)", RVA_TDM_DETERMINE_LEADER,
+    InstallSwitchedHook("winner by points / rounds (TDM leader)", RVA_TDM_DETERMINE_LEADER,
                         (void *)&HookDetermineLeader, (void **)&g_origDetermineLeader);
-  } else
+  }
+  if (!onsPoints)
     Logf("onslaught points: OFF (dn_host_no_onslaught_points.txt / "
          "DN_HOST_NO_ONSLAUGHT_POINTS=1). Onslaught ends at 30 kills.");
 

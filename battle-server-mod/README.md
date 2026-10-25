@@ -890,11 +890,38 @@ switches it off: destroyed bots stay destroyed. Logs: `bots: ... type 5 ...
 (Team Elimination: switched off again once filled)`, then `bots: Team
 Elimination ... m_enableSpawnAI 1 -> 0: destroyed bots no longer respawn`.
 
-TE's ROUND flow is not in this exe: `ClientPreRoundStart`,
-`ClientNewRoundStarts`, `ClientPostRoundEnd` and `ClientRespawnTeamElimination`
-have FName globals referenced only by their initializers -- the server build
-ran rounds. Players therefore still respawn as in TDM; real rounds would have to
-be implemented in the mod.
+**Team Elimination rounds** (on; `dn_host_no_te_rounds.txt` /
+`DN_HOST_NO_TE_ROUNDS=1` turns them off; added 2026-10-25). Rules from the
+game's own text: "Team Elimination is played in rounds. The first team to win 2
+rounds wins the match." A ship lost during a round is out until the next one;
+its captain flies a fighter (the game state's jets filter) meanwhile.
+
+CORRECTED 2026-10-25: the round flow is only half missing. `YGameState_TE`
+(m_rounds, the round-transition flag, the fighter filter) and the client side of
+`ClientPostRoundEnd` / `ClientPreRoundStart` / `ClientNewRoundStarts` /
+`ClientRespawnTeamElimination` are in this exe. What is stripped is the game
+mode: `YGameMode_TeamElimination` overrides nothing it inherits from TDM, its
+own functions are stubs, and its settings are never read (rounds to win reads 0
+on a host). TE also inherited TDM's kill limit, 12 for TE, so many matches ended
+on 12 kills.
+
+The mod drives the rounds from the game-mode timer: a round ends when one team
+has no capital ship left, or at the round limit (`m_maxRoundTime` 11, taken as
+minutes). Then the round is recorded in `m_rounds`, and the clients get
+`ClientPostRoundEnd` (8 s) and `ClientPreRoundStart` (10 s). Next, every player
+is put back in a ship (`ReplaceShipWithActiveLoadoutForNewRound`), destroyed
+bots refill through the spawner, and `ClientNewRoundStarts` goes out. At 2
+round wins the winner is set and the match ends. The kill limit is lifted, and
+the winner at the match timer is the team with more round wins. Source comment
+"Team Elimination rounds" lists the evidence and the GUESSES: timeout winner,
+durations, RPC parameter meanings, surviving bots left in place.
+
+Log, per match: `te: match ... rounds armed`, `te: round N started`,
+`te: round N -- <pc> lost its ship ... fighters until the next round`,
+`te: round N over (eliminated|time) -- team X wins it; score a-b`,
+`te: ClientPostRoundEnd(...) -> n of m players`, `te: n players put back in a
+ship`, `te: team X wins the match`. Smoke host: loads and arms. NOT verified in
+a played match.
 
 ## ClientApplyRespawnFilter guard (not switchable) -- THE end-of-match overflow
 
