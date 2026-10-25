@@ -223,7 +223,11 @@ var targetSizes = map[string]int{
 	// the heroes' maker fix -- Kore and Outis move to other manufacturer groups,
 	// and the reordered document compresses a little differently (14513 with
 	// DN_TECHTREE_NO_SHIP_PAGE=1).
-	"YA_GetTechTree": 15872,
+	// 15872 -> 17160 (+1288): the 127 fitted weapons/modules that were in no
+	// tree (every line's first ship's fit, and each later ship's own primary),
+	// filed under their line's anchor (techTreeFittedAnchorItems). Without them
+	// an owned ship's module details showed the "99999" placeholder (2026-10-25).
+	"YA_GetTechTree": 17160,
 	// Was 1035, +185 after fixing int32-blindness (CurrentXP/CurrentRank/
 	// RankXP/XPToNextRank/NumUnlockedShips and per-ship shipID/xp/tier now
 	// numeric strings, matching the rest of this payload family).

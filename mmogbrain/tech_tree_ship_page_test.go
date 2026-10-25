@@ -85,3 +85,48 @@ func TestTechTreeShipPageCarriesNextShipsAndBriefing(t *testing.T) {
 		}
 	}
 }
+
+// Every weapon and module a ship comes fitted with is in the tech tree, or the
+// module details screen of an owned ship shows the "99999" placeholder for it
+// (techTreeFittedAnchorItems). The ones no ship researches are filed under
+// their line's anchor -- never under a ship whose page would draw them, and
+// never in the global list (ClassId -1) that every ship's item list includes.
+func TestTechTreeKnowsEveryFittedItem(t *testing.T) {
+	items := techTreeBaseItems()
+	byID := map[int32]techTreeItem{}
+	for _, item := range items {
+		byID[item.id] = item
+	}
+	ships := map[int32]bool{}
+	for _, hull := range baseShipLoadouts {
+		ships[hull.loadoutID] = true
+	}
+	anchored := 0
+	for _, hull := range baseShipLoadouts {
+		class := eyShipClassByKey[hull.hullLine]
+		for _, shared := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
+			id := inflatedItemID(shared, class)
+			if shared <= 0 || isOfficerBriefing(id) {
+				continue
+			}
+			item, ok := byID[id]
+			if !ok {
+				t.Errorf("%s's fitted %d is in no tree", hull.name, id)
+				continue
+			}
+			if item.classID <= 0 {
+				t.Errorf("%s's fitted %d has ClassId %d", hull.name, id, item.classID)
+			}
+			if !ships[item.classID] {
+				anchored++
+				if item.classID != techTreeLineAnchor(hull.hullLine) {
+					t.Errorf("%s's fitted %d is filed under %d, not its line's anchor", hull.name, id, item.classID)
+				}
+			}
+		}
+	}
+	// Furia (Oberon's first artillery cruiser) fits 6, all in no other tree.
+	if anchored < 6 {
+		t.Errorf("only %d fitted items filed under anchors", anchored)
+	}
+}

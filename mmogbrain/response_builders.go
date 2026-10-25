@@ -3247,7 +3247,78 @@ func techTreeBaseItemsWith(noModules bool) []techTreeItem {
 		items[i].techItemsRequired = min(techTreeShipUnlockModulesFor(tierOf[parent]), modulesOf[parent])
 	}
 	techTreeShipPageLinks(items)
+	if !noModules {
+		items = append(items, techTreeFittedAnchorItems(items)...)
+	}
 	return items
+}
+
+// techTreeFittedAnchorItems makes every fitted weapon and module that is in no
+// ship's tree known to the client's tech tree, filed under its hull line's
+// anchor (techTreeLineAnchor).
+//
+// A ship's tree leaves out what the ship already fits (techTreeModuleItems);
+// those items are the previous ship's research. That leaves out the fit of
+// every line's first ship -- Furia, Agosta, Cerberus, Jutland and 11 more, all
+// 6 weapons and abilities -- and each later ship's primary weapon, its own tier
+// variant: 127 items in no tree (15 x 6 + 37). On an OWNED ship the module details screen
+// asks GetModulePurchaseState (0xAA7D00), which answers 0 for an item
+// find-by-id (0x1403F51A0) cannot find; InitModulePurchaseData has no case for
+// 0, so UI_Button_ModuleDetails_Purchase keeps its designer placeholder,
+// "99999" (localization key 2B127663438FEBBE4FBA09873D41BBED). Reported live
+// 2026-10-25: "all of the starting techs for the first art cruiser for oberon
+// are showing 999999 exp". (On a ship the player does not own,
+// IsModuleLockedPrecastLoadout, 0xAAEF60, answers first and the button shows
+// "locked".)
+//
+// Where they are filed matters:
+//   - under the ship itself they would be its research and draw twice
+//     (techTreeModuleItems);
+//   - with ClassId -1 they would land in the manager's global list (+0x68,
+//     loader 0x14040152F), which 0x1403F4580 appends to EVERY ship's item
+//     list, and 0x140547B00 (can this item go on this ship?) falls back to
+//     that list -- a sniper module would become fittable on an Agosta;
+//   - the line anchor is a real ship id (it passes the loader's ClassId gate),
+//     no page ever shows it, no ship's list includes it, and the client's
+//     ClassId walk (0x1403F4880) stops there because no node has that id.
+//
+// Found, an owned ship's fitted item reads 4, owned (clientOwnedItemIDs lists
+// the fit of every owned ship). NOT verified against a live client.
+func techTreeFittedAnchorItems(items []techTreeItem) []techTreeItem {
+	inTree := map[int32]bool{}
+	for _, item := range items {
+		inTree[item.id] = true
+	}
+	var out []techTreeItem
+	for _, hull := range baseShipLoadouts {
+		anchor := techTreeLineAnchor(hull.hullLine)
+		if anchor == 0 {
+			continue
+		}
+		class := eyShipClassByKey[hull.hullLine]
+		for _, shared := range append(append([]int32{hull.primary, hull.secondary}, hull.abilities[:]...), hull.perks[:]...) {
+			id := inflatedItemID(shared, class)
+			if shared <= 0 || inTree[id] || isOfficerBriefing(id) {
+				continue
+			}
+			inTree[id] = true
+			tier := hull.tier
+			if row, ok := perShipResearchRow(id); ok {
+				tier = row.Tier
+			}
+			out = append(out, techTreeItem{
+				id:           id,
+				classID:      anchor,
+				manufacturer: shipManufacturerID(baseShipManufacturerByClassSize[hull.hullLine]),
+				tier:         techTreeWireTier(tier),
+				// What it would cost as research, not 0: it is owned with its
+				// ship, but nothing in the tree is free (TestNoModuleIsFreeToResearch).
+				xpCost: techTreeModuleXPCost(max(tier, 1)),
+				module: true,
+			})
+		}
+	}
+	return out
 }
 
 // techTreeShipUnlockModulesByTier is how many modules of the previous ship

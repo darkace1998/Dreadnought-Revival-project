@@ -150,15 +150,22 @@ func TestTechTreeClassIdsPassTheManagerStoreGate(t *testing.T) {
 	}
 
 	// Every module must name a ship node that exists, or it is filed under a
-	// record no lookup will ever produce.
+	// record no ship page will ever produce. The one exception is deliberate:
+	// fitted items no ship researches are filed under their line's anchor
+	// (techTreeFittedAnchorItems), a record no page opens, because find-by-id
+	// (0x1403F51A0) scans every record and that is all they need.
 	ships := map[int32]bool{}
 	for _, item := range items {
 		if !item.module {
 			ships[item.id] = true
 		}
 	}
+	lineAnchors := map[int32]bool{}
+	for _, hull := range baseShipLoadouts {
+		lineAnchors[techTreeLineAnchor(hull.hullLine)] = true
+	}
 	for _, item := range items {
-		if item.module && !ships[item.classID] {
+		if item.module && !ships[item.classID] && !lineAnchors[item.classID] {
 			t.Errorf("module %d is filed under ClassId %d, which is not a ship node in the document", item.id, item.classID)
 		}
 	}
