@@ -3489,49 +3489,87 @@ static bool IsTerritoryMode(void *gm) {
   return s_ter;
 }
 
-// Turn off every active start tagged for another mode; returns how many.
-static int HideOtherModeStarts(uint8_t **hidden, int cap, int *ours) {
-  *ours = 0;
+// The starts are reshaped around the game's own chooser by byte patches
+// (m_active, m_onlyFighterJets, m_team), each put back right after.
+#define OFF_PS_ONLY_JETS 0x425 // m_onlyFighterJets: the chooser skips such starts
+#define YGMF_TE 3
+struct StartPatch {
+  uint8_t *p;
+  uint16_t off;
+  uint8_t old;
+};
+static StartPatch g_startPatches[2048];
+static int g_numStartPatches = 0;
+static void PatchStart(uint8_t *ps, int off, uint8_t v) {
+  if (ps[off] == v || g_numStartPatches >= 2048)
+    return;
+  g_startPatches[g_numStartPatches++] = {ps, (uint16_t)off, ps[off]};
+  ps[off] = v;
+}
+static void RestoreStarts() {
+  while (g_numStartPatches > 0) {
+    StartPatch &sp = g_startPatches[--g_numStartPatches];
+    sp.p[sp.off] = sp.old;
+  }
+}
+// Every live YPlayerStart; returns how many (at most cap).
+static int AllPlayerStarts(uint8_t **out, int cap) {
   void *cls = *(void **)(g_base + OFF_CLASSPTR_PLAYER_START);
   FUObjectArrayMin *arr = GObjects();
   if (!cls || !arr || !arr->Objects)
     return 0;
   int n = 0;
-  for (int i = 0; i < arr->NumElements; ++i) {
+  for (int i = 0; i < arr->NumElements && n < cap; ++i) {
     UObjectMin *o = arr->Objects[i].Object;
     if (!o || (o->Flags & RF_CDO_OR_ARCHETYPE) || (arr->Objects[i].Flags & OBJ_PENDING_KILL) ||
         !ClassIsAncestor(o->Class, cls))
       continue;
-    uint8_t *ps = (uint8_t *)o;
-    uint8_t mode = ps[OFF_PS_GAME_MODE];
-    if (mode == YGMF_ALL || mode == YGMF_TER) {
-      if (ps[OFF_PS_ACTIVE])
-        ++*ours;
-      continue;
-    }
-    if (!ps[OFF_PS_ACTIVE] || n >= cap)
-      continue;
-    ps[OFF_PS_ACTIVE] = 0;
-    hidden[n++] = ps;
+    out[n++] = (uint8_t *)o;
   }
   return n;
 }
 
-static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
-  if (!IsTerritoryMode(gm))
-    return g_origChoosePlayerStart(gm, ctrl);
-  static uint8_t *s_hidden[1024];
-  int hidden = 0, ours = 0;
-  __try {
-    hidden = HideOtherModeStarts(s_hidden, 1024, &ours);
-  } __except (EXCEPTION_EXECUTE_HANDLER) {
-    Logf("conquest spawns: EXCEPTION 0x%08X hiding the other modes' starts", GetExceptionCode());
+// Conquest: hide every active start tagged for another mode.
+static void PrepareConquestStarts(int *hidden, int *ours) {
+  static uint8_t *s_all[1024];
+  int n = AllPlayerStarts(s_all, 1024);
+  *hidden = *ours = 0;
+  for (int i = 0; i < n; ++i) {
+    uint8_t *ps = s_all[i];
+    uint8_t mode = ps[OFF_PS_GAME_MODE];
+    if (mode == YGMF_ALL || mode == YGMF_TER) {
+      *ours += ps[OFF_PS_ACTIVE] ? 1 : 0;
+      continue;
+    }
+    if (ps[OFF_PS_ACTIVE]) {
+      PatchStart(ps, OFF_PS_ACTIVE, 0);
+      ++*hidden;
+    }
   }
+}
+
+static bool IsTeamEliminationMode(void *gm);
+static const char *PrepareTeStarts(void *ctrl, int *hidden, int *ours); // Team Elimination section
+
+static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
+  bool ter = IsTerritoryMode(gm), te = !ter && IsTeamEliminationMode(gm);
+  if (!ter && !te)
+    return g_origChoosePlayerStart(gm, ctrl);
+  int hidden = 0, ours = 0;
+  const char *rule = "ALL/TER";
+  __try {
+    if (ter)
+      PrepareConquestStarts(&hidden, &ours);
+    else
+      rule = PrepareTeStarts(ctrl, &hidden, &ours);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("spawns: EXCEPTION 0x%08X shaping the player starts", GetExceptionCode());
+  }
+  bool patched = g_numStartPatches > 0;
   void *start = g_origChoosePlayerStart(gm, ctrl);
-  for (int i = 0; i < hidden; ++i)
-    s_hidden[i][OFF_PS_ACTIVE] = 1;
+  RestoreStarts();
   bool fallback = false;
-  if (!start && hidden > 0) {
+  if (!start && patched) {
     fallback = true;
     start = g_origChoosePlayerStart(gm, ctrl);
   }
@@ -3546,10 +3584,10 @@ static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
       ++s_logged;
       uint8_t *ps = (uint8_t *)start;
       const char *nm = ps ? NameText(((UObjectMin *)ps)->Name) : nullptr;
-      Logf("conquest spawns: %s %p -> %s (mode %d, team %d)%s; %d other-mode start(s) hidden, %d ALL/TER start(s) "
-           "active", ClassNameOf(ctrl), ctrl, ps ? (nm ? nm : "?") : "none", ps ? ps[OFF_PS_GAME_MODE] : -1,
-           ps ? ps[OFF_PS_TEAM] : -1, fallback ? " -- FALLBACK: none of the TER starts was free, unfiltered choice" : "",
-           hidden, ours);
+      Logf("%s spawns: %s %p -> %s (mode %d, team %d, jets only %d)%s; %d start(s) hidden, %d %s start(s) usable",
+           ter ? "conquest" : "te", ClassNameOf(ctrl), ctrl, ps ? (nm ? nm : "?") : "none",
+           ps ? ps[OFF_PS_GAME_MODE] : -1, ps ? ps[OFF_PS_TEAM] : -1, ps ? ps[OFF_PS_ONLY_JETS] : -1,
+           fallback ? " -- FALLBACK: no start left under the rule, unfiltered choice" : "", hidden, ours, rule);
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
@@ -7745,6 +7783,16 @@ enum { TE_WAIT, TE_ROUND, TE_POST, TE_PRE, TE_DONE };
 struct TeElim {
   void *pc;
   void *capital; // the active loadout when the capital ship was lost
+  int cls;       // its ship class
+};
+struct TeKeep {
+  void *pc;
+  void *loadout; // the round winner's ship, kept for the next round
+};
+struct TeHudRow {
+  void *pri;
+  int cls;  // the last capital class seen
+  bool had; // had a capital ship this round
 };
 struct TeMatch {
   void *gm;
@@ -7752,6 +7800,11 @@ struct TeMatch {
   DWORD phaseAt, botsOffAt;
   bool seen[2]; // each team had a capital ship this round
   TeElim elim[16];
+  TeKeep keep[16];
+  void *ready[16]; // humans who readied up between rounds
+  int numReady;
+  TeHudRow hud[32];
+  int lastWinner;
 };
 static TeMatch g_te = {};
 
@@ -7959,6 +8012,7 @@ static void TeOnShipKilled(void *gameMode, void *victimCtrl, int victimClass) {
   if (slot && slot->pc != pc) {
     slot->pc = pc;
     slot->capital = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+    slot->cls = victimClass;
   }
   ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, filter);
   TeRpcArgs a = {L"ClientRespawnTeamElimination", {0, 0}, 0, TeFirstSend(L"ClientRespawnTeamElimination")};
@@ -7983,6 +8037,9 @@ static void TeRestoreShips(uint8_t *gs) {
   (void)gs;
 }
 
+static void TeResetRoundState(uint8_t *gs);
+static bool TeSidesSwapped();
+static void TeSendTeamInfo(uint8_t *gs, bool force);
 static void TeStartRound(uint8_t *gm, uint8_t *gs, DWORD now) {
   g_te.round++;
   TeOpenRound(gs, g_te.round);
@@ -7990,12 +8047,416 @@ static void TeStartRound(uint8_t *gm, uint8_t *gs, DWORD now) {
   g_te.phaseAt = now;
   g_te.seen[0] = g_te.seen[1] = false;
   gs[OFF_GS_TE_TRANSITION] = 0;
+  TeResetRoundState(gs);
   TeForceNetUpdate(gs);
   // (roundNumber, serverLateJoinState) -- the parameter names the first live
   // match logged (2026-10-25). The client impl (PC vtable 0x2EF6670 +0xF58 =
   // 0x573970) skips its respawn step when the late-join state is 2; 0 here.
   TeSendAll(gs, L"ClientNewRoundStarts", g_te.round, 0);
-  Logf("te: round %d started (score %d-%d, %d s limit)", g_te.round, g_te.wins[0], g_te.wins[1], TeRoundTimeSecs(gm));
+  Logf("te: round %d started (score %d-%d, %d s limit, sides %s)", g_te.round, g_te.wins[0], g_te.wins[1],
+       TeRoundTimeSecs(gm), TeSidesSwapped() ? "swapped" : "as placed");
+  TeSendTeamInfo(gs, true);
+}
+
+// ---------------------------------------------------------------------------
+// Team Elimination: sides, fighter spawns, the winners' ships, ready-up and the
+// team HUD (2026-10-29).
+//
+// The rules (Grey Box, "Dreadnought Patch Notes v1.1.0", 2017): "Winning team
+// of a round cannot change loadouts for next round", "Enemy ship classes are
+// set to unknown until you see them or a teammate calls them out", "Fighter
+// Jets respawn closer to the action", "Spawn locations are swapped between
+// rounds", "Players can ready-up between rounds to spawn faster".
+//
+// Verified in the exe and maps 2026-10-29:
+//   - YGameMode_TeamElimination has the switches for three of them,
+//     m_swapTeamsOnNewRound and m_disableShipSelectionForWinningTeam (bools,
+//     registered beside m_numberOfRoundsToWin), and nothing reads them. Its
+//     ctor (0x362790) sets only five empty FStrings (+0xA70..+0xA90, the
+//     "enemies remaining" voice templates -- empty, so there is nothing to
+//     play) and GameInfo_TE_BP only m_maxRoundTime 11, m_maxMatchTime 20,
+//     m_timeSinceDamageToShowLastTarget 30. So every TE setting reads 0 here.
+//   - Sides: every TE map's persistent level has 8 + 8 team capital starts
+//     tagged YGMF_TE (YPlayerStartTE_Team1/2) and 25..47 team-less YGMF_TE
+//     starts with m_onlyFighterJets (+0x425; Spawn_JetFighter). The new-round
+//     respawn the mod used, ReplaceShipWithActiveLoadoutForNewRound (0x590B80),
+//     calls SpawnNearActor(pc, active loadout id (+0xB0), pc, 0) (0x599470):
+//     near the controller's OWN position, wherever the player last was -- no
+//     sides at all from round 2 on. The server build chose the actor.
+//   - Fighter starts: the player-start chooser 0x36C1A0 skips every start with
+//     +0x425 set, so nothing in the exe ever uses the jet starts; and it takes
+//     the TDM / Conquest starts too (the mode check is the return-true stub).
+//   - Ready-up: ServerReadyUpPlayerForNextWave / ServerUnReadyPlayerForNextWave
+//     (exec thunks 0x772650 / 0x774B40) end in `ret` stubs (PC vtable +0x1070 /
+//     +0x1060): the server half is gone.
+//   - The team HUD: AYGameState_TE::ClientTeamEliminationPlayersChanged
+//     (NetMulticast, thunk 0x7475A0 -> GS vtable +0x830 = 0x390A60) takes a
+//     YTeamEliminationHUDTeamInfo of parallel arrays -- +0x08 m_playerID
+//     (FString), +0x18 m_classID (int32), +0x28 m_eliminated (uint8), +0x38
+//     m_spotted (uint8), +0x48 m_teamID (int32) -- and hands them to the HUD's
+//     team list (0x55B720 -> 0x4990C0), then marks each eliminated id
+//     (0x559010 -> 0x492270, ids compared case-insensitively; any unique string
+//     works). Nothing sends it. Spotting itself is native and live: the client's
+//     ServerSetPawnToSpotted (impl 0x592BB0) sets YPlayerReplicationInfo
+//     m_isSpotted (+0x94A, 0x5C2960) or the NPC one (+0x669, 0x2E21F0).
+//
+// So, on TE hosts:
+//   - new rounds put each human at a capital start of their side (the i-th
+//     player of a team at its i-th start, by name), sides swapped every other
+//     round; the old controller-position respawn is the fallback;
+//   - the chooser admits only YGMF_ALL / YGMF_TE starts (sides swapped as
+//     above), and for an eliminated player only the jet starts;
+//   - a human on the round's winning team gets the same ship back for the next
+//     round even if they picked another in the pre-round;
+//   - when every human has readied up in the pre-round, the round starts;
+//   - the team list goes to the clients whenever it changes: every player's
+//     class, team, spotted flag and whether they lost their capital ship this
+//     round; m_isSpotted is cleared for everyone at each round start.
+// GUESSES: the sides alternate every round (the notes say only "swapped
+// between rounds"); the chooser's own rating decides which jet start is
+// "closer to the action"; the ready-up RPC is the one the TE pre-round sends
+// (logged when it arrives); the winner's ship is restored on the server rather
+// than locked in the client's menu; clearing m_isSpotted per round; the HUD ids
+// are the player states' addresses.
+#define RVA_PC_SPAWN_NEAR_ACTOR 0x599470      // (pc, const loadout id*, AActor* near, bool)
+#define RVA_PC_AFTER_NEW_ROUND_SPAWN 0x5953A0 // what 0x590B80 tail-calls after it
+#define OFF_LOADOUT_ID 0xB0
+#define OFF_PRI_SPOTTED 0x94A
+#define OFF_PRI_SHIP_CLASS 0x941
+typedef void(__fastcall *tSpawnNearActor)(void *pc, void *loadoutId, void *nearActor, uint8_t flag);
+static bool TeIsEliminated(void *pc);
+
+static bool TeSpawnsEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_TE_SPAWNS", "dn_host_no_te_spawns.txt") ? 0 : 1;
+  return s_on == 1;
+}
+static bool TeWinnerLockOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_TE_WINNER_LOCK", "dn_host_no_te_winner_lock.txt") ? 0 : 1;
+  return s_on == 1;
+}
+static bool TeHudOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_TE_HUD", "dn_host_no_te_hud.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static bool IsTeamEliminationMode(void *gm) {
+  static void *s_gm = nullptr;
+  static bool s_te = false;
+  if (gm != s_gm) {
+    s_gm = gm;
+    s_te = gm && ClassChainContains((UObjectMin *)gm, "YGameMode_TeamElimination");
+  }
+  return s_te && TeSpawnsEnabled();
+}
+
+// The round whose sides apply now (in the pre-round, the next one).
+static int TeSideRound() { return g_te.phase == TE_PRE ? g_te.round + 1 : (g_te.round > 0 ? g_te.round : 1); }
+static bool TeSidesSwapped() { return TeRoundsOn() && g_te.gm && TeSideRound() % 2 == 0; }
+
+static const char *PrepareTeStarts(void *ctrl, int *hidden, int *ours) {
+  static uint8_t *s_all[1024];
+  int n = AllPlayerStarts(s_all, 1024);
+  *hidden = *ours = 0;
+  bool jets = TeRoundsOn() && g_te.phase == TE_ROUND && TeIsEliminated(ctrl);
+  bool swap = !jets && TeSidesSwapped();
+  for (int i = 0; i < n; ++i) {
+    uint8_t *ps = s_all[i];
+    uint8_t mode = ps[OFF_PS_GAME_MODE], team = ps[OFF_PS_TEAM];
+    bool jetStart = ps[OFF_PS_ONLY_JETS] != 0;
+    if (jets) {
+      if (mode == YGMF_TE && jetStart) {
+        if (ps[OFF_PS_ACTIVE]) {
+          PatchStart(ps, OFF_PS_ONLY_JETS, 0);
+          ++*ours;
+        }
+      } else if (ps[OFF_PS_ACTIVE]) {
+        PatchStart(ps, OFF_PS_ACTIVE, 0);
+        ++*hidden;
+      }
+      continue;
+    }
+    if (mode != YGMF_ALL && mode != YGMF_TE) {
+      if (ps[OFF_PS_ACTIVE]) {
+        PatchStart(ps, OFF_PS_ACTIVE, 0);
+        ++*hidden;
+      }
+      continue;
+    }
+    if (jetStart)
+      continue; // the game skips these for every other spawn
+    *ours += ps[OFF_PS_ACTIVE] ? 1 : 0;
+    if (swap && mode == YGMF_TE && (team == 1 || team == 2))
+      PatchStart(ps, OFF_PS_TEAM, (uint8_t)(3 - team));
+  }
+  return jets ? "TE jet" : swap ? "ALL/TE (sides swapped)" : "ALL/TE";
+}
+
+// One side's TE capital starts, by name.
+static int TeSideStarts(int team, uint8_t **out, int cap) {
+  static uint8_t *s_all[1024];
+  int n = AllPlayerStarts(s_all, 1024), k = 0;
+  for (int i = 0; i < n && k < cap; ++i) {
+    uint8_t *ps = s_all[i];
+    if (ps[OFF_PS_GAME_MODE] == YGMF_TE && ps[OFF_PS_TEAM] == team && !ps[OFF_PS_ONLY_JETS])
+      out[k++] = ps;
+  }
+  for (int a = 1; a < k; ++a)
+    for (int b = a; b > 0; --b) {
+      const char *x = NameText(((UObjectMin *)out[b - 1])->Name), *y = NameText(((UObjectMin *)out[b])->Name);
+      int nx = ((UObjectMin *)out[b - 1])->Name.Number, ny = ((UObjectMin *)out[b])->Name.Number;
+      int c = x && y ? strcmp(x, y) : 0;
+      if (c < 0 || (c == 0 && nx <= ny))
+        break;
+      uint8_t *t = out[b];
+      out[b] = out[b - 1];
+      out[b - 1] = t;
+    }
+  return k;
+}
+
+static int TePcTeam(uint8_t *pc) {
+  uint8_t *pri = IsReadable(pc + OFF_PC_PLAYER_STATE, 8) ? *(uint8_t **)(pc + OFF_PC_PLAYER_STATE) : nullptr;
+  int t = pri && IsReadable(pri + OFF_PRI_TEAM, 1) ? pri[OFF_PRI_TEAM] : 0;
+  return t == 1 || t == 2 ? t : 0;
+}
+
+// The new-round spawn of 0x590B80, near the given start instead of the controller.
+static bool TeSpawnAt(void *pc, uint8_t *start) {
+  uint8_t *mgr = (uint8_t *)TeLoadoutManager(pc);
+  uint8_t *lo = mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(uint8_t **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+  if (!lo || !start || !IsReadable(lo + OFF_LOADOUT_ID, 8))
+    return false;
+  ((tSpawnNearActor)(g_base + RVA_PC_SPAWN_NEAR_ACTOR))(pc, lo + OFF_LOADOUT_ID, start, 0);
+  ((tPcVoid)(g_base + RVA_PC_AFTER_NEW_ROUND_SPAWN))(pc);
+  return true;
+}
+
+// The round's winners keep their ship: remembered at the round's end.
+static void TeRememberWinners(uint8_t *gs, int winner) {
+  memset(g_te.keep, 0, sizeof g_te.keep);
+  g_te.lastWinner = winner;
+  if (!winner || !TeWinnerLockOn())
+    return;
+  uint8_t *pcs[16];
+  int n = TeHumanPCs(gs, pcs, 16), k = 0;
+  for (int i = 0; i < n && k < 16; ++i) {
+    if (TePcTeam(pcs[i]) != winner)
+      continue;
+    void *lo = nullptr;
+    for (auto &e : g_te.elim)
+      if (e.pc == pcs[i])
+        lo = e.capital;
+    if (!lo) {
+      uint8_t *mgr = (uint8_t *)TeLoadoutManager(pcs[i]);
+      lo = mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+    }
+    if (lo)
+      g_te.keep[k++] = {pcs[i], lo};
+  }
+  Logf("te: round %d winners (team %d): %d human ship(s) kept for the next round", g_te.round, winner, k);
+}
+static void TeApplyKeep(void *pc) {
+  for (auto &k : g_te.keep) {
+    if (k.pc != pc || !k.loadout)
+      continue;
+    uint8_t *mgr = (uint8_t *)TeLoadoutManager(pc);
+    void *now = mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+    if (mgr && now != k.loadout) {
+      ((tActivateLoadout)(g_base + RVA_ACTIVATE_LOADOUT))(mgr, k.loadout, 1);
+      Logf("te: %p won the last round -- its pick %p undone, ship %p kept", pc, now, k.loadout);
+    }
+  }
+}
+
+// Ready-up between rounds.
+static bool TeAllReady(uint8_t *gs) {
+  uint8_t *pcs[16];
+  int n = TeHumanPCs(gs, pcs, 16);
+  if (n == 0)
+    return false;
+  for (int i = 0; i < n; ++i) {
+    bool r = false;
+    for (int j = 0; j < g_te.numReady; ++j)
+      r |= g_te.ready[j] == pcs[i];
+    if (!r)
+      return false;
+  }
+  return true;
+}
+static void TeSetReady(void *pc, bool ready) {
+  if (!TeRoundsOn() || !g_te.gm)
+    return;
+  int at = -1;
+  for (int j = 0; j < g_te.numReady; ++j)
+    if (g_te.ready[j] == pc)
+      at = j;
+  if (ready && at < 0 && g_te.numReady < 16)
+    g_te.ready[g_te.numReady++] = pc;
+  if (!ready && at >= 0)
+    g_te.ready[at] = g_te.ready[--g_te.numReady];
+  uint8_t *gs = TeGameState((uint8_t *)g_te.gm);
+  uint8_t *pcs[16];
+  int n = gs ? TeHumanPCs(gs, pcs, 16) : 0;
+  Logf("te: %p %s (phase %d, round %d; %d of %d humans ready)", pc, ready ? "READY for the next round" : "not ready",
+       g_te.phase, g_te.round, g_te.numReady, n);
+}
+#define RVA_EXEC_SERVER_READY_NEXT_WAVE 0x772650
+#define RVA_EXEC_SERVER_UNREADY_NEXT_WAVE 0x774B40
+static tExecThunk g_origExecReadyNextWave = nullptr, g_origExecUnReadyNextWave = nullptr;
+static void __fastcall HookExecReadyNextWave(void *pc, uint8_t *stack, void *result) {
+  g_origExecReadyNextWave(pc, stack, result);
+  __try {
+    TeSetReady(pc, true);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+static void __fastcall HookExecUnReadyNextWave(void *pc, uint8_t *stack, void *result) {
+  g_origExecUnReadyNextWave(pc, stack, result);
+  __try {
+    TeSetReady(pc, false);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+
+// The team HUD.
+struct TeTeamInfoArgs {
+  FStringMin ids[32];
+  wchar_t idbuf[32][24];
+  int32_t cls[32], team[32];
+  uint8_t elim[32], spotted[32];
+  int n;
+};
+static UObjectMin *g_teTeamInfoProp = nullptr;
+static void TeTeamInfoLayout(int off[5]) {
+  static int s_off[5] = {0x08, 0x18, 0x28, 0x38, 0x48}, s_done = 0;
+  static const char *kNames[5] = {"m_playerID", "m_classID", "m_eliminated", "m_spotted", "m_teamID"};
+  if (!s_done && g_teTeamInfoProp) {
+    s_done = 1;
+    for (int k = 0x70; k <= 0x80; k += 8) {
+      UObjectMin *st = IsReadable((uint8_t *)g_teTeamInfoProp + k, 8) ? *(UObjectMin **)((uint8_t *)g_teTeamInfoProp + k) : nullptr;
+      if (!st || !IsReadable(st, 0x40) || strcmp(ClassNameOf(st), "ScriptStruct"))
+        continue;
+      for (UObjectMin *f = *(UObjectMin **)((uint8_t *)st + 0x38); f && IsReadable(f, 0x58);
+           f = *(UObjectMin **)((uint8_t *)f + 0x28)) {
+        const char *nm = NameText(f->Name);
+        for (int j = 0; j < 5; ++j)
+          if (nm && !strcmp(nm, kNames[j]))
+            s_off[j] = (int)*(uint32_t *)((uint8_t *)f + 0x50);
+      }
+      Logf("te: YTeamEliminationHUDTeamInfo (struct at UStructProperty +0x%X): m_playerID +0x%X, m_classID +0x%X, "
+           "m_eliminated +0x%X, m_spotted +0x%X, m_teamID +0x%X", k, s_off[0], s_off[1], s_off[2], s_off[3], s_off[4]);
+      break;
+    }
+  }
+  for (int j = 0; j < 5; ++j)
+    off[j] = s_off[j];
+}
+static void FillTeTeamInfo(uint8_t *parms, const char *pc, const char *pn, uint32_t off, void *ctx) {
+  TeTeamInfoArgs *a = (TeTeamInfoArgs *)ctx;
+  if (strcmp(pc, "StructProperty") || off + 0x58 > 256)
+    return;
+  int o[5];
+  TeTeamInfoLayout(o);
+  uint8_t *s = parms + off;
+  void *arrays[5] = {a->ids, a->cls, a->elim, a->spotted, a->team};
+  for (int j = 0; j < 5; ++j) {
+    *(void **)(s + o[j]) = a->n ? arrays[j] : nullptr;
+    *(int32_t *)(s + o[j] + 8) = a->n;
+    *(int32_t *)(s + o[j] + 12) = a->n;
+  }
+}
+static TeHudRow *TeHudRowFor(void *pri) {
+  TeHudRow *free = nullptr;
+  for (auto &r : g_te.hud) {
+    if (r.pri == pri)
+      return &r;
+    if (!r.pri && !free)
+      free = &r;
+  }
+  if (free)
+    *free = {pri, 0, false};
+  return free;
+}
+static void TeSendTeamInfo(uint8_t *gs, bool force) {
+  if (!TeHudOn() || !IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return;
+  static TeTeamInfoArgs a;
+  memset(&a, 0, sizeof a);
+  int elimN = 0, spottedN = 0;
+  for (int i = 0; i < count && a.n < 32; ++i) {
+    uint8_t *pri = arr[i];
+    if (!IsReadable(pri, OFF_PRI_SPOTTED + 1) || !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo"))
+      continue;
+    int team = pri[OFF_PRI_TEAM];
+    if (team != 1 && team != 2)
+      continue;
+    uint8_t *ctrl = IsReadable(pri + OFF_ACTOR_OWNER, 8) ? *(uint8_t **)(pri + OFF_ACTOR_OWNER) : nullptr;
+    uint8_t *pawn = ctrl && IsReadable(ctrl + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(ctrl + OFF_CONTROLLER_PAWN) : nullptr;
+    int pcls = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) ? pawn[OFF_PAWN_SHIP_CLASS] : 0;
+    bool live = pcls >= 1 && pcls <= 15 && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3;
+    TeHudRow *row = TeHudRowFor(pri);
+    if (row && live) {
+      row->had = true;
+      row->cls = pcls;
+    }
+    int k = a.n++;
+    swprintf(a.idbuf[k], 24, L"%llX", (unsigned long long)(uintptr_t)pri);
+    a.ids[k] = {a.idbuf[k], (int32_t)wcslen(a.idbuf[k]) + 1, 24};
+    a.cls[k] = row && row->cls ? row->cls : pri[OFF_PRI_SHIP_CLASS];
+    a.team[k] = team;
+    a.elim[k] = g_te.phase == TE_ROUND && row && row->had && !live ? 1 : 0;
+    a.spotted[k] = pri[OFF_PRI_SPOTTED] ? 1 : 0;
+    elimN += a.elim[k];
+    spottedN += a.spotted[k];
+  }
+  static uint32_t s_lastSig = 0xFFFFFFFF;
+  uint32_t sig = (uint32_t)a.n * 2654435761u;
+  for (int i = 0; i < a.n; ++i) {
+    sig = (sig ^ (uint32_t)(a.cls[i] << 4 | a.team[i] << 2 | a.elim[i] << 1 | a.spotted[i])) * 16777619u;
+    for (const wchar_t *c = a.idbuf[i]; *c; ++c)
+      sig = (sig ^ (uint32_t)*c) * 16777619u;
+  }
+  if (!force && sig == s_lastSig)
+    return;
+  s_lastSig = sig;
+  if (!g_teTeamInfoProp) {
+    FNameMin nm = {};
+    ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&nm, L"ClientTeamEliminationPlayersChanged", 1);
+    void *fn = ((tFindFunctionChecked)(g_base + RVA_FIND_FUNCTION_CHECKED))(gs, *(uint64_t *)&nm);
+    g_teTeamInfoProp = fn && IsReadable((uint8_t *)fn + 0x40, 8) ? *(UObjectMin **)((uint8_t *)fn + 0x38) : nullptr;
+  }
+  bool sent = CallNamed(gs, L"ClientTeamEliminationPlayersChanged", FillTeTeamInfo, &a);
+  Logf("te: team HUD -> %d player(s), %d eliminated, %d spotted%s", a.n, elimN, spottedN,
+       sent ? "" : " -- ClientTeamEliminationPlayersChanged NOT FOUND");
+}
+
+// Round start: nobody has lost a ship yet, nobody is spotted. GUESS: the reset.
+static void TeResetRoundState(uint8_t *gs) {
+  for (auto &r : g_te.hud)
+    r.had = false;
+  g_te.numReady = 0;
+  if (!IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+    return;
+  uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+  int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+  if (count < 0 || count > 256 || (count && !IsReadable(arr, (size_t)count * 8)))
+    return;
+  for (int i = 0; i < count; ++i)
+    if (IsReadable(arr[i], OFF_PRI_SPOTTED + 1) && ClassChainContains((UObjectMin *)arr[i], "YPlayerReplicationInfo") &&
+        arr[i][OFF_PRI_SPOTTED]) {
+      arr[i][OFF_PRI_SPOTTED] = 0;
+      TeForceNetUpdate(arr[i]);
+    }
 }
 
 // Every second, from the game-mode timer.
@@ -8023,11 +8484,41 @@ static void TeRoundsTick(uint8_t *gm) {
     }
     int alive[2];
     TeCountShips(alive);
+    if (gs[OFF_GS_MATCH_RUNNING] && g_te.phase != TE_DONE)
+      TeSendTeamInfo(gs, false);
     switch (g_te.phase) {
-    case TE_WAIT:
+    case TE_WAIT: {
+      // Smoke only (dn_host_te_smoke.txt): start the match 20 s in with nobody
+      // joined, then report the side starts and send the team HUD once.
+      static void *s_smoke = nullptr;
+      static DWORD s_armedAt = 0;
+      if (s_smoke != gm && SwitchOn("DN_HOST_TE_SMOKE", "dn_host_te_smoke.txt")) {
+        if (!s_armedAt)
+          s_armedAt = now;
+        if (!gs[OFF_GS_MATCH_RUNNING] && now - s_armedAt > 20000) {
+          Logf("te: SMOKE -- starting match %p with nobody joined", gm);
+          ((void(__fastcall *)(void *))(*(void ***)gm)[0x660 / 8])(gm);
+          ((void(__fastcall *)(void *, char))(g_base + 0x380F70))(gs, 1);
+        } else if (gs[OFF_GS_MATCH_RUNNING]) {
+          s_smoke = gm;
+          uint8_t *side[16];
+          for (int t = 1; t <= 2; ++t) {
+            int k = TeSideStarts(t, side, 16);
+            Logf("te: SMOKE -- team %d side: %d TE start(s), first %s", t, k,
+                 k ? NameText(((UObjectMin *)side[0])->Name) : "none");
+          }
+          int h = 0, o = 0;
+          const char *rule = PrepareTeStarts(nullptr, &h, &o);
+          int patched = g_numStartPatches;
+          RestoreStarts();
+          Logf("te: SMOKE -- chooser rule %s: %d hidden, %d usable, %d patches restored", rule, h, o, patched);
+          TeSendTeamInfo(gs, true);
+        }
+      }
       if (gs[OFF_GS_MATCH_RUNNING] && alive[0] > 0 && alive[1] > 0)
         TeStartRound(gm, gs, now);
       break;
+    }
     case TE_ROUND: {
       for (int t = 0; t < 2; ++t)
         g_te.seen[t] |= alive[t] > 0;
@@ -8051,6 +8542,7 @@ static void TeRoundsTick(uint8_t *gm) {
       TeRecordRound(gs, g_te.round, winner);
       if (winner)
         g_te.wins[winner - 1]++;
+      TeRememberWinners(gs, winner);
       gs[OFF_GS_TE_TRANSITION] = 1;
       TeForceNetUpdate(gs);
       g_te.phase = TE_POST;
@@ -8078,22 +8570,41 @@ static void TeRoundsTick(uint8_t *gm) {
         TeSendAll(gs, L"ClientPreRoundStart", TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10), 0);
       }
       break;
-    case TE_PRE:
-      if (now - g_te.phaseAt >= (DWORD)TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10) * 1000) {
+    case TE_PRE: {
+      bool allReady = now - g_te.phaseAt >= 2000 && TeAllReady(gs);
+      if (allReady || now - g_te.phaseAt >= (DWORD)TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10) * 1000) {
+        if (allReady)
+          Logf("te: every human is ready -- round %d starts %u s early", g_te.round + 1,
+               (unsigned)(TeSeconds(gm, OFF_GM_TE_PRE_ROUND, 10) - (now - g_te.phaseAt) / 1000));
         uint8_t *pcs[16];
-        int n = TeHumanPCs(gs, pcs, 16);
+        int n = TeHumanPCs(gs, pcs, 16), atStart = 0;
+        bool swap = TeSidesSwapped();
+        uint8_t *side[2][16];
+        int nSide[2] = {0, 0}, next[2] = {0, 0};
+        if (TeSpawnsEnabled())
+          for (int t = 1; t <= 2; ++t)
+            nSide[t - 1] = TeSideStarts(swap ? 3 - t : t, side[t - 1], 16);
         for (int i = 0; i < n; ++i) {
           __try {
-            ((tPcVoid)(g_base + RVA_REPLACE_SHIP_NEW_ROUND))(pcs[i]);
+            TeApplyKeep(pcs[i]);
+            int team = TePcTeam(pcs[i]);
+            uint8_t *start = team && nSide[team - 1] ? side[team - 1][next[team - 1]++ % nSide[team - 1]] : nullptr;
+            if (start && TeSpawnAt(pcs[i], start))
+              ++atStart;
+            else
+              ((tPcVoid)(g_base + RVA_REPLACE_SHIP_NEW_ROUND))(pcs[i]);
           } __except (EXCEPTION_EXECUTE_HANDLER) {
             Logf("te: EXCEPTION putting %p back in a ship", pcs[i]);
           }
         }
-        Logf("te: %d players put back in a ship for round %d", n, g_te.round + 1);
+        Logf("te: %d players put back in a ship for round %d -- %d at their side's TE starts (sides %s; %d / %d "
+             "starts), %d near their own position", n, g_te.round + 1, atStart, swap ? "swapped" : "as placed",
+             nSide[0], nSide[1], n - atStart);
         g_te.botsOffAt = now + 15000;
         TeStartRound(gm, gs, now);
       }
       break;
+    }
     default:
       break;
     }
@@ -9097,11 +9608,13 @@ static DWORD WINAPI Startup(LPVOID) {
   if (!ConquestPointOwnerEnabled())
     Logf("conquest: captured points' territory OFF (dn_host_no_conquest_point_owner.txt / "
          "DN_HOST_NO_CONQUEST_POINT_OWNER=1)");
-  if (ConquestSpawnsEnabled())
-    InstallSwitchedHook("conquest spawns (YGameMode player-start chooser)", RVA_GM_CHOOSE_PLAYER_START,
+  if (ConquestSpawnsEnabled() || TeSpawnsEnabled())
+    InstallSwitchedHook("conquest / te spawns (YGameMode player-start chooser)", RVA_GM_CHOOSE_PLAYER_START,
                         (void *)&HookChoosePlayerStart, (void **)&g_origChoosePlayerStart);
-  else
+  if (!ConquestSpawnsEnabled())
     Logf("conquest spawns: OFF (dn_host_no_conquest_spawns.txt / DN_HOST_NO_CONQUEST_SPAWNS=1)");
+  if (!TeSpawnsEnabled())
+    Logf("te spawns: OFF (dn_host_no_te_spawns.txt / DN_HOST_NO_TE_SPAWNS=1)");
 
   if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
     InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
@@ -9140,9 +9653,16 @@ static DWORD WINAPI Startup(LPVOID) {
   g_onsPointsOn = onsPoints;
   Logf("te rounds: %s", TeRoundsOn() ? "ON (Team Elimination hosts: best of 3, fighters after a lost ship)"
        : "OFF (dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1): Team Elimination plays as a deathmatch");
-  if (TeRoundsOn() && HostIsTE())
+  if (TeRoundsOn() && HostIsTE()) {
     InstallSwitchedHook("te fighters while eliminated (AYPlayerController::SpawnPlayer)", RVA_SPAWN_PLAYER,
                         (void *)&HookTeSpawnPlayer, (void **)&g_origTeSpawnPlayer);
+    InstallSwitchedHook("te ready-up (ServerReadyUpPlayerForNextWave exec)", RVA_EXEC_SERVER_READY_NEXT_WAVE,
+                        (void *)&HookExecReadyNextWave, (void **)&g_origExecReadyNextWave);
+    InstallSwitchedHook("te un-ready (ServerUnReadyPlayerForNextWave exec)", RVA_EXEC_SERVER_UNREADY_NEXT_WAVE,
+                        (void *)&HookExecUnReadyNextWave, (void **)&g_origExecUnReadyNextWave);
+    Logf("te: winners keep their ship %s; team HUD %s", TeWinnerLockOn() ? "ON" : "OFF (dn_host_no_te_winner_lock.txt)",
+         TeHudOn() ? "ON" : "OFF (dn_host_no_te_hud.txt)");
+  }
   // Both modes ride on the same two hooks; each acts only on its own mode.
   if (onsPoints || TeRoundsOn()) {
     InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,

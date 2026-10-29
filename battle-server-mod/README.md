@@ -1120,7 +1120,75 @@ found and fixed the next day:
   The player controller vtable is 0x2EF6670 (not 0x2EF6678): the client RPC
   impls are NewRoundStarts +0xF58 0x573970, PreRoundStart +0xF60 0x573CD0,
   PostRoundEnd +0xF68 0x573B40, RespawnTeamElimination +0xF78 0x573E10.
-NOT verified in a played match yet.
+VERIFIED 2026-10-29 in the host logs: since the 10-26 crash fix, about 10 TE
+matches have opened round 1. In the 06:33 Space01 match, two rounds ran, the player flew fighters after losing the ship, the filter was
+re-applied once ("WAS CLEARED"), and the match ended 2-0.
+
+**Team Elimination sides, fighters, winners, ready-up, team HUD** (2026-10-29;
+switches `dn_host_no_te_spawns.txt`, `dn_host_no_te_winner_lock.txt`,
+`dn_host_no_te_hud.txt`). Rules from Grey Box's patch notes v1.1.0 (2017):
+
+- "Winning team of a round cannot change loadouts for next round";
+- "Enemy ship classes are set to unknown until you see them or a teammate calls
+  them out";
+- "Fighter Jets respawn closer to the action";
+- "Spawn locations are swapped between rounds";
+- "Players can ready-up between rounds to spawn faster".
+
+Verified in the exe and maps:
+
+- `YGameMode_TeamElimination` has `m_swapTeamsOnNewRound` and
+  `m_disableShipSelectionForWinningTeam`, and nothing reads them. Its ctor sets
+  only five empty FStrings: the "enemies remaining" voice templates, so there is
+  nothing to play. Every TE setting reads 0 on a host.
+- Every TE map's persistent level has 8 + 8 team capital starts tagged YGMF_TE
+  and 25..47 team-less YGMF_TE starts with `m_onlyFighterJets` (`+0x425`).
+- The new-round respawn the mod used (`0x590B80`) is
+  `SpawnNearActor(pc, loadout id, pc, 0)` (`0x599470`). It spawns near the
+  controller's own position, so from round 2 on there were no sides at all.
+- The player-start chooser skips every `+0x425` start, so nothing used the
+  fighter starts.
+- `ServerReadyUpPlayerForNextWave` / `ServerUnReady...` end in `ret` stubs.
+- `ClientTeamEliminationPlayersChanged` (GS NetMulticast, impl `0x390A60`) feeds
+  the HUD's team list from five parallel arrays: id, class, eliminated, spotted,
+  team. Nothing sends it.
+- Spotting is native and live. `ServerSetPawnToSpotted` sets
+  `YPlayerReplicationInfo` `m_isSpotted` (`+0x94A`).
+
+The mod now:
+
+- puts each human at a capital start of their side for each new round, with the
+  sides swapped every other round;
+- lets the chooser use only ALL/TE starts, and only the jet starts for an
+  eliminated player;
+- gives a round winner the same ship back for the next round;
+- starts the round early once every human has readied up;
+- sends the team list whenever it changes, and clears `m_isSpotted` at each
+  round start.
+
+GUESSES: the sides alternate every round; the chooser's own rating picks the jet
+start; the ready-up RPC is the one the pre-round sends (logged when it arrives);
+the winner's ship is restored on the server, not locked in the client menu; the
+spotted reset.
+
+Smoke host 2026-10-29, Skybridge (`dn_host_te_smoke.txt` starts the match with
+nobody joined):
+
+- all hooks installed;
+- 8 + 8 side starts;
+- the struct offsets read from reflection match the exe;
+- the HUD RPC was found and sent.
+
+Logs:
+
+- `te: N players put back in a ship for round R -- K at their side's TE starts
+  (sides swapped|as placed ...)`;
+- `te spawns: <controller> -> <start> (mode m, team t, jets only j)`;
+- `te: round N winners ...: K human ship(s) kept`, and `... its pick undone`;
+- `te: <pc> READY for the next round`;
+- `te: team HUD -> N player(s), E eliminated, S spotted`.
+
+Not verified in a played match.
 
 ## ClientApplyRespawnFilter guard (not switchable) -- THE end-of-match overflow
 
