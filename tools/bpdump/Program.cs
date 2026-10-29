@@ -146,6 +146,14 @@ if (args[0] == "--props")
         if (a.Exports[i] is not NormalExport ne) continue;
         var text = new System.Text.StringBuilder();
         Dump(ne.Data, 1, text);
+        // A DataTable's rows live outside its tagged properties.
+        if (ne is DataTableExport dte && dte.Table?.Data != null)
+            foreach (var row in dte.Table.Data)
+            {
+                text.AppendLine($"  ROW {row.Name} {{");
+                Dump(row.Value, 2, text);
+                text.AppendLine("  }");
+            }
         string body = text.ToString();
         if (filter != null && !body.Contains(filter, StringComparison.OrdinalIgnoreCase)
             && !ne.ObjectName.ToString().Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
@@ -175,6 +183,12 @@ void Dump(IList<PropertyData> props, int depth, System.Text.StringBuilder sb)
                 break;
             case MapPropertyData mp:
                 sb.AppendLine($"{pad}{mp.Name} (map, {mp.Value.Count} entries)");
+                break;
+            case BytePropertyData byp when byp.ByteType == BytePropertyType.FName:
+                // An enum byte is serialized as the enumerator's FName; RawValue is its name-map index.
+                string ev;
+                try { ev = byp.EnumValue?.ToString() ?? "?"; } catch { ev = "<unreadable>"; }
+                sb.AppendLine($"{pad}{prop.Name} = {ev}   [{prop.PropertyType}]");
                 break;
             default:
                 string v;
