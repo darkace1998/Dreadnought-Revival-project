@@ -49,6 +49,29 @@ func hullLoadoutsForPawn(pawn int32) []int32 {
 	return out
 }
 
+// unlistedTechTreeShipKeys is a 0 entry for every base hull and hero loadout
+// id that listed does not carry yet, in roster order.
+func unlistedTechTreeShipKeys(listed []shipXPEntry) []shipXPEntry {
+	seen := map[int32]bool{}
+	for _, e := range listed {
+		seen[e.shipID] = true
+	}
+	var out []shipXPEntry
+	add := func(id int32) {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, shipXPEntry{shipID: id})
+		}
+	}
+	for _, hull := range baseShipLoadouts {
+		add(hull.loadoutID)
+	}
+	for _, hero := range heroShipLoadouts {
+		add(hero.loadoutID)
+	}
+	return out
+}
+
 // clientShipXPs is the ShipXps list as the client keys it: each stored pawn's
 // XP under every hull loadout id of that pawn. The pawn-keyed entry is kept
 // too; nothing reads it that we know of, and it is what earlier builds sent.

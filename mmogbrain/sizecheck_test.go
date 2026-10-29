@@ -394,7 +394,14 @@ var targetSizes = map[string]int{
 	// DailyContractLastReplaceTime were the current time on every login; they
 	// are now the player's real times, 0 until a contract is assigned
 	// (daily_contracts.go). The test player has no database, so no contracts.
-	"YA_PlayerGet": 21968,
+	// 21968 -> 26288 (+4320): ShipXps also lists every base hull and hero the
+	// player does NOT own, at 0, by the client's key only. The client adds to
+	// this list only here; the in-session push and the YA_UnlockItem reply can
+	// only subtract from ships already in it (0x2A2FDD0, 0x2A2621E), so a ship
+	// researched mid-session never showed its XP until a relog (2026-10-29).
+	// ShipXps comes before the owned items, so playerDataFrameBudget still
+	// holds; a big account defers a few more items to YA_PushInventory.
+	"YA_PlayerGet": 26288,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which
@@ -517,7 +524,8 @@ func TestPayloadRegressionFixShrinksHeavyBootstrapPayloads(t *testing.T) {
 		"YA_RequestStaticFleetData": 30000,
 		// 44376 until 2026-10-06; the owned cosmetics added 13432 bytes of
 		// real content (see the YA_PlayerGet size note), not untrimmed bloat.
-		"YA_PlayerGet":    44376 - 13432,
+		// Less 4320 on 2026-10-29: ShipXps lists unowned ships too (same note).
+		"YA_PlayerGet":    44376 - 13432 - 4320,
 		"YA_PlayerFleets": 900,
 	}
 

@@ -1843,8 +1843,21 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 			shipXPEntries = append(shipXPEntries, shipXPEntry{shipID: id})
 		}
 	}
+	listed := clientShipXPs(shipXPEntries)
+	// And every ship the player does NOT own yet, at 0, so a ship bought or
+	// researched later in the session is already listed. VERIFIED in the exe
+	// 2026-10-29: both handlers that change this list after login -- the
+	// YA_ConvertShipXP reply (0x2A2FDD0-0x2A2FE59, which the in-session push
+	// uses) and the YA_UnlockItem reply (0x2A2621E-0x2A26252) -- search
+	// player-data +0x3B88 for the ShipID and subtract only on a hit; neither
+	// appends. Only this login list creates entries. A player who researched
+	// Dover mid-session earned 11271 XP on it over two matches and saw none.
+	// The lookup (0x3FC410) answers 0 for an absent id, so a 0 entry reads
+	// the same as no entry. Only the client's keys (hull and hero loadout
+	// ids), not the pawn-keyed copy, to keep the reply small.
+	listed = append(listed, unlistedTechTreeShipKeys(listed)...)
 	b, stack = protocol.AppendArrayStart(b, stack, "ShipXps")
-	for _, entry := range clientShipXPs(shipXPEntries) {
+	for _, entry := range listed {
 		b, stack = protocol.AppendUnnamedObjectStart(b, stack)
 		b = protocol.AppendStringField(b, "ShipID", strconv.Itoa(int(entry.shipID)))
 		b = protocol.AppendStringField(b, "ShipXp", strconv.Itoa(int(entry.xp)))

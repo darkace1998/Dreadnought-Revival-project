@@ -30,3 +30,23 @@ func TestBaseShipXPKeyedByHullLoadout(t *testing.T) {
 		t.Error("Dover's XP is not keyed by its hull loadout id 33489267")
 	}
 }
+
+// Every base hull and hero is in the login list, so a ship acquired
+// mid-session can receive the in-session XP push.
+func TestUnlistedTechTreeShipKeysCoverTheRoster(t *testing.T) {
+	keys := map[int32]bool{}
+	for _, e := range unlistedTechTreeShipKeys(nil) {
+		if keys[e.shipID] || e.xp != 0 {
+			t.Fatalf("duplicate or non-zero entry %+v", e)
+		}
+		keys[e.shipID] = true
+	}
+	for _, id := range []int32{33489267, 67043393} { // Dover, Marauder
+		if !keys[id] {
+			t.Errorf("%d missing", id)
+		}
+	}
+	if n := len(unlistedTechTreeShipKeys([]shipXPEntry{{shipID: 33489267, xp: 5}})); n != len(keys)-1 {
+		t.Errorf("a listed id is repeated: %d entries, want %d", n, len(keys)-1)
+	}
+}
