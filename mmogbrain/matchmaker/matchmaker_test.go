@@ -25,11 +25,11 @@ func TestModesOnlyGetMapsWithTheirSublevel(t *testing.T) {
 	}
 }
 
-// TDM runs the rotation plus Ryugu Haven (Space02) and Amirani.
-func TestTDMAddsRyuguHavenAndAmirani(t *testing.T) {
+// TDM runs the rotation plus Ryugu Haven (Space02), Amirani and Elysium.
+func TestTDMAddsRyuguHavenAmiraniAndElysium(t *testing.T) {
 	maps := mapsByGameMode["TDM"]
-	if len(maps) != len(availableMaps)+2 {
-		t.Fatalf("TDM maps %v, want the %d rotation maps plus Space02 and Amirani", maps, len(availableMaps))
+	if len(maps) != len(availableMaps)+3 {
+		t.Fatalf("TDM maps %v, want the %d rotation maps plus Space02, Amirani and Elysium", maps, len(availableMaps))
 	}
 	seen := map[string]bool{}
 	for _, m := range maps {
@@ -38,7 +38,8 @@ func TestTDMAddsRyuguHavenAndAmirani(t *testing.T) {
 		}
 		seen[m.Path] = true
 	}
-	for _, want := range []string{"/Game/Maps/MP/Space02/MP_Space02_P", "/Game/Maps/MP/Amirani/MP_Amirani_P"} {
+	for _, want := range []string{"/Game/Maps/MP/Space02/MP_Space02_P", "/Game/Maps/MP/Amirani/MP_Amirani_P",
+		"/Game/Maps/MP/Paradise/MP_Paradise_P"} {
 		if !seen[want] {
 			t.Errorf("TDM is missing %s", want)
 		}

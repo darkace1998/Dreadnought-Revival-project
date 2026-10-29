@@ -167,13 +167,19 @@ var onslaughtMaps = append(append([]GameMap{}, availableMaps...),
 // persistent levels hold 104 / 106 YGMF_TDM starts plus 8 + 8 team orbit
 // starts (MP_Space02_P, MP_Amirani_P; bpdump 2026-10-29). Amirani already
 // hosts Onslaught, Space02 Ceres Awakens.
-// Left out: Elysium (Paradise), Cronian Rapids (Space04), Juno (Space03),
-// Thebe (DansMap) -- in GlobalUI and complete enough, but no public record of
-// them in a PvP queue; Juno has no loading screen and Thebe no team orbit
-// starts.
+// Elysium (MP_Paradise_P) added the same day: a player identified it as the
+// remembered "two towers either end, trench through the middle" TDM map, and
+// Yager's own map-design deep dive (MMOBomb, "Dreadnought Deep Dives Into New
+// Map Design") describes the PvP map Elysium as "dominated by two towers".
+// Its Streaming_DT sublevels are all in the build; MP_Paradise_P holds 95
+// YGMF_TDM starts plus 8 + 8 team orbit starts.
+// Left out: Cronian Rapids (Space04), Juno (Space03), Thebe (DansMap) -- in
+// GlobalUI and complete enough, but no public record of them in a PvP queue;
+// Juno has no loading screen and Thebe no team orbit starts.
 var tdmMaps = append(append([]GameMap{}, availableMaps...),
 	GameMap{Name: "Space02", Path: "/Game/Maps/MP/Space02/MP_Space02_P"},
-	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"})
+	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"},
+	GameMap{Name: "Elysium", Path: "/Game/Maps/MP/Paradise/MP_Paradise_P"})
 
 var mapsByGameMode = map[string][]GameMap{
 	"TDM":       tdmMaps,
