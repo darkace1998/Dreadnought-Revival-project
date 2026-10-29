@@ -25,6 +25,26 @@ func TestModesOnlyGetMapsWithTheirSublevel(t *testing.T) {
 	}
 }
 
+// TDM runs the rotation plus Ryugu Haven (Space02) and Amirani.
+func TestTDMAddsRyuguHavenAndAmirani(t *testing.T) {
+	maps := mapsByGameMode["TDM"]
+	if len(maps) != len(availableMaps)+2 {
+		t.Fatalf("TDM maps %v, want the %d rotation maps plus Space02 and Amirani", maps, len(availableMaps))
+	}
+	seen := map[string]bool{}
+	for _, m := range maps {
+		if seen[m.Path] {
+			t.Errorf("TDM lists %s twice", m.Path)
+		}
+		seen[m.Path] = true
+	}
+	for _, want := range []string{"/Game/Maps/MP/Space02/MP_Space02_P", "/Game/Maps/MP/Amirani/MP_Amirani_P"} {
+		if !seen[want] {
+			t.Errorf("TDM is missing %s", want)
+		}
+	}
+}
+
 // Onslaught uses the regular rotation plus Amirani, not Derelict ("Site 23",
 // recognised by a tester as the Turbo TDM map, 2026-10-08).
 func TestOnslaughtUsesTheRegularMaps(t *testing.T) {

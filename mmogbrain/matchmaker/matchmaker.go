@@ -156,7 +156,27 @@ var conquestMaps = []GameMap{
 var onslaughtMaps = append(append([]GameMap{}, availableMaps...),
 	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"})
 
+// tdmMaps: the rotation plus the two TDM maps players remember and the record
+// confirms (2026-10-29): Ryugu Haven (Space02; the PS4 open beta's press
+// assets list it with Rings of Saturn, Red Sands, Kappa Base and Dry Dock,
+// under Team Deathmatch) and Amirani (added as a PvP map in update 1.9.0).
+// Neither is flagged m_avaliableTM in GlobalUI, which is why the rotation
+// above (built from that flag) missed them -- the flag is likely the Training
+// Match one, not the PvP rotation. Both maps ship complete for a plain mode:
+// every sublevel their Streaming_DT names is in the build, and their
+// persistent levels hold 104 / 106 YGMF_TDM starts plus 8 + 8 team orbit
+// starts (MP_Space02_P, MP_Amirani_P; bpdump 2026-10-29). Amirani already
+// hosts Onslaught, Space02 Ceres Awakens.
+// Left out: Elysium (Paradise), Cronian Rapids (Space04), Juno (Space03),
+// Thebe (DansMap) -- in GlobalUI and complete enough, but no public record of
+// them in a PvP queue; Juno has no loading screen and Thebe no team orbit
+// starts.
+var tdmMaps = append(append([]GameMap{}, availableMaps...),
+	GameMap{Name: "Space02", Path: "/Game/Maps/MP/Space02/MP_Space02_P"},
+	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"})
+
 var mapsByGameMode = map[string][]GameMap{
+	"TDM":       tdmMaps,
 	"Onslaught": onslaughtMaps,
 	"TM":        {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
 	"TMBasic":   {{Name: "Highlands", Path: "/Game/Maps/MP/Highlands/MP_Highlands_P"}},
