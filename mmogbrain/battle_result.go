@@ -85,7 +85,9 @@ type battleRewards struct {
 	eventXP    int32
 	useEventXP bool
 	// ribbonCredits is what the match's ribbons pay (ribbonCredits in
-	// ribbons.go), added to the credit performance part like kill credits.
+	// ribbons.go), plus the event credits mmogbrain pays itself
+	// (eventCredits: tech cache pickups), added to the credit performance
+	// part like kill credits.
 	ribbonCredits int32
 }
 
@@ -334,6 +336,10 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	if ribbonCR > 0 && os.Getenv("DN_REWARD_RIBBON_CREDITS") != "0" {
 		rewards.ribbonCredits = ribbonCR
 	}
+	paidEventCR := eventCredits(eventCounts, scoringMode)
+	if paidEventCR > 0 && os.Getenv("DN_REWARD_EVENT_CREDITS") != "0" {
+		rewards.ribbonCredits += paidEventCR
+	}
 	if v := strings.TrimSpace(q.Get("event_xp")); v != "" && os.Getenv("DN_REWARD_EVENT_XP") != "0" {
 		eventXP = int32(num("event_xp"))
 		eomXP, scoringMode = endOfMatchEventXP(currentMmogPlayerStateDB(), match)
@@ -376,7 +382,7 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 	logrus.WithFields(logrus.Fields{"match": match, "player": pid, "outcome": res.outcome, "fleet_type": res.fleetType, "kills": res.kills,
 		"deaths": res.deaths, "credits": credits, "xp": xp, "ships": res.ships, "new": fresh,
 		"event_xp": eventXP, "eom_xp": eomXP, "scoring_mode": scoringMode, "events": q.Get("events"),
-		"event_credits": q.Get("event_credits"), "ribbons": ribbons, "ribbon_xp": ribbonXP, "ribbon_credits": ribbonCR,
+		"event_credits": q.Get("event_credits"), "ribbons": ribbons, "ribbon_xp": ribbonXP, "ribbon_credits": ribbonCR, "paid_event_credits": paidEventCR,
 		"event_counts": scoringEventNames(eventCounts)}).Info("battle result")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = fmt.Fprintf(w, "outcome=%s\ncredits=%d\nxp=%d\nnew=%v\n", res.outcome, credits, xp, fresh)

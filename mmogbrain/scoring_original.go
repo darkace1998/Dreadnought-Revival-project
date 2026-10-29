@@ -72,9 +72,64 @@ func originalScoringTable() []originalScoringRow {
 			logrus.WithError(err).Warn("scoring: original table unreadable; serving the old operator table")
 			return
 		}
-		originalScoringRows = doc.Rows
+		originalScoringRows = append(doc.Rows, laterScoringRows(doc.Rows)...)
 	})
 	return originalScoringRows
+}
+
+// laterScoringRows are the rows the game gained after the 1.11/1.12 sheets
+// and that the datamine therefore lacks, each added only while the table has
+// no row of its own for that event.
+//
+// PODTDMPickup (Ceres Awakens tech cache, ordinal 74): Grey Box's "Ceres
+// Reawakens" notes (2021-04-23) "added score, ship xp, and credits for picking
+// up buff pods and additional amounts for every 3 pods picked up". The client
+// fires the event itself: AlliedBuffPod_Parent_Pickup_BP's
+// AwardPickedUpScoringEvent calls FireScoringEventForPlayer (thunk 0x74C560 ->
+// PC vtable +0xFD0 = 0x5782B0 -> the game mode's scoring manager) for the
+// picking player, with PickedUpScoringEventType YSEID_PODTDMPickup on six of
+// the seven pods (the Armor pod keeps the parent's Invalid and pays nothing).
+// Without a row the host found no reward: no PODTDMPickup was ever counted
+// in 41 Space02 matches (2026-10-08..10-29). The "every 3 pods" bonus rides on
+// the ribbon half (EventsForRibbon 3), which mmogbrain pays per ribbon; the
+// client has no ribbon icon for 74 and its Ribbons screen stops at 71, so it
+// shows only in the match. GUESS: every value and both names -- the notes give
+// none and the client's text tables have no entry for this event. The amounts
+// copy the table's own POD_TDM tiers: a bonus event (Dominator/Payback 35
+// score, 40 XP), the kill-- credits (6), and the common ribbon (50 score,
+// 55 XP) with Repair's ribbon credits (10).
+func laterScoringRows(have []originalScoringRow) []originalScoringRow {
+	later := []originalScoringRow{{
+		EventName:       "PODTDMPickup",
+		Enum:            "PODTDMPickup",
+		EventVisibility: 1,
+		NameForPlayer:   "TECH CACHE",
+		EventScore:      "POD_TDM(35)",
+		EventXP:         "POD_TDM(40)",
+		EventCredits:    "POD_TDM(6)",
+		EventsForRibbon: 3,
+		RibbonName:      "Tech Cache Hunter",
+		RibbonDesc:      "Pick up 3 Tech Caches.",
+		RibbonScore:     "POD_TDM(50)",
+		RibbonXP:        "POD_TDM(55)",
+		RibbonCredits:   "POD_TDM(10)",
+		SummaryCategory: "Extra",
+		GameModes:       "POD_TDM",
+	}}
+	var out []originalScoringRow
+	for _, r := range later {
+		found := false
+		for _, h := range have {
+			if h.Enum == r.Enum {
+				found = true
+				break
+			}
+		}
+		if !found {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 var scoringModeValue = regexp.MustCompile(`([A-Za-z_]+)\(([-\d.]+)\)`)

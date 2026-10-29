@@ -151,3 +151,21 @@ func TestBattleRibbonsTableForTheHost(t *testing.T) {
 		t.Errorf("non-loopback got %d", rec.Code)
 	}
 }
+
+// A tech cache pays its own credits per pickup (2021 Ceres notes); other
+// events' credits stay with the formula.
+func TestEventCreditsPayTechCachesOnly(t *testing.T) {
+	pod, _ := scoringEventOrdinal("PODTDMPickup")
+	kill, _ := scoringEventOrdinal("CaptainKill_SameTier")
+	r, _ := findOriginalScoringRow("PODTDMPickup")
+	per := int32(scoringValueFor(r.EventCredits, "POD_TDM"))
+	if per <= 0 {
+		t.Fatal("PODTDMPickup has no POD_TDM credits")
+	}
+	if got := eventCredits(map[int]int{pod: 4, kill: 9}, "POD_TDM"); got != 4*per {
+		t.Errorf("4 pickups + 9 kills -> %d credits, want %d (pickups only)", got, 4*per)
+	}
+	if got := eventCredits(map[int]int{pod: 4}, "TDM"); got != 0 {
+		t.Errorf("TDM pays %d for pickups, want 0", got)
+	}
+}

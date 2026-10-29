@@ -157,3 +157,34 @@ func TestScoringValueFor(t *testing.T) {
 		t.Error("PlayTime's T(30) not read")
 	}
 }
+
+// Ceres Awakens tech caches (2021 notes: score, ship XP and credits per pickup,
+// more every 3 pickups): the datamine has no PODTDMPickup row, so one is added
+// for POD_TDM only, and three pickups earn its bonus once.
+func TestPodPickupRowIsServedForCeresAwakens(t *testing.T) {
+	r, ok := findOriginalScoringRow("PODTDMPickup")
+	if !ok {
+		t.Fatal("no PODTDMPickup row: a tech cache pickup pays nothing on the host")
+	}
+	if r.GameModes != "POD_TDM" || scoringValueFor(r.EventScore, "POD_TDM") <= 0 ||
+		scoringValueFor(r.EventXP, "POD_TDM") <= 0 || scoringValueFor(r.EventCredits, "POD_TDM") <= 0 {
+		t.Errorf("row %+v: want score, XP and credits in POD_TDM only", r)
+	}
+	if countWireStringField(string(scoringDocument()), "EventName", "PODTDMPickup") != 1 {
+		t.Error("host document lacks the PODTDMPickup row")
+	}
+	ord, _ := scoringEventOrdinal("PODTDMPickup")
+	ribbons, xp := matchRibbons(map[int]int{ord: 7}, "POD_TDM")
+	if ribbons["PODTDMPickup"] != 2 || xp != 2*int32(scoringValueFor(r.RibbonXP, "POD_TDM")) {
+		t.Errorf("7 pickups -> %v / %d XP, want the every-3 bonus twice", ribbons, xp)
+	}
+	n := 0
+	for _, row := range originalScoringTable() {
+		if row.Enum == "PODTDMPickup" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d PODTDMPickup rows, want 1", n)
+	}
+}

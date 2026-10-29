@@ -100,6 +100,25 @@ func ribbonCredits(ribbons map[string]int32, mode string) int32 {
 	return cr
 }
 
+// eventCreditEvents are the events whose own EventCredits mmogbrain pays.
+// Credits otherwise keep the formula (win/loss + per kill, see battleRewards),
+// which covers kills but not a tech cache: the 2021 Ceres notes pay credits
+// for each pickup (PODTDMPickup, laterScoringRows).
+var eventCreditEvents = []string{"PODTDMPickup"}
+
+// eventCredits is what eventCreditEvents pay in mode for a match's counts.
+func eventCredits(counts map[int]int, mode string) int32 {
+	var cr int32
+	for _, name := range eventCreditEvents {
+		ord, ok := scoringEventOrdinal(name)
+		r, found := findOriginalScoringRow(name)
+		if ok && found {
+			cr += int32(counts[ord]) * int32(scoringValueFor(r.EventCredits, mode))
+		}
+	}
+	return cr
+}
+
 // scoringEventNames is a match's event counts by name, for the log: which
 // events fired at all is what tells a ribbon nobody earns (threshold not
 // reached) from one whose event never fires on our hosts.

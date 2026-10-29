@@ -62,7 +62,10 @@ var targetSizes = map[string]int{
 	// "result" that nothing read -- the client's scoring table was empty, so
 	// the Ribbons screen drew no ribbon. Over one frame; chunked
 	// (frame_chunking, verified live 2026-10-01).
-	"YA_GetScoringData": 43600,
+	// 43600 -> 44179 (+579): the Ceres Awakens tech-cache row PODTDMPickup
+	// (laterScoringRows), which the 1.11/1.12 datamine predates; the pod BP
+	// fires the event and the host had no row to pay it from.
+	"YA_GetScoringData": 44179,
 	// Was 227. +4278 for the quest catalog (ContractTable: the client's 24
 	// MPQuestCollection rows, ContractConfigTable, ContractNextResetTime) --
 	// the fields the client's parser for this reply (0x2A6B7F0) actually reads.
