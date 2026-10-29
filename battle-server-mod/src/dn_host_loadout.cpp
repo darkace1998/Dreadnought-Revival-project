@@ -7477,7 +7477,17 @@ static void FillModifierArrays(uint8_t *parms, const char *pc, const char *pn, u
 // Picks the wave's modifiers and tells every client.
 static void HavocStartWaveModifiers(uint8_t *gs, int wave) {
   g_hvcActiveMods[0] = g_hvcActiveMods[1] = -1;
-  if (HavocIsBossWave(wave)) {
+  // The first wave plays without modifiers (2026-10-29). PS4 patch 4's notes:
+  // "Resolved an issue where Wave Modifiers in Havoc would not begin until
+  // Wave 5 instead of the intended Wave 2". Every DN_HavocModifiers_DT row has
+  // m_minWave 1 and this director numbers waves from 1 (the game state's wave
+  // index it writes, which the horde manager's loop also uses), so the rows
+  // alone put modifiers on wave 1 (live 2026-10-22: two on wave 1). GUESS: the
+  // original picked a wave's modifiers when the previous one ended, so there
+  // were none before the first.
+  if (wave <= 1) {
+    Logf("havoc: wave %d -- no wave modifiers (they begin at wave 2)", wave);
+  } else if (HavocIsBossWave(wave)) {
     g_hvcActiveMods[0] = HavocModifierIndex(L"BossWave");
   } else {
     for (int slot = 0; slot < 2; ++slot) {
@@ -7715,15 +7725,17 @@ static void HavocReportRuns(uint8_t *gs) {
 // one of them has not had a living ship yet this run (still choosing one, or
 // in the orbit intro) -- the run cannot be lost before everyone is in.
 static void *g_hvcSeenAlive[16];
+static bool HavocCapitalUp(uint8_t *pawn);
+static uint8_t *g_hvcGs = nullptr;
 static int HavocPlayersAlive(uint8_t *gs, int *humansOut) {
+  g_hvcGs = gs;
   uint8_t *pcs[16];
   int npc = HavocHumanPCs(gs, pcs, 16), alive = 0;
   bool allSeen = true;
   *humansOut = npc;
   for (int i = 0; i < npc; ++i) {
     uint8_t *pawn = IsReadable(pcs[i] + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(pcs[i] + OFF_CONTROLLER_PAWN) : nullptr;
-    bool up = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 &&
-              pawn[OFF_PAWN_STATE] != 3 && ClassChainContains((UObjectMin *)pawn, "YPawn");
+    bool up = HavocCapitalUp(pawn);
     int slot = -1, freeSlot = -1;
     for (int k = 0; k < 16; ++k) {
       if (g_hvcSeenAlive[k] == pcs[i])
@@ -7753,10 +7765,72 @@ static int HavocPlayersAlive(uint8_t *gs, int *humansOut) {
 // the director calls SpawnPlayer for every eliminated player still pending.
 // GUESS: a player is eliminated when their ship is destroyed while a wave is
 // in progress; one destroyed between waves respawns at once.
+//
+// Fighters while eliminated (2026-10-29; dn_host_no_havoc_jets.txt goes back
+// to holding the respawn). The respawn is not held any more: an eliminated
+// player flies a fighter jet until the wave ends, then gets the capital ship
+// back. Evidence:
+//   - GameState_Havoc_BP sets m_respawnFighterLoadoutFilter =
+//     VH_LoadoutFilter_Jets_DA (as TE's game state does).
+//   - The team respawn pool: every Havoc map's PVE_HordeManager_BP sets
+//     m_maxPlayerTeamRespawns = 0 for Recruit, Veteran and Legendary
+//     (HVC_Map1_P / HVC_Map2_P, YHordeModeRuleSet); the game state's
+//     m_playerTeamRespawnsLeft (+0x1EA8) was server-managed (constructor -1,
+//     no other writer in the exe).
+//   - The game state's own rule (GameState_Havoc vtable 0x2E9C9A0 +0x798,
+//     0x378670): while the match runs and m_playerTeamRespawnsLeft is 0, the
+//     player's loadout filter becomes m_respawnFighterLoadoutFilter (gs+0x1E50),
+//     else the Havoc filter (gs+0x2010). Only ReadyForJoining calls it (late
+//     joiners); the same rule at death time went with the server code.
+//   - Nothing in the exe reads m_canPlayersRespawnAsCapitalShipsAfterWave
+//     (gm+0xA50, 0) or m_refillPlayerTeamRespawnsAfterWave (+0xA51, 1).
+// So: a capital ship (EYShipClass 1..15) lost during a wave puts the jets
+// filter on the player (SetLoadoutsFilter 0x35B090, as TE does) and the
+// respawn goes through; at the wave's end the Havoc filter and the capital
+// loadout come back and ReplaceShipWithActiveLoadoutForNewRound (0x590B80)
+// swaps the fighter for it. The run is lost when no player has a living
+// CAPITAL ship. GUESS: the capital ship returns at every wave end (the flag
+// names say the pool refills after a wave, its size 0 says nothing returns
+// during one).
 #define RVA_GM_SPAWN_GATE 0x368380
+#define RVA_SET_LOADOUTS_FILTER 0x35B090
+#define RVA_REPLACE_SHIP_NEW_ROUND 0x590B80
 typedef uint32_t(__fastcall *tSpawnGate)(void *gm, void *pc);
+typedef void(__fastcall *tSetLoadoutsFilter)(void *mgr, void *filter);
+typedef void(__fastcall *tPcVoid)(void *pc);
 static tSpawnGate g_origSpawnGate = nullptr;
 static void *volatile g_hvcEliminated[16];
+static void *g_hvcCapital[16];  // the eliminated player's capital loadout
+// g_hvcGs: the Havoc game state, for the filters (set by HavocPlayersAlive)
+
+static bool HavocJetsOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_HAVOC_JETS", "dn_host_no_havoc_jets.txt") ? 0 : 1;
+  return s_on == 1;
+}
+static void *HavocGsFilter(const char *name) {
+  if (!g_hvcGs)
+    return nullptr;
+  int off = PropOffset((UObjectMin *)g_hvcGs, name);
+  return off > 0 ? *(void **)(g_hvcGs + off) : nullptr;
+}
+static void HavocLogFilters() {
+  static uint8_t *s_logged = nullptr;
+  if (!g_hvcGs || s_logged == g_hvcGs || !HavocJetsOn())
+    return;
+  s_logged = g_hvcGs;
+  void *jets = HavocGsFilter("m_respawnFighterLoadoutFilter"), *def = HavocGsFilter("m_defaultLoadoutsFilter");
+  Logf("havoc: fighters while eliminated ON -- jets filter %s (+0x%X), Havoc filter %s (+0x%X)",
+       jets ? NameText(((UObjectMin *)jets)->Name) : "NONE", PropOffset((UObjectMin *)g_hvcGs, "m_respawnFighterLoadoutFilter"),
+       def ? NameText(((UObjectMin *)def)->Name) : "NONE", PropOffset((UObjectMin *)g_hvcGs, "m_defaultLoadoutsFilter"));
+}
+// A player ship that counts: alive and a capital ship, not a respawn jet.
+static bool HavocCapitalUp(uint8_t *pawn) {
+  return pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3 &&
+         ClassChainContains((UObjectMin *)pawn, "YPawn") &&
+         (!HavocJetsOn() || (pawn[OFF_PAWN_SHIP_CLASS] >= 1 && pawn[OFF_PAWN_SHIP_CLASS] <= 15));
+}
 
 static bool HavocRespawnBlockOn() {
   static int s_on = -1;
@@ -7772,6 +7846,18 @@ static bool HavocIsEliminated(void *pc) {
 }
 
 static uint32_t __fastcall HookSpawnGate(void *gm, void *pc) {
+  if (pc && HavocIsEliminated(pc) && HavocJetsOn()) {
+    // Respawn as a fighter: the filter is put back on first (in TE it held
+    // for one respawn only, the capital ship came back after a lost jet).
+    __try {
+      uint8_t *mgr = (uint8_t *)HavocLoadoutManager(pc);
+      void *jets = HavocGsFilter("m_respawnFighterLoadoutFilter");
+      if (mgr && jets)
+        ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, jets);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return g_origSpawnGate(gm, pc);
+  }
   if (pc && HavocIsEliminated(pc)) {
     static void *s_lastLogged = nullptr;
     if (s_lastLogged != pc) {
@@ -7785,22 +7871,33 @@ static uint32_t __fastcall HookSpawnGate(void *gm, void *pc) {
 
 // During a wave: a player seen with a living ship who now has none is out.
 static void HavocTrackEliminations(uint8_t *gs) {
+  HavocLogFilters();
   if (!HavocRespawnBlockOn())
     return;
   uint8_t *pcs[16];
   int npc = HavocHumanPCs(gs, pcs, 16);
   for (int i = 0; i < npc; ++i) {
     uint8_t *pawn = IsReadable(pcs[i] + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(pcs[i] + OFF_CONTROLLER_PAWN) : nullptr;
-    bool up = pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3;
+    bool up = HavocCapitalUp(pawn);
     bool seen = false;
     for (void *s : g_hvcSeenAlive)
       seen |= s == pcs[i];
     if (up || !seen || HavocIsEliminated(pcs[i]))
       continue;
-    for (auto &e : g_hvcEliminated)
-      if (!e) {
-        e = pcs[i];
-        Logf("havoc: %p eliminated -- ship lost during the wave, no respawn until it ends", pcs[i]);
+    for (int k = 0; k < 16; ++k)
+      if (!g_hvcEliminated[k]) {
+        g_hvcEliminated[k] = pcs[i];
+        if (!HavocJetsOn()) {
+          Logf("havoc: %p eliminated -- ship lost during the wave, no respawn until it ends", pcs[i]);
+          break;
+        }
+        uint8_t *mgr = (uint8_t *)HavocLoadoutManager(pcs[i]);
+        void *jets = HavocGsFilter("m_respawnFighterLoadoutFilter");
+        g_hvcCapital[k] = mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+        if (mgr && jets)
+          ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, jets);
+        Logf("havoc: %p eliminated -- capital ship lost during the wave: fighters until it ends (jets filter %p, "
+             "capital loadout %p)", pcs[i], jets, g_hvcCapital[k]);
         break;
       }
   }
@@ -7808,14 +7905,36 @@ static void HavocTrackEliminations(uint8_t *gs) {
 
 // At the wave's end: everyone is back in; held spawns go through now.
 static void HavocReleaseEliminated() {
-  for (auto &e : g_hvcEliminated) {
-    void *pc = e;
-    e = nullptr;
+  for (int k = 0; k < 16; ++k) {
+    void *pc = g_hvcEliminated[k];
+    void *capital = g_hvcCapital[k];
+    g_hvcEliminated[k] = nullptr;
+    g_hvcCapital[k] = nullptr;
     if (!pc || !IsReadable((uint8_t *)pc + OFF_PC_SPAWN_PENDING, 1))
       continue;
     uint8_t *p = (uint8_t *)pc;
     void *pawn = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
     bool pending = p[OFF_PC_SPAWN_PENDING] != 0;
+    if (HavocJetsOn()) {
+      __try {
+        uint8_t *mgr = (uint8_t *)HavocLoadoutManager(pc);
+        if (mgr && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8)) {
+          ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, HavocGsFilter("m_defaultLoadoutsFilter"));
+          if (capital && *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) != capital)
+            ((tActivateLoadout)(g_base + RVA_ACTIVATE_LOADOUT))(mgr, capital, 1);
+        }
+        if (pending)
+          ((tSpawnPlayer)(g_base + RVA_SPAWN_PLAYER))(pc);
+        else
+          ((tPcVoid)(g_base + RVA_REPLACE_SHIP_NEW_ROUND))(pc);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Logf("havoc: EXCEPTION giving %p its capital ship back", pc);
+      }
+      void *now = IsReadable(p + OFF_CONTROLLER_PAWN, 8) ? *(void **)(p + OFF_CONTROLLER_PAWN) : nullptr;
+      Logf("havoc: %p back in a capital ship -- %s (ship %p -> %p, %s)", pc,
+           pending ? "respawn pending, spawned" : "fighter replaced", pawn, now, now ? ClassNameOf(now) : "none");
+      continue;
+    }
     if (pending) {
       __try {
         ((tSpawnPlayer)(g_base + RVA_SPAWN_PLAYER))(pc);
@@ -9140,10 +9259,10 @@ static void HavocLogRules(uint8_t *gm, uint8_t *gs) {
                                     "m_killFighterJetsOnWaveEnd", "m_refillPlayerTeamRespawnsAfterWave",
                                     "m_respawnsToRefill", "m_forceRespawnInWave", "m_respawningWaveTime",
                                     "m_respawningWaveGracePeriodTime", "m_canPlayersRespawnAsCapitalShipsAfterWave",
-                                    "m_maxPlayersPerTeam"};
+                                    "m_maxPlayersPerTeam", "m_maxPlayerTeamRespawns"};
   static const char *const kGs[] = {"m_maxNumberOfWaves", "m_maxWaveEnemies", "m_waveRespawningTime",
                                     "m_allowCancelWaveSpawning", "m_useWaveSpawning", "m_endOfMatchDuration",
-                                    "m_maxModifiers", "m_pveDifficulty"};
+                                    "m_maxModifiers", "m_pveDifficulty", "m_playerTeamRespawnsLeft"};
   for (int pass = 0; pass < 2; ++pass) {
     uint8_t *o = pass ? gs : gm;
     const char *const *names = pass ? kGs : kGm;

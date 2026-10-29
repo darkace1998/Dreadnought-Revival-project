@@ -1488,6 +1488,11 @@ Stage 2 (2026-10-19), from GameState_Havoc_BP / PVE_HordeManager_BP bytecode
   `ClientUpdateActiveWaveModifier`, feats on the affected side's ships for the
   wave (`AddFeat` / `RemoveFeat` `0x359770`). **Permanent enemy modifiers**
   (`DN_HavocPermanentEnemyModifiers_DT`, from wave 3) on every enemy ship.
+  Since 2026-10-29 wave 1 has none. PS4 patch 4 notes: modifiers should "begin
+  [at] the intended Wave 2". The rows' `m_minWave` 1 with this director's
+  1-based waves put two on wave 1 (live 2026-10-22). GUESS: the original
+  picked them as the previous wave ended. Log: `havoc: wave 1 -- no wave
+  modifiers (they begin at wave 2)`.
 - **Game over**: no connected player with a living ship for 3 s during a wave
   (GUESS), or the BP's
   PlayersWin / PlayersLose. The director enters GameOver, reports each run to
@@ -1523,6 +1528,37 @@ Stage 3 (2026-10-19):
   eliminated: the hooked gate refuses them until the wave ends, then the
   director calls SpawnPlayer for each held respawn. With it, the game-over
   rule (no living player ship for 3 s) is the real one for groups too.
+- **Fighters while eliminated** (2026-10-29; `dn_host_no_havoc_jets.txt`
+  goes back to holding the respawn). An eliminated player now flies a
+  fighter until the wave ends, instead of waiting dead. Evidence:
+  - GameState_Havoc_BP's `m_respawnFighterLoadoutFilter` is
+    `VH_LoadoutFilter_Jets_DA`.
+  - Both maps' `PVE_HordeManager_BP` set `m_maxPlayerTeamRespawns` 0 for
+    every difficulty.
+  - The game state's own rule (vtable `+0x798`, `0x378670`, reached only from
+    ReadyForJoining): pool 0 during a match gives the jets filter (`+0x1E50`),
+    otherwise the Havoc filter (`+0x2010`).
+  - No exe code reads `m_canPlayersRespawnAsCapitalShipsAfterWave` or
+    `m_refillPlayerTeamRespawnsAfterWave`.
+
+  What the mod does:
+  - When the capital ship is lost: the jets filter is set (SetLoadoutsFilter
+    `0x35B090`), and again at each respawn in the spawn gate.
+  - At the wave's end: the Havoc filter and the saved capital loadout come
+    back, and `0x590B80` replaces the fighter (SpawnPlayer if the fighter is
+    gone too).
+  - Game over and the elimination tracking count capital ships only
+    (EYShipClass 1..15).
+
+  GUESS: the capital ship returns at every wave end. Logs:
+  - `havoc: fighters while eliminated ON -- jets filter VH_LoadoutFilter_Jets_DA
+    (+0x1E50), Havoc filter VH_LoadoutFilter_Havoc_DA (+0x2010)` (smoke host:
+    verified)
+  - `havoc: ... eliminated -- capital ship lost during the wave: fighters
+    until it ends`
+  - `havoc: ... back in a capital ship -- fighter replaced`
+
+  Not verified live: a headless host has no player ship to lose.
 
 - **Team HUD** (stage 4): `ClientHavocPlayersChanged` (one
   YHavocHUDTeamInfo of parallel arrays; layout read by reflection on the
