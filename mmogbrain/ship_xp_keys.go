@@ -23,12 +23,27 @@ import "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfi
 // not met" (operator). Only an account with free XP to convert got through.
 
 // hullLoadoutsForPawn is every base hull loadout (tech-tree hull id) built on
-// the pawn: the client's ship-XP keys for XP stored under that pawn.
+// the pawn, and every hero loadout: the client's ship-XP keys for XP stored
+// under that pawn.
+//
+// Heroes too since 2026-10-29. A player reported no XP on their tier 2 ships.
+// Their Marauder (VH_SupportLight_Jester_HeroLoadout_BP, hero 67043393) held
+// 8180 XP under pawn 184484238, a pawn no base hull uses, so nothing went out
+// under an id the client looks up. The tech-tree screen reads the selected
+// ship's XP by the ship's own id (0xACC170 -> 0x3FC410, the {ShipID, ShipXp}
+// search), and a hero's tree node Id is its loadout id (techTreeHeroItems).
+// GUESS: the hero's ship page passes that loadout id, as a base hull's does;
+// not yet checked on a client.
 func hullLoadoutsForPawn(pawn int32) []int32 {
 	var out []int32
 	for _, hull := range baseShipLoadouts {
 		if id, ok := dreadgameconfig.ShipIDForPrecastLoadout(hull.loadoutID); ok && id == pawn {
 			out = append(out, hull.loadoutID)
+		}
+	}
+	for _, hero := range heroShipLoadouts {
+		if id, ok := dreadgameconfig.ShipIDForPrecastLoadout(hero.loadoutID); ok && id == pawn {
+			out = append(out, hero.loadoutID)
 		}
 	}
 	return out
