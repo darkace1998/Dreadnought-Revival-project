@@ -404,6 +404,33 @@ ships; states ...) / drones N`. Each sampled ship line also shows its
 `+0x941` state, AI-target byte, team and controller. The AI's candidate pass
 drops states 2 and 3.
 
+Command ship and assault ship abilities (2026-10-29). The command ship's
+controller (`VH_ONS_AITargetH_Behavior_YAICtrl_BP`) is set up to launch
+Interceptor, Bomber and Fighter jets and to raise its armor when fired on
+(`m_fireAbilities`). The assault ship's (`..._AITargetM_Parent_...`) is set up
+to ram, deploy an offensive turret and boost its energy. Live hosts logged
+about 1,450 `fail ability index=0/2 : ability set to trigger inexistent pawn
+ability index=-1` per match from the command ship, and it never launched a
+jet. On the smoke host the possess (vtable `+0x668`, `0x295840`) did give
+the ships those abilities. It then caps each entry's class by the
+controller's max ability tier (`+0xAB0`, `GetCappedByTierAbility`
+`0x2FF860`). That tier was still 0, so the caps found no "T0" abilities and
+the entries went null. The game's scene spawn writes `+0xAB0` (the spawn
+entry's `+0x10`, default 5) before it possesses (`0x26A0CD`). The mod wrote it
+only afterwards, in the registration. Now it is written before possess. Then
+each entry's pawn slot (`+0x08`) is pointed at the pawn's ability of the
+entry's class. The fire code uses `+0x08` as the slot as it stands, and the
+cooked values are 0 for all four command ship entries and -1 for the assault
+ship's. Log: `onslaught abilities (after possess): ... pawn abilities 4:
+AB_DN_Pri_Jet_Interceptor_Ability_BP_C,... | fire list: [0]
+AB_DN_Pri_Jet_Interceptor_Ability_BP_C -> 0 [1] ..._Bomber_... -> 1 ...`.
+The same line comes for each command ship every 15 s (`status`). Smoke test
+(`dn_host_onslaught_smoke.txt` starts the match with nobody joined): the
+entries kept their classes and slots 0-3 / 0-2 after the AI started. No jet was
+launched there, because no enemy came in range. GUESS: max tier 5 for every
+fleet tier (the spawn entry's default). The original's per-tier value is not
+in the client.
+
 Not done yet: the NPC PlayerState, the level script's `OnNPCSpawned`, and the
 game mode's vtable `+0x978`, which the scene manager's own spawn also calls.
 `WP_ONS_AITargetH_weapon02/03_BP` have no row in the cooked `DN_Weapons_OTS_DT`

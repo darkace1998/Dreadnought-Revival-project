@@ -2508,7 +2508,7 @@ typedef void(__fastcall *tActorVoidFn)(void *actor);
 // AddNPCSpawn UFunction) with the pawn class (+0x20), spawn point (+0x30) and
 // team (+0x38); then the instanced flag (+0x88 = 1, so the scene manager's own
 // tick never spawns the entry again) and the weak pawn (+0x8C), the
-// controller's scene index (+0xAAC) and +0xAB0 (= entry+0x10), behaviour state
+// controller's scene index (+0xAAC) and max ability tier +0xAB0 (= entry+0x10), behaviour state
 // YCSB_NONE (+0xA38), m_runBehaviourTree; then the ROUTE behaviour the
 // Blueprint itself asks for, through ReplaceNPCBehaviours (0x25FE80: stores
 // the behaviours, sets +0x780, NextBehaviour 0x28E340, register 0x254990).
@@ -2522,7 +2522,7 @@ typedef void(__fastcall *tActorVoidFn)(void *actor);
 #define OFF_SCENE_NPCS_COUNT 0x3C8
 #define OFF_SCENE_RANDOM_CLASS 0x418         // AddNPCSpawn replaces +0x20 with a random class when set
 #define NPC_SPAWN_SIZE 0xA8
-#define OFF_NPCSPAWN_TYPE 0x10               // int, AddNPCSpawn's default 5; copied to ctrl +0xAB0
+#define OFF_NPCSPAWN_MAX_TIER 0x10           // int, AddNPCSpawn's default 5; the scene spawn copies it to ctrl +0xAB0
 #define OFF_NPCSPAWN_PAWN_CLASS 0x20
 #define OFF_NPCSPAWN_SPAWN_POINT 0x30
 #define OFF_NPCSPAWN_TEAM 0x38
@@ -2530,7 +2530,8 @@ typedef void(__fastcall *tActorVoidFn)(void *actor);
 #define OFF_NPCSPAWN_PAWN 0x8C               // TWeakObjectPtr<APawn>
 #define OFF_NPC_RUN_BEHAVIOUR_TREE 0x780
 #define OFF_NPC_SCENE_INDEX 0xAAC
-#define OFF_NPC_SCENE_TYPE 0xAB0
+#define OFF_NPC_MAX_TIER 0xAB0               // max ability tier: possess caps m_fireAbilities by it (0x2FF860)
+#define ONS_NPC_MAX_TIER 5                   // AddNPCSpawn's default, as above
 #define YCSB_ROUTE 16
 #define BEHAVIOUR_DATA_SIZE 0x28             // FYCombatSceneBehaviorData (0x702345)
 typedef int(__fastcall *tSceneAddNpcSpawn)(void *scene, void *spawn);
@@ -2559,7 +2560,7 @@ static int RegisterOnslaughtNPC(void *pawn, void *ctrl, void *cls, void *routeSt
   *(float *)(spawn + 0x9C) = -1.0f;
   *(int32_t *)(spawn + 0x8C) = -1; // weak pointers: index -1 = null
   *(int32_t *)(spawn + 0x94) = -1;
-  *(int32_t *)(spawn + OFF_NPCSPAWN_TYPE) = 5;
+  *(int32_t *)(spawn + OFF_NPCSPAWN_MAX_TIER) = ONS_NPC_MAX_TIER;
   *(void **)(spawn + OFF_NPCSPAWN_PAWN_CLASS) = cls;
   *(void **)(spawn + OFF_NPCSPAWN_SPAWN_POINT) = routeStart;
   spawn[OFF_NPCSPAWN_TEAM] = (uint8_t)team;
@@ -2574,7 +2575,7 @@ static int RegisterOnslaughtNPC(void *pawn, void *ctrl, void *cls, void *routeSt
   ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))(entry + OFF_NPCSPAWN_PAWN, pawn);
   uint8_t *c = (uint8_t *)ctrl;
   *(int32_t *)(c + OFF_NPC_SCENE_INDEX) = id;
-  *(int32_t *)(c + OFF_NPC_SCENE_TYPE) = *(int32_t *)(entry + OFF_NPCSPAWN_TYPE);
+  *(int32_t *)(c + OFF_NPC_MAX_TIER) = *(int32_t *)(entry + OFF_NPCSPAWN_MAX_TIER);
   c[OFF_NPC_BEHAVIOUR_STATE] = YCSB_NONE;
   c[OFF_NPC_RUN_BEHAVIOUR_TREE] = 1;
   // The Blueprint's ROUTE, now, so the ship moves even if its BeginPlay found
@@ -2592,6 +2593,85 @@ static int RegisterOnslaughtNPC(void *pawn, void *ctrl, void *cls, void *routeSt
     ((tSceneReplaceBehaviours)(g_base + RVA_SCENE_REPLACE_NPC_BEHAVIOURS))(scene, id, &arr, 0);
   }
   return id;
+}
+
+// Diagnostic (2026-10-29): the command ship's controller logs ~1,450 "fail
+// ability index=0/2 : ability set to trigger inexistent pawn ability
+// index=-1" per match (VH_ONS_AITargetH_Behavior_YAICtrl_BP, host logs
+// 2026-10-28). Its m_fireAbilities (controller +0x860, count +0x868, 0xD0 per
+// entry: +0x08 pawn ability index, +0x10 ability class) lists the Interceptor,
+// Bomber and Fighter jet launchers and the armor buff. The controller's
+// possess (vtable +0x668, 0x295840) hands those classes to the pawn's ability
+// manager (pawn +0x888) through 0x259DC0 -- unless controller +0x4FC is set,
+// and 0x259DC0 itself only acts when the manager's owner (+0x160) has Role
+// (+0x148) 3. The manager's instances: +0xF8, count +0x100 (0x24F9A0).
+#define OFF_PAWN_ABILITY_MANAGER 0x888
+#define OFF_NPC_FIRE_ABILITIES 0x860
+#define NPC_FIRE_ABILITY_SIZE 0xD0
+static void LogNpcAbilities(const char *when, void *pawn, void *ctrl) {
+  __try {
+    uint8_t *p = (uint8_t *)pawn, *c = (uint8_t *)ctrl;
+    uint8_t *mgr = p ? *(uint8_t **)(p + OFF_PAWN_ABILITY_MANAGER) : nullptr;
+    uint8_t *owner = mgr ? *(uint8_t **)(mgr + 0x160) : nullptr;
+    char buf[640];
+    int n = 0;
+    if (mgr) {
+      int cnt = *(int32_t *)(mgr + 0x100);
+      void **inst = *(void ***)(mgr + 0xF8);
+      for (int i = 0; i < cnt && i < 8 && n < 300; ++i)
+        n += snprintf(buf + n, sizeof(buf) - n, "%s%s", i ? "," : "", inst && inst[i] ? ClassNameOf(inst[i]) : "null");
+    }
+    if (n == 0)
+      n = snprintf(buf, sizeof(buf), "none");
+    n += snprintf(buf + n, sizeof(buf) - n, " | fire list:");
+    int fc = c ? *(int32_t *)(c + OFF_NPC_FIRE_ABILITIES + 8) : 0;
+    uint8_t *fe = c ? *(uint8_t **)(c + OFF_NPC_FIRE_ABILITIES) : nullptr;
+    for (int i = 0; fe && i < fc && i < 8 && n < (int)sizeof(buf) - 80; ++i) {
+      uint8_t *e = fe + (size_t)i * NPC_FIRE_ABILITY_SIZE;
+      void *ac = *(void **)(e + 0x10);
+      const char *an = ac ? NameText(((UObjectMin *)ac)->Name) : nullptr;
+      n += snprintf(buf + n, sizeof(buf) - n, " [%d] %s -> %d", i, an ? an : "null", *(int32_t *)(e + 8));
+    }
+    Logf("onslaught abilities (%s): %s %p manager %p owner %p role %d, controller +0x4FC %d +0x710 %p; "
+         "pawn abilities %d: %s", when, ClassNameOf(pawn), pawn, mgr, owner,
+         owner ? owner[0x148] : -1, c ? c[0x4FC] : -1, c ? *(void **)(c + 0x710) : nullptr,
+         mgr ? *(int32_t *)(mgr + 0x100) : -1, buf);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("onslaught abilities (%s): EXCEPTION reading %p", when, pawn);
+  }
+}
+
+// Points each m_fireAbilities entry (+0x08) at the pawn ability of its own
+// class (+0x10). The fire code (0x2AA9D0) uses +0x08 as the pawn's ability
+// slot as it stands while controller +0x710 is null, as on these ships, and
+// the cooked values are slot 0 for all four command ship entries
+// (VH_ONS_AITargetH_Behavior_YAICtrl_BP) and -1 for the assault ship's
+// (..._AITargetM_Parent_...): every command ship entry would trigger the
+// Interceptor launcher, every assault ship entry nothing. Possess's own
+// lookup (0x288A10 over controller +0x870) only fills that list in the
+// data-asset case (+0x710 set). Returns how many entries got a slot.
+static int ResolveNpcFireAbilities(void *pawn, void *ctrl) {
+  uint8_t *mgr = *(uint8_t **)((uint8_t *)pawn + OFF_PAWN_ABILITY_MANAGER);
+  if (!mgr)
+    return 0;
+  int cnt = *(int32_t *)(mgr + 0x100);
+  void **inst = *(void ***)(mgr + 0xF8);
+  int fc = *(int32_t *)((uint8_t *)ctrl + OFF_NPC_FIRE_ABILITIES + 8);
+  uint8_t *fe = *(uint8_t **)((uint8_t *)ctrl + OFF_NPC_FIRE_ABILITIES);
+  int found = 0;
+  for (int i = 0; fe && i < fc; ++i) {
+    uint8_t *e = fe + (size_t)i * NPC_FIRE_ABILITY_SIZE;
+    void *ac = *(void **)(e + 0x10);
+    int slot = -1;
+    for (int k = 0; ac && inst && k < cnt; ++k)
+      if (inst[k] && ((UObjectMin *)inst[k])->Class == ac) {
+        slot = k;
+        break;
+      }
+    *(int32_t *)(e + 8) = slot;
+    found += slot >= 0;
+  }
+  return found;
 }
 
 static void *SpawnOnslaughtAIShip(uint8_t *gm, void *cls, void *at, int team, bool bigShip) {
@@ -2674,10 +2754,32 @@ static void *SpawnOnslaughtAIShip(uint8_t *gm, void *cls, void *at, int team, bo
       ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))((uint8_t *)ctrl + OFF_NPC_SPAWN_ACTOR, nav ? nav : at);
       ((uint8_t *)ctrl)[OFF_NPC_BEHAVIOUR_STATE] = YCSB_NONE;
       ((uint8_t *)ctrl)[OFF_NPC_RUN_BEHAVIOUR_TREE] = 1;
+      // The max ability tier, BEFORE possess, as the scene spawn writes it
+      // (0x26A0CD, then vtable +0x640). Possess (+0x668, 0x295840) gives the
+      // pawn its m_fireAbilities classes and then caps each entry's class by
+      // this tier (UYBlueprintLibrary::GetCappedByTierAbility 0x2FF860). At
+      // the controller's default 0 the cap asks for "T0" abilities, which do
+      // not exist (one does: AB_AS_Per_Tur_Off_Ability_T0_BP_C), so the
+      // entries' classes became null. The command ship then never found the
+      // pawn ability its entries name -- ~1,450 "fail ability index=0/2 :
+      // ability set to trigger inexistent pawn ability index=-1" per match --
+      // and never launched its Interceptors and Fighters (host logs
+      // 2026-10-28; smoke host 2026-10-29: the pawn itself does get the four
+      // abilities, the entries are what was emptied). Registration set the
+      // same value after possess, too late.
+      *(int32_t *)((uint8_t *)ctrl + OFF_NPC_MAX_TIER) = ONS_NPC_MAX_TIER;
     }
     void **cvt = *(void ***)ctrl;
     ((tPossess)cvt[VT_CONTROLLER_POSSESS / 8])(ctrl, pawn);
     ((tPossess)cvt[VT_CONTROLLER_POSSESS2 / 8])(ctrl, pawn);
+    if (isNpc) {
+      __try {
+        ResolveNpcFireAbilities(pawn, ctrl);
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Logf("onslaught abilities: EXCEPTION resolving the fire list of %p", pawn);
+      }
+    }
+    LogNpcAbilities("after possess", pawn, ctrl);
     int npcId = -1;
     if (isNpc && nav)
       npcId = RegisterOnslaughtNPC(pawn, ctrl, cls, nav, team);
@@ -2810,6 +2912,17 @@ static void OnslaughtCreepTick(uint8_t *gm) {
       return; // the match has a result
     if (now - st.firstSeen < ONS_FIRST_WAVE_DELAY_MS)
       return;
+    // Smoke only (dn_host_onslaught_smoke.txt): start the match with nobody
+    // joined, as the Conquest and TE smoke switches do, so the AI of the
+    // ships spawned below starts (0x288AE0 runs only while the match does).
+    static void *s_smoke = nullptr;
+    if (s_smoke != gm && !gs[OFF_GS_MATCH_RUNNING] &&
+        SwitchOn("DN_HOST_ONSLAUGHT_SMOKE", "dn_host_onslaught_smoke.txt")) {
+      s_smoke = gm;
+      Logf("onslaught: SMOKE -- starting match %p with nobody joined", gm);
+      ((void(__fastcall *)(void *))(*(void ***)gm)[0x660 / 8])(gm);
+      ((void(__fastcall *)(void *, char))(g_base + 0x380F70))(gs, 1);
+    }
     if (st.nPoints == 0 || now - st.lastScan > 30000) {
       st.lastScan = now;
       int before = st.nPoints;
@@ -2844,6 +2957,8 @@ static void OnslaughtCreepTick(uint8_t *gm) {
                "controller %p", big ? "command ship" : "assault ship", t + 1, ship,
                *(float *)(comp + 0x160), *(float *)(comp + 0x164), *(float *)(comp + 0x168), behaviour,
                ship[OFF_PAWN_STATE], ship[OFF_PAWN_IS_AI_TARGET], ship[OFF_SHIP_TEAM], ctrl);
+        if (comp && big)
+          LogNpcAbilities("status", ship, ctrl);
       }
       LogTargetLists();
     }

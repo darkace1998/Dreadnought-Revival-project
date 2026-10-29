@@ -153,8 +153,15 @@ var conquestMaps = []GameMap{
 // So Onslaught uses the regular rotation plus Amirani (a regular PvP map since
 // update 1.9.0). GUESS: which maps the original Onslaught queue used is not
 // in the client; Derelict is left out on the tester's word.
+// Elysium (MP_Paradise_P) added 2026-10-29: PC update 1.12.1's notes
+// "Resolved an issue that was causing the Command Ship to get stuck on
+// Elysium" -- so Onslaught ran there. Its MP_Paradise_Onslaught sublevel has
+// the full set of command ship, assault ship and fighter spawn points, and its
+// 95 YGMF_TDM player starts pass the Onslaught start filter (0x3756A0 takes
+// m_gameMode ALL or TDM).
 var onslaughtMaps = append(append([]GameMap{}, availableMaps...),
-	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"})
+	GameMap{Name: "Amirani", Path: "/Game/Maps/MP/Amirani/MP_Amirani_P"},
+	GameMap{Name: "Elysium", Path: "/Game/Maps/MP/Paradise/MP_Paradise_P"})
 
 // tdmMaps: the rotation plus the two TDM maps players remember and the record
 // confirms (2026-10-29): Ryugu Haven (Space02; the PS4 open beta's press
