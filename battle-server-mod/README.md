@@ -453,15 +453,94 @@ once the match runs, the mod:
 Log: `conquest: capture point CapturePoint_TER_A -- index 0, owner 0 ...
 active 1` per point, then `N capture points set up; ... tile map N tiles`.
 
-A team's territory is its tiles in that map plus its ships' claimed tiles.
-Its percentage is its share of both teams' claimed tiles. This was the
-operator's choice on 2026-10-08. As a share of the whole grid, teams held 5-23%,
-and a 12-minute match stood at 736 vs 1050 when the players left. There is no
-time limit: the operator reports the Conquest clock counts up. Those
-come from the GameState's own per-ship pass, pawn `+0x858`. The every-10-s line
-shows both. `GameMode_TER_BP` sets no `m_maxMatchTime` (`+0x884`), unlike the
-other modes, which set 20 minutes. Its value is logged, and the mod leaves it
-alone.
+**Which tiles count (corrected 2026-10-28).** The GameState tick keeps four tile
+maps: the capture points' influence (`+0x1EF8`), the ships' claims (`+0x1F48`),
+the links (`+0x1F98`, on because `m_bAllowTerritoryLinking` is 1) and the
+territory itself (`+0x1EA8`). After each pass over the ships, the tick builds
+the territory map: the point map, plus every link tile that beats it, plus the
+ship map. A ship's claim already leaves out tiles a stronger enemy influence
+holds: the patch notes' "influence overlap ... negate a portion of their
+claim". Until now the mod counted the point map plus each ship's `+0x858`. That
+missed every link tile. It also took a team's share of the claimed tiles, so the
+two teams always added up to 100. That was the operator's choice on 2026-10-08,
+made when the whole-grid share of those incomplete counts moved too slowly.
+
+The original is the whole grid. The patch notes give a team "the percentage of
+overall territory", and the HUD (`UI_TER_HUD_WBP`) draws a neutral-area bar
+between the two teams' bars (`m_neutralAreaScoreBarWidget`). So the mod now
+counts `+0x1EA8` and writes each team's tiles out of the grid's (30 x 30 = 900).
+The operator's rule is still there behind `dn_host_conquest_claimed_share.txt`.
+Matches will run longer than they did. GUESS: rounding to the nearest percent.
+
+There is no time limit: the operator reports the Conquest clock counts up.
+`GameMode_TER_BP` sets no `m_maxMatchTime` (`+0x884`), unlike the other modes,
+which set 20 minutes. Its value is logged, and the mod leaves it alone.
+
+Log, every 10 s: `conquest: territory T1 x% T2 y% (a/b of 900 tiles; N in the
+territory map, points .., ships' own claims .. from S) -> score ... ;
+TerritoryContribution checked for S ship(s)`.
+
+Test switch: `dn_host_conquest_smoke.txt` starts the match 20 s after arming, on
+a host nobody joined. It calls `StartMatch` (vtable `+0x660`), then the
+GameState's match-started setter `0x380F70`. Smoke run 2026-10-28, Gorge:
+capture points set up, territory map 26 tiles (the two bases), score climbing,
+no errors.
+
+## Conquest personal score (on; `dn_host_no_ter_scoring.txt` turns it off)
+
+The scoring table has four Conquest rows:
+
+- TerritoryContribution ("TERRITORY HELD", ribbon ASSAYER);
+- TerritoryCleared ("HARVESTER": kill a ship holding territory);
+- TerritoryCapturedPoint ("POINT SECURED");
+- TerritoryProtectCP ("POINT DEFENDED": kill near your own point).
+
+No Conquest host ever scored one. Their checks belong to
+`UYScoringEventManager_Territory` (`0x614A90`, a child of the MP manager). Its
+init (`0x422980`) runs the MP init, then binds the checks:
+
+- `CheckTerritoryCleared` and `CheckProtectCP` to the kill delegate that every
+  kill broadcasts;
+- `CheckTerritoryConquered` to `+0x670`;
+- `CheckTerritoryCapturedPoint` to `+0x750`.
+
+Nothing in the exe creates that class. Every multiplayer game mode makes a plain
+`YScoringEventManager_MP` in `0x369AF0` / `0x369A20`, and the Territory game mode
+overrides nothing but its destructor. Nothing broadcasts `+0x670` or `+0x750`
+either. So the mod:
+
+- has those two creators make the Territory manager for a `YGameMode_Territory`
+  (same outer, name and init), so kills reach the two kill checks on their own;
+- at each 10-s score update, runs `CheckTerritoryConquered` for every live ship
+  the GameState counts. The game's check scores when the ship holds more than
+  60% of its potential territory: the row's `VAL(0.6;0.75)`, where 0.75 is the
+  cut for each ally whose radius it is in. GUESS: this interval.
+- after a capture (`YCapturePoint::OnCaptured` `0x55E0D0`, not the silent setup
+  path), runs `CheckTerritoryCapturedPoint` for the controller of each of the
+  new owner's ships in the point's radius. That is the list the exe builds for
+  its own owner-change delegate (`0x542990`).
+
+Log:
+
+- `conquest scoring: game mode ... -- scoring manager ...
+  YScoringEventManager_Territory ... enabled 1`, seen on the smoke host;
+- `conquest scoring: CapturePoint_TER_A captured by team N --
+  TerritoryCapturedPoint checked for K capturer(s)`;
+- the counts on the `ending the match` line.
+
+The awarded events reach the ribbon counts (`ev=`) like any other. Not yet
+verified in a played match.
+
+What the exe and Blueprints already do, and the mod leaves alone:
+
+- capture speed by class and contested halts (`0x5583F0`);
+- control-point counts (GameState interface `0x3732D0` / `0x36A010`);
+- capture comms (`#Station_Captured_%i`);
+- the home-base spawn buff: `CapturePoint_TER_BP` adds the game mode's
+  `SpawnprotectionTER` feat to friendly ships within 4000 of a locked base,
+  every second;
+- each client's own minimap territory: `OnRep_StationIndex` runs the GameState
+  point setup on clients too (`0x54FD60`).
 
 ## Bots spawned before the match starts (on; `dn_host_no_npc_ai_start.txt` turns it off)
 
@@ -881,6 +960,30 @@ so the table was built again and every TE match crashed. TE matches without the
 table ended cleanly, so TE is skipped by name too; its scores stay 0. Log:
 `scoring: mode "TE" is Team Elimination -- table not built ...`.
 
+RE-ENABLED 2026-10-26: TE builds its table again (`dn_host_no_te_scoring.txt` /
+`DN_HOST_NO_TE_SCORING=1` restores the skip). TE was the only mode with no
+scoring at all. The likeliest crash cause is the ClientAddAchievement loop
+below (the guard on 0x5E50C0): every ribbon for the host's own player called the
+RPC again, forever. TDM hit it at EndMatch, TE mid-match as its ribbons came in.
+The guard was written the day after the TE skip, so it was never tested with a
+TE table. Log: `scoring: building the match table for mode "TE"`. NOT verified
+in a TE match yet; a host crash 3-5 min in would mean the cause is elsewhere.
+
+**It was elsewhere (2026-10-26).** Both TE matches after the re-enable crashed
+the same way, each at the player's FIRST capital-ship kill (CaptainKill_SameTier
+and FinalBlow scored, the fault within 1 ms). The cause is in the game: the
+scorer of the TE-only row **Predator** ("kill the whole enemy team by
+yourself", 0x3EFF60) reads the LAST entry of the game state's `m_rounds` on
+every kill with no empty check. The stripped TE game mode never added one and
+the mod only appended a round when it ended, so round 1 read entry -1, 8 bytes
+before a null pointer (`0xfffffff8`). The other readers (0x57CD40, 0x3A08C0,
+0x369BB0) check the count. The TE section now keeps the round being played as
+the open last entry (winner 0 until it ends): `te: round N entry opened in
+m_rounds`. The guard also runs with the rounds switched off. The per-round kill
+records (+8) are not written, so Predator never fires (GUESS: the stripped game
+mode added them). Smoke host: entry opened, table loaded, no exceptions. NOT
+verified in a played TE match.
+
 **Team Elimination: bots fill once, then no respawns** (changed 2026-09-29).
 TE (EYGameModeType 5 on live hosts) starts with `m_enableSpawnAI` 0; forcing it
 on for the whole match refilled both teams whenever a bot died, so TE played
@@ -920,8 +1023,25 @@ Log, per match: `te: match ... rounds armed`, `te: round N started`,
 `te: round N -- <pc> lost its ship ... fighters until the next round`,
 `te: round N over (eliminated|time) -- team X wins it; score a-b`,
 `te: ClientPostRoundEnd(...) -> n of m players`, `te: n players put back in a
-ship`, `te: team X wins the match`. Smoke host: loads and arms. NOT verified in
-a played match.
+ship`, `te: team X wins the match`.
+
+First live match (2026-10-25, 1 player + bots, Highlands): rounds armed,
+round 1 ended by elimination (team 2), post-round and pre-round sent, the player
+was put back in a ship and round 2 started (VERIFIED in the host log). Two bugs
+found and fixed the next day:
+- `ClientNewRoundStarts` takes `(roundNumber, serverLateJoinState)` (names
+  from the live log); it was sent `(660, n)`, and late-join state 2 makes the
+  client skip its respawn step. Now `(round, 0)`.
+- The fighter rule held once: the capital loadout was refused ("not valid")
+  and the player flew a jet, but after losing the jet they respawned in the
+  capital ship. `AYPlayerController::SpawnPlayer` (0x5998A0) is now hooked on
+  TE hosts: before an eliminated player's spawn the jets filter is applied
+  again if it is gone or the active loadout is not valid under it
+  (`te: round N -- respawn of eliminated ...: filter still on|WAS CLEARED`).
+  The player controller vtable is 0x2EF6670 (not 0x2EF6678): the client RPC
+  impls are NewRoundStarts +0xF58 0x573970, PreRoundStart +0xF60 0x573CD0,
+  PostRoundEnd +0xF68 0x573B40, RespawnTeamElimination +0xF78 0x573E10.
+NOT verified in a played match yet.
 
 ## ClientApplyRespawnFilter guard (not switchable) -- THE end-of-match overflow
 

@@ -2921,14 +2921,36 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 // every m_scoringTerritorySecuredUpdateTime seconds adds it to the team's
 // score; at m_scoreForWinning it sets the winner (+0x4E8) and calls EndMatch
 // (vtable +0x668), as the Onslaught rule does.
-// GUESS: a team's territory is its tiles in the capture-point map plus its
-// ships' claimed tiles; its percentage is its share of both teams' tiles
-// (see the tick) (pawn +0x858, see CountShipTiles); the original's own
-// team sum is not in this exe.
-// GUESS: the multiplier is applied when the designers set one (> 0), else 1;
-// the threshold is "a team must hold more than this % to score"; percentages
-// round to nearest. m_scoreUpdateInterval (9) is not used: the preview's 10 s
-// is the Territory mode's own field.
+//
+// WHICH map (corrected 2026-10-28, verified in the exe): the tick keeps FOUR
+// tile maps, all TMap<uint32 tile, {float T1, float T2}> with the layout above:
+//   +0x1EF8 the capture points' influence (0x3ACB60, rebuilt on every owner
+//           change through the capture point's vtable +0x5F0 = 0x536510),
+//   +0x1F48 the ships' claims (GatherShipTerritoryData, one ship per tick:
+//           a ship's tile counts only where no capture point already gives
+//           it to the ship's team or a stronger influence holds it -- the
+//           patch notes' "enemy ships ... negate a portion of their claim"),
+//   +0x1F98 the links (0x38FAB0 + 0x3944C0, when m_bAllowTerritoryLinking
+//           gs+0x1E2F -- 1 from the constructor; GameState_TER_BP sets
+//           m_linkingRangeMulti / m_linkingBonusRadiusMulti 1.5 and
+//           m_linkBreakingRadius 6000),
+//   +0x1EA8 the TERRITORY: once every ship has been gathered, 0x3AAB90 clears
+//           it, copies the point map in (0x38C030), adds each link tile that
+//           beats it, and adds the ship map (0x385670, source gs+0x1F48 at
+//           0x3AB15F). It keeps that until the next pass.
+// Until 2026-10-28 this counted the point map plus each ship's +0x858, which
+// misses every link tile, and took a team's percentage as its share of the
+// CLAIMED tiles (an operator choice, 2026-10-08, made when the whole-grid
+// share of those counts moved too slowly). The original is the whole grid:
+// the patch notes' "percentage of overall territory", and the HUD
+// (UI_TER_HUD_WBP) draws a neutral-area bar between the teams'
+// (m_neutralAreaScoreBarWidget), so the two need not add up to 100. The
+// claimed-share count is still there behind dn_host_conquest_claimed_share.txt.
+// GUESS: the multiplier is applied when the designers set one (> 0), else 1
+// (GameMode_TER_BP sets none, so the field reads 0: as a factor nobody would
+// ever score); the threshold is "a team must hold more than this % to score";
+// percentages round to nearest. m_scoreUpdateInterval (9) is not used: the
+// patch notes' 10 s is the Territory mode's own field.
 #define YGMT_TER 6                        // host log "type 6" on ?game=TER
 #define OFF_GM_TER_SCORE_FOR_WINNING 0x9F0
 #define OFF_GM_TER_SCORE_MULTIPLIER 0x9F4
@@ -2939,7 +2961,8 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 #define OFF_GS_TER_SCORE_FOR_WINNING 0x1E10
 #define OFF_GS_TER_TERRITORY_T1 0x1E80
 #define OFF_GS_TER_TERRITORY_T2 0x1E84
-#define OFF_GS_TER_TILE_MAP 0x1EF8
+#define OFF_GS_TER_TILE_MAP 0x1EF8      // capture points' influence
+#define OFF_GS_TER_TERRITORY_MAP 0x1EA8 // points + links + ships: the territory
 #define OFF_GS_TER_VOLUME 0x2030
 #define OFF_TER_VOLUME_GRID 0x40C
 #define TER_TILE_ELEMENT 0x18
@@ -2948,10 +2971,10 @@ static bool ConquestScoreEnabled() {
   return !SwitchOn("DN_HOST_NO_CONQUEST_SCORE", "dn_host_no_conquest_score.txt");
 }
 
-// Tiles per team in the GameState's influence map; false if unreadable.
-static bool CountTerritoryTiles(uint8_t *gs, int *t1, int *t2, int *mapTiles) {
+// Tiles per team in one of the GameState's tile maps; false if unreadable.
+static bool CountTerritoryTiles(uint8_t *gs, int mapOff, int *t1, int *t2, int *mapTiles) {
   *t1 = *t2 = *mapTiles = 0;
-  uint8_t *map = gs + OFF_GS_TER_TILE_MAP;
+  uint8_t *map = gs + mapOff;
   uint8_t *data = *(uint8_t **)map;
   int num = *(int32_t *)(map + 0x08);
   int numFree = *(int32_t *)(map + 0x34);
@@ -2978,8 +3001,9 @@ static bool CountTerritoryTiles(uint8_t *gs, int *t1, int *t2, int *mapTiles) {
 
 struct ConquestMatch {
   void *gm;
-  DWORD lastScore, lastLog, lastPointScan;
+  DWORD lastScore, lastLog, lastPointScan, armedAt;
   bool ended, pointsReady;
+  int contributionTicks, contributionCalls, captureCalls;
 };
 static ConquestMatch g_ter = {};
 
@@ -3093,6 +3117,211 @@ static void CountShipTiles(uint8_t *gs, int *t1, int *t2, int *ships) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Conquest personal score (on; dn_host_no_ter_scoring.txt /
+// DN_HOST_NO_TER_SCORING=1 turns it off)
+//
+// The scoring table has four Conquest rows -- TerritoryContribution
+// ("TERRITORY HELD"), TerritoryCleared ("HARVESTER"), TerritoryCapturedPoint
+// ("POINT SECURED"), TerritoryProtectCP ("POINT DEFENDED") -- and no Conquest
+// host ever scored one. Verified in the exe 2026-10-28:
+//   - They belong to UYScoringEventManager_Territory (class 0x614A90, parent
+//     YScoringEventManager_MP, size 0x7C0). Its init (vtable +0x1E0 =
+//     0x422980) runs the MP init (0x3FD6C0: the kill/assist/... handlers),
+//     then binds CheckTerritoryCleared (0x416A30) and CheckProtectCP
+//     (0x416430) to the manager's kill delegate (+0xA0, the one every kill
+//     broadcasts), CheckTerritoryConquered (0x416D30) to +0x670, a no-op to
+//     +0x6E0 (TerritoryCapturingPoint, no score) and
+//     CheckTerritoryCapturedPoint (0x4168C0) to +0x750.
+//   - NOTHING in the exe creates that class. Every multiplayer game mode makes
+//     its manager in 0x369AF0 / 0x369A20 (two identical copies in different
+//     game mode vtables): NewObject<YScoringEventManager_MP>(gm,
+//     "ScoringEventManager") into gm+0x740, then vtable +0x1E0(mgr, world,
+//     gm). YGameMode_Territory overrides nothing but its destructor, so the
+//     server build's override that made the Territory manager is gone, and
+//     Conquest has been running the plain MP manager.
+//   - And nothing broadcasts +0x670 or +0x750: that was server game mode
+//     code too.
+// So: for a YGameMode_Territory, the creator makes the Territory manager
+// instead (same outer, name, flags and init). Kills then reach the two kill
+// checks on their own. Every score update (10 s) this calls
+// CheckTerritoryConquered for each ship the GameState counts (gs+0x1E88), and
+// after a capture (0x55E0D0, below) CheckTerritoryCapturedPoint for each
+// controller of the new owner's ships in the point's radius -- the list the
+// exe's own capture code builds for its owner-change delegate (0x542990:
+// m_pawnsWithinRange +0x420 of that team -> APawn::Controller).
+// The checks themselves are the game's: CheckTerritoryConquered scores when
+// the ship holds more of its potential territory than the row's first value
+// (0.6; GetPawnTerritoryPotentialClaimedPercentage 0x41FC80 = pawn +0x854,
+// cut by the second value 0.75 for every ally whose radius it is in, over its
+// own radius' share of the grid).
+// GUESS: the conquered check runs at each score update (the original's
+// interval is unknown; the ribbon wants 20 of them), and every capture scores
+// for the capturers, neutral or enemy point alike (the check does not ask).
+#define RVA_GM_CREATE_SCORING_MGR_A 0x369AF0
+#define RVA_GM_CREATE_SCORING_MGR_B 0x369A20
+#define RVA_SCORING_MGR_TERRITORY_CLASS 0x614A90 // StaticClass(L"/Script/DreadGame")
+#define RVA_STATIC_CONSTRUCT_OBJECT 0xD759E0     // as 0x369AF0 calls it
+#define RVA_FNAME_FROM_WIDE 0xC9CFA0             // FName(const TCHAR*, FNAME_Add)
+#define RVA_TER_CHECK_CONQUERED 0x416D30
+#define RVA_TER_CHECK_CAPTURED_POINT 0x4168C0
+#define RVA_CP_ON_CAPTURED 0x55E0D0              // (cp, bool silent)
+#define RVA_PAWN_GET_HEALTH 0x579170             // leaf: health component +0x9A8 -> +0x1D8
+#define OFF_GM_SCORING_MGR 0x740
+#define VT_SCORING_MGR_INIT 0x1E0
+#define OFF_CP_PAWNS_IN_RANGE 0x420              // TArray<APawn*> m_pawnsWithinRange
+#define TER_SCORING_EVENT_SIZE 0x40              // the checks read +0x08 (controller)
+typedef void(__fastcall *tGmCreateScoringMgr)(void *gm);
+typedef void *(__fastcall *tStaticClassFn)(const wchar_t *package);
+typedef void *(__fastcall *tStaticConstructObject)(void *cls, void *outer, uint64_t name, uint32_t flags,
+                                                   uint32_t internalFlags, void *tmpl, bool copyTransients,
+                                                   void *instancingGraph);
+typedef uint64_t *(__fastcall *tFNameFromWide)(uint64_t *out, const wchar_t *s, int find);
+typedef void(__fastcall *tTerCheck)(void *mgr, void *event);
+typedef float(__fastcall *tPawnGetHealth)(void *pawn);
+typedef void(__fastcall *tCpOnCaptured)(void *cp, char silent);
+static tGmCreateScoringMgr g_origCreateScoringMgrA = nullptr;
+static tGmCreateScoringMgr g_origCreateScoringMgrB = nullptr;
+static tCpOnCaptured g_origCpOnCaptured = nullptr;
+
+static void *TerritoryScoringClass() {
+  static void *s_cls = nullptr;
+  if (!s_cls)
+    s_cls = ((tStaticClassFn)(g_base + RVA_SCORING_MGR_TERRITORY_CLASS))(L"/Script/DreadGame");
+  return s_cls;
+}
+
+// The Territory manager of this game mode, or null.
+static void *TerritoryScoringManager(uint8_t *gm) {
+  if (!gm || !IsReadable(gm + OFF_GM_SCORING_MGR, 8))
+    return nullptr;
+  UObjectMin *mgr = *(UObjectMin **)(gm + OFF_GM_SCORING_MGR);
+  void *cls = TerritoryScoringClass();
+  return mgr && cls && IsReadable(mgr, sizeof(UObjectMin)) && mgr->Class == cls ? mgr : nullptr;
+}
+
+static bool CreateTerritoryScoringManager(uint8_t *gm) {
+  if (!ClassChainContains((UObjectMin *)gm, "YGameMode_Territory"))
+    return false;
+  void *cls = TerritoryScoringClass();
+  if (!cls) {
+    Logf("conquest scoring: YScoringEventManager_Territory class not found -- the MP manager stays");
+    return false;
+  }
+  uint64_t name = 0;
+  ((tFNameFromWide)(g_base + RVA_FNAME_FROM_WIDE))(&name, L"ScoringEventManager", 1);
+  void *mgr = ((tStaticConstructObject)(g_base + RVA_STATIC_CONSTRUCT_OBJECT))(cls, gm, name, 0, 0, nullptr, false, nullptr);
+  *(void **)(gm + OFF_GM_SCORING_MGR) = mgr;
+  if (mgr) {
+    void *world = ((tGetWorld)(*(void ***)gm)[VT_ACTOR_GET_WORLD / 8])(gm);
+    ((void(__fastcall *)(void *, void *, void *))(*(void ***)mgr)[VT_SCORING_MGR_INIT / 8])(mgr, world, gm);
+  }
+  Logf("conquest scoring: game mode %p -- scoring manager %p %s (the server build's Territory manager; "
+       "enabled %d)", gm, mgr, ClassNameOf(mgr), mgr ? ((uint8_t *)mgr)[0x5E0] : -1);
+  return true;
+}
+
+static bool TerScoringEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_TER_SCORING", "dn_host_no_ter_scoring.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static void __fastcall HookCreateScoringMgrA(void *gm) {
+  bool done = false;
+  __try {
+    done = TerScoringEnabled() && CreateTerritoryScoringManager((uint8_t *)gm);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("conquest scoring: EXCEPTION 0x%08X creating the Territory manager", GetExceptionCode());
+  }
+  if (!done)
+    g_origCreateScoringMgrA(gm);
+}
+
+static void __fastcall HookCreateScoringMgrB(void *gm) {
+  bool done = false;
+  __try {
+    done = TerScoringEnabled() && CreateTerritoryScoringManager((uint8_t *)gm);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("conquest scoring: EXCEPTION 0x%08X creating the Territory manager", GetExceptionCode());
+  }
+  if (!done)
+    g_origCreateScoringMgrB(gm);
+}
+
+// One Territory check for one controller (the event's +0x08 weak pointer).
+static void TerCheckFor(void *mgr, uintptr_t rva, void *controller) {
+  alignas(16) uint8_t ev[TER_SCORING_EVENT_SIZE] = {};
+  ((tWeakSet)(g_base + RVA_WEAK_PTR_SET))(ev + 8, controller);
+  ((tTerCheck)(g_base + rva))(mgr, ev);
+}
+
+// CheckTerritoryConquered for every live ship the GameState counts.
+static int TerContributionPass(uint8_t *gm, uint8_t *gs) {
+  void *mgr = TerritoryScoringManager(gm);
+  if (!mgr)
+    return 0;
+  uint8_t *data = *(uint8_t **)(gs + OFF_GS_TER_SHIPS);
+  int num = *(int32_t *)(gs + OFF_GS_TER_SHIPS + 8);
+  if (!data || num <= 0 || num > 256 || !IsReadable(data, (size_t)num * 8))
+    return 0;
+  int calls = 0;
+  for (int i = 0; i < num; ++i) {
+    uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * 8);
+    if (!pawn || !IsReadable(pawn + OFF_PAWN_CONTROLLER, 8) || !ShipTeam(pawn))
+      continue;
+    void *ctrl = *(void **)(pawn + OFF_PAWN_CONTROLLER);
+    if (!ctrl || !(((tPawnGetHealth)(g_base + RVA_PAWN_GET_HEALTH))(pawn) > 0.0f))
+      continue;
+    TerCheckFor(mgr, RVA_TER_CHECK_CONQUERED, ctrl);
+    ++calls;
+  }
+  return calls;
+}
+
+// YCapturePoint::OnCaptured (0x55E0D0, silent = the setup path): after the
+// game's own work, CheckTerritoryCapturedPoint for each capturer.
+static void __fastcall HookCpOnCaptured(void *cp, char silent) {
+  g_origCpOnCaptured(cp, silent);
+  if (silent || !TerScoringEnabled())
+    return;
+  __try {
+    uint8_t *gm = (uint8_t *)g_ter.gm;
+    void *mgr = TerritoryScoringManager(gm);
+    uint8_t *p = (uint8_t *)cp;
+    if (!mgr || !IsReadable(p + OFF_CP_OWNER, 1) || !IsReadable(p + OFF_CP_PAWNS_IN_RANGE, 16))
+      return;
+    int team = p[OFF_CP_OWNER];
+    uint8_t **pawns = *(uint8_t ***)(p + OFF_CP_PAWNS_IN_RANGE);
+    int num = *(int32_t *)(p + OFF_CP_PAWNS_IN_RANGE + 8);
+    int calls = 0;
+    if ((team == 1 || team == 2) && pawns && num > 0 && num <= 128 && IsReadable(pawns, (size_t)num * 8))
+      for (int i = 0; i < num; ++i) {
+        uint8_t *pawn = pawns[i];
+        if (!pawn || ShipTeam(pawn) != team || !IsReadable(pawn + OFF_PAWN_CONTROLLER, 8))
+          continue;
+        void *ctrl = *(void **)(pawn + OFF_PAWN_CONTROLLER);
+        if (!ctrl)
+          continue;
+        TerCheckFor(mgr, RVA_TER_CHECK_CAPTURED_POINT, ctrl);
+        ++calls;
+      }
+    g_ter.captureCalls += calls;
+    Logf("conquest scoring: %s captured by team %d -- TerritoryCapturedPoint checked for %d capturer(s) of %d in range",
+         NameText(((UObjectMin *)cp)->Name) ? NameText(((UObjectMin *)cp)->Name) : "?", team, calls, num);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("conquest scoring: EXCEPTION 0x%08X after a capture", GetExceptionCode());
+  }
+}
+
+static bool ConquestClaimedShare() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_CONQUEST_CLAIMED_SHARE", "dn_host_conquest_claimed_share.txt") ? 1 : 0;
+  return s_on == 1;
+}
+
 static void ConquestTick(uint8_t *gm) {
   static int s_enabled = -1;
   if (s_enabled < 0)
@@ -3126,15 +3355,34 @@ static void ConquestTick(uint8_t *gm) {
       memset(&g_ter, 0, sizeof(g_ter));
       g_ter.gm = gm;
       g_ter.lastScore = now;
+      g_ter.armedAt = now;
       *(int32_t *)(gs + OFF_GS_TER_SCORE_FOR_WINNING) = target;
       Logf("conquest: match %p -- score rule armed: %d to win, every %.1f s, multiplier %.3f (using %.3f), "
            "threshold %d; territory volume %p grid %.0f x %.0f; m_maxMatchTime %.2f min (+0x884; GameMode_TER_BP "
-           "sets none, the other modes 20)",
-           gm, target, every, mult, useMult, threshold, vol, gw, gh, *(float *)(gm + 0x884));
+           "sets none, the other modes 20); territory %% of %s; linking %d; scoring manager %s",
+           gm, target, every, mult, useMult, threshold, vol, gw, gh, *(float *)(gm + 0x884),
+           ConquestClaimedShare() ? "the CLAIMED tiles (dn_host_conquest_claimed_share.txt)" : "the whole grid",
+           gs[0x1E2F], IsReadable(gm + OFF_GM_SCORING_MGR, 8) ? ClassNameOf(*(void **)(gm + OFF_GM_SCORING_MGR)) : "?");
     }
     if (g_ter.ended)
       return;
     if (!gs[OFF_GS_MATCH_RUNNING] || gs[OFF_GS_MATCH_OVER]) {
+      // Test switch for a headless host with no player
+      // (dn_host_conquest_smoke.txt): start the match 20 s after arming
+      // (AGameMode::StartMatch, vtable +0x660 -- the StartMatch exec thunk
+      // 0x1EBD440 jumps there -- then the GameState's match-started setter
+      // 0x380F70, which the pre-match countdown would call), so the capture
+      // points, the territory map and the score run without anyone joining.
+      static int s_smoke = -1;
+      if (s_smoke < 0)
+        s_smoke = SwitchOn("DN_HOST_CONQUEST_SMOKE", "dn_host_conquest_smoke.txt") ? 1 : 0;
+      static void *s_smokeStarted = nullptr;
+      if (s_smoke && !gs[OFF_GS_MATCH_OVER] && s_smokeStarted != gm && now - g_ter.armedAt > 20000) {
+        s_smokeStarted = gm;
+        Logf("conquest: SMOKE -- starting match %p with nobody joined (dn_host_conquest_smoke.txt)", gm);
+        ((void(__fastcall *)(void *))(*(void ***)gm)[0x660 / 8])(gm);
+        ((void(__fastcall *)(void *, char))(g_base + 0x380F70))(gs, 1);
+      }
       g_ter.lastScore = now; // the score clock runs only while the match does
       return;
     }
@@ -3142,24 +3390,29 @@ static void ConquestTick(uint8_t *gm) {
       g_ter.lastPointScan = now;
       g_ter.pointsReady = SetUpCapturePoints(gs);
     }
-    int t1 = 0, t2 = 0, mapTiles = 0, s1 = 0, s2 = 0, ships = 0;
-    bool ok = CountTerritoryTiles(gs, &t1, &t2, &mapTiles);
+    // The territory map (+0x1EA8, see above). Before the GameState's first
+    // full pass it is empty; the point map stands in until then.
+    int t1 = 0, t2 = 0, mapTiles = 0, p1 = 0, p2 = 0, pointTiles = 0, s1 = 0, s2 = 0, ships = 0;
+    bool ok = CountTerritoryTiles(gs, OFF_GS_TER_TERRITORY_MAP, &t1, &t2, &mapTiles);
+    bool pointsOk = CountTerritoryTiles(gs, OFF_GS_TER_TILE_MAP, &p1, &p2, &pointTiles);
     CountShipTiles(gs, &s1, &s2, &ships);
-    t1 += s1;
-    t2 += s2;
+    if (!ok || mapTiles == 0) {
+      ok = pointsOk;
+      t1 = p1;
+      t2 = p2;
+    }
     float total = gw * gh;
     int pct1 = 0, pct2 = 0;
-    // A team's percentage is its share of the CLAIMED territory, t / (t1 + t2).
-    // GUESS, chosen by the operator 2026-10-08 after the first live Conquest
-    // matches. As a share of the whole 30 x 30 grid, a team held 5-23%, and a
-    // 12-minute match stood at 736 vs 1050 when the players left. That is not
-    // the designers' 2500-to-win at +score every 10 s. As a share of the
-    // claimed tiles the two add up to 100, and an even match reaches 2500 in
-    // about 8-9 minutes.
-    (void)total;
-    if (ok && t1 + t2 > 0) {
-      pct1 = (int)(100.0f * t1 / (t1 + t2) + 0.5f);
-      pct2 = 100 - pct1;
+    if (ConquestClaimedShare()) {
+      // The operator's 2026-10-08 rule: a team's share of the claimed tiles
+      // (the two add up to 100).
+      if (ok && t1 + t2 > 0) {
+        pct1 = (int)(100.0f * t1 / (t1 + t2) + 0.5f);
+        pct2 = 100 - pct1;
+      }
+    } else if (ok && total > 0.0f) {
+      pct1 = (int)(100.0f * t1 / total + 0.5f);
+      pct2 = (int)(100.0f * t2 / total + 0.5f);
     }
     int32_t *terr = (int32_t *)(gs + OFF_GS_TER_TERRITORY_T1);
     bool changed = terr[0] != pct1 || terr[1] != pct2;
@@ -3173,21 +3426,25 @@ static void ConquestTick(uint8_t *gm) {
       if (pct2 > threshold)
         score[1] += (int)(pct2 * useMult + 0.5f);
       changed = true;
-      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f: %d in the point map, ships %d/%d from %d) "
-           "-> score T1 %d T2 %d / %d",
-           pct1, pct2, t1, t2, total, mapTiles, s1, s2, ships, score[0], score[1], target);
+      int checked = TerScoringEnabled() ? TerContributionPass(gm, gs) : 0;
+      ++g_ter.contributionTicks;
+      g_ter.contributionCalls += checked;
+      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d of %.0f tiles; %d in the territory map, points %d/%d of %d, "
+           "ships' own claims %d/%d from %d) -> score T1 %d T2 %d / %d; TerritoryContribution checked for %d ship(s)",
+           pct1, pct2, t1, t2, total, mapTiles, p1, p2, pointTiles, s1, s2, ships, score[0], score[1], target, checked);
     } else if (now - g_ter.lastLog > 30000) {
       g_ter.lastLog = now;
-      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f, %d in the map%s)", pct1, pct2, t1, t2,
-           total, mapTiles, ok ? "" : ", map UNREADABLE");
+      Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f, %d in the territory map%s)", pct1, pct2, t1,
+           t2, total, mapTiles, ok ? "" : ", map UNREADABLE");
     }
     if (changed)
       ((tActorVoidFn)(*(void ***)gs)[0x580 / 8])(gs); // AActor::ForceNetUpdate
     if (score[0] >= target || score[1] >= target) {
       g_ter.ended = true;
       gs[OFF_GS_WINNING_TEAM] = score[0] > score[1] ? 1 : score[1] > score[0] ? 2 : 3;
-      Logf("conquest: team %d reached %d (T1 %d, T2 %d) -- ending the match", gs[OFF_GS_WINNING_TEAM], target,
-           score[0], score[1]);
+      Logf("conquest: team %d reached %d (T1 %d, T2 %d) -- ending the match; TerritoryContribution checks %d over "
+           "%d updates, TerritoryCapturedPoint checks %d", gs[OFF_GS_WINNING_TEAM], target, score[0], score[1],
+           g_ter.contributionCalls, g_ter.contributionTicks, g_ter.captureCalls);
       void **vt = *(void ***)gm;
       ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
     }
@@ -5231,10 +5488,33 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   // event the table leaves out on purpose (Winner/MatchEnd, excluded because
   // they overflowed the host at EndMatch) and reads through the missing row.
   // Until the crash handler below names the function, TE gets no table.
+  //
+  // RE-ENABLED 2026-10-26 (dn_host_no_te_scoring.txt / DN_HOST_NO_TE_SCORING=1
+  // restores the skip). TE was the only mode with no scoring at all (4 results,
+  // 0 events, against 108 of 111 in TDM). The likeliest cause of those crashes
+  // is the ClientAddAchievement loop (the re-entrancy guard on 0x5E50C0
+  // below, wrongly first named ClientApplyRespawnFilter): every ribbon for the
+  // host's own local player called the RPC stub again, forever. TDM met it at
+  // EndMatch, where its ribbons go; TE with a table awarded ribbons mid-match,
+  // "3-5 min in" -- there were no TE rounds then for a round end to explain it
+  // (the game mode is stripped, see "Team Elimination rounds"). The guard is
+  // installed on every host now and fires (45 times in one host log); it was
+  // written the day after the TE skip (2026-09-29), so every TE match since has
+  // run without the table and the guard was never tested against TE. NOT
+  // verified in a TE match.
+  //
+  // WRONG (2026-10-26): with the table back, both TE matches crashed the same
+  // way at the player's first capital-ship kill (CaptainKill_SameTier and
+  // FinalBlow scored, the fault within 1 ms). The cause is the TE-only
+  // Predator row: its scorer 0x3EFF60 reads the last m_rounds entry with no
+  // empty check (see TeAppendRound). The TE section now keeps that entry open.
   bool isTE = mode[0] == L'T' && mode[1] == L'E' && mode[2] == 0;
-  if (!mode[0] || isTE) {
-    Logf("scoring: mode \"%ls\" is Team Elimination -- table not built, scores stay 0 "
-         "in this mode (every TE match crashed the host with the table)", mode);
+  static int s_teScoringOff = -1;
+  if (s_teScoringOff < 0)
+    s_teScoringOff = SwitchOn("DN_HOST_NO_TE_SCORING", "dn_host_no_te_scoring.txt") ? 1 : 0;
+  if (!mode[0] || (isTE && s_teScoringOff)) {
+    Logf("scoring: mode \"%ls\" -- table not built, scores stay 0 in this mode%s", mode,
+         isTE ? " (dn_host_no_te_scoring.txt)" : " (no mode name)");
     return;
   }
   Logf("scoring: building the match table for mode \"%ls\"", mode);
@@ -7125,11 +7405,14 @@ static void HavocReleaseEliminated() {
 //     here: m_rounds +0x1E28 (TArray of 0x18-byte rounds: +0 number, +4 winner
 //     team, +8 an array -- read by 0x3A08C0 and 0x369BB0),
 //     m_IsPerformingRoundTransition +0x1E90 (0x3A2440 reads it),
-//     m_respawnFighterLoadoutFilter +0x1E98, and the controller RPCs
-//     ClientPostRoundEnd (impl 0x574BA0), ClientPreRoundStart (0x573B40: clears
-//     the loadout filter, shows the last round's result from m_rounds against
-//     the player's team), ClientNewRoundStarts (0x573CD0: round timer at
-//     pc+0xC3C), ClientRespawnTeamElimination (0x573860).
+//     m_respawnFighterLoadoutFilter +0x1E98, and the controller RPCs (impls on
+//     the PC vtable 0x2EF6670; CORRECTED 2026-10-26, first read one slot off
+//     from 0x2EF6678): ClientPostRoundEnd (+0xF68, 0x573B40, no parameters:
+//     clears the loadout filter, shows the last round's result from m_rounds
+//     against the player's team), ClientPreRoundStart(preRoundStartDuration)
+//     (+0xF60, 0x573CD0, timer at pc+0xC3C), ClientNewRoundStarts(roundNumber,
+//     serverLateJoinState) (+0xF58, 0x573970: respawn step unless state 2),
+//     ClientRespawnTeamElimination(respawnTime) (+0xF78, 0x573E10).
 //   - The fighter switch is native: SetLoadoutsFilter 0x35B090 (manager,
 //     filter) adds the filter's loadouts and activates the first allowed one
 //     when the active loadout is not; a null filter clears it (0x33CF50). The
@@ -7287,16 +7570,28 @@ static void TeSendAll(uint8_t *gs, const wchar_t *fn, int a0, int a1) {
 
 static void *TeLoadoutManager(void *pc) { return HavocLoadoutManager(pc); }
 
-// Appends the finished round to m_rounds (FMemory, as the engine's own arrays).
-static void TeRecordRound(uint8_t *gs, int number, int winner) {
+// m_rounds holds the round being PLAYED as its last entry, winner 0 until it
+// ends. The game's Predator scorer (0x3EFF60, "kill the whole enemy team by
+// yourself", a TE-only row) reads the last entry on every kill with no empty
+// check: its +8 array (16-byte kill records, matched against the killer) is
+// counted against the enemy team's size (GS +0x4F8/+0x4FC). With m_rounds
+// empty it reads entry -1, 8 bytes before a null pointer -- the host crash
+// "EXCEPTION_ACCESS_VIOLATION reading address 0xfffffff8" at the first
+// capital-ship kill of every TE match with a scoring table (7 hosts on
+// 2026-09-28/29, 2 more on 2026-10-26, each right after CaptainKill/FinalBlow).
+// Every other reader checks the count (0x57CD40, 0x3A08C0, 0x369BB0). The
+// kill records are not written here, so Predator never fires (GUESS: the
+// stripped game mode added them).
+// Appends a round entry (FMemory, as the engine's own arrays).
+static bool TeAppendRound(uint8_t *gs, int number, int winner) {
   uint8_t **data = (uint8_t **)(gs + OFF_GS_TE_ROUNDS);
   int32_t *num = (int32_t *)(gs + OFF_GS_TE_ROUNDS + 8), *max = num + 1;
   int n = *num;
   if (n < 0 || n > 32)
-    return;
+    return false;
   uint8_t *nb = (uint8_t *)((tFMemoryMalloc)(g_base + RVA_FMEMORY_MALLOC))((size_t)(n + 1) * TE_ROUND_SIZE, 0);
   if (!nb)
-    return;
+    return false;
   memset(nb, 0, (size_t)(n + 1) * TE_ROUND_SIZE);
   if (n && *data && IsReadable(*data, (size_t)n * TE_ROUND_SIZE))
     memcpy(nb, *data, (size_t)n * TE_ROUND_SIZE);
@@ -7309,6 +7604,34 @@ static void TeRecordRound(uint8_t *gs, int number, int winner) {
   *max = n + 1;
   if (old)
     ((tFMemoryFree)(g_base + RVA_FMEMORY_FREE))(old);
+  return true;
+}
+
+static uint8_t *TeLastRound(uint8_t *gs) {
+  uint8_t *data = *(uint8_t **)(gs + OFF_GS_TE_ROUNDS);
+  int n = *(int32_t *)(gs + OFF_GS_TE_ROUNDS + 8);
+  if (n < 1 || n > 33 || !data || !IsReadable(data, (size_t)n * TE_ROUND_SIZE))
+    return nullptr;
+  return data + (size_t)(n - 1) * TE_ROUND_SIZE;
+}
+
+// Makes round `number` the open last entry of m_rounds.
+static void TeOpenRound(uint8_t *gs, int number) {
+  uint8_t *last = TeLastRound(gs);
+  if (last && *(int32_t *)last == number)
+    return;
+  bool ok = TeAppendRound(gs, number, 0);
+  Logf("te: round %d entry opened in m_rounds (%d entries) -- the game's Predator scorer reads it on every kill%s",
+       number, *(int32_t *)(gs + OFF_GS_TE_ROUNDS + 8), ok ? "" : " -- FAILED");
+}
+
+// Writes the winner into the round's entry (appends it if it was not open).
+static void TeRecordRound(uint8_t *gs, int number, int winner) {
+  uint8_t *last = TeLastRound(gs);
+  if (last && *(int32_t *)last == number)
+    last[4] = (uint8_t)winner;
+  else
+    TeAppendRound(gs, number, winner);
 }
 
 static void TeForceNetUpdate(uint8_t *actor) {
@@ -7372,22 +7695,29 @@ static void TeRestoreShips(uint8_t *gs) {
 
 static void TeStartRound(uint8_t *gm, uint8_t *gs, DWORD now) {
   g_te.round++;
+  TeOpenRound(gs, g_te.round);
   g_te.phase = TE_ROUND;
   g_te.phaseAt = now;
   g_te.seen[0] = g_te.seen[1] = false;
   gs[OFF_GS_TE_TRANSITION] = 0;
   TeForceNetUpdate(gs);
-  TeSendAll(gs, L"ClientNewRoundStarts", TeRoundTimeSecs(gm), g_te.round);
+  // (roundNumber, serverLateJoinState) -- the parameter names the first live
+  // match logged (2026-10-25). The client impl (PC vtable 0x2EF6670 +0xF58 =
+  // 0x573970) skips its respawn step when the late-join state is 2; 0 here.
+  TeSendAll(gs, L"ClientNewRoundStarts", g_te.round, 0);
   Logf("te: round %d started (score %d-%d, %d s limit)", g_te.round, g_te.wins[0], g_te.wins[1], TeRoundTimeSecs(gm));
 }
 
 // Every second, from the game-mode timer.
 static void TeRoundsTick(uint8_t *gm) {
-  if (!TeRoundsOn())
-    return;
   __try {
     uint8_t *gs = TeGameState(gm);
     if (!gs)
+      return;
+    // Crash guard, on every TE host (rounds on or off): never an empty m_rounds.
+    if (!TeLastRound(gs))
+      TeOpenRound(gs, TeRoundsOn() && g_te.gm == gm && g_te.round > 0 ? g_te.round : 1);
+    if (!TeRoundsOn())
       return;
     DWORD now = GetTickCount();
     if (g_te.gm != gm) {
@@ -7480,6 +7810,53 @@ static void TeRoundsTick(uint8_t *gm) {
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("te: EXCEPTION in the round tick");
   }
+}
+
+// Fighters only while eliminated. Measured in the first live TE match
+// (2026-10-25): with the jets filter on, the player's capital loadout was
+// refused once ("ActivateLoadout | Loadout [...] is not valid", host 22:58:22)
+// and they flew a respawn jet -- but when the jet was lost, the next respawn
+// was the capital ship again: something on the respawn path clears or bypasses
+// the filter (the client's own respawn steps call ClearLoadoutFilter 0x33CF50).
+// So the filter is checked where the ship is made, AYPlayerController::
+// SpawnPlayer (0x5998A0, one argument): missing, or the active loadout not
+// valid under it (0x33C680), it is applied again, which activates the first
+// fighter (SetLoadoutsFilter). Installed on TE hosts only.
+static tSpawnPlayer g_origTeSpawnPlayer = nullptr;
+static bool HostIsTE() {
+  const wchar_t *cmd = GetCommandLineW();
+  return cmd && wcsstr(cmd, L"-GameMode=TE ") != nullptr;
+}
+static bool TeIsEliminated(void *pc) {
+  for (auto &e : g_te.elim)
+    if (e.pc && e.pc == pc)
+      return true;
+  return false;
+}
+static void __fastcall HookTeSpawnPlayer(void *pc) {
+  __try {
+    if (TeRoundsOn() && g_te.gm && g_te.phase == TE_ROUND && TeIsEliminated(pc)) {
+      uint8_t *gs = TeGameState((uint8_t *)g_te.gm);
+      uint8_t *mgr = (uint8_t *)TeLoadoutManager(pc);
+      void *filter = gs ? *(void **)(gs + OFF_GS_TE_FIGHTER_FILTER) : nullptr;
+      if (mgr && filter && IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8)) {
+        void *have = *(void **)(mgr + OFF_LOADOUT_MGR_FILTER);
+        void *active = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+        bool valid = active && ((tLoadoutGate)(g_base + RVA_LOADOUT_IS_REGISTERED))(mgr, active);
+        if (have != filter || !valid) {
+          if (have == filter)
+            ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, nullptr);
+          ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, filter);
+        }
+        Logf("te: round %d -- respawn of eliminated %p: filter %s, %s loadout %p -> %s %p", g_te.round, pc,
+             have == filter ? "still on" : "WAS CLEARED", valid ? "valid" : "invalid", active,
+             have != filter || !valid ? "re-filtered, now" : "kept", *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE));
+      }
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("te: EXCEPTION checking a respawn");
+  }
+  g_origTeSpawnPlayer(pc);
 }
 
 // The winner by rounds won (EndMatch and the match timer recompute it from kills).
@@ -8417,6 +8794,16 @@ static DWORD WINAPI Startup(LPVOID) {
     Logf("scoring: OFF (dn_host_no_scoring.txt / DN_HOST_NO_SCORING=1). Every "
          "score stays 0.");
 
+  if (TerScoringEnabled()) {
+    InstallSwitchedHook("conquest scoring manager (game mode creator A)", RVA_GM_CREATE_SCORING_MGR_A,
+                        (void *)&HookCreateScoringMgrA, (void **)&g_origCreateScoringMgrA);
+    InstallSwitchedHook("conquest scoring manager (game mode creator B)", RVA_GM_CREATE_SCORING_MGR_B,
+                        (void *)&HookCreateScoringMgrB, (void **)&g_origCreateScoringMgrB);
+    InstallSwitchedHook("conquest capture score (YCapturePoint::OnCaptured)", RVA_CP_ON_CAPTURED,
+                        (void *)&HookCpOnCaptured, (void **)&g_origCpOnCaptured);
+  } else
+    Logf("conquest scoring: OFF (dn_host_no_ter_scoring.txt / DN_HOST_NO_TER_SCORING=1)");
+
   if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
     InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
                         RVA_CLIENT_START_EOM_TRANSITION,
@@ -8454,6 +8841,9 @@ static DWORD WINAPI Startup(LPVOID) {
   g_onsPointsOn = onsPoints;
   Logf("te rounds: %s", TeRoundsOn() ? "ON (Team Elimination hosts: best of 3, fighters after a lost ship)"
        : "OFF (dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1): Team Elimination plays as a deathmatch");
+  if (TeRoundsOn() && HostIsTE())
+    InstallSwitchedHook("te fighters while eliminated (AYPlayerController::SpawnPlayer)", RVA_SPAWN_PLAYER,
+                        (void *)&HookTeSpawnPlayer, (void **)&g_origTeSpawnPlayer);
   // Both modes ride on the same two hooks; each acts only on its own mode.
   if (onsPoints || TeRoundsOn()) {
     InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,
