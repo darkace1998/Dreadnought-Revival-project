@@ -3332,6 +3332,181 @@ static void CountShipTiles(uint8_t *gs, int *t1, int *t2, int *ships) {
 }
 
 // ---------------------------------------------------------------------------
+// Capture and ship-speed diagnostics (on; dn_host_no_conquest_capture_log.txt
+// turns them off)
+//
+// Player report 2026-10-29 (Skybridge, solo with bots): flying into A or B
+// captured nothing. The same evening on Gorge two players captured A and B
+// (host log: capturers VH_YPlayerCtrl_TER_BP_C), so captures do work for
+// players. Which condition stopped them is not known. The capture logic
+// (0x5583F0, from the point's tick), read in the exe:
+//   - Candidates are the actors overlapping the point's sphere; 0x536A00 keeps
+//     a ship only if its CENTRE is within m_overlapRadius (+0x404) and its
+//     state (+0x941) is not 2 or 3, and adds the ship's influence (+0x438) to
+//     its team's slot of the point's per-team array (+0x440, 5 floats).
+//   - More than one team with influence = contested (+0x4A1): no progress.
+//   - Progress (+0x4A4) grows by (influence * m_captureSpeedUpTimePerSecond
+//     +0x49C + m_captureReductionTimePerSecond +0x460) per second, after first
+//     draining another team's progress, until m_timeToOwn (+0x4A8; when owned
+//     and +0x4C4 is set, m_timeToNeutralize +0x4AC).
+// So every 2 s, while a human ship is within 1.5x the radius of an unlocked
+// point, this logs that point's state and every ship near it; and every 30 s
+// each ship's speed, measured from its position (bots reported slower than
+// players' heaviest Dreadnoughts).
+#define OFF_CP_RADIUS 0x404
+#define OFF_CP_INFLUENCE 0x440
+#define OFF_CP_CAPTURING_TEAM 0x458
+#define OFF_CP_PREV_CAPTURING_TEAM 0x459
+#define OFF_CP_SPEED_UP 0x49C
+#define OFF_CP_REDUCTION 0x460
+#define OFF_CP_OBJECTIVE_TEAMS 0x478
+#define OFF_CP_BEING_CAPTURED 0x4A0
+#define OFF_CP_CONTESTED 0x4A1
+#define OFF_CP_PROGRESS 0x4A4
+#define OFF_CP_TIME_TO_OWN 0x4A8
+#define OFF_CP_TIME_TO_NEUTRALIZE 0x4AC
+#define OFF_PAWN_CAPTURE_INFLUENCE 0x438
+#define OFF_PAWN_SHIP_STATE 0x941
+#define OFF_CP_PAWNS_IN_RANGE 0x420
+
+static bool ConquestCaptureLogEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_CONQUEST_CAPTURE_LOG", "dn_host_no_conquest_capture_log.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static bool ActorLocation(void *actor, float out[3]) {
+  if (!IsReadable((uint8_t *)actor + OFF_ACTOR_ROOT_COMPONENT, 8))
+    return false;
+  uint8_t *comp = *(uint8_t **)((uint8_t *)actor + OFF_ACTOR_ROOT_COMPONENT);
+  if (!comp || !IsReadable(comp + OFF_COMP_WORLD_LOC, 12))
+    return false;
+  memcpy(out, comp + OFF_COMP_WORLD_LOC, 12);
+  return true;
+}
+
+static bool IsHumanShip(uint8_t *pawn) {
+  if (!IsReadable(pawn + OFF_PAWN_CONTROLLER, 8))
+    return false;
+  void *ctrl = *(void **)(pawn + OFF_PAWN_CONTROLLER);
+  return ctrl && strstr(ClassNameOf(ctrl), "PlayerCtrl") != nullptr;
+}
+
+// The point's tuning, once per point at set-up.
+static void LogCapturePointTuning(uint8_t *cp, const char *name) {
+  if (!IsReadable(cp + OFF_CP_OBJECTIVE_TEAMS, 16) || !IsReadable(cp + OFF_CP_TIME_TO_NEUTRALIZE, 4))
+    return;
+  uint8_t *teams = *(uint8_t **)(cp + OFF_CP_OBJECTIVE_TEAMS);
+  int numTeams = *(int32_t *)(cp + OFF_CP_OBJECTIVE_TEAMS + 8);
+  char list[32] = "";
+  for (int i = 0, o = 0; teams && i < numTeams && i < 8 && IsReadable(teams + i, 1); ++i)
+    o += _snprintf_s(list + o, sizeof(list) - o, _TRUNCATE, "%s%d", i ? "," : "", teams[i]);
+  Logf("conquest capture: %s -- radius %.0f, time to own %.1f s, to neutralize %.1f s, speed-up %.2f/s per "
+       "influence, reduction %.2f/s, objective teams [%s]",
+       name, *(float *)(cp + OFF_CP_RADIUS), *(float *)(cp + OFF_CP_TIME_TO_OWN),
+       *(float *)(cp + OFF_CP_TIME_TO_NEUTRALIZE), *(float *)(cp + OFF_CP_SPEED_UP),
+       *(float *)(cp + OFF_CP_REDUCTION), list);
+}
+
+static void CaptureWatch(uint8_t *gs, uint8_t **cps, int numCps) {
+  static DWORD s_last = 0;
+  DWORD now = GetTickCount();
+  if (now - s_last < 2000)
+    return;
+  s_last = now;
+  uint8_t *data = *(uint8_t **)(gs + OFF_GS_TER_SHIPS);
+  int num = *(int32_t *)(gs + OFF_GS_TER_SHIPS + 8);
+  if (!data || num <= 0 || num > 256 || !IsReadable(data, (size_t)num * 8))
+    return;
+  for (int c = 0; c < numCps; ++c) {
+    uint8_t *cp = cps[c];
+    if (!cp || cp[OFF_CP_LOCKED] || !IsReadable(cp + OFF_CP_PROGRESS, 0x10) ||
+        !IsReadable(cp + OFF_CP_PAWNS_IN_RANGE, 0x30))
+      continue;
+    float at[3];
+    float radius = *(float *)(cp + OFF_CP_RADIUS);
+    if (!ActorLocation(cp, at) || !(radius > 0.0f))
+      continue;
+    char ships[640] = "";
+    int o = 0, numNear = 0;
+    bool human = false;
+    void **inRange = *(void ***)(cp + OFF_CP_PAWNS_IN_RANGE);
+    int numInRange = *(int32_t *)(cp + OFF_CP_PAWNS_IN_RANGE + 8);
+    for (int i = 0; i < num; ++i) {
+      uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * 8);
+      float p[3];
+      if (!pawn || !IsReadable(pawn + OFF_PAWN_SHIP_STATE, 1) || !ActorLocation(pawn, p))
+        continue;
+      float dx = p[0] - at[0], dy = p[1] - at[1], dz = p[2] - at[2];
+      float ratio = sqrtf(dx * dx + dy * dy + dz * dz) / radius;
+      if (ratio > 1.5f)
+        continue;
+      bool isHuman = IsHumanShip(pawn);
+      human |= isHuman;
+      bool listed = false;
+      for (int k = 0; inRange && k < numInRange && k < 64 && IsReadable(inRange + k, 8); ++k)
+        listed |= inRange[k] == pawn;
+      ++numNear;
+      if (o < (int)sizeof(ships) - 96)
+        o += _snprintf_s(ships + o, sizeof(ships) - o, _TRUNCATE, "%s%.28s T%d%s %.2fr infl %.2f state %d%s",
+                         o ? "; " : "", ClassNameOf(pawn), ShipTeam(pawn), isHuman ? " HUMAN" : "", ratio,
+                         *(float *)(pawn + OFF_PAWN_CAPTURE_INFLUENCE), pawn[OFF_PAWN_SHIP_STATE],
+                         listed ? " counted" : "");
+    }
+    if (!human)
+      continue;
+    float *infl = *(float **)(cp + OFF_CP_INFLUENCE);
+    int numInfl = *(int32_t *)(cp + OFF_CP_INFLUENCE + 8);
+    float f[5] = {0, 0, 0, 0, 0};
+    for (int t = 0; infl && t < numInfl && t < 5 && IsReadable(infl + t, 4); ++t)
+      f[t] = infl[t];
+    Logf("conquest capture: %s owner %d capturing %d (prev %d) %s%s progress %.1f/%.1f, influence T1 %.2f T2 %.2f, "
+         "%d counted -- near: %s",
+         NameText(((UObjectMin *)cp)->Name), cp[OFF_CP_OWNER], cp[OFF_CP_CAPTURING_TEAM],
+         cp[OFF_CP_PREV_CAPTURING_TEAM], cp[OFF_CP_BEING_CAPTURED] ? "being captured" : "idle",
+         cp[OFF_CP_CONTESTED] ? " CONTESTED" : "", *(float *)(cp + OFF_CP_PROGRESS),
+         *(float *)(cp + OFF_CP_TIME_TO_OWN), f[1], f[2], numInRange, numNear ? ships : "-");
+  }
+}
+
+static void ShipSpeedLog(uint8_t *gs) {
+  struct Sample { void *pawn; float at[3]; DWORD t; };
+  static Sample s_prev[64];
+  static int s_numPrev = 0;
+  static DWORD s_last = 0;
+  DWORD now = GetTickCount();
+  if (s_last && now - s_last < 30000)
+    return;
+  s_last = now;
+  uint8_t *data = *(uint8_t **)(gs + OFF_GS_TER_SHIPS);
+  int num = *(int32_t *)(gs + OFF_GS_TER_SHIPS + 8);
+  if (!data || num <= 0 || num > 64 || !IsReadable(data, (size_t)num * 8))
+    return;
+  Sample cur[64];
+  int numCur = 0;
+  for (int i = 0; i < num; ++i) {
+    uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * 8);
+    Sample s = {pawn, {0, 0, 0}, now};
+    if (!pawn || !ActorLocation(pawn, s.at))
+      continue;
+    cur[numCur++] = s;
+    for (int k = 0; k < s_numPrev; ++k) {
+      if (s_prev[k].pawn != pawn)
+        continue;
+      float dx = s.at[0] - s_prev[k].at[0], dy = s.at[1] - s_prev[k].at[1], dz = s.at[2] - s_prev[k].at[2];
+      float secs = (now - s_prev[k].t) / 1000.0f;
+      if (secs > 1.0f)
+        Logf("conquest speed: %s T%d%s -- %.0f units/s average over %.0f s", ClassNameOf(pawn), ShipTeam(pawn),
+             IsHumanShip(pawn) ? " HUMAN" : "", sqrtf(dx * dx + dy * dy + dz * dz) / secs, secs);
+      break;
+    }
+  }
+  memcpy(s_prev, cur, sizeof(Sample) * numCur);
+  s_numPrev = numCur;
+}
+
+// ---------------------------------------------------------------------------
 // Conquest personal score (on; dn_host_no_ter_scoring.txt /
 // DN_HOST_NO_TER_SCORING=1 turns it off)
 //
@@ -3790,6 +3965,13 @@ static void ConquestTick(uint8_t *gm) {
     if (!g_ter.pointsReady && now - g_ter.lastPointScan >= 1000) {
       g_ter.lastPointScan = now;
       g_ter.pointsReady = SetUpCapturePoints(gs);
+      if (g_ter.pointsReady && ConquestCaptureLogEnabled())
+        for (int i = 0; i < g_ter.numCps; ++i)
+          LogCapturePointTuning(g_ter.cps[i], NameText(((UObjectMin *)g_ter.cps[i])->Name));
+    }
+    if (g_ter.pointsReady && ConquestCaptureLogEnabled()) {
+      CaptureWatch(gs, g_ter.cps, g_ter.numCps);
+      ShipSpeedLog(gs);
     }
     // Smoke only: 30 s into the match, give the first unlocked point to team 1
     // the way a capture's owner change does (SetCapturePoint), so the sync

@@ -648,6 +648,51 @@ Bots: Conquest also logs where each scene NPC slot spawns
 That is the diagnostic for the report of bots "standing still 9k meters away
 from the playable map".
 
+## Capture and ship-speed log (on; `dn_host_no_conquest_capture_log.txt` turns it off)
+
+Player report, 2026-10-29: on Skybridge (solo, with bots) flying into A or B
+captured nothing. Bots were also slower than a player's heaviest Dreadnought.
+The same evening on Gorge, two players captured A and B (capturers
+`VH_YPlayerCtrl_TER_BP_C`), so player captures do work. This log is meant to
+show which condition stopped them. Read in the exe (`0x5583F0`, `0x536A00`):
+
+- A ship counts only if its centre is within `m_overlapRadius` (`+0x404`).
+- A ship in state (`+0x941`) 2 or 3 does not count.
+- Each counted ship adds its influence (`+0x438`) to its team's slot.
+- Two teams with influence = contested (`+0x4A1`): no progress for either.
+- Progress grows by influence × `m_captureSpeedUpTimePerSecond` +
+  `m_captureReductionTimePerSecond` per second, after draining another team's
+  progress first, up to `m_timeToOwn`.
+
+The visible range sphere is scaled to `m_overlapRadius` (the BP's construction
+script). From the maps:
+
+| Map | A / B radius | Time to own |
+| --- | --- | --- |
+| Gorge (`CapturePoint_TER_A` / `_B`) | 4500 | 20 s |
+| Skybridge (`CapturePoint_TER_BP3` is **A**, `_BP2` is **B**) | 4000 | 30 s (BP default) |
+
+Smoke host, Gorge: speed-up 1.00 and reduction 1.00 per second, objective
+teams [1,2].
+
+Log lines:
+
+- At set-up: `conquest capture: <point> -- radius r, time to own t s, ...`.
+- Every 2 s while a human ship is within 1.5× the radius of an unlocked point:
+  `conquest capture: <point> owner o capturing c (prev p) idle|being captured
+  [CONTESTED] progress x/t, influence T1 a T2 b, n counted -- near: <class> T<team>
+  [HUMAN] <distance/radius>r infl <influence> state <s> [counted]; ...`
+- Every 30 s for every ship: `conquest speed: <class> T<team> [HUMAN] -- N
+  units/s average over 30 s`.
+
+Bot difficulty, checked: in a Legendary match the bots are the game mode's
+Legendary entries (tier 4-5 ships). `?FleetTier=5` sets the GameState fleet
+type to 3 (`0x3A55E0`), and the team fill (`0x3678F0` -> `0x373C90`) drops
+every bot entry of another tier. `YNPCAIController::GetAIDifficultyLevel`
+(`0x28AA40`) returns the same fleet type, but no Blueprint in the content
+calls it. The host also runs at about 60 frames per second (frame counter in
+the Skybridge log).
+
 ## Bots spawned before the match starts (on; `dn_host_no_npc_ai_start.txt` turns it off)
 
 Conquest and Onslaught bots sat still (operator, 2026-10-08). An NPC
