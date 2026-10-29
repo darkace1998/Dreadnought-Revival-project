@@ -542,6 +542,85 @@ What the exe and Blueprints already do, and the mod leaves alone:
 - each client's own minimap territory: `OnRep_StationIndex` runs the GameState
   point setup on clients too (`0x54FD60`).
 
+Live result 2026-10-29: Harvester (TerritoryCleared) fires: 12 and 13 in the
+two Skybridge matches. Territory Held fired 0 times in 3,890 checks, and Point
+Secured 0 in 15. The ending line now carries `best claimed/potential`, which
+is the highest ratio the Territory Held check saw against its 0.60 bar. The
+capture line names the capturers' controller classes, so a bot capture (which
+reports no player result) can be told apart.
+
+## Captured points' territory (on; `dn_host_no_conquest_point_owner.txt` turns it off)
+
+Players reported on 2026-10-29 that the capturable points "should claim a lot
+of map for your team" and never did. The points flip (6 and 9 captures in the
+two Skybridge matches), but the point map logged `points 33/33 of 66` in every
+update of both: the bases' tiles, and nothing for A or B.
+
+Verified in the exe:
+
+- Each of the GameState's influence sources (`gs+0x1FE8`, 0x40-byte entries)
+  keeps its own copy of the point's team at `+0x00`. The setup `0x39F750`
+  writes it once, while A and B are still neutral. The tile map `0x3ACB60`
+  reads only that copy.
+- Only GameState_TER vtable `+0x838` = `0x3A2610` updates the copy. Its
+  arguments are the team, the station index, the `FString*` letter, and a
+  `TArray<AController*>*` of capturers. It rewrites the copy, rebuilds the map
+  and plays the "secured" voice lines. Nothing in the exe calls it.
+- The capture's own path (`0x55E0D0` -> point vtable `+0x5F0` = `0x536510`)
+  rebuilds the map from the stale copy. It tells the GameState only through the
+  first local player controller's `CapturePointOwnerChanged` (`+0x1008`, an
+  empty `ret`). That is the client minimap path.
+
+So after a capture the mod calls `0x3A2610`. The arguments are the point's
+owner (`+0x450`), index (`+0x3E4`) and `m_UILetter` (`+0x3D0`), plus the
+capturing team's controllers in range. Once a second, any point whose copy
+still disagrees is synced with no capturers. Links to the point (`+0x1F98`)
+follow the copy.
+
+Smoke run 2026-10-29, Skybridge, with a test step that hands point B to team 1:
+the point map went from 33 to 169 team-1 tiles, and the team-1 territory from
+33 to 248 tiles (4% to 28%). The other 79 tiles are the link from the team-1
+base to B. Log line:
+`conquest: CapturePoint_TER_BP2 (index 1) owner 0 -> 1 (...) -- GameState told
+(0x3A2610); point map T1 33 -> 169, T2 33 -> 33 tiles`.
+
+## Conquest spawns (on; `dn_host_no_conquest_spawns.txt` turns it off)
+
+Players reported on 2026-10-29 that they "spawned into enemy team twice" and
+saw enemies spawn near their own team. Verified in the exe and maps:
+
+- Respawns use YGameMode's chooser `0x36C1A0` (vtable `+0x5F0`). It takes every
+  active start whose `m_team` (`+0x3F0`) is none or the player's team. It then
+  asks the mode whether the start suits it (`+0x8B8`). With
+  `m_useSpawnScoring` (`+0x6A3`) off, it picks one at random.
+- `GameMode_TER_BP` is the only mode Blueprint with `m_useSpawnScoring` off.
+  Territory's `+0x8B8` is the shared `return true` stub. Only Invasion's
+  (`0x3756A0`) filters, admitting `m_gameMode` (`+0x418`) 1..2 (ALL, TDM).
+- The `_Territory` sublevels tag their starts YGMF_TER with a team (Skybridge
+  8+8, Gorge 13+13; the enum is NONE/ALL/TDM/TE/TER = 0..4, and the
+  constructor `0x5A8E50` defaults to ALL). The persistent level keeps the other
+  modes' starts, and all of them are active. `MP_Skybridge_P` has 90 TDM and 47
+  TE starts with no team, spread over the whole map.
+
+So for a `YGameMode_Territory` the mod switches off (`m_active` `+0x424`) every
+start tagged for another mode, for the duration of the game's own choice, and
+then restores them. If no start is left, the unfiltered choice stands and the
+log says `FALLBACK`.
+
+GUESS: the server build's Territory mode filtered for ALL and TER, the way
+Invasion filters. The exe has only the stub.
+
+Log, first 40 choices per match:
+`conquest spawns: <controller class> ... -> <start> (mode m, team t); N
+other-mode start(s) hidden, K ALL/TER start(s) active`. On the smoke host the
+local controller got `Orbit_YPlayerStart_T1 (mode 1, team 1)`, with 153 hidden
+and 16 left.
+
+Bots: Conquest also logs where each scene NPC slot spawns
+(`bots: conquest NPC slot i spawns at <actor> (...) (x, y, z) mode m team t`).
+That is the diagnostic for the report of bots "standing still 9k meters away
+from the playable map".
+
 ## Bots spawned before the match starts (on; `dn_host_no_npc_ai_start.txt` turns it off)
 
 Conquest and Onslaught bots sat still (operator, 2026-10-08). An NPC

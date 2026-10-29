@@ -2925,7 +2925,9 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 // WHICH map (corrected 2026-10-28, verified in the exe): the tick keeps FOUR
 // tile maps, all TMap<uint32 tile, {float T1, float T2}> with the layout above:
 //   +0x1EF8 the capture points' influence (0x3ACB60, rebuilt on every owner
-//           change through the capture point's vtable +0x5F0 = 0x536510),
+//           change through the capture point's vtable +0x5F0 = 0x536510 --
+//           but from each source's OWN team copy, which only 0x3A2610
+//           updates; corrected 2026-10-29, see SyncPointOwner),
 //   +0x1F48 the ships' claims (GatherShipTerritoryData, one ship per tick:
 //           a ship's tile counts only where no capture point already gives
 //           it to the ship's team or a stronger influence holds it -- the
@@ -3004,6 +3006,9 @@ struct ConquestMatch {
   DWORD lastScore, lastLog, lastPointScan, armedAt;
   bool ended, pointsReady;
   int contributionTicks, contributionCalls, captureCalls;
+  uint8_t *cps[16]; // the capture points SetUpCapturePoints found
+  int numCps, ownerSyncs;
+  float bestPotential; // highest TerritoryContribution ratio seen (diagnostic)
 };
 static ConquestMatch g_ter = {};
 
@@ -3094,6 +3099,93 @@ static bool SetUpCapturePoints(uint8_t *gs) {
   ((tGsSetupCapturePoints)(g_base + RVA_GS_TER_SETUP_CAPTURE_POINTS))(gs);
   Logf("conquest: %d capture points set up; influence sources %d, tile map %d tiles", n,
        *(int32_t *)(gs + 0x1FF0), *(int32_t *)(gs + OFF_GS_TER_TILE_MAP + 8));
+  for (int i = 0; i < n; ++i)
+    g_ter.cps[i] = cps[i];
+  g_ter.numCps = n;
+  return true;
+}
+
+// A captured point's territory (on; dn_host_no_conquest_point_owner.txt /
+// DN_HOST_NO_CONQUEST_POINT_OWNER=1 turns it off)
+//
+// Player reports 2026-10-29: the two capturable points "that should claim a
+// lot of map for your team still cannot be captured". They do flip (6 and 9
+// captures in the 07:33 and 00:04 Skybridge matches), but the point map never
+// changed: "points 33/33 of 66" from the first update to the last, in all 273
+// updates of both matches -- the two bases' tiles, and nothing for A or B,
+// whoever held them. Verified in the exe 2026-10-29:
+//   - Each influence source (gs+0x1FE8, 0x40-byte entries, count gs+0x1FF0)
+//     carries its OWN copy of the point's team at +0x00, written once by the
+//     setup 0x39F750 (A and B are neutral then, so they claim nothing). The
+//     tile map 0x3ACB60 reads only that copy.
+//   - The one function that updates it is GameState_TER vtable +0x838 =
+//     0x3A2610 (gs, EYTeam, station index, FString* letter, TArray<AController*>*
+//     capturers): it writes the team, rebuilds the map (0x3ACB60), and plays
+//     the voice lines -- "#Gamemode_TER_SecuredCP" for the capturers (matched
+//     by pawn +0x3F8), "#Gamemode_TER_Team/EnemySecuredCPAlpha/Beta/Charly"
+//     (0x3843B0, by the letter A/B/C) for every other ship. Nothing in this
+//     exe calls it (no direct caller; no vtable call reaches it): the server
+//     build's capture handler did.
+//   - A capture's own path (OnCaptured 0x55E0D0 -> the point's vtable +0x5F0
+//     = 0x536510) rebuilds the map from the stale copy, and tells the GameState
+//     only through the FIRST LOCAL player controller's CapturePointOwnerChanged
+//     (vtable +0x1008, an empty `ret` in YPlayerController) -- the client's
+//     minimap path, not the server's.
+// So after a capture this calls 0x3A2610 with the point's owner (+0x450),
+// station index (+0x3E4), m_UILetter (+0x3D0, FString) and the capturing
+// team's ships' controllers in range; and once a second any point whose copy
+// still disagrees (a neutralisation, or a path this does not hook) is synced
+// with no capturers. The links (+0x1F98, m_linkableCPs, built in the
+// GameState tick from the same entries) follow the copy too.
+#define OFF_GS_TER_SOURCES 0x1FE8 // TArray of 0x40-byte influence sources, count +0x1FF0
+#define TER_SOURCE_SIZE 0x40
+#define VT_GS_TER_CP_OWNER_CHANGED 0x838
+#define RVA_GS_TER_CP_OWNER_CHANGED 0x3A2610
+#define OFF_CP_UI_LETTER 0x3D0
+struct TArrayPtrMin {
+  void **data;
+  int32_t num, max;
+};
+typedef void(__fastcall *tGsCpOwnerChanged)(void *gs, uint32_t team, int32_t index, void *letter,
+                                            TArrayPtrMin *capturers);
+
+static bool ConquestPointOwnerEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_CONQUEST_POINT_OWNER", "dn_host_no_conquest_point_owner.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+// Sync one point's influence-source team with its owner. Returns true when it
+// called the GameState (the copy disagreed).
+static bool SyncPointOwner(uint8_t *gs, uint8_t *cp, void **capturers, int numCapturers, const char *why) {
+  if (!gs || !cp || !IsReadable(gs + OFF_GS_TER_SOURCES, 16) || !IsReadable(cp + OFF_CP_OWNER, 1) ||
+      !IsReadable(cp + OFF_CP_STATION_INDEX, 4) || !IsReadable(cp + OFF_CP_UI_LETTER, 16))
+    return false;
+  // Only a YGameState_TER has 0x3A2610 in that slot.
+  void **vt = *(void ***)gs;
+  if (!IsReadable(vt + VT_GS_TER_CP_OWNER_CHANGED / 8, 8) ||
+      vt[VT_GS_TER_CP_OWNER_CHANGED / 8] != (void *)(g_base + RVA_GS_TER_CP_OWNER_CHANGED))
+    return false;
+  uint8_t *src = *(uint8_t **)(gs + OFF_GS_TER_SOURCES);
+  int count = *(int32_t *)(gs + OFF_GS_TER_SOURCES + 8);
+  int idx = *(int32_t *)(cp + OFF_CP_STATION_INDEX);
+  if (!src || idx < 0 || idx >= count || !IsReadable(src + (size_t)idx * TER_SOURCE_SIZE, 4))
+    return false;
+  uint32_t had = *(uint32_t *)(src + (size_t)idx * TER_SOURCE_SIZE);
+  uint32_t owner = cp[OFF_CP_OWNER];
+  if (had == owner)
+    return false;
+  int before1 = 0, before2 = 0, tiles = 0;
+  CountTerritoryTiles(gs, OFF_GS_TER_TILE_MAP, &before1, &before2, &tiles);
+  TArrayPtrMin arr = {capturers, numCapturers, numCapturers};
+  ((tGsCpOwnerChanged)vt[VT_GS_TER_CP_OWNER_CHANGED / 8])(gs, owner, idx, cp + OFF_CP_UI_LETTER, &arr);
+  int after1 = 0, after2 = 0;
+  CountTerritoryTiles(gs, OFF_GS_TER_TILE_MAP, &after1, &after2, &tiles);
+  ++g_ter.ownerSyncs;
+  const char *nm = NameText(((UObjectMin *)cp)->Name);
+  Logf("conquest: %s (index %d) owner %u -> %u (%s, %d capturer(s)) -- GameState told (0x3A2610); point map T1 %d -> "
+       "%d, T2 %d -> %d tiles", nm ? nm : "?", idx, had, owner, why, numCapturers, before1, after1, before2, after2);
   return true;
 }
 
@@ -3171,6 +3263,11 @@ static void CountShipTiles(uint8_t *gs, int *t1, int *t2, int *ships) {
 #define VT_SCORING_MGR_INIT 0x1E0
 #define OFF_CP_PAWNS_IN_RANGE 0x420              // TArray<APawn*> m_pawnsWithinRange
 #define TER_SCORING_EVENT_SIZE 0x40              // the checks read +0x08 (controller)
+// GetPawnTerritoryPotentialClaimedPercentage (mgr, pawn, crowding factor):
+// pawn +0x854 (its claimed tiles / the grid, set by the GameState's ship pass
+// at 0x394E84) over pi r^2 / grid area, r from gs+0x2020 by ship class.
+#define RVA_TER_POTENTIAL_CLAIMED 0x41FC80
+typedef float(__fastcall *tTerPotentialClaimed)(void *mgr, void *pawn, float crowding);
 typedef void(__fastcall *tGmCreateScoringMgr)(void *gm);
 typedef void *(__fastcall *tStaticClassFn)(const wchar_t *package);
 typedef void *(__fastcall *tStaticConstructObject)(void *cls, void *outer, uint64_t name, uint32_t flags,
@@ -3276,6 +3373,14 @@ static int TerContributionPass(uint8_t *gm, uint8_t *gs) {
       continue;
     TerCheckFor(mgr, RVA_TER_CHECK_CONQUERED, ctrl);
     ++calls;
+    // Diagnostic for "TerritoryContribution never awards" (0 of 3,890 checks
+    // in the two 10-29 Skybridge matches): the check scores when this ratio
+    // (the ship's claimed share over its potential, allies within their
+    // radius cutting it by the row's second value) beats the row's first,
+    // VAL(0.6;0.75). The 0.75 here is that table value, for the log only.
+    float ratio = ((tTerPotentialClaimed)(g_base + RVA_TER_POTENTIAL_CLAIMED))(mgr, pawn, 0.75f);
+    if (ratio == ratio && ratio > g_ter.bestPotential)
+      g_ter.bestPotential = ratio;
   }
   return calls;
 }
@@ -3284,35 +3389,171 @@ static int TerContributionPass(uint8_t *gm, uint8_t *gs) {
 // game's own work, CheckTerritoryCapturedPoint for each capturer.
 static void __fastcall HookCpOnCaptured(void *cp, char silent) {
   g_origCpOnCaptured(cp, silent);
-  if (silent || !TerScoringEnabled())
+  if (silent)
     return;
   __try {
     uint8_t *gm = (uint8_t *)g_ter.gm;
-    void *mgr = TerritoryScoringManager(gm);
     uint8_t *p = (uint8_t *)cp;
-    if (!mgr || !IsReadable(p + OFF_CP_OWNER, 1) || !IsReadable(p + OFF_CP_PAWNS_IN_RANGE, 16))
+    if (!gm || !IsReadable(p + OFF_CP_OWNER, 1) || !IsReadable(p + OFF_CP_PAWNS_IN_RANGE, 16))
       return;
     int team = p[OFF_CP_OWNER];
     uint8_t **pawns = *(uint8_t ***)(p + OFF_CP_PAWNS_IN_RANGE);
     int num = *(int32_t *)(p + OFF_CP_PAWNS_IN_RANGE + 8);
-    int calls = 0;
+    // The capturing team's ships in range, by controller.
+    void *ctrls[64];
+    const char *kinds[64];
+    int nCtrls = 0;
     if ((team == 1 || team == 2) && pawns && num > 0 && num <= 128 && IsReadable(pawns, (size_t)num * 8))
-      for (int i = 0; i < num; ++i) {
+      for (int i = 0; i < num && nCtrls < 64; ++i) {
         uint8_t *pawn = pawns[i];
         if (!pawn || ShipTeam(pawn) != team || !IsReadable(pawn + OFF_PAWN_CONTROLLER, 8))
           continue;
         void *ctrl = *(void **)(pawn + OFF_PAWN_CONTROLLER);
         if (!ctrl)
           continue;
-        TerCheckFor(mgr, RVA_TER_CHECK_CAPTURED_POINT, ctrl);
-        ++calls;
+        kinds[nCtrls] = ClassNameOf(ctrl);
+        ctrls[nCtrls++] = ctrl;
       }
-    g_ter.captureCalls += calls;
-    Logf("conquest scoring: %s captured by team %d -- TerritoryCapturedPoint checked for %d capturer(s) of %d in range",
-         NameText(((UObjectMin *)cp)->Name) ? NameText(((UObjectMin *)cp)->Name) : "?", team, calls, num);
+    if (ConquestPointOwnerEnabled() && IsReadable(gm + OFF_GM_GAMESTATE, 8))
+      SyncPointOwner(*(uint8_t **)(gm + OFF_GM_GAMESTATE), p, ctrls, nCtrls, "captured");
+    void *mgr = TerScoringEnabled() ? TerritoryScoringManager(gm) : nullptr;
+    if (!mgr)
+      return;
+    for (int i = 0; i < nCtrls; ++i)
+      TerCheckFor(mgr, RVA_TER_CHECK_CAPTURED_POINT, ctrls[i]);
+    g_ter.captureCalls += nCtrls;
+    Logf("conquest scoring: %s captured by team %d -- TerritoryCapturedPoint checked for %d capturer(s) of %d in range "
+         "(%s%s%s)", NameText(((UObjectMin *)cp)->Name) ? NameText(((UObjectMin *)cp)->Name) : "?", team, nCtrls, num,
+         nCtrls > 0 ? kinds[0] : "none", nCtrls > 1 ? ", " : "", nCtrls > 1 ? kinds[1] : "");
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("conquest scoring: EXCEPTION 0x%08X after a capture", GetExceptionCode());
   }
+}
+
+// Conquest spawns (on; dn_host_no_conquest_spawns.txt /
+// DN_HOST_NO_CONQUEST_SPAWNS=1 turns it off)
+//
+// Player report 2026-10-29 (Skybridge): "I spawned into enemy team twice in
+// this match and have seen enemies spawn near ours." Verified in the exe and
+// the maps the same day:
+//   - Respawns go through YGameMode's player-start chooser 0x36C1A0 (vtable
+//     +0x5F0 of every multiplayer mode; "Spawning a pawn for player" 25 times
+//     for one player in that match). It takes every active YPlayerStart whose
+//     m_team (+0x3F0) is none or the player's team (PC +0xC30), asks the mode
+//     whether the start suits it (vtable +0x8B8), then rates them
+//     (m_useSpawnScoring, +0x6A3) or, with that off, picks one AT RANDOM.
+//   - GameMode_TER_BP is the only mode Blueprint that turns m_useSpawnScoring
+//     off, and YGameMode_Territory's +0x8B8 is the shared `mov al,1; ret` stub
+//     0x15FBF00, as for every mode but Invasion -- Invasion's own (0x3756A0)
+//     admits a start only when its m_gameMode (+0x418) is 1..2 (YGMF_ALL,
+//     YGMF_TDM).
+//   - Each map's _Territory sublevel places its own starts, tagged
+//     m_gameMode YGMF_TER and a team (Skybridge 8 + 8, Gorge 13 + 13; enum
+//     YGMF_NONE/ALL/TDM/TE/TER = 0..4, the YPlayerStart ctor 0x5A8E50 defaults
+//     to ALL). The persistent level keeps the other modes' starts, all active
+//     (ActivateBattlePlayerStarts 0x3B54D0 enables every start that is not an
+//     orbit start): MP_Skybridge_P has 90 YGMF_TDM and 47 YGMF_TE starts with
+//     NO team, spread over the whole map, so a Conquest respawn landed on a
+//     TER start of its own team about 8 times in 160.
+// So for a YGameMode_Territory this hides (m_active +0x424 off) every start
+// tagged for another mode around the game's own chooser, restoring each one
+// after; the rest of the choice is the game's. GUESS: the server build's
+// Territory mode filtered like Invasion's, for YGMF_ALL and YGMF_TER; the
+// exe has only the stub, but the designers tagged every Conquest start TER
+// and switched the rating off. If nothing is left (all of the team's starts
+// blocked), the unfiltered choice stands.
+#define RVA_GM_CHOOSE_PLAYER_START 0x36C1A0
+#define OFF_CLASSPTR_PLAYER_START 0x3E11F80
+#define OFF_PS_TEAM 0x3F0
+#define OFF_PS_GAME_MODE 0x418
+#define OFF_PS_ACTIVE 0x424
+#define YGMF_ALL 1
+#define YGMF_TER 4
+typedef void *(__fastcall *tChoosePlayerStart)(void *gm, void *ctrl);
+static tChoosePlayerStart g_origChoosePlayerStart = nullptr;
+
+static bool ConquestSpawnsEnabled() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_CONQUEST_SPAWNS", "dn_host_no_conquest_spawns.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static bool IsTerritoryMode(void *gm) {
+  static void *s_gm = nullptr;
+  static bool s_ter = false;
+  if (gm != s_gm) {
+    s_gm = gm;
+    s_ter = gm && ClassChainContains((UObjectMin *)gm, "YGameMode_Territory");
+  }
+  return s_ter;
+}
+
+// Turn off every active start tagged for another mode; returns how many.
+static int HideOtherModeStarts(uint8_t **hidden, int cap, int *ours) {
+  *ours = 0;
+  void *cls = *(void **)(g_base + OFF_CLASSPTR_PLAYER_START);
+  FUObjectArrayMin *arr = GObjects();
+  if (!cls || !arr || !arr->Objects)
+    return 0;
+  int n = 0;
+  for (int i = 0; i < arr->NumElements; ++i) {
+    UObjectMin *o = arr->Objects[i].Object;
+    if (!o || (o->Flags & RF_CDO_OR_ARCHETYPE) || (arr->Objects[i].Flags & OBJ_PENDING_KILL) ||
+        !ClassIsAncestor(o->Class, cls))
+      continue;
+    uint8_t *ps = (uint8_t *)o;
+    uint8_t mode = ps[OFF_PS_GAME_MODE];
+    if (mode == YGMF_ALL || mode == YGMF_TER) {
+      if (ps[OFF_PS_ACTIVE])
+        ++*ours;
+      continue;
+    }
+    if (!ps[OFF_PS_ACTIVE] || n >= cap)
+      continue;
+    ps[OFF_PS_ACTIVE] = 0;
+    hidden[n++] = ps;
+  }
+  return n;
+}
+
+static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
+  if (!IsTerritoryMode(gm))
+    return g_origChoosePlayerStart(gm, ctrl);
+  static uint8_t *s_hidden[1024];
+  int hidden = 0, ours = 0;
+  __try {
+    hidden = HideOtherModeStarts(s_hidden, 1024, &ours);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("conquest spawns: EXCEPTION 0x%08X hiding the other modes' starts", GetExceptionCode());
+  }
+  void *start = g_origChoosePlayerStart(gm, ctrl);
+  for (int i = 0; i < hidden; ++i)
+    s_hidden[i][OFF_PS_ACTIVE] = 1;
+  bool fallback = false;
+  if (!start && hidden > 0) {
+    fallback = true;
+    start = g_origChoosePlayerStart(gm, ctrl);
+  }
+  static void *s_logGm = nullptr;
+  static int s_logged = 0;
+  if (s_logGm != gm) {
+    s_logGm = gm;
+    s_logged = 0;
+  }
+  __try {
+    if (s_logged < 40 || fallback) {
+      ++s_logged;
+      uint8_t *ps = (uint8_t *)start;
+      const char *nm = ps ? NameText(((UObjectMin *)ps)->Name) : nullptr;
+      Logf("conquest spawns: %s %p -> %s (mode %d, team %d)%s; %d other-mode start(s) hidden, %d ALL/TER start(s) "
+           "active", ClassNameOf(ctrl), ctrl, ps ? (nm ? nm : "?") : "none", ps ? ps[OFF_PS_GAME_MODE] : -1,
+           ps ? ps[OFF_PS_TEAM] : -1, fallback ? " -- FALLBACK: none of the TER starts was free, unfiltered choice" : "",
+           hidden, ours);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+  return start;
 }
 
 static bool ConquestClaimedShare() {
@@ -3390,6 +3631,22 @@ static void ConquestTick(uint8_t *gm) {
       g_ter.lastPointScan = now;
       g_ter.pointsReady = SetUpCapturePoints(gs);
     }
+    // Smoke only: 30 s into the match, give the first unlocked point to team 1
+    // the way a capture's owner change does (SetCapturePoint), so the sync
+    // below runs with nobody joined.
+    static void *s_smokeFlipped = nullptr;
+    if (g_ter.pointsReady && s_smokeFlipped != gm && now - g_ter.armedAt > 70000 &&
+        SwitchOn("DN_HOST_CONQUEST_SMOKE", "dn_host_conquest_smoke.txt"))
+      for (int i = 0; i < g_ter.numCps; ++i)
+        if (!g_ter.cps[i][OFF_CP_LOCKED]) {
+          s_smokeFlipped = gm;
+          Logf("conquest: SMOKE -- giving %s to team 1", NameText(((UObjectMin *)g_ter.cps[i])->Name));
+          ((tCpSetOwner)(g_base + RVA_CP_SET_OWNER))(g_ter.cps[i], 1);
+          break;
+        }
+    if (g_ter.pointsReady && ConquestPointOwnerEnabled())
+      for (int i = 0; i < g_ter.numCps; ++i)
+        SyncPointOwner(gs, g_ter.cps[i], nullptr, 0, "owner changed outside a capture");
     // The territory map (+0x1EA8, see above). Before the GameState's first
     // full pass it is empty; the point map stands in until then.
     int t1 = 0, t2 = 0, mapTiles = 0, p1 = 0, p2 = 0, pointTiles = 0, s1 = 0, s2 = 0, ships = 0;
@@ -3430,8 +3687,10 @@ static void ConquestTick(uint8_t *gm) {
       ++g_ter.contributionTicks;
       g_ter.contributionCalls += checked;
       Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d of %.0f tiles; %d in the territory map, points %d/%d of %d, "
-           "ships' own claims %d/%d from %d) -> score T1 %d T2 %d / %d; TerritoryContribution checked for %d ship(s)",
-           pct1, pct2, t1, t2, total, mapTiles, p1, p2, pointTiles, s1, s2, ships, score[0], score[1], target, checked);
+           "ships' own claims %d/%d from %d) -> score T1 %d T2 %d / %d; TerritoryContribution checked for %d ship(s), "
+           "best claimed/potential so far %.2f (scores above 0.60)",
+           pct1, pct2, t1, t2, total, mapTiles, p1, p2, pointTiles, s1, s2, ships, score[0], score[1], target, checked,
+           g_ter.bestPotential);
     } else if (now - g_ter.lastLog > 30000) {
       g_ter.lastLog = now;
       Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d tiles of %.0f, %d in the territory map%s)", pct1, pct2, t1,
@@ -3443,8 +3702,9 @@ static void ConquestTick(uint8_t *gm) {
       g_ter.ended = true;
       gs[OFF_GS_WINNING_TEAM] = score[0] > score[1] ? 1 : score[1] > score[0] ? 2 : 3;
       Logf("conquest: team %d reached %d (T1 %d, T2 %d) -- ending the match; TerritoryContribution checks %d over "
-           "%d updates, TerritoryCapturedPoint checks %d", gs[OFF_GS_WINNING_TEAM], target, score[0], score[1],
-           g_ter.contributionCalls, g_ter.contributionTicks, g_ter.captureCalls);
+           "%d updates (best claimed/potential %.2f), TerritoryCapturedPoint checks %d, point owner syncs %d",
+           gs[OFF_GS_WINNING_TEAM], target, score[0], score[1], g_ter.contributionCalls, g_ter.contributionTicks,
+           g_ter.bestPotential, g_ter.captureCalls, g_ter.ownerSyncs);
       void **vt = *(void ***)gm;
       ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
     }
@@ -3527,6 +3787,36 @@ static void NpcAiStartTick(uint8_t *gm) {
       return;
     void *npcCls = *(void **)(g_base + OFF_CLASSPTR_NPC_AI_CONTROLLER);
     static int s_started = 0;
+    // Diagnostic (Conquest, 2026-10-29: bots "standing still 9k meters away
+    // from the playable map"): the actor each scene NPC slot spawns at -- the
+    // entry's +0x30, whose root component (+0x198) gives the scene manager's
+    // spawn transform (0x2693A0) -- once per slot and match.
+    static void *s_spawnLogGm = nullptr;
+    static uint8_t s_spawnLogged[256];
+    if (s_spawnLogGm != gm) {
+      s_spawnLogGm = gm;
+      memset(s_spawnLogged, 0, sizeof(s_spawnLogged));
+    }
+    if (IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1) && gs[OFF_GS_GAME_MODE_TYPE] == YGMT_TER)
+      for (int i = 0; i < n && i < 256; ++i) {
+        uint8_t *at = *(uint8_t **)(data + (size_t)i * NPC_SPAWN_SIZE + 0x30);
+        if (s_spawnLogged[i] || !at || !IsReadable(at, sizeof(UObjectMin)))
+          continue;
+        s_spawnLogged[i] = 1;
+        uint8_t *comp = IsReadable(at + 0x198, 8) ? *(uint8_t **)(at + 0x198) : nullptr;
+        float x = 0, y = 0, z = 0;
+        if (comp && IsReadable(comp + 0x160, 12)) {
+          x = *(float *)(comp + 0x160);
+          y = *(float *)(comp + 0x164);
+          z = *(float *)(comp + 0x168);
+        }
+        void *psCls = *(void **)(g_base + OFF_CLASSPTR_PLAYER_START);
+        bool isStart = psCls && ClassIsAncestor(((UObjectMin *)at)->Class, psCls);
+        const char *nm = NameText(((UObjectMin *)at)->Name);
+        Logf("bots: conquest NPC slot %d spawns at %s (%s%s) (%.0f, %.0f, %.0f) mode %d team %d", i, nm ? nm : "?",
+             ClassNameOf(at), isStart ? ", a player start" : "", x, y, z, isStart ? at[OFF_PS_GAME_MODE] : -1,
+             isStart ? at[OFF_PS_TEAM] : -1);
+      }
     for (int i = 0; i < n; ++i) {
       uint8_t *pawn = (uint8_t *)((tWeakGet)(g_base + RVA_WEAK_PTR_GET))(data + (size_t)i * NPC_SPAWN_SIZE + OFF_SCENE_NPC_PAWN);
       if (!pawn || !IsReadable(pawn + OFF_PAWN_CONTROLLER, 8))
@@ -8799,10 +9089,19 @@ static DWORD WINAPI Startup(LPVOID) {
                         (void *)&HookCreateScoringMgrA, (void **)&g_origCreateScoringMgrA);
     InstallSwitchedHook("conquest scoring manager (game mode creator B)", RVA_GM_CREATE_SCORING_MGR_B,
                         (void *)&HookCreateScoringMgrB, (void **)&g_origCreateScoringMgrB);
-    InstallSwitchedHook("conquest capture score (YCapturePoint::OnCaptured)", RVA_CP_ON_CAPTURED,
-                        (void *)&HookCpOnCaptured, (void **)&g_origCpOnCaptured);
   } else
     Logf("conquest scoring: OFF (dn_host_no_ter_scoring.txt / DN_HOST_NO_TER_SCORING=1)");
+  if (TerScoringEnabled() || ConquestPointOwnerEnabled())
+    InstallSwitchedHook("conquest capture (YCapturePoint::OnCaptured: point owner + capture score)",
+                        RVA_CP_ON_CAPTURED, (void *)&HookCpOnCaptured, (void **)&g_origCpOnCaptured);
+  if (!ConquestPointOwnerEnabled())
+    Logf("conquest: captured points' territory OFF (dn_host_no_conquest_point_owner.txt / "
+         "DN_HOST_NO_CONQUEST_POINT_OWNER=1)");
+  if (ConquestSpawnsEnabled())
+    InstallSwitchedHook("conquest spawns (YGameMode player-start chooser)", RVA_GM_CHOOSE_PLAYER_START,
+                        (void *)&HookChoosePlayerStart, (void **)&g_origChoosePlayerStart);
+  else
+    Logf("conquest spawns: OFF (dn_host_no_conquest_spawns.txt / DN_HOST_NO_CONQUEST_SPAWNS=1)");
 
   if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
     InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
