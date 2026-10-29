@@ -1387,6 +1387,38 @@ match "faster and smooth, no stutter" -- the client moves with the replicated
 speed feat, no position corrections. `dn_host_no_game_modifiers.txt` turns it
 off.
 
+## Ceres Awakens: buffs end with their collector (on, PodTDM hosts only; `dn_host_no_ceres_buff_end.txt` turns it off; added 2026-10-29)
+
+Grey Box's Ceres Awakens posts (2017 and 2020): "A pod's effect will expire
+after 30 seconds--or when the captain who collected it is destroyed." Only the
+30 s half ran. The pod Blueprint (`AlliedBuffPod_Parent_Pickup_BP`) records
+`PickedUpPawn` / `PickedUpTeam`, and for every pawn of that team calls
+`RemoveFeat`, then 0.2 s later `AddFeat` with its `FeatToActivate` (`BuffPod_*`,
+`D(30)` in `DN_Feats_BuffPod_OTS_DT`). Nothing watches the collector.
+
+The mod hooks the `AddFeat` exec thunk (`0x73EDF0`). A Blueprint call hands the
+caller's frame to the thunk, so `Stack->Object` (`+0x18`) is the pod. For each
+buff-pod feat it remembers the pod's collector per team. When that ship is
+killed (`HookTdmKilled`), the feat is removed from every ship of the team
+(`RemoveFeat` body `0x359770`) unless a later cache of the same kind refreshed it.
+Log: `ceres: pod fields PickedUpPawn +0x.. PickedUpTeam +0x.. FeatToActivate
++0x..` (once), `ceres: BuffPod_X for team N, collector ...` per pickup, and
+`ceres: collector ... destroyed -- BuffPod_X removed from N ship(s) of team N`.
+
+Not verified live. A headless host cannot test it, because nobody picks a
+cache up and no bots spawn without a player, even with the teams filled by
+hand (smoke host 2026-10-29: 0 ships after the fill). The smoke host shows only
+that the hooks install on a PodTDM host.
+
+Checked, no change (2026-10-29): 2 caches every 30 s (6 of 6 live matches;
+the shipped map's `PodsToSpawn` 2, the 2020 notes said 3 -- the cook is
+later); 7 cache types including rapid fire; 30 s buffs; bots never pick up
+(the overlap check takes only `YPlayerController` ships); the pickup score
+goes to the collector alone (`PickedUpScoringEventForFullTeam` off on every
+pod); TDM rules otherwise (25 kills, 20 min). The host's `Failed to find
+object 'Class None.PodTDM'` warning is harmless: it still runs
+`GameMode_PodTDM_BP_C`.
+
 ## Havoc (on, Havoc hosts only; `dn_host_no_havoc_director.txt` turns it off; added 2026-10-19)
 
 Havoc is the wave-defence mode (`GameMode_Havoc_BP`, a Horde subclass,

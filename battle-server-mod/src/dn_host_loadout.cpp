@@ -2021,10 +2021,17 @@ static void AwardManOfTheDay(void *killer, int winningTeam, const char *why) {
   Logf("ribbons: Man Of The Day -> player state %p (team %d, %s)", pri, team, why);
 }
 
+static void CeresOnShipKilled(void *victimPawn);
+
 static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimCtrl,
                                      void *victimPawn, void *damageType) {
   uint8_t *gm = (uint8_t *)gameMode;
   uint8_t *gs = nullptr;
+  __try {
+    CeresOnShipKilled(victimPawn); // before the original: the pawn is still whole
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("ceres: EXCEPTION ending a collector's buffs");
+  }
   __try {
     gs = g_onsPointsOn ? InvasionGameState(gm) : nullptr;
     if (gs) {
@@ -9500,6 +9507,150 @@ static void *WaitForUObjectByName(const char *want, const char **outerOut,
   return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// Ceres Awakens: a tech cache's buff ends with its collector (on, PodTDM hosts
+// only; dn_host_no_ceres_buff_end.txt / DN_HOST_NO_CERES_BUFF_END=1 turns it
+// off). Added 2026-10-29.
+//
+// Grey Box's Ceres Awakens posts (2017 "Join the Harvest", 2020-06 "Ceres
+// Awakens"): "When you pick up a pod, every member of your team will get a
+// temporary boost ... A pod's effect will expire after 30 seconds--or when the
+// captain who collected it is destroyed." Only the 30 s half ran here: the
+// pod (AlliedBuffPod_Parent_Pickup_BP, bytecode read 2026-10-29) records
+// PickedUpPawn and PickedUpTeam, then for every pawn of that team calls
+// RemoveFeat(FeatToActivate), waits 0.2 s and calls AddFeat(FeatToActivate)
+// (BuffPod_Weapons / _Energy / _RapidFire / _Modules / _Health /
+// _MovementSpeed / _Armor; DN_Feats_BuffPod_OTS_DT gives each D(30)). Nothing
+// in the Blueprint, the exe or the feat rows watches the collector -- that was
+// server-side.
+//
+// So the mod hooks the AddFeat exec thunk (0x73EDF0, .pdata entry; Step()s the
+// FName through Stack->Object +0x18, then calls the body 0x337850). A Blueprint
+// call hands the caller's frame to the thunk, so Stack->Object is the pod.
+// Each buff pod feat added is remembered per team with the pod's
+// PickedUpPawn. When that pawn is killed (HookTdmKilled), the feat is removed
+// from every ship of its team (RemoveFeat body 0x359770, as the pod itself
+// calls it -- on ships without the feat too), unless a later cache of the
+// same kind refreshed it for that team. Log: "ceres: <feat> for team N,
+// collector <pawn>" and "ceres: collector <pawn> destroyed -- <feat> removed
+// from N ship(s) of team N".
+#define RVA_EXEC_ADD_FEAT 0x73EDF0
+#define OFF_FFRAME_OBJECT 0x18
+#define YGMT_POD_TDM 4
+#define CERES_BUFF_MS 30000 // the rows' D(30)
+static tExecThunk g_origExecAddFeat = nullptr;
+struct CeresBuff {
+  uint64_t feat;  // FName
+  void *collector;
+  DWORD at;
+};
+static CeresBuff g_ceresBuffs[2][8] = {};
+static SRWLOCK g_ceresLock = SRWLOCK_INIT;
+
+static bool HostIsPodTDM() {
+  const wchar_t *cmd = GetCommandLineW();
+  return cmd && wcsstr(cmd, L"-GameMode=PodTDM ") != nullptr;
+}
+static bool CeresBuffEndOn() {
+  static int s_on = -1;
+  if (s_on < 0)
+    s_on = SwitchOn("DN_HOST_NO_CERES_BUFF_END", "dn_host_no_ceres_buff_end.txt") ? 0 : 1;
+  return s_on == 1;
+}
+
+static void __fastcall HookExecAddFeat(void *comp, uint8_t *stack, void *result) {
+  void *pod = nullptr;
+  __try {
+    pod = stack ? *(void **)(stack + OFF_FFRAME_OBJECT) : nullptr;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    pod = nullptr;
+  }
+  g_origExecAddFeat(comp, stack, result);
+  __try {
+    if (!pod || !ClassChainContains((UObjectMin *)pod, "AlliedBuffPod_Parent_Pickup_BP"))
+      return;
+    static int offPawn = -2, offTeam = -2, offFeat = -2;
+    if (offPawn == -2) {
+      offPawn = PropOffset((UObjectMin *)pod, "PickedUpPawn");
+      offTeam = PropOffset((UObjectMin *)pod, "PickedUpTeam");
+      offFeat = PropOffset((UObjectMin *)pod, "FeatToActivate");
+      Logf("ceres: pod fields PickedUpPawn +0x%X PickedUpTeam +0x%X FeatToActivate +0x%X", offPawn, offTeam, offFeat);
+    }
+    if (offPawn < 0 || offTeam < 0 || offFeat < 0)
+      return;
+    uint8_t *p = (uint8_t *)pod;
+    void *collector = *(void **)(p + offPawn);
+    int team = p[offTeam];
+    uint64_t feat = *(uint64_t *)(p + offFeat);
+    if (!collector || (team != 1 && team != 2) || !feat)
+      return;
+    DWORD now = GetTickCount();
+    AcquireSRWLockExclusive(&g_ceresLock);
+    CeresBuff *slot = nullptr, *oldest = &g_ceresBuffs[team - 1][0];
+    for (auto &b : g_ceresBuffs[team - 1]) {
+      if (b.feat == feat) { slot = &b; break; }
+      if (b.at < oldest->at) oldest = &b;
+    }
+    if (!slot) slot = oldest;
+    bool fresh = slot->feat != feat || slot->collector != collector || now - slot->at > 1000;
+    slot->feat = feat;
+    slot->collector = collector;
+    slot->at = now;
+    ReleaseSRWLockExclusive(&g_ceresLock);
+    if (fresh) // once per pickup, not once per teammate
+      Logf("ceres: %s for team %d, collector %p (%s)", NameText(*(FNameMin *)&feat), team, collector,
+           ClassNameOf(collector));
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("ceres: EXCEPTION reading a buff pod");
+  }
+}
+
+static void CeresOnShipKilled(void *victimPawn) {
+  if (!g_origExecAddFeat || !victimPawn)
+    return;
+  uint64_t feats[8];
+  int team = 0, nf = 0;
+  DWORD now = GetTickCount();
+  AcquireSRWLockExclusive(&g_ceresLock);
+  for (int t = 0; t < 2; ++t)
+    for (auto &b : g_ceresBuffs[t])
+      if (b.collector == victimPawn) {
+        if (b.feat && now - b.at <= CERES_BUFF_MS && nf < 8) {
+          feats[nf++] = b.feat;
+          team = t + 1;
+        }
+        b = CeresBuff{};
+      }
+  ReleaseSRWLockExclusive(&g_ceresLock);
+  if (!nf)
+    return;
+  uint8_t *base = (uint8_t *)g_base;
+  void **arr = *(void ***)(base + RVA_SHIP_LIST);
+  int n = *(int32_t *)(base + RVA_SHIP_LIST + 8);
+  if (n <= 0 || n > 512 || !IsReadable(arr, (size_t)n * 8))
+    return;
+  static int offFeats = -2;
+  for (int f = 0; f < nf; ++f) {
+    int removed = 0;
+    for (int i = 0; i < n; ++i) {
+      uint8_t *ship = (uint8_t *)arr[i];
+      if (!ship || ShipTeam(ship) != team)
+        continue;
+      if (offFeats == -2)
+        offFeats = PropOffset((UObjectMin *)ship, "m_featsComponent");
+      if (offFeats < 0)
+        return;
+      void *comp = *(void **)(ship + offFeats);
+      if (!comp)
+        continue;
+      ((tRemoveFeat)(g_base + RVA_FEATS_REMOVE_FEAT))(comp, feats[f]);
+      ++removed;
+    }
+    Logf("ceres: collector %p destroyed -- %s removed from %d ship(s) of team %d", victimPawn,
+         NameText(*(FNameMin *)&feats[f]), removed, team);
+  }
+}
+
 static void InstallPostLoginHook() {
   g_spawnArmed = PostLoginSpawnEnabled();
   // g_fleetTierArmed is already set in Startup, which must know it before this
@@ -9778,8 +9929,14 @@ static DWORD WINAPI Startup(LPVOID) {
     Logf("te: winners keep their ship %s; team HUD %s", TeWinnerLockOn() ? "ON" : "OFF (dn_host_no_te_winner_lock.txt)",
          TeHudOn() ? "ON" : "OFF (dn_host_no_te_hud.txt)");
   }
-  // Both modes ride on the same two hooks; each acts only on its own mode.
-  if (onsPoints || TeRoundsOn()) {
+  bool ceres = HostIsPodTDM() && CeresBuffEndOn();
+  if (ceres)
+    InstallSwitchedHook("ceres buffs end with their collector (AddFeat exec)", RVA_EXEC_ADD_FEAT,
+                        (void *)&HookExecAddFeat, (void **)&g_origExecAddFeat);
+  else if (HostIsPodTDM())
+    Logf("ceres: buffs outlive their collector (dn_host_no_ceres_buff_end.txt / DN_HOST_NO_CERES_BUFF_END=1)");
+  // These modes ride on the same two hooks; each acts only on its own mode.
+  if (onsPoints || TeRoundsOn() || ceres) {
     InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,
                         (void *)&HookTdmKilled, (void **)&g_origTdmKilled);
     InstallSwitchedHook("winner by points / rounds (TDM leader)", RVA_TDM_DETERMINE_LEADER,
