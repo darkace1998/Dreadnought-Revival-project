@@ -31,6 +31,22 @@ func TestBaseShipXPKeyedByHullLoadout(t *testing.T) {
 	}
 }
 
+// A pawn shared by a base hull and heroes lists its XP once, under the base
+// hull: pawn 184483987 is base hull 33489271 and hero 67043343. Listing
+// it under both let a player convert the same XP twice (2026-10-31).
+func TestSharedPawnXPListedOnceUnderBaseHull(t *testing.T) {
+	got := map[int32]int32{}
+	for _, e := range clientShipXPs([]shipXPEntry{{shipID: 184483987, xp: 1278}}) {
+		got[e.shipID] = e.xp
+	}
+	if got[33489271] != 1278 {
+		t.Errorf("base hull 33489271 = %d, want 1278 (%v)", got[33489271], got)
+	}
+	if _, dup := got[67043343]; dup {
+		t.Errorf("hero 67043343 repeats the base hull's XP: %v", got)
+	}
+}
+
 // Every base hull and hero is in the login list, so a ship acquired
 // mid-session can receive the in-session XP push.
 func TestUnlistedTechTreeShipKeysCoverTheRoster(t *testing.T) {

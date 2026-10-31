@@ -34,12 +34,24 @@ import "github.com/darkace1998/Dreadnought-Revival-project/shared/dreadgameconfi
 // search), and a hero's tree node Id is its loadout id (techTreeHeroItems).
 // GUESS: the hero's ship page passes that loadout id, as a base hull's does;
 // not yet checked on a client.
+//
+// Only heroes on a pawn NO base hull uses (2026-10-31). 26 of the 53 pawns
+// carry a base hull plus 1-3 heroes, and keying all of them listed the same
+// stored XP two to four times. YA_ConvertShipXP then failed with "not enough
+// ship XP": converting from one key drained the pawn while the reply handler
+// subtracts only from the ShipID it names (0x2A2FDD0), so the siblings kept
+// showing XP that was gone. Measured: 0 failures in the five days before the
+// hero keys went live (2026-10-29 21:42), 29 in the two days after, every
+// failing player owning such a hero.
 func hullLoadoutsForPawn(pawn int32) []int32 {
 	var out []int32
 	for _, hull := range baseShipLoadouts {
 		if id, ok := dreadgameconfig.ShipIDForPrecastLoadout(hull.loadoutID); ok && id == pawn {
 			out = append(out, hull.loadoutID)
 		}
+	}
+	if len(out) > 0 {
+		return out
 	}
 	for _, hero := range heroShipLoadouts {
 		if id, ok := dreadgameconfig.ShipIDForPrecastLoadout(hero.loadoutID); ok && id == pawn {
