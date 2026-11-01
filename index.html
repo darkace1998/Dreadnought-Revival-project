@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DREADNOUGHT REVIVAL — Community Private Server</title>
+<meta name="description" content="A community-operated private server reviving Dreadnought (UE4, Steam 835860). Unmodified client, emulated backend, dedicated battle servers.">
+<link rel="icon" type="image/png" href="dn-launcher/winres/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#0a0b0e;
+  --charcoal:#12151c;
+  --panel:#1f2430;
+  --gunmetal:#2b3245;
+  --line:rgba(120,140,180,.14);
+  --line-bright:rgba(255,107,0,.45);
+  --amber:#ff6b00;
+  --amber-deep:#e65100;
+  --cyan:#00b0ff;
+  --green:#00e676;
+  --text:#d7dde8;
+  --muted:#8b95a9;
+  --font-head:'Orbitron',sans-serif;
+  --font-body:'Rajdhani',sans-serif;
+  --font-mono:'Share Tech Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{
+  background:var(--void);
+  color:var(--text);
+  font-family:var(--font-body);
+  font-size:18px;
+  line-height:1.6;
+  overflow-x:hidden;
+}
+::selection{background:var(--amber);color:#000}
+
+/* ---------- overlays ---------- */
+body::before{
+  content:"";position:fixed;inset:0;z-index:1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 100%);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);
+}
+.glow-orb{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0}
+.glow-orb.a{width:560px;height:560px;top:-180px;right:-120px;background:radial-gradient(circle,rgba(255,107,0,.16),transparent 65%)}
+.glow-orb.b{width:480px;height:480px;top:40%;left:-200px;background:radial-gradient(circle,rgba(0,176,255,.10),transparent 65%)}
+
+/* ---------- chrome ---------- */
+.skip-link{position:absolute;left:-9999px;top:0;background:var(--amber);color:#000;padding:10px 18px;z-index:200;font-family:var(--font-mono)}
+.skip-link:focus{left:12px;top:12px}
+
+header{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,11,14,.82);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  transition:box-shadow .3s;
+}
+header.scrolled{box-shadow:0 0 40px rgba(255,107,0,.12),0 8px 30px rgba(0,0,0,.6)}
+.nav{
+  max-width:1240px;margin:0 auto;padding:0 24px;height:68px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)}
+.brand img{width:34px;height:34px;filter:drop-shadow(0 0 8px rgba(255,107,0,.6))}
+.brand span{font-family:var(--font-head);font-weight:800;font-size:15px;letter-spacing:.18em}
+.brand span em{font-style:normal;color:var(--amber)}
+.nav-links{display:flex;align-items:center;gap:6px;list-style:none}
+.nav-links a{
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);text-decoration:none;padding:8px 12px;border:1px solid transparent;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:color .2s,border-color .2s,background .2s;
+}
+.nav-links a:hover{color:var(--text)}
+.nav-links a.active{color:var(--amber);border-color:var(--line-bright);background:rgba(255,107,0,.07)}
+.nav-cta{
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  color:#000;background:linear-gradient(135deg,var(--amber),var(--amber-deep));
+  text-decoration:none;padding:9px 16px;font-weight:bold;
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  transition:box-shadow .2s,transform .2s;
+}
+.nav-cta:hover{box-shadow:0 0 22px rgba(255,107,0,.55);transform:translateY(-1px)}
+.burger{display:none;background:none;border:1px solid var(--line);color:var(--text);padding:8px 10px;cursor:pointer;font-family:var(--font-mono)}
+
+main{position:relative;z-index:3}
+section{max-width:1240px;margin:0 auto;padding:110px 24px 40px}
+
+/* ---------- shared section furniture ---------- */
+.sec-tag{
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--cyan);display:flex;align-items:center;gap:12px;margin-bottom:14px;
+}
+.sec-tag::before{content:"";width:34px;height:1px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+h2{
+  font-family:var(--font-head);font-weight:800;font-size:clamp(26px,4vw,40px);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:18px;
+}
+h2 em{font-style:normal;color:var(--amber);text-shadow:0 0 24px rgba(255,107,0,.5)}
+.sec-lead{max-width:760px;color:var(--muted);font-size:19px;margin-bottom:44px}
+.sec-lead strong{color:var(--text)}
+
+.panel{
+  background:linear-gradient(160deg,rgba(31,36,48,.75),rgba(18,21,28,.85));
+  border:1px solid var(--line);
+  clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+  backdrop-filter:blur(8px);
+}
+
+/* ---------- hero ---------- */
+.hero{
+  min-height:100svh;max-width:none;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;
+  padding:140px 24px 80px;position:relative;
+}
+.hero-bg{
+  position:absolute;inset:0;z-index:-1;overflow:hidden;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 110%,rgba(255,107,0,.14),transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% -10%,rgba(0,176,255,.10),transparent 60%),
+    linear-gradient(180deg,#0a0b0e 0%,#0d1017 55%,#0a0b0e 100%);
+}
+.hero-bg::before{
+  content:"";position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 20%,transparent 75%);
+  animation:gridrift 24s linear infinite;
+}
+@keyframes gridrift{to{background-position:52px 52px}}
+.hero-ship{
+  position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+  width:min(880px,110vw);opacity:.5;pointer-events:none;
+  mask-image:linear-gradient(180deg,transparent,#000 30%,#000 75%,transparent);
+  filter:drop-shadow(0 0 60px rgba(255,107,0,.25));
+}
+.status-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--green);border:1px solid rgba(0,230,118,.4);background:rgba(0,230,118,.06);
+  padding:8px 18px;margin-bottom:30px;
+  clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+}
+.pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}
+.hero h1{
+  font-family:var(--font-head);font-weight:900;
+  font-size:clamp(42px,9vw,104px);line-height:1.02;letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.hero h1 .amber{
+  color:var(--amber);
+  text-shadow:0 0 18px rgba(255,107,0,.65),0 0 70px rgba(255,107,0,.35);
+}
+.hero h1 .hollow{
+  color:transparent;-webkit-text-stroke:2px rgba(215,221,232,.85);
+}
+.hero .tagline{
+  font-family:var(--font-mono);font-size:clamp(14px,2vw,18px);color:var(--muted);
+  letter-spacing:.14em;margin:26px 0 40px;max-width:720px;
+}
+.hero .tagline b{color:var(--cyan);font-weight:normal}
+.cta-row{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+.btn{
+  font-family:var(--font-mono);font-size:15px;letter-spacing:.1em;text-transform:uppercase;
+  text-decoration:none;padding:15px 30px;cursor:pointer;border:none;position:relative;
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  transition:box-shadow .2s,transform .2s,background .2s;
+}
+.btn-primary{color:#000;font-weight:bold;background:linear-gradient(135deg,var(--amber),var(--amber-deep))}
+.btn-primary:hover{box-shadow:0 0 34px rgba(255,107,0,.6);transform:translateY(-2px)}
+.btn-ghost{color:var(--cyan);background:rgba(0,176,255,.05);border:1px solid rgba(0,176,255,.45)}
+.btn-ghost{box-shadow:inset 0 0 0 1px rgba(0,176,255,.45)}
+.btn-ghost:hover{box-shadow:0 0 26px rgba(0,176,255,.4),inset 0 0 0 1px rgba(0,176,255,.8);transform:translateY(-2px)}
+.btn-dim{color:var(--text);background:rgba(43,50,69,.5);box-shadow:inset 0 0 0 1px var(--line)}
+.btn-dim:hover{box-shadow:0 0 22px rgba(139,149,169,.3),inset 0 0 0 1px rgba(139,149,169,.5);transform:translateY(-2px)}
+.hero-stats{
+  display:flex;flex-wrap:wrap;gap:0;margin-top:64px;border:1px solid var(--line);
+  background:rgba(18,21,28,.6);backdrop-filter:blur(8px);
+}
+.hero-stats div{padding:18px 34px;border-right:1px solid var(--line)}
+.hero-stats div:last-child{border-right:none}
+.hero-stats .num{font-family:var(--font-head);font-weight:800;font-size:26px;color:var(--amber)}
+.hero-stats .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.scroll-hint{
+  position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.3em;color:var(--muted);
+  animation:bob 2s ease-in-out infinite;
+}
+@keyframes bob{50%{transform:translate(-50%,8px)}}
+
+/* ---------- briefing ---------- */
+.briefing-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:24px}
+.briefing-main{padding:36px}
+.briefing-main p{color:var(--muted);margin-bottom:16px;font-size:19px}
+.briefing-main p strong{color:var(--text)}
+.briefing-main .mono-line{
+  font-family:var(--font-mono);font-size:14px;color:var(--cyan);
+  border-left:3px solid var(--amber);padding:10px 16px;background:rgba(255,107,0,.05);margin-top:8px;
+}
+.briefing-side{padding:36px;display:flex;flex-direction:column;gap:0}
+.briefing-side h3{font-family:var(--font-head);font-size:15px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px dashed var(--line);font-size:16px}
+.kv:last-child{border-bottom:none}
+.kv .k{font-family:var(--font-mono);font-size:13px;color:var(--muted);letter-spacing:.06em}
+.kv .v{color:var(--text);text-align:right;font-weight:600}
+.kv .v.ok{color:var(--green)}
+.kv .v.wip{color:var(--amber)}
+
+/* ---------- features ---------- */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.feature{
+  padding:30px 28px;position:relative;overflow:hidden;
+  transition:border-color .25s,box-shadow .25s,transform .25s;
+}
+.feature::before{
+  content:"";position:absolute;top:0;left:0;width:100%;height:2px;
+  background:linear-gradient(90deg,var(--amber),transparent 70%);
+  opacity:0;transition:opacity .25s;
+}
+.feature:hover{border-color:var(--line-bright);box-shadow:0 0 34px rgba(255,107,0,.14),inset 0 0 24px rgba(255,107,0,.04);transform:translateY(-4px)}
+.feature:hover::before{opacity:1}
+.feature .ico{
+  width:46px;height:46px;display:grid;place-items:center;margin-bottom:18px;
+  border:1px solid var(--line-bright);color:var(--amber);font-family:var(--font-mono);font-size:20px;
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  text-shadow:0 0 12px rgba(255,107,0,.8);
+}
+.feature h3{font-family:var(--font-head);font-size:17px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;color:var(--text)}
+.feature p{color:var(--muted);font-size:16.5px}
+.feature .tag{
+  display:inline-block;margin-top:14px;font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--green);border:1px solid rgba(0,230,118,.35);padding:4px 10px;
+  background:rgba(0,230,118,.05);
+}
+.feature .tag.amber{color:var(--amber);border-color:rgba(255,107,0,.4);background:rgba(255,107,0,.06)}
+.feature .tag.cyan{color:var(--cyan);border-color:rgba(0,176,255,.4);background:rgba(0,176,255,.06)}
+
+/* ---------- gallery ---------- */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.ship-card{
+  cursor:pointer;padding:0;overflow:hidden;position:relative;
+  transition:border-color .25s,box-shadow .25s,transform .25s;
+}
+.ship-card:hover{border-color:var(--line-bright);box-shadow:0 0 30px rgba(0,176,255,.18);transform:translateY(-4px)}
+.ship-card img{width:100%;display:block;aspect-ratio:512/320;object-fit:cover;background:radial-gradient(ellipse at 50% 60%,#1a2030,#0d1017)}
+.ship-card .meta{padding:14px 18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.ship-card .name{font-family:var(--font-head);font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+.ship-card .cls{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan)}
+.ship-card .cls.dread{color:var(--amber)}
+.gallery-note{margin-top:22px;font-family:var(--font-mono);font-size:13px;color:var(--muted);letter-spacing:.06em}
+
+/* lightbox */
+.lightbox{
+  position:fixed;inset:0;z-index:150;display:none;place-items:center;
+  background:rgba(5,6,8,.9);backdrop-filter:blur(10px);padding:24px;
+}
+.lightbox.open{display:grid}
+.lightbox figure{max-width:min(960px,94vw);text-align:center}
+.lightbox img{max-width:100%;max-height:74vh;border:1px solid var(--line-bright);box-shadow:0 0 60px rgba(255,107,0,.25)}
+.lightbox figcaption{margin-top:16px;font-family:var(--font-head);font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--text)}
+.lightbox figcaption span{display:block;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:.2em;margin-top:6px}
+.lightbox .close{
+  position:absolute;top:22px;right:26px;background:none;cursor:pointer;
+  font-family:var(--font-mono);font-size:15px;color:var(--amber);letter-spacing:.2em;
+  border:1px solid var(--line-bright);padding:10px 16px;
+}
+
+/* ---------- roadmap ---------- */
+.timeline{position:relative;padding-left:34px}
+.timeline::before{
+  content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;
+  background:linear-gradient(180deg,var(--green),var(--cyan) 45%,var(--amber) 75%,var(--gunmetal));
+}
+.milestone{position:relative;padding:0 0 42px 10px}
+.milestone:last-child{padding-bottom:0}
+.milestone::before{
+  content:"";position:absolute;left:-32px;top:6px;width:14px;height:14px;
+  background:var(--void);border:2px solid var(--gunmetal);transform:rotate(45deg);
+}
+.milestone.done::before{border-color:var(--green);box-shadow:0 0 12px rgba(0,230,118,.7);background:var(--green)}
+.milestone.active::before{border-color:var(--amber);box-shadow:0 0 14px rgba(255,107,0,.9);background:var(--amber);animation:pulse 1.6s infinite}
+.milestone .phase{font-family:var(--font-mono);font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted)}
+.milestone.done .phase{color:var(--green)}
+.milestone.active .phase{color:var(--amber)}
+.milestone h3{font-family:var(--font-head);font-size:19px;letter-spacing:.08em;text-transform:uppercase;margin:6px 0 8px}
+.milestone p{color:var(--muted);max-width:680px;font-size:17px}
+
+/* ---------- community ---------- */
+.community-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.steps{padding:36px}
+.steps h3,.contribute h3{font-family:var(--font-head);font-size:18px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:22px}
+.step{display:flex;gap:18px;padding:16px 0;border-bottom:1px dashed var(--line)}
+.step:last-of-type{border-bottom:none}
+.step .n{
+  flex:none;width:38px;height:38px;display:grid;place-items:center;
+  font-family:var(--font-head);font-weight:700;color:var(--amber);
+  border:1px solid var(--line-bright);font-size:15px;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+.step h4{font-family:var(--font-body);font-weight:700;font-size:17px;letter-spacing:.04em;text-transform:uppercase}
+.step p{color:var(--muted);font-size:16px}
+.step code,.contribute code{font-family:var(--font-mono);font-size:13.5px;color:var(--cyan);background:rgba(0,176,255,.07);padding:2px 7px}
+.cmd-row{
+  display:flex;align-items:center;gap:10px;margin-top:14px;
+  background:#0d1017;border:1px solid var(--line);padding:12px 16px;
+}
+.cmd-row code{flex:1;font-family:var(--font-mono);font-size:13.5px;color:var(--green);white-space:nowrap;overflow-x:auto}
+.copy-btn{
+  flex:none;cursor:pointer;font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--amber);background:rgba(255,107,0,.08);border:1px solid var(--line-bright);padding:7px 12px;
+  transition:box-shadow .2s;
+}
+.copy-btn:hover{box-shadow:0 0 16px rgba(255,107,0,.4)}
+.contribute{padding:36px}
+.contribute p{color:var(--muted);margin-bottom:14px;font-size:17px}
+.contribute ul{margin:0 0 18px 20px;color:var(--muted);font-size:16.5px}
+.contribute li{margin-bottom:8px}
+.contribute a{color:var(--cyan);text-decoration:none;border-bottom:1px dotted rgba(0,176,255,.5)}
+.contribute a:hover{color:#fff}
+
+/* ---------- footer ---------- */
+footer{
+  position:relative;z-index:3;margin-top:80px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(18,21,28,.6),#07080b);
+}
+.footer-inner{max-width:1240px;margin:0 auto;padding:56px 24px 36px;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:36px}
+.footer-inner h4{font-family:var(--font-head);font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin-bottom:16px}
+.footer-inner p{color:var(--muted);font-size:15.5px;max-width:380px}
+.footer-inner ul{list-style:none}
+.footer-inner li{margin-bottom:10px}
+.footer-inner a{color:var(--muted);text-decoration:none;font-family:var(--font-mono);font-size:13.5px;letter-spacing:.05em;transition:color .2s}
+.footer-inner a:hover{color:var(--amber)}
+.footer-bottom{
+  border-top:1px solid var(--line);padding:20px 24px;text-align:center;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--muted);
+}
+.footer-bottom b{color:var(--green);font-weight:normal}
+
+/* ---------- reveal ---------- */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  .briefing-grid,.community-grid{grid-template-columns:1fr}
+  .footer-inner{grid-template-columns:1fr 1fr}
+}
+@media (max-width:760px){
+  .burger{display:block}
+  .nav-links{
+    position:absolute;top:68px;left:0;right:0;flex-direction:column;align-items:stretch;
+    background:rgba(10,11,14,.97);border-bottom:1px solid var(--line);padding:12px 20px 18px;display:none;
+  }
+  .nav-links.open{display:flex}
+  .nav-links a{padding:12px}
+  .nav-cta{display:none}
+  .hero-stats{flex-direction:column}
+  .hero-stats div{border-right:none;border-bottom:1px solid var(--line)}
+  .hero-stats div:last-child{border-bottom:none}
+  section{padding:80px 20px 30px}
+  .footer-inner{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="glow-orb a" aria-hidden="true"></div>
+<div class="glow-orb b" aria-hidden="true"></div>
+
+<header id="site-header">
+  <nav class="nav" aria-label="Primary">
+    <a class="brand" href="#top">
+      <img src="dn-launcher/winres/icon.png" alt="Dreadnought Revival logo">
+      <span>DREAD<em>NOUGHT</em> // REVIVAL</span>
+    </a>
+    <button class="burger" id="burger" aria-label="Toggle menu" aria-expanded="false">[ MENU ]</button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="#briefing">Briefing</a></li>
+      <li><a href="#systems">Systems</a></li>
+      <li><a href="#gallery">Fleet</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#community">Community</a></li>
+    </ul>
+    <a class="nav-cta" href="https://github.com/darkace1998/Dreadnought-Revival-project" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="top">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <img class="hero-ship" src="data/market-images/UI_DreadnoughtM_Morningstar.png" alt="" aria-hidden="true">
+    <div class="status-badge"><span class="pulse-dot" aria-hidden="true"></span> Status: Active Development — Revival in Progress</div>
+    <h1><span class="hollow">DREAD</span><span class="amber">NOUGHT</span><br>REVIVAL</h1>
+    <p class="tagline">The guns of the fleet are hot again. A community-operated private server bringing the discontinued sci-fi space combat game <b>Dreadnought</b> (UE4 · Steam 835860) back online — unmodified client, emulated backend, dedicated battle servers.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#community">▶ Join the Playtest</a>
+      <a class="btn btn-ghost" href="https://github.com/darkace1998/Dreadnought-Revival-project" target="_blank" rel="noopener">GitHub Repository</a>
+      <a class="btn btn-dim" href="https://github.com/darkace1998/Dreadnought-Revival-project/discussions" target="_blank" rel="noopener">Community Hub</a>
+    </div>
+    <div class="hero-stats" aria-label="Project stats">
+      <div><div class="num">7</div><div class="lbl">Backend Services</div></div>
+      <div><div class="num">0</div><div class="lbl">Client Mods Required</div></div>
+      <div><div class="num">62</div><div class="lbl">Market Items Live</div></div>
+      <div><div class="num">Apache-2.0</div><div class="lbl">Open Source</div></div>
+    </div>
+    <div class="scroll-hint" aria-hidden="true">▼ SCROLL</div>
+  </section>
+
+  <!-- ============ BRIEFING ============ -->
+  <section id="briefing">
+    <p class="sec-tag reveal">01 // Mission Briefing</p>
+    <h2 class="reveal">The Mission: <em>Bring Her Back</em></h2>
+    <div class="briefing-grid">
+      <div class="panel briefing-main reveal">
+        <p><strong>Dreadnought</strong> was a massive-scale space combat game — dreadnoughts, cruisers and fighters clashing across open maps — shut down with its publisher. This project is a fan-led revival: a <strong>community-operated private server</strong> that runs the <strong>completely unmodified game client</strong> against our own backend.</p>
+        <p>Everything is emulated server-side — login, hangar, inventory, market, loadouts, career progression and matchmaking. The only thing a player installs is a <strong>replacement launcher</strong> that signs them into our servers. No game files are modified, and no game code or assets are distributed here.</p>
+        <p>Operators can additionally host matches themselves: a seven-service Go stack spawns headless <strong>dedicated battle servers</strong> (Wine + the original executable), one per match, on UDP 7777–7877.</p>
+        <div class="mono-line">&gt; objective: preserve a piece of online-game history — playable, forever.</div>
+      </div>
+      <div class="panel briefing-side reveal">
+        <h3>Ship Systems Status</h3>
+        <div class="kv"><span class="k">LOGIN / ACCOUNTS</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">HANGAR &amp; FLEETS</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">INVENTORY &amp; MARKET</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">LOADOUTS &amp; CAREER</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">MATCHMAKING</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">BATTLE SERVERS</span><span class="v ok">OPERATIONAL</span></div>
+        <div class="kv"><span class="k">TECH TREE</span><span class="v wip">IN PROGRESS</span></div>
+        <div class="kv"><span class="k">DAILY CONTRACTS</span><span class="v wip">IN PROGRESS</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section id="systems">
+    <p class="sec-tag reveal">02 // Key Systems</p>
+    <h2 class="reveal">Game Systems <em>Online</em></h2>
+    <p class="sec-lead reveal">Everything below runs today on the community server. <strong>No client patch is ever required</strong> — the server speaks the original protocol.</p>
+    <div class="feature-grid">
+      <article class="panel feature reveal">
+        <div class="ico">◈</div>
+        <h3>Dedicated Server Revival</h3>
+        <p>A seven-service Go backend (auth, legacy API, matchmaking brain, master server, game manager, gateway) spawns headless Wine battle servers — one per match — and keeps them healthy.</p>
+        <span class="tag">Live</span>
+      </article>
+      <article class="panel feature reveal">
+        <div class="ico">⬡</div>
+        <h3>Unmodified Client</h3>
+        <p>Players run the original Steam build untouched. A replacement launcher handles sign-in, certificate install and hands the game the right server addresses.</p>
+        <span class="tag">Live</span>
+      </article>
+      <article class="panel feature reveal">
+        <div class="ico">⚙</div>
+        <h3>Full Meta Layer</h3>
+        <p>Hangar, fleets, inventory, the 62-item market catalog, ship and captain customisation, career goals, daily login bonuses and auto-scaled matchmaking all work end to end.</p>
+        <span class="tag">Live</span>
+      </article>
+      <article class="panel feature reveal">
+        <div class="ico">✦</div>
+        <h3>Battle-Server Mod</h3>
+        <p>An optional operator-side DLL for the headless host process supplies loadouts the host cannot obtain without a login — this is what lets players actually spawn into a match. Also rebuilds Havoc wave defence.</p>
+        <span class="tag cyan">Operator Tool</span>
+      </article>
+      <article class="panel feature reveal">
+        <div class="ico">⬢</div>
+        <h3>Modern Patch Support</h3>
+        <p>Server-side fixes (tech-tree encoding, conquest diagnostics, contract payouts, XP tracking) ship as backend updates — players just get a working game, no client surgery.</p>
+        <span class="tag amber">Ongoing</span>
+      </article>
+      <article class="panel feature reveal">
+        <div class="ico">♜</div>
+        <h3>Community Matchmaking</h3>
+        <p>Auto-scaling matches size themselves to whoever is online — a lone player launches instantly, groups land together. Private matches per player by default, PvP with 2+.</p>
+        <span class="tag">Live</span>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ GALLERY ============ -->
+  <section id="gallery">
+    <p class="sec-tag reveal">03 // Fleet Gallery</p>
+    <h2 class="reveal">Ships of the <em>Line</em></h2>
+    <p class="sec-lead reveal">Real in-game ship art from the project's extracted game data. Click any hull to inspect it.</p>
+    <div class="gallery-grid" id="gallery-grid">
+      <figure class="panel ship-card reveal" data-name="Morningstar" data-cls="Dreadnought · T5" data-cls-type="dread" tabindex="0" role="button" aria-label="Inspect Morningstar dreadnought">
+        <img src="data/market-images/UI_DreadnoughtM_Morningstar.png" alt="Dreadnought-class ship Morningstar" loading="lazy">
+        <figcaption class="meta"><span class="name">Morningstar</span><span class="cls dread">Dreadnought</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Leviathan" data-cls="Dreadnought · Legendary" data-cls-type="dread" tabindex="0" role="button" aria-label="Inspect Leviathan dreadnought">
+        <img src="data/market-images/UI_DreadnoughtL_Leviathan.png" alt="Dreadnought-class ship Leviathan" loading="lazy">
+        <figcaption class="meta"><span class="name">Leviathan</span><span class="cls dread">Dreadnought</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Trident" data-cls="Dreadnought · Heavy" data-cls-type="dread" tabindex="0" role="button" aria-label="Inspect Trident dreadnought">
+        <img src="data/market-images/UI_DreadnoughtH_Trident.png" alt="Dreadnought-class ship Trident" loading="lazy">
+        <figcaption class="meta"><span class="name">Trident</span><span class="cls dread">Dreadnought</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Autumn" data-cls="Assault · Medium" tabindex="0" role="button" aria-label="Inspect Autumn assault cruiser">
+        <img src="data/market-images/UI_AssaultM_Autumn.png" alt="Assault-class ship Autumn" loading="lazy">
+        <figcaption class="meta"><span class="name">Autumn</span><span class="cls">Assault</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Huscarl" data-cls="Assault · Heavy" tabindex="0" role="button" aria-label="Inspect Huscarl assault cruiser">
+        <img src="data/market-images/UI_AssaultH_Huscarl.png" alt="Assault-class ship Huscarl" loading="lazy">
+        <figcaption class="meta"><span class="name">Huscarl</span><span class="cls">Assault</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Phoenix" data-cls="Scout · Medium" tabindex="0" role="button" aria-label="Inspect Phoenix scout fighter">
+        <img src="data/market-images/UI_ScoutM_Phoenix.png" alt="Scout-class ship Phoenix" loading="lazy">
+        <figcaption class="meta"><span class="name">Phoenix</span><span class="cls">Scout</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Artemis" data-cls="Sniper · Medium" tabindex="0" role="button" aria-label="Inspect Artemis sniper">
+        <img src="data/market-images/UI_SniperM_Artemis.png" alt="Sniper-class ship Artemis" loading="lazy">
+        <figcaption class="meta"><span class="name">Artemis</span><span class="cls">Sniper</span></figcaption>
+      </figure>
+      <figure class="panel ship-card reveal" data-name="Nereid" data-cls="Support · Medium" tabindex="0" role="button" aria-label="Inspect Nereid support ship">
+        <img src="data/market-images/UI_SupportM_Nereid.png" alt="Support-class ship Nereid" loading="lazy">
+        <figcaption class="meta"><span class="name">Nereid</span><span class="cls">Support</span></figcaption>
+      </figure>
+    </div>
+    <p class="gallery-note">// Artwork: extracted from the game's own UI assets (data/market-images/) — fan-preservation use only. Click a card for full view.</p>
+  </section>
+
+  <!-- ============ ROADMAP ============ -->
+  <section id="roadmap">
+    <p class="sec-tag reveal">04 // Mission Timeline</p>
+    <h2 class="reveal">The Road <em>Back to War</em></h2>
+    <div class="timeline">
+      <div class="milestone done reveal">
+        <div class="phase">Phase 01 — Complete</div>
+        <h3>Client Reverse Engineering</h3>
+        <p>Hooked and decoded the UE4 client's binary protocol, catalog and session flows — building on the original Dreadnought Revival Patch SDK. Every server payload is traceable to the client's own tables.</p>
+      </div>
+      <div class="milestone done reveal">
+        <div class="phase">Phase 02 — Complete</div>
+        <h3>Backend Emulation</h3>
+        <p>Seven Go microservices reimplement the Greybox/Yager backend: registration, profiles, inventory, market, fleets, matchmaking and the Firmament social socket.</p>
+      </div>
+      <div class="milestone done reveal">
+        <div class="phase">Phase 03 — Complete</div>
+        <h3>Replacement Launcher</h3>
+        <p>dn-launcher.exe (Windows, WebView2) plus a Linux/Proton wrapper: sign-in, CA install without admin rights, news tiles, and one-click Play into the unmodified game.</p>
+      </div>
+      <div class="milestone done reveal">
+        <div class="phase">Phase 04 — Complete</div>
+        <h3>Dedicated Battle Servers</h3>
+        <p>game-manager / dn-dedicated spawns headless Wine battle servers per match with a managed UDP port pool, readiness gating and per-instance logs. The battle-server mod supplies host loadouts.</p>
+      </div>
+      <div class="milestone active reveal">
+        <div class="phase">Phase 05 — In Progress</div>
+        <h3>Public Playtests</h3>
+        <p>Community alpha playtests: matchmaking auto-scaling, Havoc wave defence rebuilt by the battle-server mod, conquest and Onslaught modes, contract and XP economies being tuned live.</p>
+      </div>
+      <div class="milestone reveal">
+        <div class="phase">Phase 06 — Queued</div>
+        <h3>Full Release</h3>
+        <p>Tech tree and daily contracts fully unlocked, storefront artwork restored, stable public deployment with documented one-command setup for new operators and players.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMMUNITY ============ -->
+  <section id="community">
+    <p class="sec-tag reveal">05 // Join the Fight</p>
+    <h2 class="reveal">How to <em>Play &amp; Contribute</em></h2>
+    <div class="community-grid">
+      <div class="panel steps reveal">
+        <h3>Get In-Game (Players)</h3>
+        <div class="step">
+          <div class="n">01</div>
+          <div><h4>Own the game</h4><p>You need your own copy of Dreadnought on Steam (App 835860). No game files are distributed by this project.</p></div>
+        </div>
+        <div class="step">
+          <div class="n">02</div>
+          <div><h4>Clone the project</h4>
+            <div class="cmd-row">
+              <code id="clone-cmd">git clone https://github.com/darkace1998/Dreadnought-Revival-project.git</code>
+              <button class="copy-btn" id="copy-btn" type="button">Copy</button>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="n">03</div>
+          <div><h4>Get the launcher</h4><p>Build or download <code>dn-launcher.exe</code>, drop it next to <code>ca.crt</code> and a <code>dn-launcher.json</code> pointing at the server — or just run the exe with the server address baked in.</p></div>
+        </div>
+        <div class="step">
+          <div class="n">04</div>
+          <div><h4>Sign in &amp; play</h4><p>Create an account in the launcher, hit <strong>PLAY</strong>, queue for a match and fly. Linux players use the bundled Proton/Wine wrapper script.</p></div>
+        </div>
+      </div>
+      <div class="panel contribute reveal">
+        <h3>Contribute (Developers)</h3>
+        <p>This is a server for a client we cannot change — <strong>never invent data</strong>: everything the server sends must be traceable to the client's own tables or binary. Read the client's parsers before forming a theory.</p>
+        <ul>
+          <li>Read <a href="https://github.com/darkace1998/Dreadnought-Revival-project/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a> and the client-data docs under <code>docs/</code>.</li>
+          <li>It's a Go workspace — build one service with <code>go build ./mmogbrain</code>, test per-module with <code>go test ./...</code>.</li>
+          <li>Run the stack locally: <code>bash scripts/setup.sh</code> then <code>bash scripts/start-services.sh</code>.</li>
+          <li>Open issues for bugs, PRs for fixes — see open work in <a href="https://github.com/darkace1998/Dreadnought-Revival-project/issues" target="_blank" rel="noopener">Issues</a> and <a href="https://github.com/darkace1998/Dreadnought-Revival-project/pulls" target="_blank" rel="noopener">Pull Requests</a>.</li>
+        </ul>
+        <p>Testers, bug reporters and Discord regulars keep the servers alive — every playtest report matters.</p>
+        <a class="btn btn-primary" style="display:inline-block;margin-top:8px" href="https://github.com/darkace1998/Dreadnought-Revival-project" target="_blank" rel="noopener">Open the Repository ↗</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <h4>Dreadnought Revival</h4>
+      <p>A community-operated private server for the discontinued game Dreadnought (UE4 4.13.1, Steam App 835860). Fan preservation project — not affiliated with the original publisher.</p>
+    </div>
+    <div>
+      <h4>Command Links</h4>
+      <ul>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project" target="_blank" rel="noopener">GitHub Repository</a></li>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/issues" target="_blank" rel="noopener">Report a Bug</a></li>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/discussions" target="_blank" rel="noopener">Discussions</a></li>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/blob/master/README.md" target="_blank" rel="noopener">Server Setup Guide</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Intel</h4>
+      <ul>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/blob/master/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/blob/master/docs/client-data-reference.md" target="_blank" rel="noopener">Client Data Reference</a></li>
+        <li><a href="https://github.com/darkace1998/Dreadnought-Revival-project/blob/master/LICENSE" target="_blank" rel="noopener">License (Apache-2.0)</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    © DREADNOUGHT REVIVAL PROJECT — CODE UNDER <b>APACHE LICENSE 2.0</b> · GAME DATA © ORIGINAL OWNER, FAN-PRESERVATION USE ONLY · STATUS: <b>REVIVAL IN PROGRESS</b>
+  </div>
+</footer>
+
+<!-- lightbox -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Ship detail view">
+  <button class="close" id="lightbox-close" type="button">[ ESC ]</button>
+  <figure>
+    <img id="lightbox-img" src="" alt="">
+    <figcaption><span id="lightbox-name"></span><span id="lightbox-cls"></span></figcaption>
+  </figure>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var header = document.getElementById('site-header');
+  var burger = document.getElementById('burger');
+  var navLinks = document.getElementById('nav-links');
+
+  burger.addEventListener('click', function(){
+    var open = navLinks.classList.toggle('open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  navLinks.addEventListener('click', function(e){
+    if(e.target.tagName === 'A'){ navLinks.classList.remove('open'); burger.setAttribute('aria-expanded','false'); }
+  });
+
+  var onScrollHeader = function(){
+    if(window.scrollY > 10){ header.classList.add('scrolled'); } else { header.classList.remove('scrolled'); }
+  };
+  window.addEventListener('scroll', onScrollHeader, {passive:true});
+  onScrollHeader();
+
+  // scrollspy
+  var links = Array.prototype.slice.call(navLinks.querySelectorAll('a'));
+  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  var spy = function(){
+    var pos = window.scrollY + 120;
+    var current = -1;
+    sections.forEach(function(sec, i){ if(sec && sec.offsetTop <= pos){ current = i; } });
+    links.forEach(function(a, i){ a.classList.toggle('active', i === current); });
+  };
+  window.addEventListener('scroll', spy, {passive:true});
+  spy();
+
+  // reveal on scroll
+  var revealEls = document.querySelectorAll('.reveal');
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); }
+      });
+    }, {threshold:.12});
+    revealEls.forEach(function(el){ io.observe(el); });
+  } else {
+    revealEls.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // lightbox
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lightbox-img');
+  var lbName = document.getElementById('lightbox-name');
+  var lbCls = document.getElementById('lightbox-cls');
+  var lbClose = document.getElementById('lightbox-close');
+
+  function openLightbox(card){
+    var img = card.querySelector('img');
+    lbImg.src = img.src;
+    lbImg.alt = img.alt;
+    lbName.textContent = card.getAttribute('data-name');
+    lbCls.textContent = card.getAttribute('data-cls');
+    lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    lbClose.focus();
+  }
+  function closeLightbox(){
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  document.querySelectorAll('.ship-card').forEach(function(card){
+    card.addEventListener('click', function(){ openLightbox(card); });
+    card.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openLightbox(card); }
+    });
+  });
+  lbClose.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', function(e){ if(e.target === lightbox){ closeLightbox(); } });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && lightbox.classList.contains('open')){ closeLightbox(); } });
+
+  // copy to clipboard
+  var copyBtn = document.getElementById('copy-btn');
+  var cloneCmd = document.getElementById('clone-cmd');
+  copyBtn.addEventListener('click', function(){
+    var text = cloneCmd.textContent;
+    function done(){
+      copyBtn.textContent = 'Copied ✓';
+      setTimeout(function(){ copyBtn.textContent = 'Copy'; }, 1600);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){ fallback(); });
+    } else { fallback(); }
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); done(); }catch(err){}
+      document.body.removeChild(ta);
+    }
+  });
+})();
+</script>
+</body>
+</html>
