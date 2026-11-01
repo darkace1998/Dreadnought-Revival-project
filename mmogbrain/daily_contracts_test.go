@@ -90,17 +90,20 @@ func TestNewPlayerGetsDailyContracts(t *testing.T) {
 	}
 }
 
-// Matches advance contracts by their own filters; a completed one pays its
-// credits once; the elite slot counts only with Elite Status.
+// Matches advance contracts by their own filters and pay nothing; a
+// completed contract pays its credits once, when the player claims it in
+// the contracts menu (operator 2026-11-01); the elite slot counts only with
+// Elite Status.
 func TestContractProgressAndPayout(t *testing.T) {
 	database := contractTestDB(t)
 	now := time.Now()
 	setContracts(t, database, now, "YMPQ_CompleteMatches", "YMPQ_WinMatchesTER", "YMPQ_Kills", "YMPQ_WinMatches")
 	before := mmogPlayerStateForPID(contractTestPID).softCurrency
+	balance := func() int32 { return mmogPlayerStateForPID(contractTestPID).softCurrency - before }
 
 	tdmLoss := contractMatch{mode: "TDM", outcome: "loss", kills: 4}
-	if credits, changed := applyContractProgress(contractTestPID, tdmLoss, now); !changed || credits != 0 {
-		t.Fatalf("first match: credits %d changed %v", credits, changed)
+	if !applyContractProgress(contractTestPID, tdmLoss, now) {
+		t.Fatal("first match changed nothing")
 	}
 	if c := contractBySlot(t, 0); c.progress != 1 || c.state != "active" {
 		t.Errorf("CompleteMatches after one match: %+v", c)
@@ -115,21 +118,48 @@ func TestContractProgressAndPayout(t *testing.T) {
 		t.Errorf("the elite slot counted without Elite Status: %+v", c)
 	}
 
-	credits, _ := applyContractProgress(contractTestPID, contractMatch{mode: "TER", outcome: "win", kills: 2}, now)
-	if want := int32(5000 * 3); credits != want {
-		t.Fatalf("second match paid %d, want %d (CompleteMatches, WinMatchesTER, Kills)", credits, want)
-	}
+	applyContractProgress(contractTestPID, contractMatch{mode: "TER", outcome: "win", kills: 2}, now)
 	for slot := 0; slot < 3; slot++ {
 		if c := contractBySlot(t, slot); c.state != "completed" || c.progress != c.target {
 			t.Errorf("slot %d not completed: %+v", slot, c)
 		}
 	}
-	if got := mmogPlayerStateForPID(contractTestPID).softCurrency - before; got != 15000 {
-		t.Errorf("balance grew by %d, want 15000", got)
+	if got := balance(); got != 0 {
+		t.Fatalf("completing contracts paid %d; they pay on the claim", got)
 	}
-	// Completed contracts are not paid again.
-	if credits, _ := applyContractProgress(contractTestPID, contractMatch{mode: "TER", outcome: "win", kills: 9}, now); credits != 0 {
-		t.Errorf("paid %d again", credits)
+
+	// The claim pays, once.
+	done := contractBySlot(t, 0)
+	if ok, credits := removeDailyContract(contractTestPID, done.entryID); !ok || credits != 5000 {
+		t.Fatalf("claim: ok %v credits %d, want 5000", ok, credits)
+	}
+	if ok, credits := removeDailyContract(contractTestPID, done.entryID); ok || credits != 0 {
+		t.Errorf("second claim of the same contract: ok %v credits %d", ok, credits)
+	}
+	if got := balance(); got != 5000 {
+		t.Errorf("balance grew by %d after one claim, want 5000", got)
+	}
+
+	// A contract completed before 2026-11-01 was paid with its match: the
+	// migration marks it paid, and claiming it pays nothing more.
+	paidBefore := contractBySlot(t, 1)
+	if _, err := database.Exec(`UPDATE player_daily_contracts SET paid=1 WHERE entry_id=?`, paidBefore.entryID); err != nil {
+		t.Fatal(err)
+	}
+	if ok, credits := removeDailyContract(contractTestPID, paidBefore.entryID); !ok || credits != 0 {
+		t.Errorf("claiming an already paid contract: ok %v credits %d, want true/0", ok, credits)
+	}
+
+	// Dropping an unfinished contract pays nothing.
+	if _, err := database.Exec(`UPDATE player_daily_contracts SET state='active', progress=0, completed_at=0 WHERE entry_id=?`,
+		contractBySlot(t, 2).entryID); err != nil {
+		t.Fatal(err)
+	}
+	if ok, credits := removeDailyContract(contractTestPID, contractBySlot(t, 2).entryID); !ok || credits != 0 {
+		t.Errorf("dropping an active contract: ok %v credits %d", ok, credits)
+	}
+	if got := balance(); got != 5000 {
+		t.Errorf("balance %d after the unpaid claims, want 5000", got)
 	}
 
 	// With Elite Status the elite slot counts.
@@ -137,8 +167,9 @@ func TestContractProgressAndPayout(t *testing.T) {
 		now.Add(time.Hour).Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if credits, _ := applyContractProgress(contractTestPID, contractMatch{mode: "TDM", outcome: "win"}, now); credits != 5000 {
-		t.Errorf("elite WinMatches paid %d, want 5000", credits)
+	applyContractProgress(contractTestPID, contractMatch{mode: "TDM", outcome: "win"}, now)
+	if c := contractBySlot(t, 3); c.state != "completed" {
+		t.Errorf("elite WinMatches not completed: %+v", c)
 	}
 }
 
@@ -171,8 +202,8 @@ func TestContractRerollAcknowledgeAndReset(t *testing.T) {
 	if done.state != "completed" {
 		t.Fatalf("slot 0 not completed: %+v", done)
 	}
-	if !removeDailyContract(contractTestPID, done.entryID) {
-		t.Fatal("acknowledge failed")
+	if ok, credits := removeDailyContract(contractTestPID, done.entryID); !ok || credits != done.reward {
+		t.Fatalf("acknowledge: ok %v credits %d", ok, credits)
 	}
 	if n := len(currentContracts(contractTestPID, day1.Add(time.Hour)).entries); n != contractSlots()-1 {
 		t.Fatalf("%d contracts after acknowledging, want the slot empty until the reset", n)

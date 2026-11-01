@@ -361,12 +361,10 @@ func battleResultHandler(w http.ResponseWriter, r *http.Request) {
 			logrus.WithFields(logrus.Fields{"match": match, "player": pid, "stats": stats,
 				"from_mod": q.Has("ct")}).Info("statistics: match recorded")
 		}
-		// Daily contracts: this match's progress, and the credits of any it
-		// completes -- before the currencies push below, which then carries
-		// them (daily_contracts.go).
-		if contractCredits, changed := applyContractProgress(pid, battleContractMatch(res, q), time.Now()); changed {
+		// Daily contracts: this match's progress. Completed ones pay when the
+		// player claims them, not here (daily_contracts.go).
+		if applyContractProgress(pid, battleContractMatch(res, q), time.Now()) {
 			squadHubInstance.push(pid, buildMmogContractRefreshPush(pid))
-			credits += contractCredits
 		}
 		// The hangar's credits only change through YA_RewardCurrencies, whose
 		// handler ASSIGNS Credits/Points (buildMmogRewardCurrenciesPayload); it

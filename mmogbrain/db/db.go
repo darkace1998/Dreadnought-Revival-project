@@ -420,8 +420,9 @@ var migrations = []string{
 	)`,
 	// Daily contracts (daily_contracts.go). One row per contract ever
 	// assigned; entry_id is the client's "eid" (YA_ContractReplace/Remove
-	// name an assignment by it). state: active, completed (reward paid,
-	// waiting for the player to acknowledge it), acknowledged, replaced
+	// name an assignment by it). state: active, completed (waiting for the
+	// player to claim it; paid on the claim since 2026-11-01), acknowledged
+	// (claimed), replaced
 	// (rerolled), removed. Times are Unix seconds.
 	`CREATE TABLE IF NOT EXISTS player_daily_contracts (
 		entry_id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -489,6 +490,13 @@ var migrations = []string{
 		created_at TEXT NOT NULL DEFAULT (datetime('now')),
 		PRIMARY KEY (user_id, week_start, reward)
 	)`,
+	// Daily contracts pay when the player claims them in the contracts menu
+	// (daily_contracts.go, 2026-11-01), no longer at the match that completes
+	// them. paid marks a contract whose credits went out; every contract
+	// completed before the change was paid with its match, so it must not
+	// pay again when claimed.
+	`ALTER TABLE player_daily_contracts ADD COLUMN paid INTEGER NOT NULL DEFAULT 0`,
+	`UPDATE player_daily_contracts SET paid=1 WHERE completed_at>0`,
 }
 
 func Open(path string) (*sql.DB, error) {

@@ -49,9 +49,18 @@ import (
 //     rank 1 to unlock the daily contracts" (patch 1.4.1 notes); the elite
 //     slot shows "BECOME ELITE TO ACTIVATE THIS CONTRACT" (client text).
 //   - Contracts pay Credits ("You can earn Credits by playing matches and
-//     completing contracts"), added to the rewards of the match that
-//     completes them (Steam, the community team's answer on contract
-//     credits). The amount is the quest's m_FPReward.
+//     completing contracts"); the amount is the quest's m_FPReward. They
+//     pay when the player claims them in the daily contracts menu (operator
+//     2026-11-01). Until then they were paid with the match that completed
+//     them (a Steam answer from the community team), which no screen showed:
+//     the end-of-match pools (EYXPPoolType) have no contract pool, and the
+//     claim then added nothing ("every time I complete a contract and
+//     acknowledge the reward I don't receive anything"). The claim is
+//     AcknowledgeCompletedContract (exec 0xBB13E0 -> 0xABF110 -> 0xA95040 ->
+//     0x2F2810, which finds the entry by eid and calls the sender 0x2A40B60).
+//     Its reply handler (dispatcher 0x2A2F254) reads only "Contracts"
+//     (0x2A79B20) -- no currency -- so the credits reach the hangar through
+//     the YA_RewardCurrencies push, whose handler assigns the balance.
 //   - What counts is each quest's own filters (mpquest_rules_gen.go).
 //
 // So a slot is refilled once per day: an empty slot (never filled, or its
@@ -416,26 +425,49 @@ func replaceDailyContract(pid string, entryID int64, now time.Time) (bool, strin
 	return true, r.id
 }
 
-// removeDailyContract is the player acknowledging a completed contract (or
-// dropping one): the slot stays empty until the next reset.
-func removeDailyContract(pid string, entryID int64) bool {
+// removeDailyContract is the player claiming a completed contract (or
+// dropping one): the slot stays empty until the next reset. A claimed
+// contract pays its credits here, once (paid). Returns whether the entry
+// was found and the credits paid.
+func removeDailyContract(pid string, entryID int64) (bool, int32) {
 	database := currentMmogPlayerStateDB()
 	pid = normalizedPlayerStatePID(pid)
 	if database == nil {
-		return false
+		return false, 0
 	}
 	contractsMu.Lock()
 	defer contractsMu.Unlock()
-	res, err := database.Exec(`UPDATE player_daily_contracts SET state=CASE state WHEN 'completed' THEN 'acknowledged' ELSE 'removed' END
-		WHERE entry_id=? AND user_id=? AND state IN ('active','completed')`, entryID, pid)
+	var state string
+	var reward, paid int32
+	if err := database.QueryRow(`SELECT state, reward, paid FROM player_daily_contracts WHERE entry_id=? AND user_id=? AND state IN ('active','completed')`,
+		entryID, pid).Scan(&state, &reward, &paid); err != nil {
+		return false, 0
+	}
+	tx, err := database.Begin()
 	if err != nil {
-		return false
+		return false, 0
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.Exec(`UPDATE player_daily_contracts SET state=CASE state WHEN 'completed' THEN 'acknowledged' ELSE 'removed' END, paid=paid OR state='completed'
+		WHERE entry_id=? AND user_id=? AND state=?`, entryID, pid, state)
+	if err != nil {
+		return false, 0
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return false
+		return false, 0
+	}
+	credits := int32(0)
+	if state == "completed" && paid == 0 && reward > 0 {
+		if _, err := tx.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, reward, pid); err != nil {
+			return false, 0
+		}
+		credits = reward
+	}
+	if err := tx.Commit(); err != nil {
+		return false, 0
 	}
 	bumpContractState(database, pid, 0, 0)
-	return true
+	return true, credits
 }
 
 // resetDailyContracts is the admin dashboard's reset: the player's current
@@ -470,20 +502,20 @@ func resetDailyContracts(pid string, now time.Time) (int64, error) {
 // --- progress -----------------------------------------------------------------
 
 // applyContractProgress counts a finished match against the player's
-// contracts, pays completed ones in credits and reports the credits paid and
-// whether anything changed. The elite slot counts only with Elite Status.
-func applyContractProgress(pid string, m contractMatch, now time.Time) (int32, bool) {
+// contracts and reports whether anything changed. Completed contracts wait
+// for the player's claim to pay (removeDailyContract). The elite slot counts
+// only with Elite Status.
+func applyContractProgress(pid string, m contractMatch, now time.Time) bool {
 	database := currentMmogPlayerStateDB()
 	pid = normalizedPlayerStatePID(pid)
 	if database == nil || !dailyContractsEnabled() {
-		return 0, false
+		return false
 	}
 	elite := int64(membershipExpiresAt(pid)) > now.Unix()
 	contractsMu.Lock()
 	defer contractsMu.Unlock()
 	ensureDailyContracts(database, pid, now)
 	st := readContractState(database, pid)
-	var credits int32
 	changed := false
 	for _, c := range st.entries {
 		if c.state != "active" || (c.slot >= mpQuestNumBaseContractSlots && !elite) {
@@ -507,7 +539,6 @@ func applyContractProgress(pid string, m contractMatch, now time.Time) (int32, b
 		state, completedAt := "active", int64(0)
 		if progress >= c.target {
 			state, completedAt = "completed", now.Unix()
-			credits += c.reward
 		}
 		if _, err := database.Exec(`UPDATE player_daily_contracts SET progress=?, state=?, completed_at=? WHERE entry_id=?`,
 			progress, state, completedAt, c.entryID); err != nil {
@@ -517,13 +548,10 @@ func applyContractProgress(pid string, m contractMatch, now time.Time) (int32, b
 		logrus.WithFields(logrus.Fields{"player": pid, "contract": c.quest, "progress": progress, "target": c.target,
 			"state": state}).Info("contracts: progress")
 	}
-	if credits > 0 {
-		_, _ = database.Exec(`UPDATE player_state SET soft_currency=soft_currency+?, updated_at=datetime('now') WHERE user_id=?`, credits, pid)
-	}
 	if changed {
 		bumpContractState(database, pid, 0, 0)
 	}
-	return credits, changed
+	return changed
 }
 
 // --- wire -----------------------------------------------------------------------
@@ -576,10 +604,17 @@ func buildMmogContractReplacePayload(pid string, payload []byte) []byte {
 	return b
 }
 
-// buildMmogContractRemovePayload answers YA_ContractRemove (acknowledge):
-// the entry list as root "Contracts".
+// buildMmogContractRemovePayload answers YA_ContractRemove (the claim):
+// the entry list as root "Contracts". The reply carries no currency (see
+// the rules above), so a paid claim also pushes the new balance.
 func buildMmogContractRemovePayload(pid string, payload []byte) []byte {
-	removeDailyContract(pid, contractEntryID(payload))
+	entryID := contractEntryID(payload)
+	ok, credits := removeDailyContract(pid, entryID)
+	logrus.WithFields(logrus.Fields{"player": normalizedPlayerStatePID(pid), "entry": entryID, "ok": ok,
+		"credits": credits}).Info("contracts: claim")
+	if credits > 0 {
+		squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
+	}
 	var b []byte
 	var stack []int
 	b = protocol.AppendStringField(b, "RT", "YA_ContractRemove")
