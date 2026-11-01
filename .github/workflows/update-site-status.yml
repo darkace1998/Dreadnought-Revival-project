@@ -1,0 +1,51 @@
+name: Update site status
+
+on:
+  schedule:
+    # Every 6 hours, keep the landing page's intel feed fresh.
+    - cron: "0 */6 * * *"
+  push:
+    branches: [master]
+    paths:
+      - "scripts/update-site-status.sh"
+      - ".github/workflows/update-site-status.yml"
+      - "status.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-site-status
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+
+      - name: Install gh CLI
+        run: sudo apt-get update && sudo apt-get install -y gh
+
+      - name: Regenerate status.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/update-site-status.sh
+
+      - name: Commit if changed
+        run: |
+          if ! git diff --quiet -- status.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add status.json
+            git commit -m "chore(site): refresh status.json [skip ci]"
+            git push
+          else
+            echo "status.json unchanged; nothing to commit"
+          fi

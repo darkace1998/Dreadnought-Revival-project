@@ -330,6 +330,53 @@ h2 em{font-style:normal;color:var(--amber);text-shadow:0 0 24px rgba(255,107,0,.
 .contribute a{color:var(--cyan);text-decoration:none;border-bottom:1px dotted rgba(0,176,255,.5)}
 .contribute a:hover{color:#fff}
 
+/* ---------- live intel ---------- */
+.intel-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:24px}
+.intel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.intel-head h3{font-family:var(--font-head);font-size:18px;letter-spacing:.1em;text-transform:uppercase}
+.intel-updated{font-family:var(--font-mono);font-size:12px;color:var(--muted);letter-spacing:.1em}
+.intel-updated b{color:var(--green);font-weight:normal}
+.intel-stats{display:flex;gap:0;border:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
+.intel-stats div{padding:12px 22px;border-right:1px solid var(--line)}
+.intel-stats div:last-child{border-right:none}
+.intel-stats .num{font-family:var(--font-head);font-weight:800;font-size:20px;color:var(--amber)}
+.intel-stats .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.log-list{list-style:none;max-height:420px;overflow-y:auto;padding-right:6px}
+.log-list li{
+  display:flex;gap:14px;padding:11px 0;border-bottom:1px dashed var(--line);align-items:baseline;
+}
+.log-list li:last-child{border-bottom:none}
+.log-list .area{
+  flex:none;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--cyan);border:1px solid rgba(0,176,255,.35);padding:3px 8px;background:rgba(0,176,255,.05);
+  white-space:nowrap;
+}
+.log-list .body{flex:1;font-size:16px;color:var(--text)}
+.log-list .body a{color:var(--muted);text-decoration:none;font-family:var(--font-mono);font-size:12px}
+.log-list .body a:hover{color:var(--amber)}
+.log-list .when{flex:none;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.issues{padding:32px}
+.issues h3{font-family:var(--font-head);font-size:18px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.issues .sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);letter-spacing:.1em;margin-bottom:16px}
+.issue-list{list-style:none}
+.issue-list li{padding:10px 0;border-bottom:1px dashed var(--line)}
+.issue-list li:last-child{border-bottom:none}
+.issue-list a{
+  color:var(--text);text-decoration:none;font-size:16px;display:flex;gap:10px;align-items:baseline;
+}
+.issue-list a:hover{color:var(--amber)}
+.issue-list a:hover .ino{color:var(--amber)}
+.issue-list .ino{font-family:var(--font-mono);font-size:12px;color:var(--cyan);flex:none}
+.intel-empty{font-family:var(--font-mono);font-size:13px;color:var(--muted);padding:14px 0}
+.intel-refresh{
+  margin-top:16px;font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--muted);
+}
+.intel-refresh button{
+  cursor:pointer;background:none;border:1px solid var(--line-bright);color:var(--amber);
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:6px 12px;
+}
+.intel-refresh button:hover{box-shadow:0 0 14px rgba(255,107,0,.4)}
+
 /* ---------- footer ---------- */
 footer{
   position:relative;z-index:3;margin-top:80px;
@@ -355,7 +402,7 @@ footer{
 
 /* ---------- responsive ---------- */
 @media (max-width:960px){
-  .briefing-grid,.community-grid{grid-template-columns:1fr}
+  .briefing-grid,.community-grid,.intel-grid{grid-template-columns:1fr}
   .footer-inner{grid-template-columns:1fr 1fr}
 }
 @media (max-width:760px){
@@ -397,6 +444,7 @@ footer{
       <li><a href="#systems">Systems</a></li>
       <li><a href="#gallery">Fleet</a></li>
       <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#intel">Intel</a></li>
       <li><a href="#community">Community</a></li>
     </ul>
     <a class="nav-cta" href="https://github.com/darkace1998/Dreadnought-Revival-project" target="_blank" rel="noopener">GitHub ↗</a>
@@ -576,9 +624,45 @@ footer{
     </div>
   </section>
 
+  <!-- ============ LIVE INTEL ============ -->
+  <section id="intel">
+    <p class="sec-tag reveal">05 // Live Intel</p>
+    <h2 class="reveal">Transmission <em>Log</em></h2>
+    <p class="sec-lead reveal">Auto-updated by a scheduled GitHub Actions run every 6 hours — latest deployed changes and open bugs, straight from the repository.</p>
+    <div class="intel-grid">
+      <div class="panel" style="padding:32px" id="intel-panel">
+        <div class="intel-head">
+          <h3>Recent Changes</h3>
+          <span class="intel-updated" id="intel-updated">sync: <b>…</b></span>
+        </div>
+        <div class="intel-stats" id="intel-stats">
+          <div><div class="num" id="st-stars">–</div><div class="lbl">Stars</div></div>
+          <div><div class="num" id="st-forks">–</div><div class="lbl">Forks</div></div>
+          <div><div class="num" id="st-commits">–</div><div class="lbl">Commits / 7d</div></div>
+          <div><div class="num" id="st-issues">–</div><div class="lbl">Open Issues</div></div>
+          <div><div class="num" id="st-prs">–</div><div class="lbl">Open PRs</div></div>
+        </div>
+        <ul class="log-list" id="log-list">
+          <li class="intel-empty">// awaiting transmission…</li>
+        </ul>
+        <div class="intel-refresh">
+          feed: <span id="intel-feed">status.json</span>
+          <button type="button" id="intel-refresh-btn">↻ Refresh</button>
+        </div>
+      </div>
+      <aside class="panel issues">
+        <h3>Known Issues</h3>
+        <p class="sub">// open bugs from the tracker — please report &amp; confirm</p>
+        <ul class="issue-list" id="issue-list">
+          <li class="intel-empty">// awaiting transmission…</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
   <!-- ============ COMMUNITY ============ -->
   <section id="community">
-    <p class="sec-tag reveal">05 // Join the Fight</p>
+    <p class="sec-tag reveal">06 // Join the Fight</p>
     <h2 class="reveal">How to <em>Play &amp; Contribute</em></h2>
     <div class="community-grid">
       <div class="panel steps reveal">
@@ -738,6 +822,74 @@ footer{
   lbClose.addEventListener('click', closeLightbox);
   lightbox.addEventListener('click', function(e){ if(e.target === lightbox){ closeLightbox(); } });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && lightbox.classList.contains('open')){ closeLightbox(); } });
+
+  // ---- live intel feed (status.json, refreshed by a scheduled workflow) ----
+  var logList = document.getElementById('log-list');
+  var issueList = document.getElementById('issue-list');
+  var intelUpdated = document.getElementById('intel-updated');
+
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function timeAgo(iso){
+    var then = new Date(iso).getTime();
+    if(isNaN(then)){ return iso; }
+    var s = Math.max(0, (Date.now() - then) / 1000);
+    if(s < 60){ return Math.floor(s) + 's ago'; }
+    if(s < 3600){ return Math.floor(s / 60) + 'm ago'; }
+    if(s < 86400){ return Math.floor(s / 3600) + 'h ago'; }
+    return Math.floor(s / 86400) + 'd ago';
+  }
+
+  function renderStatus(data){
+    if(!data){ return; }
+    var r = data.repo || {}, a = data.activity || {};
+    document.getElementById('st-stars').textContent = r.stars != null ? r.stars : '–';
+    document.getElementById('st-forks').textContent = r.forks != null ? r.forks : '–';
+    document.getElementById('st-commits').textContent = a.commits_last_7d != null ? a.commits_last_7d : '–';
+    document.getElementById('st-issues').textContent = r.open_issues != null ? r.open_issues : '–';
+    document.getElementById('st-prs').textContent = r.open_prs != null ? r.open_prs : '–';
+    intelUpdated.innerHTML = 'last sync: <b>' + esc(timeAgo(data.generated_at)) + '</b>' +
+      (a.last_commit_at ? ' · last deploy: <b>' + esc(timeAgo(a.last_commit_at)) + '</b>' : '');
+
+    var changes = data.recent_changes || [];
+    if(changes.length){
+      logList.innerHTML = changes.map(function(c){
+        return '<li>' +
+          '<span class="area">' + esc(c.area) + '</span>' +
+          '<span class="body">' + esc(c.subject) + ' ' +
+            '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">' + esc(c.short) + ' ↗</a></span>' +
+          '<span class="when">' + esc(timeAgo(c.date)) + '</span>' +
+        '</li>';
+      }).join('');
+    } else {
+      logList.innerHTML = '<li class="intel-empty">// no new transmissions since last sync</li>';
+    }
+
+    var issues = data.known_issues || [];
+    if(issues.length){
+      issueList.innerHTML = issues.map(function(i){
+        return '<li><a href="' + esc(i.url) + '" target="_blank" rel="noopener">' +
+          '<span class="ino">#' + esc(i.number) + '</span><span>' + esc(i.title) + '</span></a></li>';
+      }).join('');
+    } else {
+      issueList.innerHTML = '<li class="intel-empty">// no open bugs — all systems nominal</li>';
+    }
+  }
+
+  function loadStatus(){
+    fetch('status.json', {cache: 'no-store'})
+      .then(function(res){ if(!res.ok){ throw new Error('HTTP ' + res.status); } return res.json(); })
+      .then(renderStatus)
+      .catch(function(){
+        intelUpdated.innerHTML = 'sync: <b>offline</b> — showing static briefing';
+        document.getElementById('intel-feed').textContent = 'status.json (unavailable locally)';
+      });
+  }
+  document.getElementById('intel-refresh-btn').addEventListener('click', loadStatus);
+  loadStatus();
 
   // copy to clipboard
   var copyBtn = document.getElementById('copy-btn');
