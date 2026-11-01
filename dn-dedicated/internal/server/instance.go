@@ -1116,17 +1116,10 @@ func reportHostLoadoutModState(cfg LaunchConfig, logTo io.Writer) {
 			"and copy dn_host_loadout.dll here AS wer.dll.\n", dll)
 		return
 	}
-	marker := filepath.Join(dir, "dn_server_loadout.txt")
-	_, markerErr := os.Stat(marker)
-	enabled := markerErr == nil || os.Getenv("DN_SERVER_LOADOUT") == "1"
-	if !enabled {
-		fmt.Fprintf(logTo, "[host-loadout] wer.dll is present but the fix is OFF -- create %s "+
-			"or set DN_SERVER_LOADOUT=1, or players will not be able to spawn.\n", marker)
-		return
-	}
+	// No marker file any more: since 2026-11-01 the mod is on whenever it is
+	// loaded (dn_server_loadout.txt / DN_SERVER_LOADOUT were removed).
 	fmt.Fprintf(logTo, "[host-loadout] wer.dll present and enabled; expect timestamped "+
 		"[dn-host-loadout] lines in the host log.\n")
-	_ = marker
 }
 
 // fileContains reports whether the file holds the given bytes.

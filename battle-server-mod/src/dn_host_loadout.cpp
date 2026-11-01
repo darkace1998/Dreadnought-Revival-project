@@ -163,8 +163,8 @@ static uintptr_t g_base = 0;
 // CORRECTED 2026-09-24: the second argument is the PAWN, not the PlayerState
 // (the null branch logs "Trying to teleport into level a null YPawn!", and the
 // caller passes an IsA-checked element of an array of pawns). This function is
-// no longer hooked; see the DISPROVED note above OFF_HIGHEST_FLEET and
-// HookGetNetMode. The original analysis follows, kept as a record.
+// no longer hooked; see HookGetNetMode (the fleet-tier write this fed was
+// removed 2026-11-01). The original analysis follows, kept as a record.
 //
 // AYOrbitTransitionManager::TeleportPlayerIntoLevel(this, AYPlayerReplicationInfo*)
 //
@@ -697,7 +697,7 @@ static tFindLoadoutByID g_origFindLoadoutByID = nullptr;
 
 
 // ---------------------------------------------------------------------------
-// The player's own fit (dn_host_player_loadouts.txt)
+// The player's own fit
 //
 // Verified 2026-09-25 from the exe: a client tells the host only WHICH loadout
 // it picked (ServerPlayerClickedShipLoadout(FName id)), and the host cannot
@@ -777,8 +777,6 @@ typedef void(__fastcall *tLoadoutInitFromInfo)(void *obj, void *ownerArg,
 typedef void(__fastcall *tAssign)(void *dst, const void *src);
 typedef FNameMin *(__fastcall *tFNameCtor)(FNameMin *out, const wchar_t *text,
                                            int findType);
-
-static bool PlayerLoadoutsEnabled();
 
 // One ?KEY=value option from the controller's connection login URL (e.g.
 // "DNPID=", "TEAM="), or false (the host's local player 256 has no connection).
@@ -1032,7 +1030,7 @@ static int ParseInts(const char *csv, int32_t *out, int maxN) {
 }
 
 static bool RegisterPlayerLoadout(void *mgr, void **id, const char *idText) {
-  if (!PlayerLoadoutsEnabled() || !idText)
+  if (!idText)
     return false;
   char pid[80];
   if (!PlayerPIDForManager(mgr, pid, sizeof(pid)))
@@ -1194,346 +1192,11 @@ static bool IsBattleServer() {
   return false;
 }
 
-// Opt-in on the host. A marker file beside the executable survives however the
-// operator starts the service; the environment variable is honoured too because
-// dn-dedicated's spawner does inherit its environment (buildEnv, AGENT-CHAT
-// S10.5).
-// ---------------------------------------------------------------------------
-// PostLogin: put a joining player straight into the arena
-//
-// OFF by default. This is a much larger behavioural change than the loadout
-// registration above, and it removes a step players can see.
-//
-// Why it exists. Registering the precast loadouts got players a PAWN -- the host
-// spawns them and SetYPawn assigns it -- but they still never reach the map,
-// because the orbit teleport is gated:
-//
-//   FUN_3D92A0:  cmp byte ptr [rdx+0x948], 0 ; jne proceed
-//                -> "Trying to teleport into level player %s that is not in orbit!"
-//
-// and 0x948 is AYPlayerReplicationInfo::m_highestFleetUnlocked, an EYFleetType
-// from YMmogbrain_Structs.h. It is EYFT_None on a host that never logged in, and
-// no payload we can send changes that, because the host holds no mmogbrain data
-// (AGENT-CHAT S39, S40).
-//
-// dread-sdk's server mod does not satisfy that gate. It skips the orbit flow
-// entirely: hook PostLogin, set the controller's active loadout, and call the
-// engine's own ServerRestartPlayer(), which asks the GameMode for a PlayerStart
-// and spawns there. That path never enters UYPlayerOrbitComponent, never reads
-// m_highestFleetUnlocked, and never needs the GameState readiness mask. It is a
-// proven route -- our operator has played matches with it (S42).
-//
-// What it costs, stated plainly: the player no longer picks a ship in orbit.
-// Everyone spawns in one configured hull. That is a real regression in
-// behaviour, and it is why this is opt-in and separate from the loadout fix.
-// Prefer the orbit path if it can ever be made to work.
-//
-// How it hooks. Every reflected call goes through UObject::ProcessEvent, vtable
-// index 0x35 on this build (dread-sdk resolves it the same way). Hooking there
-// costs one pointer comparison per reflected call: the UFunction objects are
-// resolved ONCE at install and the hook compares pointers, never strings.
-// ---------------------------------------------------------------------------
-
-#define VF_PROCESS_EVENT 0x35
-
-// UYLoadoutManagerComponent::m_activeLoadout, from the SDK dump
-// (DreadGame_Classes.h: "class UYShipLoadout* m_activeLoadout; // 0x0208").
-#define OFF_ACTIVE_LOADOUT 0x208
-
-typedef void *(__fastcall *tProcessEvent)(void *object, void *function,
-                                          void *params);
-static tProcessEvent g_origProcessEvent = nullptr;
-
-static void *g_fnK2PostLogin = nullptr;
-static void *g_fnGetLoadoutManager = nullptr;
-static void *g_fnServerRestartPlayer = nullptr;
-static void *g_fnServerReadyForJoining = nullptr;
-static void *g_fnServerSpawnNearActor = nullptr;
-static void *g_fnServerPlayerReadyUp = nullptr;
-static bool g_postLoginArmed = false;
-static bool g_fleetTierArmed = false;
-static bool g_spawnArmed = false;
-
-// Which of the four precast loadouts everyone spawns in. Index into
-// kPrecastPaths / g_precastCDO; 0 is the Assault Medium T1.
-static int g_postLoginLoadoutIndex = 0;
-
-// FindUObjectByName walks GObjects for an object whose FName text CONTAINS the
-// wanted text.
-//
-// Substring, not equality. The first version matched "K2_PostLogin" exactly and
-// found nothing on a live host; dread-sdk matches
-// GetFullName().find("PostLogin"), which also catches a plain "PostLogin" and
-// any Blueprint variant. Equality was a guess about which of those this build
-// creates, and it was wrong.
-//
-// Names are not unique across classes, so the caller gets the FIRST match and
-// the outer is logged. A wrong pick shows up in the log rather than silently.
-static void *FindUObjectByName(const char *want, const char **outerOut) {
-  FUObjectArrayMin *arr = GObjects();
-  if (!IsReadable(arr, sizeof(*arr)) || !IsReadable(arr->Objects, sizeof(FUObjectItemMin)))
-    return nullptr;
-
-  int count = arr->NumElements;
-  if (count < 0 || count > 20000000)
-    return nullptr;
-
-  for (int i = 0; i < count; ++i) {
-    FUObjectItemMin *item = &arr->Objects[i];
-    if (!IsReadable(item, sizeof(*item)))
-      continue;
-    UObjectMin *obj = item->Object;
-    if (!IsReadable(obj, sizeof(*obj)))
-      continue;
-    const char *text = NameText(obj->Name);
-    if (!text || !strstr(text, want))
-      continue;
-    if (outerOut) {
-      *outerOut = nullptr;
-      if (IsReadable(obj->Outer, sizeof(UObjectMin)))
-        *outerOut = NameText(obj->Outer->Name);
-    }
-    return obj;
-  }
-  return nullptr;
-}
-
-// AController::PlayerState, from the SDK dump (Engine_Classes.h:797).
-#define OFF_PLAYERSTATE 0x3E0
-// DISPROVED 2026-09-24 -- read before using anything in this block.
-//
-// The orbit gate does NOT read the PlayerState. TeleportPlayerIntoLevel
-// (0x3D92A0) is called from TeleportPlayersFromOrbit (call at 0x3838D1) with an
-// element of a weak-pointer array that passed an IsA check, and its null branch
-// logs "Trying to teleport into level a null YPawn!" -- the object is the PAWN,
-// and +0x948 on AYPawn is a native, unreflected field (the SDK has no member
-// there), i.e. the pawn's own in-orbit state. The SDK's
-// AYPlayerReplicationInfo::m_highestFleetUnlocked shares the offset by
-// coincidence; the real PlayerState constructor (0x5A8820, reached from the
-// class thunk at 0x5CE5D0) already sets it to Recruit.
-//
-// So the TeleportPlayerIntoLevel write this block fed forced the pawn's orbit
-// flag -- the "fake the gate" the repo rule warns about, and the operator
-// rejected it. The real cause is the net mode: see HookGetNetMode. The fleet
-// tier feature is therefore disabled (g_fleetTierArmed is never set) and kept
-// only as a record.
-//
-// Original text: AYPlayerReplicationInfo::m_highestFleetUnlocked
-// (DreadGame_Classes.h:1920), an EYFleetType from YMmogbrain_Structs.h:
-// None=0 Recruit=1 Veteran=2 Legendary=3.
-#define OFF_HIGHEST_FLEET 0x948
-#define EYFT_NONE 0
-#define EYFT_RECRUIT 1
-
-// EnsureFleetTier gives a player the Recruit tier when the host has none.
-//
-// This is the byte the orbit teleport is gated on:
-//
-//   FUN_3D92A0: cmp byte ptr [rdx+0x948], 0 ; jne proceed
-//               -> "Trying to teleport into level player %s that is not in orbit!"
-//
-// It is EYFT_None on a host that never logged in, so nobody is ever teleported
-// and the client sits in the orbit screen. Measured, and the reason the
-// post-login spawn below is not sufficient on its own: the server spawned FOUR
-// pawns for the player and the CLIENT still stayed in orbit, because the only
-// thing that takes a client out of orbit is the teleport.
-//
-// Why Recruit, and why this is not fabrication. The tier is real backend data:
-// the engine computes it from the YMmogbrain module (FUN_3A5831, which logs
-// "EYFleetType::EYFT_Recruit: no FleetType override - FleetTier=%d") and cannot
-// here, because the host holds no mmogbrain data. Recruit is the floor -- what
-// a player who owns any fleet at all has unlocked, and every player who reaches
-// a battle server owns one. It is the value a logged-in host would have had.
-//
-// The honest limit: Veteran and Legendary players are under-reported. If a real
-// tier ever reaches the host this must defer to it, which is what the guard
-// below does.
-//
-// EVERY path here logs. The first version returned silently on three of them,
-// and when the tier did not get written there was no way to tell which -- a
-// default indistinguishable from a real result, which is the exact trap
-// CONTRIBUTING.md warns about. Capped so a busy match cannot flood the log.
-// EnsureFleetTierOnPlayerState is the half that does the work, split out
-// because the teleport hook already HAS the PlayerState -- it is the argument
-// the gate is read from -- and must not go looking for one via a controller.
-static void EnsureFleetTierOnPlayerState(void *ps, const char *where,
-                                         bool verbose) {
-  if (!ps) {
-    if (verbose)
-      Logf("fleet tier [%s]: NULL PlayerState", where);
-    return;
-  }
-  if (!IsReadable(ps, OFF_HIGHEST_FLEET + 1)) {
-    if (verbose)
-      Logf("fleet tier [%s]: PlayerState %p not readable to +0x%X", where, ps,
-           OFF_HIGHEST_FLEET);
-    return;
-  }
-
-  uint8_t *tier = (uint8_t *)((uintptr_t)ps + OFF_HIGHEST_FLEET);
-  uint8_t before = *tier;
-
-  // Never overwrite a value the engine already has. Same rule the
-  // FindLoadoutByID hook follows -- if the engine answered, do not second-guess
-  // it -- and it is what keeps this correct if a real tier ever arrives.
-  if (before != EYFT_NONE) {
-    if (verbose)
-      Logf("fleet tier [%s]: PlayerState %p already reads %u, leaving it", where,
-           ps, (unsigned)before);
-    return;
-  }
-
-  *tier = EYFT_RECRUIT;
-
-  if (verbose)
-    Logf("fleet tier [%s]: PlayerState %p EYFT_None -> EYFT_Recruit, reads "
-         "back %u",
-         where, ps, (unsigned)*tier);
-}
-
-static void EnsureFleetTier(void *pc, const char *where) {
-  if (!g_fleetTierArmed)
-    return;
-
-  static int s_logged = 0;
-  bool verbose = (s_logged++ < 24);
-
-  if (!IsReadable(pc, OFF_PLAYERSTATE + sizeof(void *))) {
-    if (verbose)
-      Logf("fleet tier [%s]: controller %p not readable to +0x%X", where, pc,
-           OFF_PLAYERSTATE);
-    return;
-  }
-
-  void *ps = *(void **)((uintptr_t)pc + OFF_PLAYERSTATE);
-  if (!ps) {
-    if (verbose)
-      Logf("fleet tier [%s]: controller %p has a NULL PlayerState (+0x%X) -- "
-           "too early, the engine has not created it yet",
-           where, pc, OFF_PLAYERSTATE);
-    return;
-  }
-  EnsureFleetTierOnPlayerState(ps, where, verbose);
-}
-
-// SpawnJoiningPlayer runs after the engine's own PostLogin has finished.
-static void SpawnJoiningPlayer(void *params) {
-  if (!IsReadable(params, sizeof(void *)))
-    return;
-
-  // AGameMode_K2_PostLogin_Params is a single APlayerController* at +0x00.
-  void *pc = *(void **)params;
-  if (!IsReadable(pc, 0x200)) {
-    Logf("post-login: NewPlayer is not readable, skipping");
-    return;
-  }
-
-  // The tier first. It is what lets the NORMAL orbit flow finish, and it is
-  // useful with or without the spawn below -- which is why the two are
-  // separately switchable. Tier alone is the better outcome: the player still
-  // picks a ship in orbit.
-  //
-  // PostLogin may be too early: the engine creates the PlayerState in
-  // InitPlayerState, and for a networked join that can land after this. The
-  // later trigger points in HookProcessEvent are what actually catch it; this
-  // one is kept because when it does work it is the earliest.
-  EnsureFleetTier(pc, "PostLogin");
-
-  if (!g_spawnArmed)
-    return;
-
-  // GetLoadoutManager() is a UFunction returning UYLoadoutManagerComponent*.
-  // Calling it through ProcessEvent avoids needing another hardcoded RVA.
-  struct {
-    void *ReturnValue;
-  } gp = {};
-  g_origProcessEvent(pc, g_fnGetLoadoutManager, &gp);
-
-  void *mgr = gp.ReturnValue;
-  if (!IsReadable(mgr, OFF_ACTIVE_LOADOUT + sizeof(void *))) {
-    Logf("post-login: controller %p has no readable loadout manager, skipping",
-         pc);
-    return;
-  }
-
-  // Same registration the FindLoadoutByID path uses, so the manager holds real
-  // loadouts before one is made active. Idempotent per manager.
-  RegisterPrecastLoadouts(mgr);
-  if (g_precastResolved == 0) {
-    Logf("post-login: no precast loadouts resolved, skipping");
-    return;
-  }
-
-  int idx = g_postLoginLoadoutIndex;
-  if (idx < 0 || idx >= g_precastResolved)
-    idx = 0;
-  void *loadout = g_precastCDO[idx];
-  if (!IsReadable(loadout, sizeof(void *))) {
-    Logf("post-login: precast %d is not readable, skipping", idx);
-    return;
-  }
-
-  *(void **)((uintptr_t)mgr + OFF_ACTIVE_LOADOUT) = loadout;
-
-  // The engine's own respawn. It asks the GameMode for a PlayerStart and
-  // spawns there -- no orbit, no readiness mask, no fleet tier.
-  g_origProcessEvent(pc, g_fnServerRestartPlayer, nullptr);
-
-  Logf("post-login: controller %p -> active loadout %s (%p), ServerRestartPlayer called",
-       pc, kPrecastLabels[idx], loadout);
-}
-
-// Team sync (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1),
-// see PlayersTick.
-static bool g_teamSyncArmed = false;
-
-static void *__fastcall HookProcessEvent(void *object, void *function,
-                                         void *params) {
-  void *ret = g_origProcessEvent ? g_origProcessEvent(object, function, params)
-                                 : nullptr;
-
-  if (!g_postLoginArmed)
-    return ret;
-
-  // Later trigger points, all server RPCs on the PlayerController, all of which
-  // route through ProcessEvent and all of which happen long after the
-  // PlayerState exists. `object` is the controller.
-  //
-  // Several rather than one because PostLogin alone did not write the byte on a
-  // live host and the silent version could not say why; these bracket the whole
-  // orbit sequence, from picking a ship to readying up to the last event before
-  // the teleport. Writing twice is free -- the second call sees a non-zero tier
-  // and leaves it.
-  if (function == g_fnServerReadyForJoining) {
-    EnsureFleetTier(object, "ServerReadyForJoining");
-    return ret;
-  }
-  if (function == g_fnServerSpawnNearActor) {
-    EnsureFleetTier(object, "ServerSpawnNearActor");
-    return ret;
-  }
-  if (function == g_fnServerPlayerReadyUp) {
-    EnsureFleetTier(object, "ServerPlayerReadyUpForMatch");
-    return ret;
-  }
-
-  // One pointer compare on the hot path. Everything else is behind it.
-  if (function != g_fnK2PostLogin)
-    return ret;
-
-  // SpawnJoiningPlayer calls ProcessEvent twice, which re-enters this hook.
-  // Neither call is K2_PostLogin, so the compare above already stops it; the
-  // guard makes that explicit rather than incidental.
-  static thread_local bool s_inSpawn = false;
-  if (s_inSpawn)
-    return ret;
-  // AGameMode_K2_PostLogin_Params: APlayerController* NewPlayer at +0x00.
-  s_inSpawn = true;
-  SpawnJoiningPlayer(params);
-  s_inSpawn = false;
-
-  return ret;
-}
+// The PostLogin spawn bypass (dread-sdk's ServerRestartPlayer route, which
+// skipped ship selection) and the fleet-tier write were removed 2026-11-01:
+// both were off on every live host, and the fleet tier was DISPROVED on
+// 2026-09-24 (the orbit gate reads the pawn; the real cause was the net mode,
+// see HookGetNetMode). Git history keeps the code.
 
 // ---------------------------------------------------------------------------
 // Dedicated net mode: let the game's own dedicated-server path run the orbit
@@ -1583,7 +1246,7 @@ static int __fastcall HookGetNetMode(void *netDriver) {
 }
 
 // ---------------------------------------------------------------------------
-// AI in the proving ground (dn_host_bc_ai.txt)
+// AI in the proving ground
 //
 // Verified 2026-09-24 (disassembly + live memory of a BC host):
 //   - Every NPC spawn path ends in game-mode virtual 0x9D0 (0x3678F0), which
@@ -1604,19 +1267,15 @@ static int __fastcall HookGetNetMode(void *netDriver) {
 typedef void(__fastcall *tGameModeTimer)(void *gameMode);
 static tGameModeTimer g_origGameModeTimer = nullptr;
 
-static bool g_bcAIArmed = false;
 static void PlayersTick(uint8_t *gm);
 static void ClassTimeTick(uint8_t *gm);
 
-// Bots in every multiplayer mode (on; dn_host_bots_bc_only.txt /
-// DN_HOST_BOTS_BC_ONLY=1 limits them to the proving ground again). Added
-// 2026-09-28 at the operator's request. The spawner only fills a team from the
+// Bots in every multiplayer mode. Added 2026-09-28 at the operator's request. The spawner only fills a team from the
 // mode's own bot list (gm+0x968, count gm+0x970) up to its team size
 // (gm+0x97C); whether a PvP map loads such a list is NOT known yet -- the
 // once-per-game-mode log line below answers it for each mode.
 #define OFF_GM_NPC_COUNT 0x970
 #define OFF_GM_TEAM_SIZE 0x97C
-static bool g_botsBCOnly = false;
 
 static void FlushPendingEomStats();
 
@@ -1635,7 +1294,7 @@ static void TeFixLeader(uint8_t *gm);
 
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
-  if (g_bcAIArmed && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
+  if (IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) &&
       IsReadable(gm + OFF_GM_GAMESTATE, sizeof(void *))) {
     uint8_t *gs = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
     if (gs && IsReadable(gs + OFF_GS_GAME_MODE_TYPE, 1)) {
@@ -1643,10 +1302,9 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
       static void *s_reported = nullptr;
       if (s_reported != gameMode && IsReadable(gm + OFF_GM_TEAM_SIZE, 4)) {
         s_reported = gameMode;
-        Logf("bots: game mode %p type %d: bot list %d entries, team size %d%s",
+        Logf("bots: game mode %p type %d: bot list %d entries, team size %d",
              gameMode, type, *(int32_t *)(gm + OFF_GM_NPC_COUNT),
-             *(int32_t *)(gm + OFF_GM_TEAM_SIZE),
-             (type == YGMT_BOOTCAMP || !g_botsBCOnly) ? "" : " (bots limited to the proving ground)");
+             *(int32_t *)(gm + OFF_GM_TEAM_SIZE));
       }
       // TE: fill once, then no respawns. The fill has happened once the AI
       // targets are set (gm+0x980/0x984, written by 0x3678F0 when the teams are
@@ -1682,8 +1340,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
         if (s_pve)
           Logf("pve: game mode %p (type %d) is a PvE episode -- no multiplayer bot fill", gameMode, type);
       }
-      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && s_teStopped != gameMode && !s_pve &&
-          (type == YGMT_BOOTCAMP || !g_botsBCOnly)) {
+      if (gm[OFF_GM_ENABLE_SPAWN_AI] == 0 && s_teStopped != gameMode && !s_pve) {
         gm[OFF_GM_ENABLE_SPAWN_AI] = 1;
         Logf("bots: game mode %p (type %d) m_enableSpawnAI 0 -> 1. The game fills "
              "both teams when the pre-match countdown reaches 50 s%s.",
@@ -1704,8 +1361,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
 }
 
 // ---------------------------------------------------------------------------
-// Onslaught match points (on by default; dn_host_no_onslaught_points.txt /
-// DN_HOST_NO_ONSLAUGHT_POINTS=1 turns it off)
+// Onslaught match points
 //
 // Operator report 2026-10-07: "the game should finish if 1 of the teams reaches
 // 300 points but now it finishes at around 248 points".
@@ -1766,9 +1422,6 @@ typedef void(__fastcall *tTdmKilled)(void *gm, void *killer, void *victimCtrl,
 static tTdmKilled g_origTdmKilled = nullptr;
 typedef void(__fastcall *tDetermineLeader)(void *gm);
 static tDetermineLeader g_origDetermineLeader = nullptr;
-// The Onslaught points rule's switch: its kill hook is also installed for Team
-// Elimination rounds, so it checks this before acting.
-static bool g_onsPointsOn = true;
 
 struct OnslaughtMatch {
   void *gm;
@@ -1850,7 +1503,7 @@ static bool SetLeaderByPoints(uint8_t *gs, int p1, int p2) {
 }
 
 // ---------------------------------------------------------------------------
-// Kill detail for daily contracts (on; dn_host_no_kill_detail.txt turns it off)
+// Kill detail for daily contracts
 //
 // mmogbrain counts the daily contracts (mmogbrain/daily_contracts.go), and
 // many count only some kills: "Destroy Enemy Corvettes" (the destroyed ship's
@@ -1871,13 +1524,6 @@ static KillLog g_killLogs[64] = {};
 static SRWLOCK g_killLogLock = SRWLOCK_INIT;
 
 static bool SwitchOn(const char *envName, const char *markerFile);
-
-static bool KillDetailEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_KILL_DETAIL", "dn_host_no_kill_detail.txt") ? 0 : 1;
-  return s_on == 1;
-}
 
 static void RecordKill(void *killerCtrl, uint8_t victimClass) {
   uint8_t *kc = (uint8_t *)killerCtrl;
@@ -1957,12 +1603,9 @@ static void TakeClassTime(void *pri, char *out, size_t outLen) {
   ReleaseSRWLockExclusive(&g_classTimeLock);
 }
 
-// The player's kills as "victim.killer,..." into out; false when the kill
-// detail is off (mmogbrain then counts only the class-free contracts).
+// The player's kills as "victim.killer,..." into out.
 static bool TakeKillLog(void *pri, char *out, size_t outLen) {
   out[0] = 0;
-  if (!KillDetailEnabled())
-    return false;
   size_t o = 0;
   AcquireSRWLockExclusive(&g_killLogLock);
   for (auto &k : g_killLogs) {
@@ -1978,8 +1621,7 @@ static bool TakeKillLog(void *pri, char *out, size_t outLen) {
 }
 
 // ---------------------------------------------------------------------------
-// MVP and Man Of The Day ribbons (on; dn_host_no_eom_ribbons.txt /
-// DN_HOST_NO_EOM_RIBBONS=1 turns them off). Added 2026-10-15.
+// MVP and Man Of The Day ribbons. Added 2026-10-15.
 //
 // Both are end-of-match scoring events (EYScoringEventID ManOfTheDay 41, MVP
 // 42), and mmogbrain keeps every end-of-match event out of the host's table:
@@ -1996,18 +1638,12 @@ static bool TakeKillLog(void *pri, char *out, size_t outLen) {
 #define SCORING_EVENT_MAN_OF_THE_DAY 41
 #define SCORING_EVENT_MVP 42
 static void AddScoringEvent(void *pri, uint32_t event);
-static bool EomRibbonsEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_EOM_RIBBONS", "dn_host_no_eom_ribbons.txt") ? 0 : 1;
-  return s_on == 1;
-}
 
 // The match-winning kill: killer's player state and team, if the killer is a
 // player.
 static void AwardManOfTheDay(void *killer, int winningTeam, const char *why) {
   uint8_t *kc = (uint8_t *)killer;
-  if (!EomRibbonsEnabled() || !kc || !IsReadable(kc + OFF_PC_PLAYER_STATE, 8))
+  if (!kc || !IsReadable(kc + OFF_PC_PLAYER_STATE, 8))
     return;
   uint8_t *pri = *(uint8_t **)(kc + OFF_PC_PLAYER_STATE);
   if (!IsReadable(pri, 0x941) || !ClassChainContains((UObjectMin *)pri, "YPlayerReplicationInfo"))
@@ -2033,7 +1669,7 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
     Logf("ceres: EXCEPTION ending a collector's buffs");
   }
   __try {
-    gs = g_onsPointsOn ? InvasionGameState(gm) : nullptr;
+    gs = InvasionGameState(gm);
     if (gs) {
       if (g_ons.gm != gameMode) {
         memset(&g_ons, 0, sizeof(g_ons));
@@ -2077,7 +1713,7 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   } __except (EXCEPTION_EXECUTE_HANDLER) {
   }
   int victimClass = -1;
-  if (KillDetailEnabled() && killer && killer != victimCtrl && victimPawn &&
+  if (killer && killer != victimCtrl && victimPawn &&
       IsReadable((uint8_t *)victimPawn + OFF_PAWN_SHIP_CLASS, 1))
     victimClass = ((uint8_t *)victimPawn)[OFF_PAWN_SHIP_CLASS];
   // Man Of The Day, TDM family: the original call ends the match when a
@@ -2087,7 +1723,7 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
   int32_t limit = 0, before1 = 0, before2 = 0;
   uint8_t *tdmGS = nullptr;
   __try {
-    if (EomRibbonsEnabled() && killer && killer != victimCtrl && IsReadable(gm + OFF_GM_KILLS_FOR_WINNING, 4) &&
+    if (killer && killer != victimCtrl && IsReadable(gm + OFF_GM_KILLS_FOR_WINNING, 4) &&
         IsReadable(gm + OFF_GM_GAMESTATE, 8)) {
       tdmGS = *(uint8_t **)(gm + OFF_GM_GAMESTATE);
       limit = *(int32_t *)(gm + OFF_GM_KILLS_FOR_WINNING);
@@ -2197,7 +1833,7 @@ static void __fastcall HookDetermineLeader(void *gameMode) {
 }
 
 // ---------------------------------------------------------------------------
-// Onslaught AI ships (on; dn_host_no_onslaught_creeps.txt turns it off)
+// Onslaught AI ships
 //
 // Onslaught's fighters, assault ships and command ship never spawned: every
 // kill in a live Onslaught match was a bot (2026-10-07). Verified in the exe
@@ -2263,12 +1899,6 @@ static OnsCreepState g_onsCreeps = {};
 static void *g_onsBigShip[2] = {}; // last seen command ship per team, for the position log
 static void *g_onsMidShip[2] = {}; // last seen assault ship per team, likewise
 static void *g_onsBigNav = nullptr; // the map's ONS_AITargetH_Navigation node, if any
-
-static bool SwitchOn(const char *envName, const char *markerFile);
-
-static bool OnslaughtCreepsEnabled() {
-  return !SwitchOn("DN_HOST_NO_ONSLAUGHT_CREEPS", "dn_host_no_onslaught_creeps.txt");
-}
 
 static int SizeFromName(const char *n) {
   if (!n) return -1;
@@ -2897,11 +2527,6 @@ static void LogTargetLists() {
 }
 
 static void OnslaughtCreepTick(uint8_t *gm) {
-  static int s_enabled = -1;
-  if (s_enabled < 0)
-    s_enabled = OnslaughtCreepsEnabled() ? 1 : 0;
-  if (!s_enabled)
-    return;
   __try {
     uint8_t *gs = InvasionGameState(gm);
     if (!gs)
@@ -3001,8 +2626,7 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 }
 
 // ---------------------------------------------------------------------------
-// Conquest score (on; dn_host_no_conquest_score.txt / DN_HOST_NO_CONQUEST_SCORE=1
-// turns it off)
+// Conquest score
 //
 // No Conquest match on our hosts ever ended: all 10 TER host logs up to
 // 2026-10-08 ran until the reaper killed them (one 25 min), none reached
@@ -3068,8 +2692,8 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 // share of those counts moved too slowly). The original is the whole grid:
 // the patch notes' "percentage of overall territory", and the HUD
 // (UI_TER_HUD_WBP) draws a neutral-area bar between the teams'
-// (m_neutralAreaScoreBarWidget), so the two need not add up to 100. The
-// claimed-share count is still there behind dn_host_conquest_claimed_share.txt.
+// (m_neutralAreaScoreBarWidget), so the two need not add up to 100. (The
+// claimed-share alternative was removed 2026-11-01; it was never used live.)
 // GUESS: the multiplier is applied when the designers set one (> 0), else 1
 // (GameMode_TER_BP sets none, so the field reads 0: as a factor nobody would
 // ever score); the threshold is "a team must hold more than this % to score";
@@ -3090,10 +2714,6 @@ static void OnslaughtCreepTick(uint8_t *gm) {
 #define OFF_GS_TER_VOLUME 0x2030
 #define OFF_TER_VOLUME_GRID 0x40C
 #define TER_TILE_ELEMENT 0x18
-
-static bool ConquestScoreEnabled() {
-  return !SwitchOn("DN_HOST_NO_CONQUEST_SCORE", "dn_host_no_conquest_score.txt");
-}
 
 // Tiles per team in one of the GameState's tile maps; false if unreadable.
 static bool CountTerritoryTiles(uint8_t *gs, int mapOff, int *t1, int *t2, int *mapTiles) {
@@ -3227,8 +2847,7 @@ static bool SetUpCapturePoints(uint8_t *gs) {
   return true;
 }
 
-// A captured point's territory (on; dn_host_no_conquest_point_owner.txt /
-// DN_HOST_NO_CONQUEST_POINT_OWNER=1 turns it off)
+// A captured point's territory
 //
 // Player reports 2026-10-29: the two capturable points "that should claim a
 // lot of map for your team still cannot be captured". They do flip (6 and 9
@@ -3270,13 +2889,6 @@ struct TArrayPtrMin {
 };
 typedef void(__fastcall *tGsCpOwnerChanged)(void *gs, uint32_t team, int32_t index, void *letter,
                                             TArrayPtrMin *capturers);
-
-static bool ConquestPointOwnerEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_CONQUEST_POINT_OWNER", "dn_host_no_conquest_point_owner.txt") ? 0 : 1;
-  return s_on == 1;
-}
 
 // Sync one point's influence-source team with its owner. Returns true when it
 // called the GameState (the copy disagreed).
@@ -3507,8 +3119,7 @@ static void ShipSpeedLog(uint8_t *gs) {
 }
 
 // ---------------------------------------------------------------------------
-// Conquest personal score (on; dn_host_no_ter_scoring.txt /
-// DN_HOST_NO_TER_SCORING=1 turns it off)
+// Conquest personal score
 //
 // The scoring table has four Conquest rows -- TerritoryContribution
 // ("TERRITORY HELD"), TerritoryCleared ("HARVESTER"), TerritoryCapturedPoint
@@ -3615,17 +3226,10 @@ static bool CreateTerritoryScoringManager(uint8_t *gm) {
   return true;
 }
 
-static bool TerScoringEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_TER_SCORING", "dn_host_no_ter_scoring.txt") ? 0 : 1;
-  return s_on == 1;
-}
-
 static void __fastcall HookCreateScoringMgrA(void *gm) {
   bool done = false;
   __try {
-    done = TerScoringEnabled() && CreateTerritoryScoringManager((uint8_t *)gm);
+    done = CreateTerritoryScoringManager((uint8_t *)gm);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("conquest scoring: EXCEPTION 0x%08X creating the Territory manager", GetExceptionCode());
   }
@@ -3636,7 +3240,7 @@ static void __fastcall HookCreateScoringMgrA(void *gm) {
 static void __fastcall HookCreateScoringMgrB(void *gm) {
   bool done = false;
   __try {
-    done = TerScoringEnabled() && CreateTerritoryScoringManager((uint8_t *)gm);
+    done = CreateTerritoryScoringManager((uint8_t *)gm);
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("conquest scoring: EXCEPTION 0x%08X creating the Territory manager", GetExceptionCode());
   }
@@ -3711,9 +3315,9 @@ static void __fastcall HookCpOnCaptured(void *cp, char silent) {
         kinds[nCtrls] = ClassNameOf(ctrl);
         ctrls[nCtrls++] = ctrl;
       }
-    if (ConquestPointOwnerEnabled() && IsReadable(gm + OFF_GM_GAMESTATE, 8))
+    if (IsReadable(gm + OFF_GM_GAMESTATE, 8))
       SyncPointOwner(*(uint8_t **)(gm + OFF_GM_GAMESTATE), p, ctrls, nCtrls, "captured");
-    void *mgr = TerScoringEnabled() ? TerritoryScoringManager(gm) : nullptr;
+    void *mgr = TerritoryScoringManager(gm);
     if (!mgr)
       return;
     for (int i = 0; i < nCtrls; ++i)
@@ -3727,8 +3331,7 @@ static void __fastcall HookCpOnCaptured(void *cp, char silent) {
   }
 }
 
-// Conquest spawns (on; dn_host_no_conquest_spawns.txt /
-// DN_HOST_NO_CONQUEST_SPAWNS=1 turns it off)
+// Conquest spawns
 //
 // Player report 2026-10-29 (Skybridge): "I spawned into enemy team twice in
 // this match and have seen enemies spawn near ours." Verified in the exe and
@@ -3768,13 +3371,6 @@ static void __fastcall HookCpOnCaptured(void *cp, char silent) {
 #define YGMF_TER 4
 typedef void *(__fastcall *tChoosePlayerStart)(void *gm, void *ctrl);
 static tChoosePlayerStart g_origChoosePlayerStart = nullptr;
-
-static bool ConquestSpawnsEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_CONQUEST_SPAWNS", "dn_host_no_conquest_spawns.txt") ? 0 : 1;
-  return s_on == 1;
-}
 
 static bool IsTerritoryMode(void *gm) {
   static void *s_gm = nullptr;
@@ -3891,19 +3487,7 @@ static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
   return start;
 }
 
-static bool ConquestClaimedShare() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_CONQUEST_CLAIMED_SHARE", "dn_host_conquest_claimed_share.txt") ? 1 : 0;
-  return s_on == 1;
-}
-
 static void ConquestTick(uint8_t *gm) {
-  static int s_enabled = -1;
-  if (s_enabled < 0)
-    s_enabled = ConquestScoreEnabled() ? 1 : 0;
-  if (!s_enabled)
-    return;
   __try {
     if (!IsReadable(gm + OFF_GM_GAMESTATE, 8) || !IsReadable(gm + OFF_GM_TER_SCORE_INTERVAL, 4))
       return;
@@ -3937,7 +3521,7 @@ static void ConquestTick(uint8_t *gm) {
            "threshold %d; territory volume %p grid %.0f x %.0f; m_maxMatchTime %.2f min (+0x884; GameMode_TER_BP "
            "sets none, the other modes 20); territory %% of %s; linking %d; scoring manager %s",
            gm, target, every, mult, useMult, threshold, vol, gw, gh, *(float *)(gm + 0x884),
-           ConquestClaimedShare() ? "the CLAIMED tiles (dn_host_conquest_claimed_share.txt)" : "the whole grid",
+           "the whole grid",
            gs[0x1E2F], IsReadable(gm + OFF_GM_SCORING_MGR, 8) ? ClassNameOf(*(void **)(gm + OFF_GM_SCORING_MGR)) : "?");
     }
     if (g_ter.ended)
@@ -3986,7 +3570,7 @@ static void ConquestTick(uint8_t *gm) {
           ((tCpSetOwner)(g_base + RVA_CP_SET_OWNER))(g_ter.cps[i], 1);
           break;
         }
-    if (g_ter.pointsReady && ConquestPointOwnerEnabled())
+    if (g_ter.pointsReady)
       for (int i = 0; i < g_ter.numCps; ++i)
         SyncPointOwner(gs, g_ter.cps[i], nullptr, 0, "owner changed outside a capture");
     // The territory map (+0x1EA8, see above). Before the GameState's first
@@ -4002,14 +3586,7 @@ static void ConquestTick(uint8_t *gm) {
     }
     float total = gw * gh;
     int pct1 = 0, pct2 = 0;
-    if (ConquestClaimedShare()) {
-      // The operator's 2026-10-08 rule: a team's share of the claimed tiles
-      // (the two add up to 100).
-      if (ok && t1 + t2 > 0) {
-        pct1 = (int)(100.0f * t1 / (t1 + t2) + 0.5f);
-        pct2 = 100 - pct1;
-      }
-    } else if (ok && total > 0.0f) {
+    if (ok && total > 0.0f) {
       pct1 = (int)(100.0f * t1 / total + 0.5f);
       pct2 = (int)(100.0f * t2 / total + 0.5f);
     }
@@ -4025,7 +3602,7 @@ static void ConquestTick(uint8_t *gm) {
       if (pct2 > threshold)
         score[1] += (int)(pct2 * useMult + 0.5f);
       changed = true;
-      int checked = TerScoringEnabled() ? TerContributionPass(gm, gs) : 0;
+      int checked = TerContributionPass(gm, gs);
       ++g_ter.contributionTicks;
       g_ter.contributionCalls += checked;
       Logf("conquest: territory T1 %d%% T2 %d%% (%d/%d of %.0f tiles; %d in the territory map, points %d/%d of %d, "
@@ -4056,8 +3633,7 @@ static void ConquestTick(uint8_t *gm) {
 }
 
 // ---------------------------------------------------------------------------
-// Bots spawned before the match starts (on; dn_host_no_npc_ai_start.txt turns
-// it off)
+// Bots spawned before the match starts
 //
 // Operator report 2026-10-08: Conquest and Onslaught bots "just sit still and
 // ignore the objective". Verified in the exe the same day:
@@ -4109,11 +3685,6 @@ static void ReportFarAway(uint8_t *pawn, const char *what) {
 }
 
 static void NpcAiStartTick(uint8_t *gm) {
-  static int s_enabled = -1;
-  if (s_enabled < 0)
-    s_enabled = SwitchOn("DN_HOST_NO_NPC_AI_START", "dn_host_no_npc_ai_start.txt") ? 0 : 1;
-  if (!s_enabled)
-    return;
   __try {
     if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
       return;
@@ -4181,8 +3752,7 @@ static void NpcAiStartTick(uint8_t *gm) {
 }
 
 // ---------------------------------------------------------------------------
-// Veteran / Legendary command ship guns (on; dn_host_no_ons_gun_rows.txt turns
-// it off)
+// Veteran / Legendary command ship guns
 //
 // Operator report 2026-10-08: the command ship shoots in Recruit Onslaught
 // but not in Veteran or Legendary. Verified in the cooked files the same day:
@@ -4248,7 +3818,231 @@ static void *__fastcall HookWeaponGroupLoadRow(void *group) {
 }
 
 // ---------------------------------------------------------------------------
-// Player ship physics (dn_host_ship_physics.txt)
+// Onslaught ships keep their ability slots through behaviour changes (on;
+// dn_host_no_ons_ability_slots.txt turns it off)
+//
+// Tester 2026-10-30, after the possess fix (6742c5f): "none of this works" --
+// command ships launched no jets, assault ships never rammed. Host logs
+// 2026-11-01 (Legendary, Amirani): the pawn has its four abilities and the
+// fire list its four slots right after possess, yet 549 "fail ability
+// index=0/2 : ability set to trigger inexistent pawn ability index=-1" once the
+// fighting starts. Verified in the exe:
+//   - The fire loop (0x2AA9D0, entries controller +0x860 / count +0x868, 0xD0
+//     each) takes the pawn slot from entry +0x08 as it stands while the
+//     controller's data asset (+0x710) is null (0x2AAC95); with one set it
+//     looks the slot up by the entry's class every time (0x288A10 over
+//     +0x870).
+//   - On a behaviour change the NPC tick (0x2A9300, by state +0xA38) applies
+//     a controller class's values to the controller (0x29C5F0): it copies that
+//     class default's fire list over +0x860 (0x278980), m_maxFireDistance
+//     (+0x834) and m_maxFireDistanceCreeps (+0x83C) among others, caps the
+//     classes by tier (0x2FF860) and looks the slots up (0x288A10) -- but only
+//     to build a warning; +0x08 keeps the class default's value. The
+//     command ship's parent controller, VH_ONS_AITargetH_Parent_YAICtrl_BP,
+//     cooks m_abilityIndex -1 into all four entries (the assault ship's parent
+//     too), so after the first change every slot is -1.
+// So after each application the slots are looked up again, by class, the way
+// the data-asset path does it.
+#define RVA_NPC_APPLY_CONTROL_VALUES 0x29C5F0 // .pdata entry 0x29C5F0-0x29C648 (body in chunks)
+typedef void(__fastcall *tNpcApplyControlValues)(void *ctrl, void *valuesClass);
+static tNpcApplyControlValues g_origNpcApplyControlValues = nullptr;
+
+// Onslaught assault / command ship classes, cached so the hot damage hook
+// below never looks a name up twice. kind 'H' command ship, 'M' assault ship,
+// 0 anything else; tier 0 Recruit (_Pawn_BP), 1 Veteran (_Pawn_V_BP),
+// 2 Legendary (_Pawn_L_BP).
+struct OnsClassInfo {
+  void *cls;
+  char kind;
+  int tier;
+};
+static OnsClassInfo s_onsClasses[160];
+static volatile LONG s_onsClassCount = 0;
+
+static OnsClassInfo OnsClassOf(void *cls) {
+  OnsClassInfo info = {cls, 0, 0};
+  if (!cls)
+    return info;
+  int n = (int)s_onsClassCount;
+  for (int i = 0; i < n; ++i)
+    if (s_onsClasses[i].cls == cls)
+      return s_onsClasses[i];
+  const char *name = NameText(((UObjectMin *)cls)->Name);
+  if (name && strncmp(name, "VH_ONS_AITarget", 15) == 0 && (name[15] == 'H' || name[15] == 'M')) {
+    info.kind = name[15];
+    info.tier = strstr(name, "_Pawn_L_") ? 2 : strstr(name, "_Pawn_V_") ? 1 : 0;
+  }
+  if (n < (int)(sizeof(s_onsClasses) / sizeof(s_onsClasses[0]))) {
+    s_onsClasses[n] = info;
+    s_onsClassCount = n + 1; // game thread only
+  }
+  return info;
+}
+
+// Only Onslaught's own assault / command ship controllers may be applied to
+// those ships. Host log 2026-11-01 (Legendary, Amirani): at 19:58, a second
+// after the game spawned one of its bots, the team 1 command ship's fire list
+// held a SNIPER controller's abilities (AB_SN_Pri_FireMode_Rapid_Ability_T5,
+// ...), every slot -1 -- it never launched a jet again, and the 549 errors
+// were its Rapid fire mode and missile entries. The application's callers:
+// NextBehaviour (0x28E340: the next behaviour of the scene entry at the
+// controller's OWN index, +0xAAC), the scene's per-entry advance (0x2685F0,
+// the entry's weak pawn), the NPC tick (states 17-19) and the SetProperties
+// node. Which one carried the sniper's class is not traced: AddNPCSpawn
+// (0x23A280) only appends, and the game's bot spawns (InternalAddNpcSpawn
+// 0x374550) take fresh entries. So a foreign class is refused and logged with
+// its caller and the ship's scene index.
+static void __fastcall HookNpcApplyControlValues(void *ctrl, void *valuesClass) {
+  void *caller = __builtin_return_address(0);
+  if (ctrl && valuesClass) {
+    __try {
+      uint8_t *pawn = *(uint8_t **)((uint8_t *)ctrl + OFF_CONTROLLER_PAWN);
+      OnsClassInfo info = pawn ? OnsClassOf(((UObjectMin *)pawn)->Class) : OnsClassInfo{};
+      const char *vn = NameText(((UObjectMin *)valuesClass)->Name);
+      if (info.kind && !(vn && strncmp(vn, "VH_ONS_AITarget", 15) == 0)) {
+        static volatile LONG s_refused = 0;
+        if (InterlockedIncrement(&s_refused) <= 40) {
+          uint8_t *c = (uint8_t *)ctrl;
+          void *loc = *(void **)(c + 0xA48); // behaviour m_location, as the callers copied it
+          const char *ln = loc ? NameText(((UObjectMin *)loc)->Name) : nullptr;
+          Logf("onslaught abilities: REFUSED %s for %s %p (caller RVA 0x%llX, scene index %d, behaviour %d, "
+               "location %s) -- it would replace the ship's own fire list",
+               vn ? vn : "?", ClassNameOf(pawn), pawn, (unsigned long long)((uintptr_t)caller - g_base),
+               *(int32_t *)(c + OFF_NPC_SCENE_INDEX), c[OFF_NPC_BEHAVIOUR_STATE], ln ? ln : "none");
+        }
+        return;
+      }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+  }
+  g_origNpcApplyControlValues(ctrl, valuesClass);
+  if (!ctrl || !valuesClass)
+    return;
+  __try {
+    uint8_t *pawn = *(uint8_t **)((uint8_t *)ctrl + OFF_CONTROLLER_PAWN);
+    if (!pawn)
+      return;
+    OnsClassInfo info = OnsClassOf(((UObjectMin *)pawn)->Class);
+    if (!info.kind)
+      return;
+    int fc = *(int32_t *)((uint8_t *)ctrl + OFF_NPC_FIRE_ABILITIES + 8);
+    uint8_t *fe = *(uint8_t **)((uint8_t *)ctrl + OFF_NPC_FIRE_ABILITIES);
+    char before[64] = "", after[64] = "";
+    int nb = 0, na = 0;
+    for (int i = 0; fe && i < fc && i < 8; ++i)
+      nb += snprintf(before + nb, sizeof(before) - nb, "%s%d", i ? "," : "",
+                     *(int32_t *)(fe + (size_t)i * NPC_FIRE_ABILITY_SIZE + 8));
+    int found = ResolveNpcFireAbilities(pawn, ctrl);
+    for (int i = 0; fe && i < fc && i < 8; ++i)
+      na += snprintf(after + na, sizeof(after) - na, "%s%d", i ? "," : "",
+                     *(int32_t *)(fe + (size_t)i * NPC_FIRE_ABILITY_SIZE + 8));
+    static volatile LONG s_logged = 0;
+    if (InterlockedIncrement(&s_logged) <= 40) {
+      const char *vn = NameText(((UObjectMin *)valuesClass)->Name);
+      Logf("onslaught abilities: %s applied to %s %p (caller RVA 0x%llX) -- fire list slots %s -> %s "
+           "(%d of %d found), max fire distance %.0f",
+           vn ? vn : "?", ClassNameOf(pawn), pawn, (unsigned long long)((uintptr_t)caller - g_base),
+           before[0] ? before : "none", after[0] ? after : "none", found, fc, *(float *)((uint8_t *)ctrl + 0x834));
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("onslaught abilities: EXCEPTION 0x%08X after applying controller values", GetExceptionCode());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Command ship gun damage, measured (on; dn_host_no_ons_gun_log.txt turns it
+// off)
+//
+// Tester 2026-10-30: "Legendary Command Ship hits way weaker now. Though it
+// may have longer range of around 5km, while before it was about 3km?" The
+// cooked data says the opposite of weaker: the three tiers' guns differ only
+// in their projectile rows, 400/200/100 (Recruit), 700/300/150 (Veteran),
+// 1000/500/200 (Legendary) for the high / medium / low bands, high up to
+// 6000 units and medium up to 12000 (DN_Projectile_OTS_DT); the controller
+// fires out to m_maxFireDistance, 20000 by the native default (ctor 0x276EA0)
+// since neither command ship controller Blueprint overrides it. Which of the
+// gun's two rows (weapon row 75 flat, projectile row as above) the host
+// applies is not settled statically, so this measures it: every hit a
+// command ship lands, through YPawn::TakeDamage (0x59BAF0; float damage,
+// FDamageEvent&, instigating controller, damage causer -> damage dealt), is
+// summed per tier, victim kind and distance band, and logged every 30 s.
+#define RVA_PAWN_TAKE_DAMAGE 0x59BAF0
+typedef float(__fastcall *tPawnTakeDamage)(void *pawn, float damage, void *evt, void *instigator, void *causer);
+static tPawnTakeDamage g_origPawnTakeDamage = nullptr;
+
+struct OnsGunBand {
+  int hits;
+  double asked, dealt;
+};
+static OnsGunBand s_onsGun[3][2][3]; // tier, victim (0 player ship, 1 other), band (<6000, <12000, beyond)
+static float s_onsGunMaxDist[3];
+static ULONGLONG s_onsGunNextLog = 0;
+
+static void FlushOnsGunLog() {
+  static const char *tiers[3] = {"Recruit", "Veteran", "Legendary"};
+  for (int t = 0; t < 3; ++t)
+    for (int v = 0; v < 2; ++v) {
+      OnsGunBand *b = s_onsGun[t][v];
+      int hits = b[0].hits + b[1].hits + b[2].hits;
+      if (!hits)
+        continue;
+      char buf[256];
+      int n = 0;
+      static const char *bands[3] = {"<6000", "6000-12000", ">12000"};
+      for (int k = 0; k < 3; ++k)
+        if (b[k].hits)
+          n += snprintf(buf + n, sizeof(buf) - n, " %s: %d hits, avg %.0f asked / %.0f dealt;", bands[k],
+                        b[k].hits, b[k].asked / b[k].hits, b[k].dealt / b[k].hits);
+      Logf("onslaught gun: %s command ship -> %s, %d hits in 30 s --%s max distance %.0f", tiers[t],
+           v == 0 ? "player ships" : "AI ships", hits, buf, s_onsGunMaxDist[t]);
+    }
+  memset(s_onsGun, 0, sizeof(s_onsGun));
+  memset(s_onsGunMaxDist, 0, sizeof(s_onsGunMaxDist));
+}
+
+static float __fastcall HookPawnTakeDamage(void *pawn, float damage, void *evt, void *instigator, void *causer) {
+  float dealt = g_origPawnTakeDamage(pawn, damage, evt, instigator, causer);
+  if (!instigator || !pawn)
+    return dealt;
+  __try {
+    uint8_t *shooter = *(uint8_t **)((uint8_t *)instigator + OFF_CONTROLLER_PAWN);
+    if (!shooter)
+      return dealt;
+    OnsClassInfo info = OnsClassOf(((UObjectMin *)shooter)->Class);
+    if (info.kind != 'H')
+      return dealt;
+    float a[3], b[3];
+    uint8_t *ca = *(uint8_t **)(shooter + OFF_ACTOR_ROOT_COMPONENT);
+    uint8_t *cb = *(uint8_t **)((uint8_t *)pawn + OFF_ACTOR_ROOT_COMPONENT);
+    float dist = -1.0f;
+    if (ca && cb) {
+      memcpy(a, ca + OFF_COMP_WORLD_LOC, sizeof(a));
+      memcpy(b, cb + OFF_COMP_WORLD_LOC, sizeof(b));
+      dist = sqrtf((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]));
+    }
+    void *victimCtrl = *(void **)((uint8_t *)pawn + OFF_PAWN_CONTROLLER);
+    int v = victimCtrl && strstr(ClassNameOf(victimCtrl), "PlayerCtrl") ? 0 : 1;
+    int band = dist < 6000.0f ? 0 : dist < 12000.0f ? 1 : 2;
+    OnsGunBand &g = s_onsGun[info.tier][v][band];
+    g.hits++;
+    g.asked += damage;
+    g.dealt += dealt;
+    if (dist > s_onsGunMaxDist[info.tier])
+      s_onsGunMaxDist[info.tier] = dist;
+    ULONGLONG now = GetTickCount64();
+    if (!s_onsGunNextLog)
+      s_onsGunNextLog = now + 30000;
+    else if (now >= s_onsGunNextLog) {
+      s_onsGunNextLog = now + 30000;
+      FlushOnsGunLog();
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+  return dealt;
+}
+
+// ---------------------------------------------------------------------------
+// Player ship physics
 //
 // Verified 2026-09-24 (disassembly + live memory while the operator flew):
 //   - Ship inputs reach the host (ServerUpdateThrottle/Steering/VerticalState
@@ -4289,8 +4083,8 @@ static void __fastcall HookVehicleViewCull(void *movementComp) {
 }
 
 // ---------------------------------------------------------------------------
-// Turbo TDM modifiers (on, TurboTDM hosts only; dn_host_no_game_modifiers.txt
-// turns it off). From PR #80, addresses re-checked 2026-10-16.
+// Turbo TDM modifiers (TurboTDM hosts only). From PR #80, addresses re-checked
+// 2026-10-16.
 //
 // Turbo TDM's whole effect is three feats on every ship. DN_GameModifiers_DT
 // row YGMT_TURBO_TDM: m_feats "ModifierSpeed;ModifierDamage;ModifierFireRate",
@@ -4418,7 +4212,7 @@ static void __fastcall HookClientSetPlayerRestrictions(
 // ClientApplyRespawnFilter re-entrancy guard (not switchable)
 //
 // THE end-of-match stack overflow (~40% of matches, ~3 ms after EndMatch).
-// Found 2026-09-29 by the stack probe below, which caught the cycle live:
+// Found 2026-09-29 by a stack probe (since removed), which caught the cycle live:
 //
 //   0x28D6FB -> 0x5E5107 -> 0x41723D -> 0x744B7C -> 0xD1878B -> 0xD5B430 ->
 //   0xD5B2A4 -> 0x28D6FB -> ...        (862 repetitions in 512 KB of stack)
@@ -4459,244 +4253,10 @@ static void __fastcall HookClientApplyRespawnFilter(void *self, void *filter) {
 }
 
 // ---------------------------------------------------------------------------
-// End-of-match stack probe (DIAGNOSTIC; dn_host_no_stack_probe.txt /
-// DN_HOST_NO_STACK_PROBE=1 turns it off)
-//
-// The host overflows its stack in about 40% of matches, ~3 ms after EndMatch
-// starts ("Match over event" -> music reset -> EXCEPTION_STACK_OVERFLOW; 5 of
-// 12 matches on 2026-09-29). Neither Wine nor the game logs a backtrace, and
-// the restrictions guard above did not stop it, so the recursing function is
-// unknown. This finds it: the local-controller restrictions RPC fires on the
-// game thread right before every overflow, so it arms a watcher for 5 s. The
-// watcher repeatedly suspends the game thread and reads its RSP; once the stack
-// is PROBE_DEPTH deeper than at arm time, it scans the stack above RSP for
-// values inside the exe's code section, counts them, and writes the most
-// frequent ones -- the return addresses of the recursion -- as RVAs.
-//
-// While the game thread is suspended nothing here touches the C runtime or the
-// heap (the thread may hold their locks): wsprintfA into static buffers and a
-// raw WriteFile to dn_host_stackprobe.log beside the exe.
-#define PROBE_DEPTH (768 * 1024)
-#define PROBE_SCAN (512 * 1024)
-#define PROBE_SLOTS 4096
-static HANDLE g_probeTarget = nullptr;
-static volatile LONG g_probeArmed = 0;
-static volatile DWORD g_probeUntil = 0;
-static uintptr_t g_probeBaseline = 0;
-static uintptr_t g_textLo = 0, g_textHi = 0;
-static uint64_t g_probeKeys[PROBE_SLOTS];
-static uint32_t g_probeCounts[PROBE_SLOTS];
-static char g_probeLine[512];
-static HANDLE g_probeFile = INVALID_HANDLE_VALUE;
-static bool SwitchOn(const char *envName, const char *markerFile);
-
-static void ProbeWrite(const char *text) {
-  if (g_probeFile == INVALID_HANDLE_VALUE)
-    return;
-  DWORD n = 0;
-  WriteFile(g_probeFile, text, (DWORD)lstrlenA(text), &n, nullptr);
-}
-
-static void ProbeScanAndReport(uintptr_t rsp, uintptr_t rip) {
-  memset(g_probeKeys, 0, sizeof(g_probeKeys));
-  memset(g_probeCounts, 0, sizeof(g_probeCounts));
-  uint32_t candidates = 0;
-  // Every page is checked before it is read, the FIRST one included: the probe
-  // can fire just as the thread reaches the bottom of its stack, where RSP sits
-  // on the guard page -- reading it faulted this thread and took the host down
-  // (21:45:42 on 2026-09-29, "Unhandled page fault on read access to
-  // 00007FFFFE100000", thread = the probe). Guard / no-access pages end the scan.
-  uintptr_t readableTo = 0;
-  for (uintptr_t p = rsp; p < rsp + PROBE_SCAN; p += 8) {
-    if (p >= readableTo) {
-      MEMORY_BASIC_INFORMATION mbi;
-      if (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT ||
-          (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) || !(mbi.Protect & (PAGE_READWRITE | PAGE_READONLY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)))
-        break;
-      readableTo = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-    }
-    uint64_t v;
-    __try {
-      v = *(uint64_t *)p;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-      break;
-    }
-    if (v < g_textLo || v >= g_textHi)
-      continue;
-    candidates++;
-    uint32_t h = (uint32_t)((v * 0x9E3779B97F4A7C15ull) >> 52) & (PROBE_SLOTS - 1);
-    for (int i = 0; i < PROBE_SLOTS; ++i, h = (h + 1) & (PROBE_SLOTS - 1)) {
-      if (g_probeKeys[h] == v || g_probeKeys[h] == 0) {
-        g_probeKeys[h] = v;
-        g_probeCounts[h]++;
-        break;
-      }
-    }
-  }
-  wsprintfA(g_probeLine,
-            "stack probe: game thread is %u KB deeper than at match end; rip RVA 0x%X; "
-            "%u code addresses in the top %u KB of stack. Most frequent (RVA x count):\r\n",
-            (unsigned)((g_probeBaseline - rsp) / 1024),
-            (unsigned)(rip >= g_base ? rip - g_base : 0), candidates, PROBE_SCAN / 1024);
-  ProbeWrite(g_probeLine);
-  for (int rank = 0; rank < 24; ++rank) {
-    int best = -1;
-    for (int i = 0; i < PROBE_SLOTS; ++i)
-      if (g_probeCounts[i] && (best < 0 || g_probeCounts[i] > g_probeCounts[best]))
-        best = i;
-    if (best < 0)
-      break;
-    wsprintfA(g_probeLine, "  0x%X x %u\r\n", (unsigned)(g_probeKeys[best] - g_base),
-              g_probeCounts[best]);
-    ProbeWrite(g_probeLine);
-    g_probeCounts[best] = 0;
-  }
-}
-
-static DWORD WINAPI StackProbeThread(LPVOID) {
-  for (;;) {
-    if (!g_probeArmed) {
-      Sleep(20);
-      continue;
-    }
-    if ((LONG)(GetTickCount() - g_probeUntil) >= 0) {
-      g_probeArmed = 0;
-      continue;
-    }
-    if (SuspendThread(g_probeTarget) == (DWORD)-1) {
-      g_probeArmed = 0;
-      continue;
-    }
-    CONTEXT ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.ContextFlags = CONTEXT_CONTROL;
-    if (GetThreadContext(g_probeTarget, &ctx) && g_probeBaseline > ctx.Rsp &&
-        g_probeBaseline - ctx.Rsp > PROBE_DEPTH) {
-      ProbeScanAndReport((uintptr_t)ctx.Rsp, (uintptr_t)ctx.Rip);
-      g_probeArmed = 0;
-    }
-    ResumeThread(g_probeTarget);
-    SwitchToThread();
-  }
-}
-
-// The exe's code range and the raw output file, shared by the stack probe and
-// the crash handler below. Safe to call more than once.
-static void InitProbeOutput() {
-  if (g_textLo)
-    return;
-  IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)g_base;
-  IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(g_base + dos->e_lfanew);
-  g_textLo = g_base + nt->OptionalHeader.BaseOfCode;
-  g_textHi = g_textLo + nt->OptionalHeader.SizeOfCode;
-  char path[MAX_PATH];
-  DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
-  while (len > 0 && path[len - 1] != '\\' && path[len - 1] != '/')
-    --len;
-  lstrcpyA(path + len, "dn_host_stackprobe.log");
-  g_probeFile = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-}
-
-// ---------------------------------------------------------------------------
-// Host crash handler (DIAGNOSTIC; same switch as the stack probe)
-//
-// The second host crash: "Unhandled Exception: EXCEPTION_ACCESS_VIOLATION
-// reading address 0xfffffff8" MID-match (3-5 min in), then the engine's crash
-// handler exits with status 3 -- 7 matches on 2026-09-28/29, 5 of them
-// identical. The engine's report lists frames without addresses and Wine logs
-// none, so the faulting code is unknown. A vectored handler sees the exception
-// first: for an access violation or stack overflow whose RIP is inside the
-// exe's code, it writes the fault RVA, the address read, and the exe code
-// addresses found on the stack above RSP in order (a rough call chain), to
-// dn_host_stackprobe.log. Faults in wer.dll itself (the IsReadable probes)
-// are not in the exe and are skipped. It only observes: always
-// EXCEPTION_CONTINUE_SEARCH. At most 4 reports per process.
-static volatile LONG g_crashReports = 0;
-static char g_crashLine[256];
-
-static LONG CALLBACK HostCrashHandler(EXCEPTION_POINTERS *ep) {
-  DWORD code = ep->ExceptionRecord->ExceptionCode;
-  if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_STACK_OVERFLOW)
-    return EXCEPTION_CONTINUE_SEARCH;
-  uintptr_t rip = (uintptr_t)ep->ContextRecord->Rip;
-  if (rip < g_textLo || rip >= g_textHi)
-    return EXCEPTION_CONTINUE_SEARCH;
-  if (InterlockedIncrement(&g_crashReports) > 4)
-    return EXCEPTION_CONTINUE_SEARCH;
-  uintptr_t addr = ep->ExceptionRecord->NumberParameters >= 2
-                       ? (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1]
-                       : 0;
-  uintptr_t rsp = (uintptr_t)ep->ContextRecord->Rsp;
-  wsprintfA(g_crashLine, "crash: %s at RVA 0x%X, address 0x%I64X, thread %u. Stack chain (RVA):\r\n",
-            code == EXCEPTION_STACK_OVERFLOW ? "STACK OVERFLOW" : "ACCESS VIOLATION",
-            (unsigned)(rip - g_base), (unsigned long long)addr, (unsigned)GetCurrentThreadId());
-  ProbeWrite(g_crashLine);
-  // Registers often hold the object that was null; worth a line.
-  CONTEXT *c = ep->ContextRecord;
-  wsprintfA(g_crashLine, "  rax=%I64X rbx=%I64X rcx=%I64X rdx=%I64X rsi=%I64X rdi=%I64X\r\n",
-            c->Rax, c->Rbx, c->Rcx, c->Rdx, c->Rsi, c->Rdi);
-  ProbeWrite(g_crashLine);
-  // Separate line: both in one would be up to 298 chars in this 256-byte
-  // buffer (wsprintfA does not bound it). r8-r15 from PR #80.
-  wsprintfA(g_crashLine, "  r8=%I64X r9=%I64X r10=%I64X r11=%I64X r12=%I64X r13=%I64X r14=%I64X r15=%I64X\r\n",
-            c->R8, c->R9, c->R10, c->R11, c->R12, c->R13, c->R14, c->R15);
-  ProbeWrite(g_crashLine);
-  int shown = 0;
-  uintptr_t limit = rsp + (code == EXCEPTION_STACK_OVERFLOW ? 4096 : 65536);
-  uintptr_t readableTo = 0;
-  for (uintptr_t p = rsp; p < limit && shown < 40; p += 8) {
-    if (p >= readableTo) {
-      MEMORY_BASIC_INFORMATION mbi;
-      if (!VirtualQuery((void *)p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT ||
-          (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
-        break;
-      readableTo = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
-    }
-    uint64_t v = *(uint64_t *)p;
-    if (v >= g_textLo && v < g_textHi) {
-      wsprintfA(g_crashLine, "  0x%X\r\n", (unsigned)(v - g_base));
-      ProbeWrite(g_crashLine);
-      shown++;
-    }
-  }
-  return EXCEPTION_CONTINUE_SEARCH;
-}
-
-static void InstallHostCrashHandler() {
-  if (SwitchOn("DN_HOST_NO_STACK_PROBE", "dn_host_no_stack_probe.txt"))
-    return;
-  InitProbeOutput();
-  if (AddVectoredExceptionHandler(1, HostCrashHandler))
-    Logf("crash handler: installed; access violations / stack overflows in the exe "
-         "are written to dn_host_stackprobe.log");
-}
-
-// Called on the game thread at match end (the restrictions RPC hook).
-static void ArmStackProbe() {
-  static int s_state = -1; // -1 unknown, 0 off, 1 on
-  if (s_state < 0) {
-    s_state = SwitchOn("DN_HOST_NO_STACK_PROBE", "dn_host_no_stack_probe.txt") ? 0 : 1;
-    if (s_state) {
-      InitProbeOutput();
-      if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
-                           &g_probeTarget, THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT, FALSE, 0) ||
-          !CreateThread(nullptr, 0, StackProbeThread, nullptr, 0, nullptr)) {
-        s_state = 0;
-        Logf("stack probe: could not start (thread handle or watcher thread)");
-      } else {
-        Logf("stack probe: armed on the game thread; a deep stack in the next 5 s is "
-             "written to dn_host_stackprobe.log");
-      }
-    }
-  }
-  if (!s_state)
-    return;
-  volatile char here = 0;
-  g_probeBaseline = (uintptr_t)&here;
-  g_probeUntil = GetTickCount() + 5000;
-  g_probeArmed = 1;
-}
+// The end-of-match stack probe and the host crash handler that lived here
+// were removed 2026-11-01. Both were off on the live hosts since 2026-10-08
+// (the probe preceded two host crashes, 09:50 TDM and 12:06 PodTDM); the
+// probe had done its job, finding the ClientAddAchievement loop above.
 
 #define RVA_CLIENT_SET_PLAYER_RESTRICTIONS_RPC 0x5E5B80
 static tClientSetPlayerRestrictions g_origClientSetPlayerRestrictionsRPC = nullptr;
@@ -4713,7 +4273,6 @@ static void __fastcall HookClientSetPlayerRestrictionsRPC(
     local = false;
   }
   if (local) {
-    ArmStackProbe(); // the overflow follows within milliseconds when it happens
     static volatile LONG s_logged = 0;
     if (InterlockedIncrement(&s_logged) <= 3)
       Logf("restrictions: skipped the ClientSetPlayerRestrictions RPC to the host's "
@@ -4725,7 +4284,7 @@ static void __fastcall HookClientSetPlayerRestrictionsRPC(
 }
 
 // ---------------------------------------------------------------------------
-// End-of-match screen (on unless dn_host_no_eom_stats.txt / DN_HOST_NO_EOM_STATS=1)
+// End-of-match screen
 //
 // Verified 2026-09-25 from a client log + the exe: the client's end-of-match
 // stage graph runs Init -> FadeToBlack -> UnloadSublevels -> LoadLevel ->
@@ -4762,8 +4321,7 @@ typedef void *(__fastcall *tFindFunctionChecked)(void *obj, uint64_t name);
 typedef void(__fastcall *tProcessEventVirt)(void *obj, void *fn, void *parms);
 
 // ---------------------------------------------------------------------------
-// Match result -> mmogbrain (on unless dn_host_no_match_result.txt /
-// DN_HOST_NO_MATCH_RESULT=1)
+// Match result -> mmogbrain
 //
 // Added 2026-09-26. The original backend paid XP and credits from a result the
 // server build reported; nothing in this exe does, so no match ever paid
@@ -4850,10 +4408,9 @@ static bool MatchIDFromCommandLine(char *out, size_t outLen) {
 static int s_round = 0;
 
 static void WriteEomRewards(uint8_t *pri, const char *body, const char *match);
-static bool RewardsScreenEnabled();
 
 // ---------------------------------------------------------------------------
-// Original match XP (on; dn_host_no_event_xp.txt turns it off)
+// Original match XP
 //
 // mmogbrain now serves the ORIGINAL scoring table (the operator's datamine of
 // the 1.11.1 / 1.12.0 tables, data/scoring/ScoringTable.json), XP and credits
@@ -4889,8 +4446,7 @@ static EventTotals g_eventTotals[128] = {};
 static SRWLOCK g_eventTotalsLock = SRWLOCK_INIT;
 
 // ---------------------------------------------------------------------------
-// Ribbons announced in the match (on; dn_host_no_live_ribbons.txt /
-// DN_HOST_NO_LIVE_RIBBONS=1 turns it off). Added 2026-10-15.
+// Ribbons announced in the match. Added 2026-10-15.
 //
 // A ribbon never showed during a match (operator: "ribbons dont get rewarded
 // in matches"), although mmogbrain awards them from ev= after it. The host's
@@ -4925,19 +4481,8 @@ struct RibbonRule {
   int n, score, xp, credits;
 };
 static RibbonRule g_ribbonRules[SCORING_EVENT_COUNT] = {};
-static bool SwitchOn(const char *envName, const char *markerFile);
-
-static bool LiveRibbonsEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_LIVE_RIBBONS", "dn_host_no_live_ribbons.txt") ? 0 : 1;
-  return s_on == 1;
-}
-
 // The ribbon rows for the match's scoring mode, from mmogbrain.
 static void LoadRibbonRules(const wchar_t *mode) {
-  if (!LiveRibbonsEnabled())
-    return;
   char m[24] = {0}, path[96], body[4096];
   for (int i = 0; i < 20 && mode && mode[i]; ++i)
     m[i] = (mode[i] < 128 && (isalnum((int)mode[i]) || mode[i] == L'_')) ? (char)mode[i] : '_';
@@ -4966,7 +4511,7 @@ static void LoadRibbonRules(const wchar_t *mode) {
 
 // Sends one ribbon (type-2 achievement) for event to the player owning pri.
 static void SendRibbonAchievement(void *pri, uint32_t event) {
-  if (!LiveRibbonsEnabled() || event >= SCORING_EVENT_COUNT || g_ribbonRules[event].n <= 0)
+  if (event >= SCORING_EVENT_COUNT || g_ribbonRules[event].n <= 0)
     return;
   __try {
     uint8_t *p = (uint8_t *)pri;
@@ -5001,8 +4546,7 @@ static void MaybeAnnounceRibbon(void *pri, uint32_t event, unsigned count) {
     SendRibbonAchievement(pri, event);
 }
 
-// The in-match ribbon popup (on; dn_host_no_ribbon_popup.txt /
-// DN_HOST_NO_RIBBON_POPUP=1 turns it off). Added 2026-10-16.
+// The in-match ribbon popup. Added 2026-10-16.
 //
 // ClientAddAchievement (above) only files the ribbon into the client's
 // scoring component list (the client's +0x350 is 0x4171E0 itself: type 2 ->
@@ -5029,13 +4573,6 @@ static void MaybeAnnounceRibbon(void *pri, uint32_t event, unsigned count) {
 // +0xC m_eventScore, +0x10 m_ribbonScore, +0x14 m_eventReward,
 // +0x18 m_ribbonReward, +0x1C m_eventCredits, +0x20 m_ribbonCredits,
 // +0x24 m_visibility, +0x28 m_requiresHUDUpdate.
-static bool RibbonPopupEnabled() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_RIBBON_POPUP", "dn_host_no_ribbon_popup.txt") ? 0 : 1;
-  return s_on == 1;
-}
-
 static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
   bool tracked = false, ribbon = false;
   uint32_t event = SCORING_EVENT_COUNT;
@@ -5057,9 +4594,9 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
           count = ++slot->counts[event];
       }
       ReleaseSRWLockExclusive(&g_eventTotalsLock);
-      ribbon = LiveRibbonsEnabled() && event < SCORING_EVENT_COUNT && count > 0 &&
+      ribbon = event < SCORING_EVENT_COUNT && count > 0 &&
                g_ribbonRules[event].n > 0 && count % (unsigned)g_ribbonRules[event].n == 0;
-      if (ribbon && RibbonPopupEnabled()) {
+      if (ribbon) {
         ((uint8_t *)reward)[0x04] = 1;
         reward[4] = g_ribbonRules[event].score;
         ((uint8_t *)reward)[0x28] = 1;
@@ -5086,8 +4623,7 @@ static void __fastcall HookAssignScoringReward(void *pri, int32_t *reward) {
     }
     if (ribbon) {
       SendRibbonAchievement(pri, event);
-      if (RibbonPopupEnabled())
-        Logf("ribbons: event %u -> ribbon popup (ClientEventResult m_ribbonAchieved, ribbon score %d)",
+      Logf("ribbons: event %u -> ribbon popup (ClientEventResult m_ribbonAchieved, ribbon score %d)",
              event, g_ribbonRules[event].score);
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -5229,7 +4765,7 @@ static void ReportMatchResult(void *orbitComp) {
   if (priOut)
     SendRibbonAchievement(priOut, SCORING_EVENT_MATCH_END);
   // MVP: the highest match score among the players (see AddScoringEvent).
-  if (priOut && EomRibbonsEnabled()) {
+  if (priOut) {
     __try {
       uint8_t *gs = GameStateForPRI(priOut);
       if (gs && IsReadable(gs + 0x470, 16)) { // AGameState::PlayerArray (SDK)
@@ -5281,7 +4817,7 @@ static void ReportMatchResult(void *orbitComp) {
     _snprintf_s(path + pl, sizeof(path) - pl, _TRUNCATE, "&score=%d&heal=%d&ct=%s", score, (int)healing, ct);
   }
   bool ok = HttpGetLoopback(path, body, sizeof(body));
-  if (ok && priOut && RewardsScreenEnabled())
+  if (ok && priOut)
     WriteEomRewards(priOut, body, match);
   for (char *c = body; *c; ++c)
     if (*c == '\n') *c = ' ';
@@ -5295,7 +4831,7 @@ static void ReportMatchResult(void *orbitComp) {
 }
 
 // ---------------------------------------------------------------------------
-// End-of-match rewards screen (on; dn_host_no_eom_rewards.txt turns it off)
+// End-of-match rewards screen
 //
 // The screen was empty although mmogbrain pays: the client reads its rewards
 // from two structures that only the missing server build ever filled and
@@ -5331,11 +4867,6 @@ static void ReportMatchResult(void *orbitComp) {
 
 typedef void *(__fastcall *tOperatorNew)(size_t size);
 
-static bool SwitchOn(const char *envName, const char *markerFile);
-
-static bool RewardsScreenEnabled() {
-  return !SwitchOn("DN_HOST_NO_EOM_REWARDS", "dn_host_no_eom_rewards.txt");
-}
 
 #define RVA_ACTOR_FLUSH_NET_DORMANCY 0x171C000
 #define VT_ACTOR_FORCE_NET_UPDATE 0x580
@@ -5451,10 +4982,8 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
   // end-of-match screen lost its Rewards tab (MVP/Stats/Scoreboard only,
   // operator 2026-09-30). A component replicates through its owner's actor
   // channel, so forcing the PRI covers m_matchXPInfo as well.
-  // dn_host_no_eom_push.txt / DN_HOST_NO_EOM_PUSH=1 turns the push off, to
-  // bisect it against the end-of-match screen without a rebuild.
   (void)xpmOut;
-  int pushed = SwitchOn("DN_HOST_NO_EOM_PUSH", "dn_host_no_eom_push.txt") ? 0 : PushActorNow(pri);
+  int pushed = PushActorNow(pri);
   Logf("eom rewards: PRI %p written -- scoring pool credits %d xp %d, %d fleet ships "
        "(%d flown, unplayed share %d), both finalized; PRI pushed %d (FlushNetDormancy + ForceNetUpdate)",
        pri, credits[0], xp[0], nFleet, nFlown, haveUnplayed ? unplayed[0] : 0, pushed);
@@ -5462,7 +4991,6 @@ static void WriteEomRewards(uint8_t *pri, const char *body, const char *match) {
 
 // ---------------------------------------------------------------------------
 // Teams, names and bot balance, from the game-mode timer
-// (on unless dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)
 //
 // Three gaps the host has because the original server build fed it match data:
 //
@@ -5533,11 +5061,8 @@ static PlayerSeen *SeenFor(void *pc) {
 // player's saved one from mmogbrain (/battle/player captain=), data the
 // original server had. From PR #80 (they resolved the offset by reflection).
 // NOT verified live: that clients re-render the captain from the OnRep alone.
-// Switch: dn_host_no_captain.txt / DN_HOST_NO_CAPTAIN.
 #define OFF_PRI_CAPTAIN_DISPLAY 0x758
 static void SetCaptainDisplayInfo(uint8_t *pc, const char *body) {
-  if (SwitchOn("DN_HOST_NO_CAPTAIN", "dn_host_no_captain.txt"))
-    return;
   char v[512];
   if (!FieldValue(body, "captain", v, sizeof(v)) || !v[0] || strlen(v) >= sizeof(v) - 1)
     return;
@@ -5628,8 +5153,6 @@ static void FixTeam(uint8_t *pc, uint8_t *pri, PlayerSeen *seen) {
 
 // Runs once a second on the game thread (HookGameModeTimer).
 static void PlayersTick(uint8_t *gm) {
-  if (!g_teamSyncArmed)
-    return;
   __try {
     if (!IsReadable(gm + OFF_GM_GAMESTATE, 8))
       return;
@@ -5667,10 +5190,7 @@ static void PlayersTick(uint8_t *gm) {
 
     // Humans take bot slots on their own team, in any mode with bots
     // (m_enableSpawnAI set): proving ground (all humans on team 1) and PvP.
-    static int s_botBalance = -1;
-    if (s_botBalance < 0)
-      s_botBalance = SwitchOn("DN_HOST_NO_BOT_BALANCE", "dn_host_no_bot_balance.txt") ? 0 : 1;
-    if (s_botBalance && IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) && gm[OFF_GM_ENABLE_SPAWN_AI]) {
+    if (IsReadable(gm + OFF_GM_ENABLE_SPAWN_AI, 1) && gm[OFF_GM_ENABLE_SPAWN_AI]) {
       int size = *(int32_t *)(gm + OFF_GM_TEAM_SIZE);
       for (int team = 1; team <= 2; ++team) {
         int target = *(int32_t *)(gm + OFF_GM_AI_TARGET_T1 + (team - 1) * 4); // +0x980, +0x984
@@ -5752,8 +5272,6 @@ static bool SwitchOn(const char *envName, const char *markerFile);
 // transition, and the stats RPC right after it (the order that fixed the
 // black screen). Sent from the game mode's once-a-second timer, which keeps
 // running after the match (verified 2026-09-29: "sent ... (deferred)" lines).
-// dn_host_eom_no_defer.txt / DN_HOST_EOM_NO_DEFER=1 restores the old flow
-// (transition, stats, then rewards).
 #define EOM_TRANSITION_DELAY_MS 3000
 struct PendingEomTransition {
   void *orbitComp;
@@ -5853,8 +5371,7 @@ static void SendTopPlayerMatchStats(uint8_t *pc, uint8_t *pri, const char *how) 
     }
     int rows = 0;
     TArrayIntMin parms = {nullptr, 0, 0}; // TArray<FYPlayerMatchStat>
-    if (!SwitchOn("DN_HOST_EMPTY_EOM_STATS", "dn_host_empty_eom_stats.txt"))
-      rows = BuildPlayerMatchStats(pri, &parms);
+    rows = BuildPlayerMatchStats(pri, &parms);
     void **vt = *(void ***)pri;
     ((tProcessEventVirt)vt[VT_PROCESS_EVENT / 8])(pri, fn, &parms);
     Logf("eom stats: sent ClientSetTopPlayerMatchStats (%d personal stat rows, %s) to "
@@ -5917,19 +5434,13 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
     Logf("eom stats: EXCEPTION reading the controller of %p", orbitComp);
     pc = nullptr;
   }
-  bool noDefer = SwitchOn("DN_HOST_EOM_NO_DEFER", "dn_host_eom_no_defer.txt");
-  if (!pc || noDefer) {
-    // Local player, unknown controller, or the old flow: transition now.
+  if (!pc) {
+    // Local player or unknown controller: transition now.
     g_origClientStartEomTransition(orbitComp);
-    if (pc)
-      SendTopPlayerMatchStats(pc, pri, "immediate");
   }
   // Rewards (ReportMatchResult writes them) -- before the deferred transition.
-  if (!SwitchOn("DN_HOST_NO_MATCH_RESULT", "dn_host_no_match_result.txt"))
-    ReportMatchResult(orbitComp);
-  else
-    Logf("match result: OFF (dn_host_no_match_result.txt / DN_HOST_NO_MATCH_RESULT=1)");
-  if (!pc || noDefer)
+  ReportMatchResult(orbitComp);
+  if (!pc)
     return;
   for (auto &p : g_pendingEom) {
     if (!p.pc) {
@@ -5943,8 +5454,6 @@ static void __fastcall HookClientStartEomTransition(void *orbitComp) {
   SendEomTransition(orbitComp, pc, pri, "queue full, immediate");
 }
 
-// Both of the switches below are opt-in separately from the loadout fix,
-// because both change what players see.
 // ---------------------------------------------------------------------------
 // Scoring table (issue #67): every score was 0.
 //
@@ -6121,8 +5630,7 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   // they overflowed the host at EndMatch) and reads through the missing row.
   // Until the crash handler below names the function, TE gets no table.
   //
-  // RE-ENABLED 2026-10-26 (dn_host_no_te_scoring.txt / DN_HOST_NO_TE_SCORING=1
-  // restores the skip). TE was the only mode with no scoring at all (4 results,
+  // RE-ENABLED 2026-10-26. TE was the only mode with no scoring at all (4 results,
   // 0 events, against 108 of 111 in TDM). The likeliest cause of those crashes
   // is the ClientAddAchievement loop (the re-entrancy guard on 0x5E50C0
   // below, wrongly first named ClientApplyRespawnFilter): every ribbon for the
@@ -6141,12 +5649,9 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   // Predator row: its scorer 0x3EFF60 reads the last m_rounds entry with no
   // empty check (see TeAppendRound). The TE section now keeps that entry open.
   bool isTE = mode[0] == L'T' && mode[1] == L'E' && mode[2] == 0;
-  static int s_teScoringOff = -1;
-  if (s_teScoringOff < 0)
-    s_teScoringOff = SwitchOn("DN_HOST_NO_TE_SCORING", "dn_host_no_te_scoring.txt") ? 1 : 0;
-  if (!mode[0] || (isTE && s_teScoringOff)) {
-    Logf("scoring: mode \"%ls\" -- table not built, scores stay 0 in this mode%s", mode,
-         isTE ? " (dn_host_no_te_scoring.txt)" : " (no mode name)");
+  (void)isTE;
+  if (!mode[0]) {
+    Logf("scoring: mode \"%ls\" -- table not built, scores stay 0 in this mode (no mode name)", mode);
     return;
   }
   Logf("scoring: building the match table for mode \"%ls\"", mode);
@@ -6154,11 +5659,15 @@ static void __fastcall HookScoringCopy(void *table, void *modeName) {
   LoadRibbonRules(mode);
 }
 
-static DWORD WINAPI PostLoginInstallThread(LPVOID);
 
 // SwitchOn reports whether an env var is "1" or a marker file sits beside the
 // executable. Two ways because the spawner inherits its environment but a file
 // survives however the operator starts the service.
+//
+// Kept only for smoke tests and for features not yet verified live (2026-11-01:
+// 38 switches for features verified live were removed, and those features are
+// simply always on). A new feature gets no switch unless it is genuinely risky;
+// remove its switch once a live match has confirmed it.
 static bool SwitchOn(const char *envName, const char *markerFile) {
   char buf[8];
   DWORD n = GetEnvironmentVariableA(envName, buf, sizeof(buf));
@@ -6175,45 +5684,11 @@ static bool SwitchOn(const char *envName, const char *markerFile) {
   return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
 }
 
-// The ServerRestartPlayer bypass: spawns joining players straight into the
-// arena, at the cost of removing ship selection.
-static bool PostLoginSpawnEnabled() {
-  return SwitchOn("DN_HOST_POSTLOGIN_SPAWN", "dn_host_postlogin.txt");
-}
-
-// The fleet tier: DISABLED, see the DISPROVED note above OFF_HIGHEST_FLEET.
-// Still read, only so a leftover marker file is reported instead of ignored.
-static bool FleetTierEnabled() {
-  return SwitchOn("DN_HOST_FLEET_TIER", "dn_host_fleet_tier.txt");
-}
-
-// Dedicated net mode (HookGetNetMode). Opt-in like every host mod, so a match
-// can still be diagnosed with it off.
-static bool DedicatedNetModeEnabled() {
-  return SwitchOn("DN_HOST_DEDICATED", "dn_host_dedicated.txt");
-}
-
-// The player's own fit via mmogbrain (RegisterPlayerLoadout).
-static bool PlayerLoadoutsEnabled() {
-  return SwitchOn("DN_HOST_PLAYER_LOADOUTS", "dn_host_player_loadouts.txt");
-}
-
-// AI in the proving ground (HookGameModeTimer).
-static bool BootcampAIEnabled() {
-  return SwitchOn("DN_HOST_BC_AI", "dn_host_bc_ai.txt");
-}
-
-// Player ship physics without the local-camera cull (HookVehicleViewCull).
-static bool ShipPhysicsEnabled() {
-  return SwitchOn("DN_HOST_SHIP_PHYSICS", "dn_host_ship_physics.txt");
-}
-
 // Installs one single-argument hook and reports it either way.
 // ===========================================================================
 // Havoc (from PR #80, starveil-bunny). Wave director, wave and kill XP,
 // between-wave upgrades, respawn ship switch. Installed only on hosts started
-// with -GameMode=Havoc; dn_host_no_havoc_director.txt /
-// DN_HOST_NO_HAVOC_DIRECTOR=1 turns all of it off.
+// with -GameMode=Havoc.
 // ===========================================================================
 #define RVA_SCENE_START_COMBAT 0x2681A0    // (sceneMgr, bool notifyLevelScript); no-op unless +0x444
 #define OFF_SCENE_COMBAT_NOT_STARTED 0x444 // byte; tick spawns nothing while set
@@ -6317,8 +5792,7 @@ static int PropOffset(UObjectMin *obj, const char *name) {
 }
 
 // ---------------------------------------------------------------------------
-// Havoc wave director (on by default on Havoc hosts; dn_host_no_havoc_director.txt
-// / DN_HOST_NO_HAVOC_DIRECTOR=1 turns it off).
+// Havoc wave director (Havoc hosts).
 //
 // Without this, Havoc loads and fighter swarms fight, but no wave ever starts
 // (no big ships, no wave timer). The server half of the wave
@@ -7015,12 +6489,6 @@ static const int kHavocShipCount = (int)(sizeof kHavocShips / sizeof kHavocShips
 typedef void(__fastcall *tSpawnPlayer)(void *pc);
 typedef void(__fastcall *tWeakSet)(void *weak, void *obj);
 
-static bool HavocShipUpgradesOn() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_HAVOC_SHIP_UPGRADES", "dn_host_no_havoc_ship_upgrades.txt") ? 0 : 1;
-  return s_on == 1;
-}
 static bool HavocIsShipWave(int wave) {
   for (const HavocShip &s : kHavocShips)
     if (s.wave > 0 && s.wave == wave)
@@ -7172,7 +6640,7 @@ static void HavocOfferUpgrades(uint8_t *gs) {
       continue;
     static const char kCats[3] = {'O', 'D', 'U'};
     int wave = *(int32_t *)(gs + OFF_HVC_GS_WAVE_INDEX);
-    bool ships = HavocShipUpgradesOn() && HavocIsShipWave(wave);
+    bool ships = HavocIsShipWave(wave);
     int cur = ships ? HavocShipByItem(HavocCurrentShipItem(pcs[i])) : -1;
     int next = cur >= 0 ? HavocShipByItem(kHavocShips[cur].nextTierId) : -1;
     for (int k = 0; k < 3; ++k) {
@@ -8131,8 +7599,7 @@ static void HavocReleaseEliminated() {
 }
 
 // ---------------------------------------------------------------------------
-// Team Elimination rounds (on; dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1
-// turns it off). Added 2026-10-25.
+// Team Elimination rounds. Added 2026-10-25.
 //
 // The rules, from the game's own text (en DreadGame.locres): "Team Elimination
 // is played in rounds. The first team to win 2 rounds wins the match." and "The
@@ -8230,13 +7697,6 @@ struct TeMatch {
   int lastWinner;
 };
 static TeMatch g_te = {};
-
-static bool TeRoundsOn() {
-  static int s_on = -1;
-  if (s_on < 0)
-    s_on = SwitchOn("DN_HOST_NO_TE_ROUNDS", "dn_host_no_te_rounds.txt") ? 0 : 1;
-  return s_on == 1;
-}
 
 static uint8_t *TeGameState(uint8_t *gm) {
   if (!gm || !IsReadable(gm + OFF_GM_GAMESTATE, 8))
@@ -8417,7 +7877,7 @@ static int TeRoundTimeSecs(uint8_t *gm) {
 
 // A human's capital ship was destroyed during a round: fighters until the next.
 static void TeOnShipKilled(void *gameMode, void *victimCtrl, int victimClass) {
-  if (!TeRoundsOn() || g_te.gm != gameMode || g_te.phase != TE_ROUND || victimClass < 1 || victimClass > 15)
+  if (g_te.gm != gameMode || g_te.phase != TE_ROUND || victimClass < 1 || victimClass > 15)
     return;
   uint8_t *gs = TeGameState((uint8_t *)gameMode);
   uint8_t *pc = (uint8_t *)victimCtrl;
@@ -8580,13 +8040,13 @@ static bool IsTeamEliminationMode(void *gm) {
 
 // The round whose sides apply now (in the pre-round, the next one).
 static int TeSideRound() { return g_te.phase == TE_PRE ? g_te.round + 1 : (g_te.round > 0 ? g_te.round : 1); }
-static bool TeSidesSwapped() { return TeRoundsOn() && g_te.gm && TeSideRound() % 2 == 0; }
+static bool TeSidesSwapped() { return g_te.gm && TeSideRound() % 2 == 0; }
 
 static const char *PrepareTeStarts(void *ctrl, int *hidden, int *ours) {
   static uint8_t *s_all[1024];
   int n = AllPlayerStarts(s_all, 1024);
   *hidden = *ours = 0;
-  bool jets = TeRoundsOn() && g_te.phase == TE_ROUND && TeIsEliminated(ctrl);
+  bool jets = g_te.phase == TE_ROUND && TeIsEliminated(ctrl);
   bool swap = !jets && TeSidesSwapped();
   for (int i = 0; i < n; ++i) {
     uint8_t *ps = s_all[i];
@@ -8713,7 +8173,7 @@ static bool TeAllReady(uint8_t *gs) {
   return true;
 }
 static void TeSetReady(void *pc, bool ready) {
-  if (!TeRoundsOn() || !g_te.gm)
+  if (!g_te.gm)
     return;
   int at = -1;
   for (int j = 0; j < g_te.numReady; ++j)
@@ -8888,11 +8348,9 @@ static void TeRoundsTick(uint8_t *gm) {
     uint8_t *gs = TeGameState(gm);
     if (!gs)
       return;
-    // Crash guard, on every TE host (rounds on or off): never an empty m_rounds.
+    // Crash guard, on every TE host: never an empty m_rounds.
     if (!TeLastRound(gs))
-      TeOpenRound(gs, TeRoundsOn() && g_te.gm == gm && g_te.round > 0 ? g_te.round : 1);
-    if (!TeRoundsOn())
-      return;
+      TeOpenRound(gs, g_te.gm == gm && g_te.round > 0 ? g_te.round : 1);
     DWORD now = GetTickCount();
     if (g_te.gm != gm) {
       memset(&g_te, 0, sizeof g_te);
@@ -9059,7 +8517,7 @@ static bool TeIsEliminated(void *pc) {
 }
 static void __fastcall HookTeSpawnPlayer(void *pc) {
   __try {
-    if (TeRoundsOn() && g_te.gm && g_te.phase == TE_ROUND && TeIsEliminated(pc)) {
+    if (g_te.gm && g_te.phase == TE_ROUND && TeIsEliminated(pc)) {
       uint8_t *gs = TeGameState((uint8_t *)g_te.gm);
       uint8_t *mgr = (uint8_t *)TeLoadoutManager(pc);
       void *filter = gs ? *(void **)(gs + OFF_GS_TE_FIGHTER_FILTER) : nullptr;
@@ -9085,7 +8543,7 @@ static void __fastcall HookTeSpawnPlayer(void *pc) {
 
 // The winner by rounds won (EndMatch and the match timer recompute it from kills).
 static void TeFixLeader(uint8_t *gm) {
-  if (!TeRoundsOn() || g_te.gm != gm || (!g_te.wins[0] && !g_te.wins[1]))
+  if (g_te.gm != gm || (!g_te.wins[0] && !g_te.wins[1]))
     return;
   uint8_t *gs = TeGameState(gm);
   if (!gs)
@@ -9466,8 +8924,7 @@ static void HavocDirectorTick(uint8_t *gm) {
   static int s_on = 0, s_phase = -1, s_wave = 0, s_secs = 0, s_waitStart = 0, s_peakAlive = 0;
   if (s_for != gm) {
     s_for = gm;
-    s_on = ClassChainContains((UObjectMin *)gm, "YGameMode_Havoc") &&
-           !SwitchOn("DN_HOST_NO_HAVOC_DIRECTOR", "dn_host_no_havoc_director.txt");
+    s_on = ClassChainContains((UObjectMin *)gm, "YGameMode_Havoc");
     s_phase = -1, s_wave = 0, s_secs = 0, s_waitStart = 0, s_peakAlive = 0;
     if (s_on)
       Logf("havoc: director on for %p (start delay %d s, complete %.0f s, upgrade %d s)", gm,
@@ -9773,41 +9230,6 @@ static void InstallSwitchedHook(const char *what, uintptr_t rva, void *detour,
     Logf("installed: %s hooked at RVA 0x%X (%p)", what, (unsigned)rva, target);
 }
 
-// The install runs on its own thread and WAITS, because GObjects is not
-// populated when this DLL is attached.
-//
-// Measured: the first version resolved at DLL_PROCESS_ATTACH and logged
-// "K2_PostLogin not found in GObjects" on a live host, while the loadout half of
-// this file worked -- because that half resolves lazily, on the first
-// FindLoadoutByID miss, by which time the engine is up. dread-sdk sleeps 20
-// seconds before its server callbacks for the same reason.
-//
-// Polling rather than a fixed sleep, so a fast host is not held back and a slow
-// one is not cut off. The window is generous: the hook only has to be in place
-// before the first player joins, which is many seconds after map load.
-#define POSTLOGIN_WAIT_MS 90000
-#define POSTLOGIN_POLL_MS 500
-
-static void *WaitForUObjectByName(const char *want, const char **outerOut,
-                                  int *waitedMsOut) {
-  int waited = 0;
-  for (;;) {
-    void *found = FindUObjectByName(want, outerOut);
-    if (found) {
-      if (waitedMsOut)
-        *waitedMsOut = waited;
-      return found;
-    }
-    if (waited >= POSTLOGIN_WAIT_MS)
-      break;
-    Sleep(POSTLOGIN_POLL_MS);
-    waited += POSTLOGIN_POLL_MS;
-  }
-  if (waitedMsOut)
-    *waitedMsOut = waited;
-  return nullptr;
-}
-
 // ---------------------------------------------------------------------------
 // Ceres Awakens: a tech cache's buff ends with its collector (on, PodTDM hosts
 // only; dn_host_no_ceres_buff_end.txt / DN_HOST_NO_CERES_BUFF_END=1 turns it
@@ -9952,134 +9374,11 @@ static void CeresOnShipKilled(void *victimPawn) {
   }
 }
 
-static void InstallPostLoginHook() {
-  g_spawnArmed = PostLoginSpawnEnabled();
-  // g_fleetTierArmed is already set in Startup, which must know it before this
-  // thread exists so the teleport hook can install without racing it.
-
-  // The ProcessEvent hook carries both features, so it installs if either is
-  // wanted.
-  if (!g_spawnArmed && !g_fleetTierArmed) {
-    Logf("post-login hook is OFF. Enable the fleet tier "
-         "(dn_host_fleet_tier.txt or DN_HOST_FLEET_TIER=1) to let the normal "
-         "orbit flow finish, and/or the spawn bypass (dn_host_postlogin.txt or "
-         "DN_HOST_POSTLOGIN_SPAWN=1) to skip orbit entirely.");
-    return;
-  }
-  Logf("post-login hook: fleet tier %s, spawn bypass %s",
-       g_fleetTierArmed ? "ON" : "off", g_spawnArmed ? "ON" : "off");
-
-  const char *outer = nullptr;
-  int waited = 0;
-  g_fnK2PostLogin = FindUObjectByName("PostLogin", &outer);
-  if (!g_fnK2PostLogin)
-    g_fnK2PostLogin = WaitForUObjectByName("PostLogin", &outer, &waited);
-  if (!g_fnK2PostLogin) {
-    FUObjectArrayMin *arr = GObjects();
-    Logf("post-login: no UFunction containing \"PostLogin\" after %d ms "
-         "(GObjects reports %d objects). Not hooking.",
-         waited,
-         IsReadable(arr, sizeof(*arr)) ? arr->NumElements : -1);
-    return;
-  }
-  if (waited)
-    Logf("post-login: waited %d ms for GObjects to carry PostLogin", waited);
-  Logf("post-login: K2_PostLogin found at %p (outer %s)", g_fnK2PostLogin,
-       outer ? outer : "<unknown>");
-
-  // Only the spawn bypass needs these two. The fleet tier writes a byte on the
-  // PlayerState and calls nothing, so it must not be blocked by their absence.
-  if (g_spawnArmed) {
-    g_fnGetLoadoutManager = WaitForUObjectByName("GetLoadoutManager", &outer, nullptr);
-    g_fnServerRestartPlayer = WaitForUObjectByName("ServerRestartPlayer", &outer, nullptr);
-    if (!g_fnGetLoadoutManager || !g_fnServerRestartPlayer) {
-      Logf("post-login: GetLoadoutManager=%p ServerRestartPlayer=%p -- spawn "
-           "bypass disabled, continuing with fleet tier only.",
-           g_fnGetLoadoutManager, g_fnServerRestartPlayer);
-      g_spawnArmed = false;
-      if (!g_fleetTierArmed)
-        return;
-    }
-  }
-
-  // The later tier trigger points. All optional: a missing one costs a trigger,
-  // not the feature.
-  g_fnServerReadyForJoining = FindUObjectByName("ServerReadyForJoining", &outer);
-  g_fnServerSpawnNearActor = FindUObjectByName("ServerSpawnNearActor", &outer);
-  g_fnServerPlayerReadyUp =
-      FindUObjectByName("ServerPlayerReadyUpForMatch", &outer);
-  Logf("post-login: tier triggers -- ServerReadyForJoining=%p "
-       "ServerSpawnNearActor=%p ServerPlayerReadyUpForMatch=%p",
-       g_fnServerReadyForJoining, g_fnServerSpawnNearActor,
-       g_fnServerPlayerReadyUp);
-
-  // ProcessEvent is virtual on UObject, so any UObject's vtable has it. The
-  // UFunction just resolved is one.
-  if (!IsReadable(g_fnK2PostLogin, sizeof(void *))) {
-    Logf("post-login: K2_PostLogin object is not readable. Not hooking.");
-    return;
-  }
-  void **vtable = *(void ***)g_fnK2PostLogin;
-  if (!IsReadable(vtable, (VF_PROCESS_EVENT + 1) * sizeof(void *))) {
-    Logf("post-login: vtable is not readable to index 0x%X. Not hooking.",
-         VF_PROCESS_EVENT);
-    return;
-  }
-  void *processEvent = vtable[VF_PROCESS_EVENT];
-
-  if (MH_CreateHook((LPVOID)processEvent, (LPVOID)&HookProcessEvent,
-                    (LPVOID *)&g_origProcessEvent) != MH_OK ||
-      MH_EnableHook(processEvent) != MH_OK) {
-    Logf("post-login: failed to hook ProcessEvent at %p. Not hooking.",
-         processEvent);
-    return;
-  }
-
-  g_postLoginArmed = true;
-  if (g_spawnArmed)
-    Logf("post-login: ProcessEvent hooked at %p; joining players will spawn "
-         "directly as %s, bypassing the orbit flow.",
-         processEvent, kPrecastLabels[g_postLoginLoadoutIndex]);
-  else
-    Logf("post-login: ProcessEvent hooked at %p; players keep ship selection "
-         "and the normal orbit flow.",
-         processEvent);
-}
-
-static DWORD WINAPI PostLoginInstallThread(LPVOID) {
-  InstallPostLoginHook();
-  return 0;
-}
-
-static bool IsEnabled() {
-  char buf[8];
-  DWORD n = GetEnvironmentVariableA("DN_SERVER_LOADOUT", buf, sizeof(buf));
-  if (n == 1 && buf[0] == '1')
-    return true;
-
-  char path[MAX_PATH];
-  if (!GetModuleFileNameA(NULL, path, MAX_PATH))
-    return false;
-  char *slash = strrchr(path, '\\');
-  if (!slash)
-    return false;
-  strcpy_s(slash + 1, sizeof(path) - (slash + 1 - path),
-           "dn_server_loadout.txt");
-  return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
-}
-
 static DWORD WINAPI Startup(LPVOID) {
   if (!IsBattleServer())
     return 0; // a client. Do nothing at all, and say nothing.
 
   LogOpen();
-
-  if (!IsEnabled()) {
-    Logf("battle server detected but the fix is off "
-         "(create dn_server_loadout.txt beside the executable, or set "
-         "DN_SERVER_LOADOUT=1, to enable). Standing down.");
-    return 0;
-  }
 
   g_base = (uintptr_t)GetModuleHandleW(L"DreadGame-Win64-Shipping.exe");
   if (!g_base) {
@@ -10089,7 +9388,6 @@ static DWORD WINAPI Startup(LPVOID) {
   }
   Logf("battle server detected and enabled. module base 0x%llX",
        (unsigned long long)g_base);
-  InstallHostCrashHandler();
 
   if (MH_Initialize() != MH_OK) {
     Logf("MH_Initialize failed. Standing down.");
@@ -10109,16 +9407,9 @@ static DWORD WINAPI Startup(LPVOID) {
        "loadout lookup.",
        RVA_FIND_LOADOUT_BY_ID, target);
 
-  // The fleet tier write is disabled for good (see OFF_HIGHEST_FLEET). Say so
-  // if an old marker file is still asking for it.
-  g_fleetTierArmed = false;
-  if (FleetTierEnabled())
-    Logf("fleet tier: dn_host_fleet_tier.txt / DN_HOST_FLEET_TIER is set but "
-         "IGNORED -- it forced the pawn's orbit state. Use dn_host_dedicated.txt.");
-
   // Dedicated net mode. Installed here, before the map loads, so every
   // GetNetMode the orbit code asks is answered the same way.
-  if (DedicatedNetModeEnabled()) {
+  {
     void *nm = (void *)(g_base + RVA_NETDRIVER_GET_NET_MODE);
     if (MH_CreateHook((LPVOID)nm, (LPVOID)&HookGetNetMode, (LPVOID *)&g_origGetNetMode) != MH_OK ||
         MH_EnableHook(nm) != MH_OK) {
@@ -10130,10 +9421,6 @@ static DWORD WINAPI Startup(LPVOID) {
            "net driver now reports DEDICATED.",
            RVA_NETDRIVER_GET_NET_MODE, nm);
     }
-  } else {
-    Logf("net mode: dedicated OFF (create dn_host_dedicated.txt beside the "
-         "executable, or set DN_HOST_DEDICATED=1). The host stays a listen "
-         "server; players will not leave orbit.");
   }
 
   // Not switchable: without it a host dies whenever restrictions change.
@@ -10151,76 +9438,38 @@ static DWORD WINAPI Startup(LPVOID) {
                       (void *)&HookClientApplyRespawnFilter,
                       (void **)&g_origClientApplyRespawnFilter);
 
-  // On by default: without it every score is 0. Opt out to diagnose.
-  if (!SwitchOn("DN_HOST_NO_SCORING", "dn_host_no_scoring.txt")) {
-    InstallSwitchedHook("scoring table (UYScoringEventManager::InitializeData)",
-                        RVA_SCORING_INIT_DATA, (void *)&HookScoringInitData,
-                        (void **)&g_origScoringInitData);
-    InstallSwitchedHook("scoring mode log (scoring table copy)", RVA_SCORING_COPY,
-                        (void *)&HookScoringCopy, (void **)&g_origScoringCopy);
-  } else
-    Logf("scoring: OFF (dn_host_no_scoring.txt / DN_HOST_NO_SCORING=1). Every "
-         "score stays 0.");
+  InstallSwitchedHook("scoring table (UYScoringEventManager::InitializeData)",
+                      RVA_SCORING_INIT_DATA, (void *)&HookScoringInitData,
+                      (void **)&g_origScoringInitData);
+  InstallSwitchedHook("scoring mode log (scoring table copy)", RVA_SCORING_COPY,
+                      (void *)&HookScoringCopy, (void **)&g_origScoringCopy);
 
-  if (TerScoringEnabled()) {
-    InstallSwitchedHook("conquest scoring manager (game mode creator A)", RVA_GM_CREATE_SCORING_MGR_A,
-                        (void *)&HookCreateScoringMgrA, (void **)&g_origCreateScoringMgrA);
-    InstallSwitchedHook("conquest scoring manager (game mode creator B)", RVA_GM_CREATE_SCORING_MGR_B,
-                        (void *)&HookCreateScoringMgrB, (void **)&g_origCreateScoringMgrB);
-  } else
-    Logf("conquest scoring: OFF (dn_host_no_ter_scoring.txt / DN_HOST_NO_TER_SCORING=1)");
-  if (TerScoringEnabled() || ConquestPointOwnerEnabled())
-    InstallSwitchedHook("conquest capture (YCapturePoint::OnCaptured: point owner + capture score)",
-                        RVA_CP_ON_CAPTURED, (void *)&HookCpOnCaptured, (void **)&g_origCpOnCaptured);
-  if (!ConquestPointOwnerEnabled())
-    Logf("conquest: captured points' territory OFF (dn_host_no_conquest_point_owner.txt / "
-         "DN_HOST_NO_CONQUEST_POINT_OWNER=1)");
-  if (ConquestSpawnsEnabled() || TeSpawnsEnabled())
-    InstallSwitchedHook("conquest / te spawns (YGameMode player-start chooser)", RVA_GM_CHOOSE_PLAYER_START,
-                        (void *)&HookChoosePlayerStart, (void **)&g_origChoosePlayerStart);
-  if (!ConquestSpawnsEnabled())
-    Logf("conquest spawns: OFF (dn_host_no_conquest_spawns.txt / DN_HOST_NO_CONQUEST_SPAWNS=1)");
+  InstallSwitchedHook("conquest scoring manager (game mode creator A)", RVA_GM_CREATE_SCORING_MGR_A,
+                      (void *)&HookCreateScoringMgrA, (void **)&g_origCreateScoringMgrA);
+  InstallSwitchedHook("conquest scoring manager (game mode creator B)", RVA_GM_CREATE_SCORING_MGR_B,
+                      (void *)&HookCreateScoringMgrB, (void **)&g_origCreateScoringMgrB);
+  InstallSwitchedHook("conquest capture (YCapturePoint::OnCaptured: point owner + capture score)",
+                      RVA_CP_ON_CAPTURED, (void *)&HookCpOnCaptured, (void **)&g_origCpOnCaptured);
+  InstallSwitchedHook("conquest / te spawns (YGameMode player-start chooser)", RVA_GM_CHOOSE_PLAYER_START,
+                      (void *)&HookChoosePlayerStart, (void **)&g_origChoosePlayerStart);
   if (!TeSpawnsEnabled())
     Logf("te spawns: OFF (dn_host_no_te_spawns.txt / DN_HOST_NO_TE_SPAWNS=1)");
 
-  if (!SwitchOn("DN_HOST_NO_EOM_STATS", "dn_host_no_eom_stats.txt"))
-    InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
-                        RVA_CLIENT_START_EOM_TRANSITION,
-                        (void *)&HookClientStartEomTransition,
-                        (void **)&g_origClientStartEomTransition);
-  else
-    Logf("eom stats: OFF (dn_host_no_eom_stats.txt / DN_HOST_NO_EOM_STATS=1). "
-         "Clients will stop on a black screen at SetupUIWidgets.");
+  InstallSwitchedHook("eom stats (ClientStartEndOfMatchTransition)",
+                      RVA_CLIENT_START_EOM_TRANSITION,
+                      (void *)&HookClientStartEomTransition,
+                      (void **)&g_origClientStartEomTransition);
 
-  // The game-mode timer carries the proving-ground bots AND the per-second
-  // team/name/bot-balance pass (PlayersTick), so it installs if either is on.
-  g_bcAIArmed = BootcampAIEnabled();
-  g_botsBCOnly = SwitchOn("DN_HOST_BOTS_BC_ONLY", "dn_host_bots_bc_only.txt");
-  g_teamSyncArmed = !SwitchOn("DN_HOST_NO_TEAM_SYNC", "dn_host_no_team_sync.txt");
-  if (!g_bcAIArmed)
-    Logf("bc ai: OFF (create dn_host_bc_ai.txt beside the executable, or set "
-         "DN_HOST_BC_AI=1). The proving ground has no bots.");
-  Logf("team sync / names / bot balance: %s", g_teamSyncArmed ? "ON (game-mode timer)"
-       : "OFF (dn_host_no_team_sync.txt / DN_HOST_NO_TEAM_SYNC=1)");
-  if (g_bcAIArmed || g_teamSyncArmed)
-    InstallSwitchedHook("game-mode timer (bc ai, teams, names, bot balance)",
-                        RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
-                        (void **)&g_origGameModeTimer);
+  // The game-mode timer carries the bots AND the per-second
+  // team/name/bot-balance pass (PlayersTick).
+  InstallSwitchedHook("game-mode timer (bc ai, teams, names, bot balance)",
+                      RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
+                      (void **)&g_origGameModeTimer);
 
-  if (!SwitchOn("DN_HOST_NO_EVENT_XP", "dn_host_no_event_xp.txt"))
-    InstallSwitchedHook("original match xp (AssignScoringReward)", RVA_ASSIGN_SCORING_REWARD,
-                        (void *)&HookAssignScoringReward, (void **)&g_origAssignScoringReward);
-  else
-    Logf("event xp: OFF (dn_host_no_event_xp.txt / DN_HOST_NO_EVENT_XP=1). mmogbrain "
-         "pays its formula XP.");
+  InstallSwitchedHook("original match xp (AssignScoringReward)", RVA_ASSIGN_SCORING_REWARD,
+                      (void *)&HookAssignScoringReward, (void **)&g_origAssignScoringReward);
 
-  Logf("onslaught creeps: %s", OnslaughtCreepsEnabled() ? "ON (game-mode timer; Onslaught hosts only)"
-       : "OFF (dn_host_no_onslaught_creeps.txt / DN_HOST_NO_ONSLAUGHT_CREEPS=1)");
-  bool onsPoints = !SwitchOn("DN_HOST_NO_ONSLAUGHT_POINTS", "dn_host_no_onslaught_points.txt");
-  g_onsPointsOn = onsPoints;
-  Logf("te rounds: %s", TeRoundsOn() ? "ON (Team Elimination hosts: best of 3, fighters after a lost ship)"
-       : "OFF (dn_host_no_te_rounds.txt / DN_HOST_NO_TE_ROUNDS=1): Team Elimination plays as a deathmatch");
-  if (TeRoundsOn() && HostIsTE()) {
+  if (HostIsTE()) {
     InstallSwitchedHook("te fighters while eliminated (AYPlayerController::SpawnPlayer)", RVA_SPAWN_PLAYER,
                         (void *)&HookTeSpawnPlayer, (void **)&g_origTeSpawnPlayer);
     InstallSwitchedHook("te ready-up (ServerReadyUpPlayerForNextWave exec)", RVA_EXEC_SERVER_READY_NEXT_WAVE,
@@ -10237,34 +9486,24 @@ static DWORD WINAPI Startup(LPVOID) {
   else if (HostIsPodTDM())
     Logf("ceres: buffs outlive their collector (dn_host_no_ceres_buff_end.txt / DN_HOST_NO_CERES_BUFF_END=1)");
   // These modes ride on the same two hooks; each acts only on its own mode.
-  if (onsPoints || TeRoundsOn() || ceres) {
-    InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,
-                        (void *)&HookTdmKilled, (void **)&g_origTdmKilled);
-    InstallSwitchedHook("winner by points / rounds (TDM leader)", RVA_TDM_DETERMINE_LEADER,
-                        (void *)&HookDetermineLeader, (void **)&g_origDetermineLeader);
-  }
-  if (!onsPoints)
-    Logf("onslaught points: OFF (dn_host_no_onslaught_points.txt / "
-         "DN_HOST_NO_ONSLAUGHT_POINTS=1). Onslaught ends at 30 kills.");
+  InstallSwitchedHook("onslaught points + te ships lost (TDM Killed)", RVA_TDM_KILLED,
+                      (void *)&HookTdmKilled, (void **)&g_origTdmKilled);
+  InstallSwitchedHook("winner by points / rounds (TDM leader)", RVA_TDM_DETERMINE_LEADER,
+                      (void *)&HookDetermineLeader, (void **)&g_origDetermineLeader);
 
-  if (!SwitchOn("DN_HOST_NO_ONS_GUN_ROWS", "dn_host_no_ons_gun_rows.txt"))
-    InstallSwitchedHook("command ship gun rows (LoadWeaponDataTableRow)", RVA_WEAPON_GROUP_LOAD_ROW,
-                        (void *)&HookWeaponGroupLoadRow, (void **)&g_origWeaponGroupLoadRow);
+  InstallSwitchedHook("command ship gun rows (LoadWeaponDataTableRow)", RVA_WEAPON_GROUP_LOAD_ROW,
+                      (void *)&HookWeaponGroupLoadRow, (void **)&g_origWeaponGroupLoadRow);
+  if (!SwitchOn("DN_HOST_NO_ONS_ABILITY_SLOTS", "dn_host_no_ons_ability_slots.txt"))
+    InstallSwitchedHook("onslaught ability slots (NPC controller values)", RVA_NPC_APPLY_CONTROL_VALUES,
+                        (void *)&HookNpcApplyControlValues, (void **)&g_origNpcApplyControlValues);
+  if (!SwitchOn("DN_HOST_NO_ONS_GUN_LOG", "dn_host_no_ons_gun_log.txt"))
+    InstallSwitchedHook("command ship gun log (YPawn::TakeDamage)", RVA_PAWN_TAKE_DAMAGE,
+                        (void *)&HookPawnTakeDamage, (void **)&g_origPawnTakeDamage);
 
-  if (!HostIsTurboTDM())
-    ;
-  else if (SwitchOn("DN_HOST_NO_GAME_MODIFIERS", "dn_host_no_game_modifiers.txt"))
-    Logf("turbo modifiers: OFF (dn_host_no_game_modifiers.txt / "
-         "DN_HOST_NO_GAME_MODIFIERS=1). Turbo TDM plays as plain TDM.");
-  else
+  if (HostIsTurboTDM())
     g_featsTurbo = true;
 
-  if (!HostIsHavoc())
-    ;
-  else if (SwitchOn("DN_HOST_NO_HAVOC_DIRECTOR", "dn_host_no_havoc_director.txt"))
-    Logf("havoc: OFF (dn_host_no_havoc_director.txt / DN_HOST_NO_HAVOC_DIRECTOR=1). "
-         "Fighters fight, but no wave ever starts.");
-  else {
+  if (HostIsHavoc()) {
     g_featsHavoc = true;
     InstallSwitchedHook("havoc director (compiled-out native exec thunk)", RVA_EMPTY_EXEC_THUNK,
                         (void *)&HookEmptyExecThunk, (void **)&g_origEmptyExecThunk);
@@ -10286,18 +9525,10 @@ static DWORD WINAPI Startup(LPVOID) {
                           (void *)&HookSpawnGate, (void **)&g_origSpawnGate);
     else
       Logf("havoc respawn block: OFF (dn_host_no_havoc_respawn_block.txt / DN_HOST_NO_HAVOC_RESPAWN_BLOCK=1)");
-    if (!HavocShipUpgradesOn())
-      Logf("havoc ship upgrades: OFF (dn_host_no_havoc_ship_upgrades.txt / DN_HOST_NO_HAVOC_SHIP_UPGRADES=1)");
-    // Not verified in PR #80 either: own switch, to bisect without a rebuild.
-    if (SwitchOn("DN_HOST_NO_HAVOC_RESPAWN_GATE", "dn_host_no_havoc_respawn_gate.txt"))
-      Logf("havoc respawn ship gate: OFF (dn_host_no_havoc_respawn_gate.txt / "
-           "DN_HOST_NO_HAVOC_RESPAWN_GATE=1). A respawn pick keeps the old ship.");
-    else {
-      InstallSwitchedHook("havoc respawn ship gate (UYLoadoutManager loadout validity)", RVA_LOADOUT_IS_REGISTERED,
-                          (void *)&HookLoadoutGate, (void **)&g_origLoadoutGate);
-      InstallSwitchedHook("havoc respawn ship (UYLoadoutManager::ActivateLoadout)", RVA_ACTIVATE_LOADOUT,
-                          (void *)&HookActivateLoadout, (void **)&g_origActivateLoadout);
-    }
+    InstallSwitchedHook("havoc respawn ship gate (UYLoadoutManager loadout validity)", RVA_LOADOUT_IS_REGISTERED,
+                        (void *)&HookLoadoutGate, (void **)&g_origLoadoutGate);
+    InstallSwitchedHook("havoc respawn ship (UYLoadoutManager::ActivateLoadout)", RVA_ACTIVATE_LOADOUT,
+                        (void *)&HookActivateLoadout, (void **)&g_origActivateLoadout);
   }
 
   if (g_featsTurbo || g_featsHavoc)
@@ -10305,18 +9536,10 @@ static DWORD WINAPI Startup(LPVOID) {
                                      : "havoc boosts (UYFeatsComponent setup)",
                         RVA_FEATS_COMPONENT_BEGIN, (void *)&HookFeatsBegin, (void **)&g_origFeatsBegin);
 
-  if (ShipPhysicsEnabled())
-    InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",
-                        RVA_VEHICLE_VIEW_CULL_SETUP, (void *)&HookVehicleViewCull,
-                        (void **)&g_origVehicleViewCull);
-  else
-    Logf("ship physics: OFF (create dn_host_ship_physics.txt beside the "
-         "executable, or set DN_HOST_SHIP_PHYSICS=1). Player ships far from the "
-         "host's orbit camera are not simulated; players snap back.");
+  InstallSwitchedHook("ship physics (UYVehicleMovementComp view cull)",
+                      RVA_VEHICLE_VIEW_CULL_SETUP, (void *)&HookVehicleViewCull,
+                      (void **)&g_origVehicleViewCull);
 
-  // On its own thread: InstallPostLoginHook waits for GObjects, and Startup
-  // must return so the FindLoadoutByID hook above is live immediately.
-  CreateThread(NULL, 0, PostLoginInstallThread, NULL, 0, NULL);
   return 0;
 }
 

@@ -85,10 +85,11 @@ the root `mmogbrain.log`. With two hosts up, both write the one
 `dn_host_loadout.log`, so read each host's mod lines from its `battle-logs` file.
 
 The mod's log is NOT in `run/`. `$GAME_BINARY`'s directory
-(`src/Dreadnought/DreadGame/DreadGame/Binaries/Win64/`) also holds its switch
-files (`dn_host_dedicated.txt`, `dn_host_bc_ai.txt`, `dn_host_ship_physics.txt`,
-`dn_host_player_loadouts.txt`, and off-switches such as `dn_host_no_eom_stats.txt`)
-and `wer.dll`, which is how the mod is side-loaded. `battle-server-mod/build.bat`
+(`src/Dreadnought/DreadGame/DreadGame/Binaries/Win64/`) also holds `wer.dll`,
+which is how the mod is side-loaded, and the few switch files that remain
+(smoke tests and off-switches for features not yet verified live; the table is
+in `battle-server-mod/README.md`, "Switches"). Since 2026-11-01 the mod needs no
+marker file to run. `battle-server-mod/build.bat`
 (MSVC, Windows) writes `build.log` next to itself; `build-linux.sh` writes
 `build-linux/build.log`.
 
@@ -162,7 +163,7 @@ not exist in the binary, and dropping `-server` was measured to change nothing.
 | `PLAYERS_PER_MATCH` | defaults to **1**, so every player gets a private match and can never meet another. Set 2+ for PvP. |
 | `DN_TUNE_EMPTY=1` | send empty tuning tables (the old behaviour; empty tables break weapon lookups — see `dreadnought-mmog-responses`) |
 | `DN_TECHTREE_*` | many; printed at startup by `logTechTreeSwitches()` |
-| `DN_HOST_FLEET_TIER` / `DN_HOST_POSTLOGIN_SPAWN` | battle-server mod, marker file or env |
+| `DN_HOST_*_SMOKE` / `DN_HOST_NO_*` | battle-server mod: smoke tests and off-switches for unverified features only (README "Switches"); marker file or env |
 | `DN_CLAIM_ITEM_PUSH` | OFF: the push wiped the inventory to 0 items |
 
 ## A test account with everything

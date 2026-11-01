@@ -24,9 +24,6 @@ func TestModStateRejectsTheWerProxy(t *testing.T) {
 		[]byte("Dreadnought WER proxy diagnostics\x00WerReportCreate\x00WerReportSubmit"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "dn_server_loadout.txt"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	var out bytes.Buffer
 	reportHostLoadoutModState(LaunchConfig{GameBinary: exe}, &out)
@@ -48,9 +45,6 @@ func TestModStateAcceptsTheRealMod(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "wer.dll"),
 		[]byte("...binary...[dn-host-loadout] %s %s\n...more..."), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "dn_server_loadout.txt"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -16,7 +16,7 @@ Updated 2026-08-14, replacing a narrower rule that permitted only one specific h
 Two things still worth keeping from the old rule, as *guidance* rather than a gate:
 
 - Prefer **supplying data the engine would have had** over **fabricating a value that satisfies a check**. Registering the precast loadouts the host never received is the first kind; writing an arbitrary tier to get past a comparison is the second. The first tends to work; the second produced a pawn that could shoot but not move (`AGENT-CHAT C32.4`).
-- Keep host mods **optional at runtime**, so a match can still be diagnosed with them off. See `battle-server-mod/README.md`.
+- Keep host mods **optional at runtime** in one sense only: removing `wer.dll` must leave a working (if degraded) stack. Do NOT give every feature its own switch file (operator 2026-11-01; 38 were removed). Add a switch only for a genuinely risky change or a smoke test, and remove it once a live match has confirmed the feature. See `battle-server-mod/README.md`, "Switches".
 
 A Go workspace (`go.work`, Go 1.24+ required) of independent modules under `github.com/darkace1998/Dreadnought-Revival-project/<service>`.
 

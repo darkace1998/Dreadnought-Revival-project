@@ -116,6 +116,5 @@ echo.
 echo Built %OUT%\dn_host_loadout.dll
 echo.
 echo To deploy, see README.md. In short: copy it next to
-echo DreadGame-Win64-Shipping.exe as wer.dll, and create an empty
-echo dn_server_loadout.txt in the same directory to switch it on.
+echo DreadGame-Win64-Shipping.exe as wer.dll. No marker file is needed.
 endlocal

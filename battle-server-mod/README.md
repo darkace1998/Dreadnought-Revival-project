@@ -56,11 +56,30 @@ engine was designed to have and then gets out of the way. It stays correct if a
 real backend ever populates the manager, because it only runs when the manager
 could not answer.
 
-## Dedicated net mode (`dn_host_dedicated.txt`) — this is what gets players out of orbit
+## Switches
 
-**Opt-in** like every host mod: an empty `dn_host_dedicated.txt` beside the
-executable, or `DN_HOST_DEDICATED=1`. Added 2026-09-24; not yet verified in a
-live match.
+The mod is on whenever it is loaded as `wer.dll`, and every feature that has
+been verified in a live match is simply on. Since 2026-11-01 only these marker
+files (beside the executable, or the matching `DN_HOST_*=1` variable) remain:
+
+| Switch | What it does |
+| --- | --- |
+| `dn_host_conquest_smoke.txt`, `dn_host_te_smoke.txt`, `dn_host_onslaught_smoke.txt`, `dn_host_havoc_smoke.txt` | Smoke tests: start the match with nobody joined |
+| `dn_host_havoc_fast_waves.txt` | Smoke tests: short Havoc waves |
+| `dn_host_no_te_spawns.txt`, `dn_host_no_te_winner_lock.txt`, `dn_host_no_te_hud.txt` | Off-switches for Team Elimination parts not yet verified live |
+| `dn_host_no_havoc_jets.txt`, `dn_host_no_havoc_respawn_block.txt` | Off-switches for Havoc parts not yet verified live |
+| `dn_host_no_ceres_buff_end.txt` | Off-switch for the Ceres buff end, not yet verified live |
+| `dn_host_no_ons_ability_slots.txt`, `dn_host_no_ons_gun_log.txt` | Off-switches for the Onslaught ability guard and command ship gun log (new) |
+| `dn_host_no_conquest_capture_log.txt` | Turns off the Conquest capture/speed diagnostic |
+
+A new feature gets no switch unless it is genuinely risky, and an off-switch
+is removed once a live match has confirmed its feature. The 38 removed
+switches' marker files are ignored if still present.
+
+## Dedicated net mode — this is what gets players out of orbit
+
+Always on. Added 2026-09-24; verified live the same day (players reach the
+arena).
 
 **Why players stay in orbit** (verified by disassembly and the full host log of
 a match, `run/battle-logs/battle-20260923-204528-port7777.log`):
@@ -99,9 +118,9 @@ What to look for in the host log:
 ... TeleportPlayersFromOrbit ...        and NO "that is not in orbit!" after it
 ```
 
-## The player's own fit (`dn_host_player_loadouts.txt`)
+## The player's own fit
 
-**Opt-in.** The host used to spawn every ship with its DEFAULT precast fit,
+Always on (verified live 2026-09-25). The host used to spawn every ship with its DEFAULT precast fit,
 because a client only tells the server which loadout it picked
 (`ServerPlayerClickedShipLoadout(FName)`) and this exe's server side cannot look
 the fit up: its mmog `AutoLogin` (`0x2AABCB0`) is a stub and the fleet manager
@@ -149,7 +168,7 @@ connection (`PC+0x5A8` null) -- the host's own local player, whose client RPC
 would run in-process. Remote players are unaffected. Log:
 `restrictions: skipped the ClientSetPlayerRestrictions RPC to the host's local controller`.
 
-## End-of-match screen (on; `dn_host_no_eom_stats.txt` turns it off)
+## End-of-match screen
 
 Symptom: the match ends, the screen fades to black and stays black. The client
 log shows the end-of-match stage graph stopping at `SetupUIWidgets`.
@@ -179,13 +198,11 @@ game's own `ClientStartEndOfMatchTransition` followed by
 Log: `eom transition: controller … held for 3000 ms`, then
 `eom transition: ClientStartEndOfMatchTransition sent … (deferred)` and
 `eom stats: sent … (empty, deferred)`.
-`dn_host_eom_no_defer.txt` (or `DN_HOST_EOM_NO_DEFER=1`) restores the old flow:
-transition, stats, then rewards.
 
 (The first attempt deferred only the stats RPC. The reports kept coming, 3 s
 before the deferred send: the gather runs at the transition, not at the stats.)
 
-## Teams, names and bot balance (on; `dn_host_no_team_sync.txt` turns it off)
+## Teams, names and bot balance
 
 Three things the host lacks because the original server build fed it match
 data. All run once a second from the game-mode timer hook (`PlayersTick`), for
@@ -201,14 +218,12 @@ every human (a player controller with a network connection):
   The mod asks mmogbrain for the display name by `DNPID`
   (`GET /battle/player`), else takes the join URL's `PlayerName=`, and calls
   the game mode's `AGameMode::ChangeName`.
-- **Bots in every mode** (`dn_host_bots_bc_only.txt` limits them to the proving
-  ground). The mod sets `m_enableSpawnAI` in every multiplayer mode, not only
+- **Bots in every mode**. The mod sets `m_enableSpawnAI` in every multiplayer mode, not only
   Bootcamp. The spawner fills teams only from the mode's own bot list
   (`gm+0x968`, count `gm+0x970`) up to its team size (`gm+0x97C`); the log line
   `bots: game mode … type N: bot list X entries, team size Y` shows per mode
   whether a PvP map has one. Not verified live yet.
-- **Bot balance** (any mode with bots; `dn_host_no_bot_balance.txt` turns just
-  this off). Per team: bots = team size − humans on that team. The bot targets are the mode's fixed team size (`gm+0x97C`); nothing
+- **Bot balance** (any mode with bots). Per team: bots = team size − humans on that team. The bot targets are the mode's fixed team size (`gm+0x97C`); nothing
   subtracted the humans, so three players still got 8 bots on their side. Once
   the bots are set up, the mod calls the game's `SetTeamSizeAI` (`0x381550`)
   with `teamSize - humans`, which trims the surplus.
@@ -217,8 +232,7 @@ The first version did teams at `PostLogin` through the `ProcessEvent` hook and
 `AYPlayerController::SetTeam`. With it, only the last player to join got his
 own loadout; with it off both players' fits registered. It is gone.
 
-- **Captains** (`dn_host_no_captain.txt` turns just this off; added
-  2026-10-16, from PR #80). `GET /battle/player` also answers
+- **Captains** (added 2026-10-16, from PR #80). `GET /battle/player` also answers
   `captain=<display info>` (the string the client saved with
   `YA_SavePlayerDisplayInformation`). The mod writes it into
   `AYPlayerReplicationInfo::m_captainDisplayInformation` (`+0x758`, replicated
@@ -232,7 +246,7 @@ Logs: `team sync: controller … TEAM=1 -- player state 0 -> 1, …`,
 `bot balance: 3 human(s) on team 1; team size 8 -> team 1 bots 8 -> 5`.
 Not verified live yet.
 
-## Match results (on; `dn_host_no_match_result.txt` turns it off)
+## Match results
 
 Nothing in this exe reports a finished match -- the server build did -- so no
 match paid XP or credits. At the same moment as the eom stats above, once per
@@ -254,7 +268,7 @@ Log: `match result: <pid> team 1 final 1 kills 3 ... -> mmogbrain: outcome=win c
 `final 0` means the match result was not yet set when the transition started
 (mmogbrain logs `outcome=unknown` and pays it as a loss) -- not verified live yet.
 
-## End-of-match rewards screen (on; `dn_host_no_eom_rewards.txt` turns it off)
+## End-of-match rewards screen
 
 The rewards page was empty although mmogbrain paid: the client reads its
 numbers from two structures only the missing server build filled, and both
@@ -275,7 +289,7 @@ Not verified live yet. If the client files `ShipXpError` reports
 
 Personal stats are still sent empty (next step).
 
-## Match scores (on; `dn_host_no_scoring.txt` turns it off)
+## Match scores
 
 Every score was 0 (issue #67) while kills, deaths and damage counted: the host
 scores events from a table it copies out of the YMmogbrain subsystem
@@ -313,7 +327,7 @@ alias, and the last line shows which name the host really uses. Not verified
 live yet: `NOT loaded` or an `EXCEPTION` line means the decode path is wrong;
 `root has 0 fields` means the document did not decode.
 
-## Onslaught points (on; `dn_host_no_onslaught_points.txt` turns it off)
+## Onslaught points
 
 Onslaught (`YGameMode_Invasion`, host mode code `IVN`, `m_gameModeType` 16)
 should end when a team reaches **300 points** (`GameState_Onslaught_BP`:
@@ -336,7 +350,7 @@ points T1 .. (kills ..) T2 .. / 300`, and the end as `onslaught: team N
 reached 300 points`. If no `onslaught:` line appears in an Onslaught match, the
 mode's kills do not go through `0x375F30` and the hook does nothing.
 
-## Onslaught AI ships (on; `dn_host_no_onslaught_creeps.txt` turns it off)
+## Onslaught AI ships
 
 Onslaught's fighters, assault ships and command ship
 (`VH_ONS_AITarget{L,M,H}_Pawn_BP`, YCreepPawn) never spawned: the spawner was
@@ -437,7 +451,7 @@ game mode's vtable `+0x978`, which the scene manager's own spawn also calls.
 table ("Weapon Data ... Couldn't be found"). The command ship's main gun
 (`weapon01`) does have one.
 
-## Conquest score (on; `dn_host_no_conquest_score.txt` turns it off)
+## Conquest score
 
 No Conquest (TER) match ever ended on our hosts. All of them ran until the reaper
 killed them. The rule, from Grey Box's 2018 preview: every 10 s each team adds
@@ -496,7 +510,7 @@ The original is the whole grid. The patch notes give a team "the percentage of
 overall territory", and the HUD (`UI_TER_HUD_WBP`) draws a neutral-area bar
 between the two teams' bars (`m_neutralAreaScoreBarWidget`). So the mod now
 counts `+0x1EA8` and writes each team's tiles out of the grid's (30 x 30 = 900).
-The operator's rule is still there behind `dn_host_conquest_claimed_share.txt`.
+(The operator's claimed-share rule was removed 2026-11-01; it was never used live.)
 Matches will run longer than they did. GUESS: rounding to the nearest percent.
 
 There is no time limit: the operator reports the Conquest clock counts up.
@@ -513,7 +527,7 @@ GameState's match-started setter `0x380F70`. Smoke run 2026-10-28, Gorge:
 capture points set up, territory map 26 tiles (the two bases), score climbing,
 no errors.
 
-## Conquest personal score (on; `dn_host_no_ter_scoring.txt` turns it off)
+## Conquest personal score
 
 The scoring table has four Conquest rows:
 
@@ -576,7 +590,7 @@ is the highest ratio the Territory Held check saw against its 0.60 bar. The
 capture line names the capturers' controller classes, so a bot capture (which
 reports no player result) can be told apart.
 
-## Captured points' territory (on; `dn_host_no_conquest_point_owner.txt` turns it off)
+## Captured points' territory
 
 Players reported on 2026-10-29 that the capturable points "should claim a lot
 of map for your team" and never did. The points flip (6 and 9 captures in the
@@ -611,7 +625,7 @@ base to B. Log line:
 `conquest: CapturePoint_TER_BP2 (index 1) owner 0 -> 1 (...) -- GameState told
 (0x3A2610); point map T1 33 -> 169, T2 33 -> 33 tiles`.
 
-## Conquest spawns (on; `dn_host_no_conquest_spawns.txt` turns it off)
+## Conquest spawns
 
 Players reported on 2026-10-29 that they "spawned into enemy team twice" and
 saw enemies spawn near their own team. Verified in the exe and maps:
@@ -693,7 +707,7 @@ every bot entry of another tier. `YNPCAIController::GetAIDifficultyLevel`
 calls it. The host also runs at about 60 frames per second (frame counter in
 the Skybridge log).
 
-## Bots spawned before the match starts (on; `dn_host_no_npc_ai_start.txt` turns it off)
+## Bots spawned before the match starts
 
 Conquest and Onslaught bots sat still (operator, 2026-10-08). An NPC
 controller is born halted (`+0xAFA`) until `0x288AE0` starts its AI. In the
@@ -715,7 +729,7 @@ Diagnostic: two Amirani Onslaught matches logged 47,490 and 119,500
 about +-2^19 units, whose movement no longer replicates. Any bot or Onslaught
 ship that far out, or with a NaN position, is now logged once: `far away: ...`.
 
-## Veteran / Legendary command ship guns (on; `dn_host_no_ons_gun_rows.txt` turns it off)
+## Veteran / Legendary command ship guns
 
 The Recruit command ship shoots, but the Veteran and Legendary ones don't
 (operator, 2026-10-08). Each tier carries its own gun:
@@ -729,7 +743,71 @@ found") and never fire. The mod hooks `UYWeaponGroup::LoadWeaponDataTableRow`
 GUESS: the lost rows were copies of `weapon01`'s. Log: `command ship gun: no
 weapon row for WP_ONS_AITargetH_weapon02_BP; using ...`.
 
-## Original match XP (on; `dn_host_no_event_xp.txt` turns it off)
+## Onslaught ability slots (on; `dn_host_no_ons_ability_slots.txt` turns it off)
+
+After the possess fix the command ship still launched no jets and the assault
+ship never rammed (tester, 2026-10-30). Host logs from 2026-11-01 show the pawn
+with all its abilities and the fire list with its slots right after possess.
+Once the fighting starts, the same match logs 549 `fail ability index=0/2 :
+ability set to trigger inexistent pawn ability index=-1`.
+
+The cause is in the exe:
+
+- **The fire loop trusts a stored slot.** The fire loop (`0x2AA9D0`) takes the
+  pawn slot from each fire-list entry's `+0x08` whenever the controller has no
+  data asset (`+0x710`). With a data asset it looks the slot up by class every
+  time.
+- **A behaviour change replaces the fire list.** The NPC tick (`0x2A9300`)
+  applies a controller class's values to the controller (`0x29C5F0`). That
+  copies the class default's fire list, `m_maxFireDistance` and more. It looks
+  the slots up only to build a warning.
+- **The parent blueprints store −1.** `VH_ONS_AITargetH_Parent_YAICtrl_BP` (and
+  the assault ship's parent) cooks `m_abilityIndex = -1` into every entry.
+
+So the mod hooks `0x29C5F0` and looks each slot up again by class after every
+application, the way the data-asset path does.
+
+The same live match showed something worse. At 19:58 the team 1 command ship's
+fire list held a **sniper** controller's abilities
+(`AB_SN_Pri_FireMode_Rapid_Ability_T5`, …), all at −1. That was a second after
+the game spawned one of its bots. Its 549 errors were those entries.
+
+The route that carried the sniper's class is not traced. The candidates are
+`NextBehaviour` `0x28E340` (the scene entry at the controller's own `+0xAAC`),
+the scene advance `0x2685F0`, the NPC tick states 17–19 and `SetProperties`.
+`AddNPCSpawn` only appends, and bot spawns take fresh entries.
+
+So the hook refuses any class that is not `VH_ONS_AITarget*` for these ships.
+Log: `onslaught abilities: REFUSED <class> for <ship> (caller RVA 0x…, scene
+index N, behaviour N, location …)`. The caller RVA names the path for the next
+step.
+
+Log for an applied class: `onslaught abilities: <class> applied to <ship>
+(caller RVA 0x…) -- fire list slots -1,-1,-1,-1 -> 0,1,2,3 (4 of 4 found), max
+fire distance N`.
+
+## Command ship gun log (on; `dn_host_no_ons_gun_log.txt` turns it off)
+
+A diagnostic for the tester's report that the Legendary command ship "hits way
+weaker" from farther away. The cooked data points the other way.
+
+- **Projectile rows.** The tiers' guns differ only in their projectile rows.
+  High damage is 400 / 700 / 1000 (Recruit / Veteran / Legendary) up to 6000
+  units. Medium is 200 / 300 / 500 up to 12000 units. Low is 100 / 150 / 200
+  beyond that.
+- **Fire distance.** The controller fires out to `m_maxFireDistance`. The
+  native default is 20000 (ctor `0x276EA0`), and neither command ship
+  Blueprint overrides it.
+
+It is not settled statically which of the gun's two rows the host applies: the
+weapon row (75 flat) or the projectile row. So the mod hooks `YPawn::TakeDamage`
+(`0x59BAF0`) and sums every command ship hit by tier, victim kind and distance
+band.
+
+Log, every 30 s: `onslaught gun: Legendary command ship -> player ships, N hits
+in 30 s -- <6000: n hits, avg A asked / D dealt; ...  max distance M`.
+
+## Original match XP
 
 mmogbrain serves the ORIGINAL scoring table (the datamine's 1.11.1 / 1.12.0
 tables, `data/scoring/ScoringTable.json`), XP and credits per event included.
@@ -767,10 +845,9 @@ it with the asking manager.
 [dn-host-loadout] FindLoadoutByID miss for ... -> after registering: FOUND
 ```
 
-## AI in the proving ground (`dn_host_bc_ai.txt`)
+## AI in the proving ground
 
-**Opt-in.** Empty `dn_host_bc_ai.txt` beside the executable (or
-`DN_HOST_BC_AI=1`). Verified live 2026-09-24.
+Always on. Verified live 2026-09-24.
 
 The proving ground is game mode BC (`YGameMode_Bootcamp`, `EYGameModeType` 18).
 Its blueprint carries 45 NPC entries, but every spawn path (game-mode virtual
@@ -792,10 +869,9 @@ game does the rest: at the 50 s mark both teams fill (T1 7 + the player, T2 8).
 Known noise: "No mmog tier data available for spawning AI ships, using default
 hardcoded data" (the host never logs in) and content warnings from the AI data.
 
-## Player ship physics (`dn_host_ship_physics.txt`)
+## Player ship physics
 
-**Opt-in.** Empty `dn_host_ship_physics.txt` beside the executable (or
-`DN_HOST_SHIP_PHYSICS=1`). Verified live 2026-09-24: without it a player's ship
+Always on. Verified live 2026-09-24: without it a player's ship
 moved on their screen but snapped back to a stale spot on every server
 correction (e.g. after firing or an ability).
 
@@ -816,118 +892,18 @@ untouched.
 [dn-host-loadout] ship physics: movement component ... is a remote player's ship; cleared ...
 ```
 
-## DISABLED: fleet tier (`dn_host_fleet_tier.txt`)
+## Removed: fleet tier and post-login spawn
 
-**Disproved 2026-09-24 and switched off in code**; the marker is now ignored and
-the log says so. The gate below reads the **pawn**, not the PlayerState: the
-caller (`0x3838D1`) passes an IsA-checked element of an array of pawns, and the
-null branch logs "Trying to teleport into level a null YPawn!". `+0x948` on
-`AYPawn` is an unreflected native field -- the pawn's own orbit state -- and the
-SDK's `m_highestFleetUnlocked` merely shares the offset; the real PlayerState
-constructor (`0x5A8820`) already sets that to Recruit. So writing `+0x948` at
-`TeleportPlayerIntoLevel` forced the pawn's orbit flag, which is faking the
-gate. The analysis below is kept as a record of how that was reached.
+Both were removed from the code on 2026-11-01; git history keeps them. Neither
+ran on a live host.
 
-### Original section (superseded)
-
-**Off by default.** Enable with an empty `dn_host_fleet_tier.txt` beside the
-executable, or `DN_HOST_FLEET_TIER=1`.
-
-The orbit teleport is gated on one byte:
-
-```
-FUN_3D92A0:  cmp byte ptr [rdx+0x948], 0 ; jne proceed
-             -> "Trying to teleport into level player %s that is not in orbit!"
-```
-
-`+0x948` is `AYPlayerReplicationInfo::m_highestFleetUnlocked`, an `EYFleetType`
-declared in `YMmogbrain_Structs.h` (`None=0 Recruit=1 Veteran=2 Legendary=3`).
-It is `EYFT_None` on a host that never logged in, so **nobody is ever teleported
-and the client sits in the orbit screen** — measured live, and the reason the
-spawn bypass below was not sufficient on its own: the host spawned four pawns
-for the player and the client stayed in orbit regardless, because the only thing
-that takes a client out of orbit is the teleport.
-
-This sets the tier to `EYFT_Recruit` **when, and only when, the host has none**.
-It never overwrites a value the engine already has — the same rule the
-`FindLoadoutByID` hook follows, and what keeps it correct if a real tier ever
-arrives.
-
-**Where it is written, corrected 2026-08-15.** It used to be written from
-UFunction trigger points (`PostLogin`, `ServerReadyForJoining`, …) reached
-through a `ProcessEvent` hook. Measured on a live host, **none of them ever
-ran**: `ProcessEvent` hooked successfully and `EnsureFleetTier` then logged
-nothing at all — not even one of its failure paths, which all log. `K2_PostLogin`
-resolves on the base `GameMode` and is never dispatched through `ProcessEvent`
-here. The fix had never once executed.
-
-It is now written in a hook on **`AYOrbitTransitionManager::TeleportPlayerIntoLevel`
-(RVA `0x3D92A0`)** — the function that reads the gate, which the same host log
-proves runs once per player. No reflection, no GObjects scan, no guess about
-when a `PlayerState` exists: the engine hands over the exact object it is about
-to test, at the moment it tests it. The old trigger points are retained and
-still log, so if they ever start firing it will be visible.
-
-The gate was re-verified by disassembly rather than inherited from notes:
-
-```
-0x1403d92b6  test rdx, rdx
-0x1403d92b9  jne  0x1403d9303        ; a null PRI logs a different message
-0x1403d9303  cmp  byte ptr [rdx+0x948], 0
-0x1403d930a  jne  0x1403d9393        ; -> teleport proceeds
-```
-
-The format string has two identical `.rdata` copies (`0x142edaf90`,
-`0x142edb0a0`) and exactly one xref, to the second — the wrong-copy trap in
-`CONTRIBUTING.md`.
-
-Why this is supplying data rather than faking a check: the engine computes this
-tier from the YMmogbrain module (`FUN_3A5831`, which logs
-`EYFleetType::EYFT_Recruit: no FleetType override - FleetTier=%d`) and cannot
-here, because the host holds no mmogbrain data at all. Recruit is the floor —
-what a player who owns any fleet has unlocked, and every player who reaches a
-battle server owns one.
-
-**Honest limit:** Veteran and Legendary players are under-reported as Recruit.
-If a real tier ever reaches the host, this defers to it.
-
-**Prefer this over the spawn bypass below.** It lets the *normal* orbit flow
-finish, so players keep ship selection.
-
-## Optional: post-login spawn (`dn_host_postlogin.txt`)
-
-**Off by default, and a bigger change than the loadout fix.** Enable with an
-empty `dn_host_postlogin.txt` beside the executable, or `DN_HOST_POSTLOGIN_SPAWN=1`.
-
-Registering the loadouts gets a player a **pawn** — the host spawns them and
-`SetYPawn` assigns it — but they still never reach the map, because the orbit
-teleport is gated on `AYPlayerReplicationInfo::m_highestFleetUnlocked`
-(`+0x948`, an `EYFleetType` from `YMmogbrain_Structs.h`). It is `EYFT_None` on a
-host that never logged in, and no backend payload can change that, because the
-host holds no mmogbrain data at all (AGENT-CHAT S39, S40).
-
-This switch does not satisfy that gate. It skips the orbit flow: it hooks
-`PostLogin`, sets the controller's active loadout, and calls the engine's own
-`ServerRestartPlayer()`, which asks the GameMode for a PlayerStart and spawns
-there. That path never enters `UYPlayerOrbitComponent` and never reads the fleet
-tier. The approach is taken from `dread-sdk`'s server mod, which the operator has
-played real matches with (S42).
-
-**What it costs:** the player no longer picks a ship in orbit — everyone spawns
-in one configured hull (`g_postLoginLoadoutIndex`, default Assault Medium T1).
-That is a real regression in behaviour and the reason this is opt-in and
-separate. If the orbit path can ever be made to work, prefer it.
-
-**How it hooks:** `UObject::ProcessEvent`, vtable index `0x35`. The three
-UFunctions it needs (`K2_PostLogin`, `GetLoadoutManager`, `ServerRestartPlayer`)
-are resolved once at install by walking GObjects, so the hot path is a single
-pointer comparison per reflected call — no string work.
-
-**Not yet verified against a running host.** It is written from the SDK dump's
-offsets (`m_activeLoadout` at `0x0208`) and dread-sdk's proven sequence, but it
-has not been built or run. Expect to read the `[dn-host-loadout] post-login:`
-lines on the first attempt; every failure path logs why and stands down rather
-than continuing.
+- **Fleet tier.** It wrote `+0x948` to get players past the orbit teleport. That
+  was disproved on 2026-09-24: the gate reads the **pawn's** own orbit state,
+  not `m_highestFleetUnlocked`, so the write faked the gate. The real cause was
+  the net mode (see "Dedicated net mode").
+- **Post-login spawn.** `dread-sdk`'s route: hook `PostLogin` and call
+  `ServerRestartPlayer`, skipping the orbit flow and ship selection. Never
+  needed once the net mode was fixed.
 
 ## What does NOT belong here
 
@@ -955,10 +931,8 @@ player record, it belongs in the other repository.
 
 - **Optional at runtime.** The stack must build, start and run a match with this
   directory absent or the DLL not deployed. `dn-dedicated` must not require it.
-- **Opt-in on the host.** The existing marker-file switch
-  (`dn_server_loadout.txt` beside the executable) is fine and is the right shape
-  — our spawner does inherit its environment (`buildEnv`, S10.5), but a file
-  survives however the operator starts the service.
+- **Few switches.** Since 2026-11-01 the mod is on whenever it is loaded, and
+  every feature verified live is simply on. See [Switches](#switches).
 - **Its own build.** Windows/MSVC, not wired into `go.work`, not built by
   `scripts/setup.sh`.
 - **Evidence in the commit body**, per `CONTRIBUTING.md`: the RVAs, what was
@@ -993,16 +967,11 @@ from the executable's own directory first:
 
 1. Copy `build/dn_host_loadout.dll` next to `DreadGame-Win64-Shipping.exe`,
    renamed to `wer.dll`.
-2. Create an empty `dn_server_loadout.txt` in the same directory.
-3. Create an empty `dn_host_dedicated.txt` in the same directory, so players
-   can leave orbit (see "Dedicated net mode" above).
-4. Create an empty `dn_host_bc_ai.txt` for bots in the proving ground, and an
-   empty `dn_host_ship_physics.txt` so player ships are simulated on the host
-   (see the two sections above).
 
-Steps 1 and 2 are required for the loadout fix; step 3 for the orbit; step 4
-for bots and for player movement. Each can
-be undone by deleting a file.
+That is all. No marker files are needed since 2026-11-01: the old
+`dn_server_loadout.txt`, `dn_host_dedicated.txt`, `dn_host_player_loadouts.txt`,
+`dn_host_bc_ai.txt` and `dn_host_ship_physics.txt` are ignored, as their
+features are always on. To take the mod off a host, remove `wer.dll`.
 
 The four `WerReport*` exports are no-op stubs. The engine only calls them while
 writing a crash report, and a host writing a crash report has already lost the
@@ -1015,7 +984,6 @@ checked twice:
 - `game-manager`'s spawner is the only thing that passes `-MatchID=`, so its
   absence identifies a client. On a client the DLL returns from `DllMain`
   without reading the game's memory, installing a hook, or writing a line.
-- Without `dn_server_loadout.txt` it stands down on a host as well, and says so.
 
 ## What it logs
 
@@ -1070,40 +1038,13 @@ Two of these have a trap attached, both of which cost real time to find:
 - **Type 2, not 4.** The validity gate at `0x33C680` rejects loadouts recorded
   as type 4.
 
-## End-of-match stack probe (diagnostic; `dn_host_no_stack_probe.txt` turns it off)
+## Removed: end-of-match stack probe and host crash handler
 
-The host overflows its stack in about 40% of matches, ~3 ms after `EndMatch`
-starts ("Match over event" -> music reset -> `EXCEPTION_STACK_OVERFLOW`). No
-backtrace is logged anywhere, and the restrictions guard did not stop it, so
-the recursing function is still unknown.
-
-At match end (the local-controller restrictions RPC, which fires on the game
-thread right before every overflow) the mod arms a watcher for 5 s. The watcher
-repeatedly suspends the game thread and reads its stack pointer. Once the stack
-is 768 KB deeper than at arm time, it scans the top 512 KB for addresses inside
-the exe's code section and writes the most frequent ones (the recursion's return
-addresses, as RVAs) to **`dn_host_stackprobe.log`** beside the exe. While the
-game thread is suspended it avoids the C runtime and the heap: `wsprintfA` plus a
-raw `WriteFile`.
-
-Log: `stack probe: armed on the game thread ...` in `dn_host_loadout.log`, then,
-if the match overflows, a block in `dn_host_stackprobe.log`:
-
-    stack probe: game thread is 800 KB deeper than at match end; rip RVA 0x...; ...
-      0x2A... x 3120
-      ...
-
-## Host crash handler (diagnostic; same switch as the stack probe)
-
-The second host crash is `EXCEPTION_ACCESS_VIOLATION reading address
-0xfffffff8` mid-match, after which the engine's crash handler exits with status
-3. All 7 cases on 2026-09-28/29 were **Team Elimination** (`?game=TE`), 3-5
-minutes in. A vectored exception handler (installed at startup) writes, for an
-access violation or stack overflow whose RIP is in the exe, the fault RVA, the
-address read, the main registers and the exe return addresses on the stack to
-`dn_host_stackprobe.log`. Faults inside wer.dll (its own guarded reads) are
-skipped; it only observes and never handles. Log:
-`crash handler: installed ...` in `dn_host_loadout.log`.
+Both diagnostics were removed from the code on 2026-11-01. They had been off on
+the live hosts since 2026-10-08, when the probe preceded two host crashes. The
+probe had done its job: it caught the `ClientAddAchievement` loop (see
+"ClientApplyRespawnFilter guard"). The handler was looking for the
+`0xfffffff8` Team Elimination crash, since fixed (Predator scorer, below).
 
 **Team Elimination gets no scoring table** (changed 2026-09-29). The old guard
 skipped the table only for an EMPTY mode name; hosts now report TE as `"TE"`,
@@ -1111,8 +1052,7 @@ so the table was built again and every TE match crashed. TE matches without the
 table ended cleanly, so TE is skipped by name too; its scores stay 0. Log:
 `scoring: mode "TE" is Team Elimination -- table not built ...`.
 
-RE-ENABLED 2026-10-26: TE builds its table again (`dn_host_no_te_scoring.txt` /
-`DN_HOST_NO_TE_SCORING=1` restores the skip). TE was the only mode with no
+RE-ENABLED 2026-10-26: TE builds its table again. TE was the only mode with no
 scoring at all. The likeliest crash cause is the ClientAddAchievement loop
 below (the guard on 0x5E50C0): every ribbon for the host's own player called the
 RPC again, forever. TDM hit it at EndMatch, TE mid-match as its ribbons came in.
@@ -1144,8 +1084,7 @@ switches it off: destroyed bots stay destroyed. Logs: `bots: ... type 5 ...
 (Team Elimination: switched off again once filled)`, then `bots: Team
 Elimination ... m_enableSpawnAI 1 -> 0: destroyed bots no longer respawn`.
 
-**Team Elimination rounds** (on; `dn_host_no_te_rounds.txt` /
-`DN_HOST_NO_TE_ROUNDS=1` turns them off; added 2026-10-25). Rules from the
+**Team Elimination rounds** (added 2026-10-25). Rules from the
 game's own text: "Team Elimination is played in rounds. The first team to win 2
 rounds wins the match." A ship lost during a round is out until the next one;
 its captain flies a fighter (the game state's jets filter) meanwhile.
@@ -1275,7 +1214,7 @@ loop at match end. The guard drops only a nested call on the same thread, so
 remote players' RPCs are unchanged. Log: `respawn filter: dropped a nested
 ClientApplyRespawnFilter ...`.
 
-## Personal stats page (on; `dn_host_empty_eom_stats.txt` sends the old empty list)
+## Personal stats page
 
 `ClientSetTopPlayerMatchStats` used to go out empty, so the end-of-match
 "Player Stats" page had no rows. The client makes one row per array entry (no
@@ -1295,8 +1234,7 @@ transition, for exactly the reported ship ids: replication only notices the
 change on the actor's next net update. After writing, the mod now calls the
 engine's own `FlushNetDormancy` (body `0x171C000`) and `ForceNetUpdate`
 (virtual at vtable `+0x580`, from its exec thunk `0x1E70010`) on the PRI.
-Log: `eom rewards: ... written ...; PRI pushed 1`. `dn_host_no_eom_push.txt`
-(or `DN_HOST_NO_EOM_PUSH=1`) turns the push off.
+Log: `eom rewards: ... written ...; PRI pushed 1`.
 
 The first build also pushed the "XP actor" at PRI+0x930. It is not an actor:
 it is a `UYXPManager : UActorComponent`, so neither function exists on it and
@@ -1306,7 +1244,7 @@ end-of-match screen had no Rewards tab (MVP / Stats / Scoreboard only, no
 replicates through the PRI's channel, so pushing the PRI covers it. Not
 verified live yet that this brings the tab back.
 
-## Kill detail for daily contracts (on; `dn_host_no_kill_detail.txt` turns it off)
+## Kill detail for daily contracts
 
 mmogbrain counts the daily contracts (`mmogbrain/daily_contracts.go`), and many
 of them count only some kills: "Destroy Enemy Corvettes" (the destroyed ship's
@@ -1322,9 +1260,7 @@ servers report per-kill detail").
 Expected log: none per kill; the `battle result` line in mmogbrain's log shows
 the contract progress ("contracts: progress").
 
-## Ribbons announced in the match (on, added 2026-10-15)
-
-Switch off with `dn_host_no_live_ribbons.txt` / `DN_HOST_NO_LIVE_RIBBONS=1`.
+## Ribbons announced in the match (added 2026-10-15)
 
 No ribbon ever showed during a match: the host's reward path (`0x426DC0`) only
 builds type-1 (event) achievements (`0x5A9D30` is always called with 1) and
@@ -1347,7 +1283,7 @@ Expected log: `ribbons: N ribbon rules loaded for mode "TDM"` per match and
 NOT verified live: whether the client shows the ribbon (popup / end-of-match
 list) from this RPC.
 
-## Ribbon popup in the match (on; `dn_host_no_ribbon_popup.txt` turns it off; added 2026-10-16)
+## Ribbon popup in the match (added 2026-10-16)
 
 `ClientAddAchievement` (above) only files a ribbon into the client's scoring
 list; the client's handler for it is the same `0x4171E0` and calls no UI. The
@@ -1369,9 +1305,7 @@ mmogbrain pays them.
 Log: `ribbons: event N -> ribbon popup (ClientEventResult m_ribbonAchieved,
 ribbon score S)`. Not verified live yet.
 
-## MVP and Man Of The Day ribbons (on, added 2026-10-15)
-
-Switch off with `dn_host_no_eom_ribbons.txt` / `DN_HOST_NO_EOM_RIBBONS=1`.
+## MVP and Man Of The Day ribbons (added 2026-10-15)
 
 Both are end-of-match scoring events (EYScoringEventID ManOfTheDay 41, MVP 42)
 that mmogbrain keeps out of the host's scoring table, because end-of-match
@@ -1391,7 +1325,7 @@ Expected log: `ribbons: MVP -> <pid>` and `ribbons: Man Of The Day -> ...`; in
 mmogbrain's `battle result` line, `event_counts` shows MVP / ManOfTheDay and
 `ribbons` the earned ribbon. NOT verified live.
 
-## Statistics: score, healing, time per ship class (on, added 2026-10-15)
+## Statistics: score, healing, time per ship class (added 2026-10-15)
 
 The Statistics screen (`YA_GetPlayerStatistics`) shows ScoreSum, HealPoints and
 seconds per ship type, which nothing reported. The match result now also sends:
@@ -1410,7 +1344,7 @@ score-based daily contracts. The offsets are NOT verified live.
 Expected log: the `match result:` line now shows `score N healing N`; in
 mmogbrain's log, `statistics: match recorded` with `from_mod=true`.
 
-## Turbo TDM modifiers (on, TurboTDM hosts only; `dn_host_no_game_modifiers.txt` turns it off; added 2026-10-16)
+## Turbo TDM modifiers (TurboTDM hosts only, added 2026-10-16)
 
 Turbo TDM's only difference from TDM is three feats on every ship, from
 `DN_GameModifiers_DT` row `YGMT_TURBO_TDM`: `ModifierSpeed` (+600%
@@ -1429,8 +1363,7 @@ Logs: `turbo modifiers: AddFeat(ModifierSpeed) on … -> added` (first 16
 pawns, and every failure). VERIFIED live 2026-10-16 (Gorge): all three feats
 added to the player's ship and every bot class, and the operator reported the
 match "faster and smooth, no stutter" -- the client moves with the replicated
-speed feat, no position corrections. `dn_host_no_game_modifiers.txt` turns it
-off.
+speed feat, no position corrections.
 
 ## Ceres Awakens: buffs end with their collector (on, PodTDM hosts only; `dn_host_no_ceres_buff_end.txt` turns it off; added 2026-10-29)
 
@@ -1464,7 +1397,7 @@ pod); TDM rules otherwise (25 kills, 20 min). The host's `Failed to find
 object 'Class None.PodTDM'` warning is harmless: it still runs
 `GameMode_PodTDM_BP_C`.
 
-## Havoc (on, Havoc hosts only; `dn_host_no_havoc_director.txt` turns it off; added 2026-10-19)
+## Havoc (Havoc hosts only, added 2026-10-19)
 
 Havoc is the wave-defence mode (`GameMode_Havoc_BP`, a Horde subclass,
 `YGMT_HAVOC`) on `HVC_Map1` / `HVC_Map2`. The client's mode list
@@ -1501,8 +1434,7 @@ What the mod does, all from the game-mode timer (1 s) and four hooks:
   which only logs) is paid with the game's `DeductXP` `0x3F34F0` and the boost's
   feat goes on the ship with `AddFeat`, again on every respawned ship (the
   feats-component hook is shared with Turbo TDM). GUESS: the selection rule.
-- **Respawn ship switch** (`dn_host_no_havoc_respawn_gate.txt` turns only this
-  off). Havoc clears the loadout filter, so `0x33C680` rejects every Havoc ship
+- **Respawn ship switch**. Havoc clears the loadout filter, so `0x33C680` rejects every Havoc ship
   on respawn; the gate answers TRUE for exactly the loadout being activated.
   NOT verified in PR #80 either.
 
@@ -1554,8 +1486,7 @@ wave 3, game over and EndMatch without a fault; the host then loaded
 
 Stage 3 (2026-10-19):
 
-- **Ship tier upgrades** (`dn_host_no_havoc_ship_upgrades.txt` turns them
-  off). On a wave in the loadout rows' `m_waveAppearances` (3, 6, 12) the
+- **Ship tier upgrades**. On a wave in the loadout rows' `m_waveAppearances` (3, 6, 12) the
   client's PrepareUpgradesForUI (`0x37B2D0`) reads the offered names as
   `DN_HavocLoadouts_DT` rows, and their cost is left 0 (free). The director
   offers one ship per category from the rows of that wave, the player's own
