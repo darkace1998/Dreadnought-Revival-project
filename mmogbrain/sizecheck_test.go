@@ -261,7 +261,9 @@ var targetSizes = map[string]int{
 	// wear them (in a gender's captain template): the NPC heads and test hair
 	// are gone -- owned, they were empty options in the captain editor.
 	// Materials keep the old rule.
-	"YA_GetPlayerPurchases": 2967,
+	// 2967 -> 2997 (+30): Standard Issue (M) and (F), the starting outfits,
+	// are free (2 x 15 bytes); no template outfit was owned before.
+	"YA_GetPlayerPurchases": 2997,
 	// Was 305, then 233 after removing fabricated Eligible/isEligible bool
 	// fields (issue #51 — zero footprint in the client binary). Now 953: the
 	// body is the FleetTypes/Maintenance shape FUN_142a78790 actually parses,
@@ -401,7 +403,10 @@ var targetSizes = map[string]int{
 	// researched mid-session never showed its XP until a relog (2026-10-29).
 	// ShipXps comes before the owned items, so playerDataFrameBudget still
 	// holds; a big account defers a few more items to YA_PushInventory.
-	"YA_PlayerGet": 26288,
+	// 26288 -> 26387 (+99): Standard Issue (M)/(F) are free, so owned (2 Items
+	// x 46 bytes), and the default captain wears CH_Attachment_Default instead
+	// of no headwear ("-1" -> "872349736", +7 in disp).
+	"YA_PlayerGet": 26387,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which
@@ -409,7 +414,8 @@ var targetSizes = map[string]int{
 	// at the field in buildMmogPlayerFleetsPayload.
 	"YA_PlayerFleets":          2144,
 	"YA_GetSeasonProgress":     146,
-	"YA_GetPlayersInformation": 326,
+	// 326 -> 333 (+7): the default captain's headwear, "-1" -> "872349736".
+	"YA_GetPlayersInformation": 333,
 	// Was 115, -14 after removing fabricated ReturnValue field (issue #52).
 	"YA_CheckReturn":               101,
 	"YA_AnalyticsBeginTransaction": 124,

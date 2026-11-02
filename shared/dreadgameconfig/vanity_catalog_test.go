@@ -74,3 +74,14 @@ func TestVanityCatalogFromTheClientsAssets(t *testing.T) {
 		t.Error("VAN_EMB_Bear has no headline localization key")
 	}
 }
+
+// Standard Issue is every captain's starting outfit, so it is free and still
+// listed; the other template outfits are not free.
+func TestStandardIssueOutfitIsFree(t *testing.T) {
+	for id, want := range map[int32]bool{872349706: true /*Body_Male_01*/, 872349703: true /*Body_Female_01*/, 872349707: false /*Body_Male_02*/, 872349704: false /*Body_Female_02*/} {
+		v, ok := VanityItemByID(id)
+		if !ok || VanityItemIsFree(v) != want || !VanityItemIsSold(v) {
+			t.Errorf("item %d (%s): known=%v free=%v sold=%v, want free=%v and sold", id, v.Name, ok, ok && VanityItemIsFree(v), ok && VanityItemIsSold(v), want)
+		}
+	}
+}

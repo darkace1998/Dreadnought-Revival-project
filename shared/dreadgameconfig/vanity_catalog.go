@@ -100,7 +100,8 @@ func VanityItemByID(itemID int32) (VanityItem, bool) {
 //
 //   - captain body features: genders (52), materials such as eyes, skin and
 //     scars (50), heads and hair (51 under Heads/, Hair/), the base outfits
-//     (Bodies/*_Base_*) and the default head attachment;
+//     (Bodies/*_Base_*), the Standard Issue outfits (Body_Male_01,
+//     Body_Female_01) and the default head attachment;
 //   - every ship cosmetic that is part of some hull's default appearance
 //     (AllDefaultShipVanityItemIDs).
 func VanityItemIsFree(v VanityItem) bool {
@@ -111,9 +112,20 @@ func VanityItemIsFree(v VanityItem) bool {
 		f := v.File
 		return strings.Contains(f, "/Characters/Heads/") || strings.Contains(f, "/Characters/Hair/") ||
 			(strings.Contains(f, "/Characters/Bodies/") && strings.Contains(v.Name, "_Base_")) ||
-			strings.Contains(v.Name, "Attachment_Default")
+			isStandardIssueOutfit(v) || strings.Contains(v.Name, "Attachment_Default")
 	}
 	return AllDefaultShipVanityItemIDs()[v.ItemID]
+}
+
+// isStandardIssueOutfit reports Standard Issue (M)/(F), the outfit every
+// captain starts in. ADDED 2026-11-02: it was sold for 100 GP. Its own text
+// says it is "handed out to new members of Bix's bunch on arrival at Sinley
+// Bay", and it is the suit the client puts on a captain when the gender is
+// switched (the first suit in Captain_Template_<gender>_01). The base outfit
+// that was free instead (Body_Male_Base_MC01) is in no template, so a new
+// captain owned none of the outfits the captain screen lists.
+func isStandardIssueOutfit(v VanityItem) bool {
+	return strings.Contains(v.File, "/Characters/Bodies/") && (v.Name == "Body_Male_01" || v.Name == "Body_Female_01")
 }
 
 // VanityItemIsSold reports whether the store lists the item: every item with a

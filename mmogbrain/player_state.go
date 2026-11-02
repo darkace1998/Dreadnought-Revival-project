@@ -19,7 +19,60 @@ var (
 	mmogPlayerStateDB *sql.DB
 )
 
-const defaultCaptainDisplayInfo = "GENDER_MALE;#iiS=872349903#iiH=872349830#iiHw=-1#iiEw=-1#iiMs=855572488#iiMt=855572501#iiMe=855572482#iiMn=855572504#bIam=0"
+// defaultCaptainDisplayInfo is the captain of a player who never saved one.
+// CHANGED 2026-11-02: it wore Body_Male_Base_MC01 (872349903), a suit in no
+// captain template, and no headwear (-1), which broke the captain screen; see
+// repairedCaptainDisplayInfo. The suit is now Standard Issue (M) and the
+// headwear CH_Attachment_Default, what the client itself picks for a male
+// captain.
+const defaultCaptainDisplayInfo = "GENDER_MALE;#iiS=872349706#iiH=872349830#iiHw=872349736#iiEw=-1#iiMs=855572488#iiMt=855572501#iiMe=855572482#iiMn=855572504#bIam=0"
+
+// captainSlotDefaults are the items repairedCaptainDisplayInfo puts in an
+// empty captain slot, per gender: suit Standard Issue, a template head,
+// headwear CH_Attachment_Default, and the default skin/tint/eyes/scar
+// materials (in both templates). iiEw is not here: the client always
+// exports it as -1 (its slot is never filled, captain+0x110).
+var captainSlotDefaults = map[string]map[string]string{
+	"GENDER_MALE": {"iiS": "872349706", "iiH": "872349830", "iiHw": "872349736",
+		"iiMs": "855572488", "iiMt": "855572501", "iiMe": "855572482", "iiMn": "855572504"},
+	"GENDER_FEMALE": {"iiS": "872349703", "iiH": "872349769", "iiHw": "872349736",
+		"iiMs": "855572488", "iiMt": "855572501", "iiMe": "855572482", "iiMn": "855572504"},
+}
+
+// oldDefaultCaptainSuit is Body_Male_Base_MC01, the suit the old default
+// captain wore. No template lists it, so the captain screen cannot offer it
+// back; it is replaced like an empty slot.
+const oldDefaultCaptainSuit = "872349903"
+
+// repairedCaptainDisplayInfo fills the empty slots of a captain appearance.
+//
+// The captain screen makes one category button per slot from the equipped
+// items (0x140AB3250, slots 0-6; an empty slot gives item id -1). A click
+// passes that item id to RequestSelectCategoryItem (0x140ADCC20), which finds
+// the category by looking the item up (0x14053DC90); for -1 the lookup fails
+// and the button does nothing. Players without headwear (the old default)
+// reported exactly that: a second "outfits" button that does nothing, and
+// switching gender fixes it, because a gender switch fills every slot with
+// the template's first item of its category (0x140311D40 -> 0x140310220).
+// Everything else in the string is kept as the client saved it.
+func repairedCaptainDisplayInfo(displayInfo string) string {
+	gender, rest, ok := strings.Cut(displayInfo, ";")
+	defaults := captainSlotDefaults[gender]
+	if !ok || defaults == nil {
+		return displayInfo
+	}
+	fields := strings.Split(rest, "#")
+	for i, f := range fields {
+		key, value, ok := strings.Cut(f, "=")
+		if !ok {
+			continue
+		}
+		if def, known := defaults[key]; known && (value == "-1" || value == "" || (key == "iiS" && value == oldDefaultCaptainSuit)) {
+			fields[i] = key + "=" + def
+		}
+	}
+	return gender + ";" + strings.Join(fields, "#")
+}
 
 type mmogPlayerState struct {
 	playerPID       string
@@ -116,7 +169,7 @@ func extendMembershipTx(tx *sql.Tx, playerPID string, durationDays int32, now in
 
 func normalizedCaptainDisplayInfo(displayInfo string) string {
 	if trimmed := strings.TrimSpace(displayInfo); trimmed != "" {
-		return trimmed
+		return repairedCaptainDisplayInfo(trimmed)
 	}
 	return defaultCaptainDisplayInfo
 }
