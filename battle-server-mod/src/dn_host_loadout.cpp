@@ -3443,6 +3443,7 @@ static void PrepareConquestStarts(int *hidden, int *ours) {
 
 static bool IsTeamEliminationMode(void *gm);
 static const char *PrepareTeStarts(void *ctrl, int *hidden, int *ours); // Team Elimination section
+static void *TePickStart(void *gm, void *ctrl, int *cands, int *inUse, int *nearShip);
 
 static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
   bool ter = IsTerritoryMode(gm), te = !ter && IsTeamEliminationMode(gm);
@@ -3460,6 +3461,14 @@ static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
   }
   bool patched = g_numStartPatches > 0;
   void *start = g_origChoosePlayerStart(gm, ctrl);
+  int cands = -1, inUse = 0, nearShip = 0;
+  if (!start && patched && te) {
+    __try {
+      start = TePickStart(gm, ctrl, &cands, &inUse, &nearShip);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+      Logf("te spawns: EXCEPTION picking a start");
+    }
+  }
   RestoreStarts();
   bool fallback = false;
   if (!start && patched) {
@@ -3473,13 +3482,19 @@ static void *__fastcall HookChoosePlayerStart(void *gm, void *ctrl) {
     s_logged = 0;
   }
   __try {
-    if (s_logged < 40 || fallback) {
+    if (s_logged < 40 || fallback || cands >= 0) {
       ++s_logged;
       uint8_t *ps = (uint8_t *)start;
       const char *nm = ps ? NameText(((UObjectMin *)ps)->Name) : nullptr;
-      Logf("%s spawns: %s %p -> %s (mode %d, team %d, jets only %d)%s; %d start(s) hidden, %d %s start(s) usable",
+      char why[192] = "";
+      if (cands >= 0)
+        _snprintf(why, sizeof why,
+                  " -- the game's chooser found all %d of the team's starts blocked (%d in use, %d with a ship "
+                  "within the block radius)%s",
+                  cands, inUse, nearShip, fallback ? "" : "; the mod picked the one farthest from every ship");
+      Logf("%s spawns: %s %p -> %s (mode %d, team %d, jets only %d)%s%s; %d start(s) hidden, %d %s start(s) usable",
            ter ? "conquest" : "te", ClassNameOf(ctrl), ctrl, ps ? (nm ? nm : "?") : "none",
-           ps ? ps[OFF_PS_GAME_MODE] : -1, ps ? ps[OFF_PS_TEAM] : -1, ps ? ps[OFF_PS_ONLY_JETS] : -1,
+           ps ? ps[OFF_PS_GAME_MODE] : -1, ps ? ps[OFF_PS_TEAM] : -1, ps ? ps[OFF_PS_ONLY_JETS] : -1, why,
            fallback ? " -- FALLBACK: no start left under the rule, unfiltered choice" : "", hidden, ours, rule);
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -7695,6 +7710,7 @@ struct TeMatch {
   int numReady;
   TeHudRow hud[32];
   int lastWinner;
+  bool postPending, endPending; // ClientPostRoundEnd (and the match end) wait one tick for m_rounds
 };
 static TeMatch g_te = {};
 
@@ -8080,6 +8096,78 @@ static const char *PrepareTeStarts(void *ctrl, int *hidden, int *ours) {
   return jets ? "TE jet" : swap ? "ALL/TE (sides swapped)" : "ALL/TE";
 }
 
+// The chooser (0x36C1A0) found no start under the TE rule. It drops every
+// start its blocked test (YPlayerStart vtable +0x5F0 = 0x5BBAE0) fails: the
+// start's m_inUseByPlayer (+0x440, cleared by its m_timerHandle_CoolDown
+// +0x430) is set, or a ship stands within m_radiusOfBlockByPawn (+0x41C) --
+// field names from the reflection registrar 0x7A87A0. Measured: from round 2
+// of every sides-swapped TE match since 2026-10-29, every spawn (each refilled
+// bot, and the human's own respawn ~1.6 s after the round started) found all
+// of its side blocked and the unfiltered fallback dropped it on a random
+// start anywhere on the map. Which half of the test blocks them is not known
+// yet (logged here). So this picks among the TE starts the rule left for the
+// spawning team -- the game mode's spawn team (+0x748) for a bot, else the
+// controller's (+0xC30), as the chooser reads them -- the one farthest from
+// every live ship, which is an unblocked one whenever one exists.
+#define OFF_GM_SPAWN_TEAM 0x748
+#define OFF_PS_IN_USE 0x440
+#define OFF_PS_BLOCK_RADIUS 0x41C
+#define YGMF_IGNORED_TEAM 4 // the chooser skips starts with m_team 4
+static void *TePickStart(void *gm, void *ctrl, int *cands, int *inUse, int *nearShip) {
+  *cands = *inUse = *nearShip = 0;
+  int team = (int)*(uint32_t *)((uint8_t *)gm + OFF_GM_SPAWN_TEAM);
+  if (!team && ctrl && IsReadable((uint8_t *)ctrl + 0xC30, 1))
+    team = ((uint8_t *)ctrl)[0xC30];
+  static float s_ships[512][3];
+  int ns = 0;
+  uint8_t *base = (uint8_t *)g_base;
+  if (IsReadable(base + RVA_SHIP_LIST, 16)) {
+    void **arr = *(void ***)(base + RVA_SHIP_LIST);
+    int n = *(int32_t *)(base + RVA_SHIP_LIST + 8);
+    if (n > 0 && n <= 512 && IsReadable(arr, (size_t)n * 8))
+      for (int i = 0; i < n; ++i) {
+        uint8_t *p = (uint8_t *)arr[i];
+        if (p && IsReadable(p + OFF_PAWN_STATE, 1) && p[OFF_PAWN_STATE] != 2 && p[OFF_PAWN_STATE] != 3 &&
+            ActorLocation(p, s_ships[ns]))
+          ++ns;
+      }
+  }
+  static uint8_t *s_all[1024];
+  int n = AllPlayerStarts(s_all, 1024);
+  uint8_t *best = nullptr;
+  float bestD = -1.f;
+  for (int i = 0; i < n; ++i) {
+    uint8_t *ps = s_all[i];
+    int t = ps[OFF_PS_TEAM];
+    // TE starts only: the rule's YGMF_ALL starts include the orbit starts
+    // (Orbit_YPlayerStart_T1/T2, smoke 2026-11-02), which are not in the arena.
+    if (ps[OFF_PS_GAME_MODE] != YGMF_TE || !ps[OFF_PS_ACTIVE] || ps[OFF_PS_ONLY_JETS] || t == YGMF_IGNORED_TEAM ||
+        (t && t != team))
+      continue;
+    float at[3];
+    if (!ActorLocation(ps, at))
+      continue;
+    ++*cands;
+    if (*(void **)(ps + OFF_PS_IN_USE))
+      ++*inUse;
+    float d = 3.4e38f;
+    for (int k = 0; k < ns; ++k) {
+      float dx = s_ships[k][0] - at[0], dy = s_ships[k][1] - at[1], dz = s_ships[k][2] - at[2];
+      float d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < d)
+        d = d2;
+    }
+    float r = *(float *)(ps + OFF_PS_BLOCK_RADIUS);
+    if (d < r * r)
+      ++*nearShip;
+    if (d > bestD) {
+      bestD = d;
+      best = ps;
+    }
+  }
+  return best;
+}
+
 // One side's TE capital starts, by name.
 static int TeSideStarts(int team, uint8_t **out, int cap) {
   static uint8_t *s_all[1024];
@@ -8342,6 +8430,28 @@ static void TeResetRoundState(uint8_t *gs) {
     }
 }
 
+// The round's result banner. ClientPostRoundEnd (0x573B40) shows victory or
+// defeat only when the LAST m_rounds entry's winner (+4) is 1 or 2 -- anything
+// else is "Draw" -- and it reads the client's replicated copy. Sent in the same
+// tick as the winner was written, the RPC beat the game state's next update:
+// the first live round won 7-0 showed "Draw" (2026-11-02). So the winner is
+// written and the game state flushed at the round's end, and the RPC (and, for
+// the deciding round, the match end) follows a tick later. GUESS: one second
+// is enough for the property to arrive first.
+static void TeSendPostRoundEnd(uint8_t *gm, uint8_t *gs) {
+  g_te.postPending = false;
+  uint8_t *last = TeLastRound(gs);
+  Logf("te: round %d result sent (m_rounds last entry: round %d, winner %d)", g_te.round, last ? *(int32_t *)last : -1,
+       last ? last[4] : -1);
+  TeSendAll(gs, L"ClientPostRoundEnd", TeSeconds(gm, OFF_GM_TE_POST_ROUND, 8), 0);
+  if (g_te.endPending) {
+    g_te.endPending = false;
+    Logf("te: ending the match");
+    void **vt = *(void ***)gm;
+    ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+  }
+}
+
 // Every second, from the game-mode timer.
 static void TeRoundsTick(uint8_t *gm) {
   __try {
@@ -8367,6 +8477,8 @@ static void TeRoundsTick(uint8_t *gm) {
     TeCountShips(alive);
     if (gs[OFF_GS_MATCH_RUNNING] && g_te.phase != TE_DONE)
       TeSendTeamInfo(gs, false);
+    if (g_te.postPending && now - g_te.phaseAt >= 1000)
+      TeSendPostRoundEnd(gm, gs);
     switch (g_te.phase) {
     case TE_WAIT: {
       // Smoke only (dn_host_te_smoke.txt): start the match 20 s in with nobody
@@ -8391,6 +8503,40 @@ static void TeRoundsTick(uint8_t *gm) {
           int h = 0, o = 0;
           const char *rule = PrepareTeStarts(nullptr, &h, &o);
           int patched = g_numStartPatches;
+          {
+            static uint8_t *s_dump[1024];
+            int nd = AllPlayerStarts(s_dump, 1024);
+            for (int i = 0; i < nd; ++i) {
+              uint8_t *ps = s_dump[i];
+              if ((ps[OFF_PS_GAME_MODE] != YGMF_ALL && ps[OFF_PS_GAME_MODE] != YGMF_TE) || ps[OFF_PS_ONLY_JETS])
+                continue;
+              float at[3] = {0, 0, 0};
+              ActorLocation(ps, at);
+              Logf("te: SMOKE -- start %s_%d mode %d team %d active %d jets %d in use %p radius %.0f at %.0f %.0f %.0f",
+                   NameText(((UObjectMin *)ps)->Name), ((UObjectMin *)ps)->Name.Number, ps[OFF_PS_GAME_MODE],
+                   ps[OFF_PS_TEAM], ps[OFF_PS_ACTIVE], ps[OFF_PS_ONLY_JETS], *(void **)(ps + OFF_PS_IN_USE),
+                   *(float *)(ps + OFF_PS_BLOCK_RADIUS), at[0], at[1], at[2]);
+            }
+          }
+          // A smoke match never leaves orbit, so ActivateBattlePlayerStarts has
+          // not switched the TE starts on (live matches have them active).
+          {
+            static uint8_t *s_on[1024];
+            int no = AllPlayerStarts(s_on, 1024);
+            for (int i = 0; i < no; ++i)
+              if (s_on[i][OFF_PS_GAME_MODE] == YGMF_TE && !s_on[i][OFF_PS_ONLY_JETS])
+                PatchStart(s_on[i], OFF_PS_ACTIVE, 1);
+          }
+          uint32_t spawnTeam = *(uint32_t *)(gm + OFF_GM_SPAWN_TEAM);
+          for (int t = 1; t <= 2; ++t) {
+            *(uint32_t *)(gm + OFF_GM_SPAWN_TEAM) = (uint32_t)t;
+            int c = 0, u = 0, s = 0;
+            uint8_t *ps = (uint8_t *)TePickStart(gm, nullptr, &c, &u, &s);
+            Logf("te: SMOKE -- own pick for team %d: %s (%d candidates, %d in use, %d ship-blocked; radius %.0f)", t,
+                 ps ? NameText(((UObjectMin *)ps)->Name) : "none", c, u, s,
+                 ps ? *(float *)(ps + OFF_PS_BLOCK_RADIUS) : -1.f);
+          }
+          *(uint32_t *)(gm + OFF_GM_SPAWN_TEAM) = spawnTeam;
           RestoreStarts();
           Logf("te: SMOKE -- chooser rule %s: %d hidden, %d usable, %d patches restored", rule, h, o, patched);
           TeSendTeamInfo(gs, true);
@@ -8431,14 +8577,14 @@ static void TeRoundsTick(uint8_t *gm) {
       Logf("te: round %d over (%s) -- %s; ships left %d-%d; score %d-%d", g_te.round, why,
            winner ? (winner == 1 ? "team 1 wins it" : "team 2 wins it") : "draw", alive[0], alive[1], g_te.wins[0],
            g_te.wins[1]);
-      TeSendAll(gs, L"ClientPostRoundEnd", TeSeconds(gm, OFF_GM_TE_POST_ROUND, 8), 0);
+      g_te.postPending = true; // sent on the next tick, see TeSendPostRoundEnd
       int champ = g_te.wins[0] >= g_te.rule ? 1 : g_te.wins[1] >= g_te.rule ? 2 : 0;
       if (champ) {
         g_te.phase = TE_DONE;
+        g_te.endPending = true;
         gs[OFF_GS_WINNING_TEAM] = (uint8_t)champ;
-        Logf("te: team %d wins the match %d-%d -- ending it", champ, g_te.wins[0], g_te.wins[1]);
-        void **vt = *(void ***)gm;
-        ((void(__fastcall *)(void *))vt[VT_GM_END_MATCH / 8])(gm);
+        Logf("te: team %d wins the match %d-%d -- ending it after the round result", champ, g_te.wins[0],
+             g_te.wins[1]);
       }
       break;
     }

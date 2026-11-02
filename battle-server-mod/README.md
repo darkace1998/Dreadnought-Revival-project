@@ -1201,6 +1201,31 @@ Logs:
 
 Not verified in a played match.
 
+### Round banner and round-2 starts (2026-11-02)
+
+Two bugs from a live match (Highlands, 1 player + bots, won 2-0):
+
+- **"Draw" after a won round.** `ClientPostRoundEnd` (0x573B40) reads the
+  client's copy of the last `m_rounds` entry: winner 1 or 2 gives victory or
+  defeat, anything else gives "Draw". The RPC went out in the same tick as the
+  winner was written, so it beat the game state's replication (theory). The
+  RPC, and for the deciding round the match end, now follow one tick later.
+  Log: `te: round N result sent (m_rounds last entry: round N, winner W)`.
+- **Random starts from round 2.** Every round-2 spawn (each refilled bot, and
+  the human's respawn ~1.6 s after the round started) found all of its side's
+  TE starts "blocked" (0x5BBAE0: `m_inUseByPlayer` +0x440 set, or a ship
+  within `m_radiusOfBlockByPawn` +0x41C, 1000 on Highlands). The unfiltered
+  fallback then dropped it anywhere on the map. Now the mod picks the TE start
+  of the spawning team (game mode +0x748 for bots, controller +0xC30 for
+  players) farthest from every ship. Log: `te spawns: ... the game's chooser
+  found all N of the team's starts blocked (I in use, S with a ship within the
+  block radius); the mod picked ...`. The I/S counts will say which check
+  blocks them.
+
+Smoke 2026-11-02, Highlands: the pick returns each team's own capital start
+(8 candidates per team). A smoke match never leaves orbit, so the smoke turns
+the TE starts on itself. Neither fix is verified in a played match yet.
+
 ## ClientApplyRespawnFilter guard (not switchable) -- THE end-of-match overflow
 
 Found 2026-09-29 by the stack probe, which caught the cycle live (862
