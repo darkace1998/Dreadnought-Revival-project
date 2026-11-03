@@ -406,7 +406,11 @@ var targetSizes = map[string]int{
 	// 26288 -> 26387 (+99): Standard Issue (M)/(F) are free, so owned (2 Items
 	// x 46 bytes), and the default captain wears CH_Attachment_Default instead
 	// of no headwear ("-1" -> "872349736", +7 in disp).
-	"YA_PlayerGet": 26387,
+	// 26387 -> 26209 (-178): the placeholder CustomRoom object is gone. Its
+	// presence alone put the player in a custom room (0x2A70DA0 sets the
+	// in-room flag mmog +0x3B08), which hid the rewards page of the first
+	// match after every login.
+	"YA_PlayerGet": 26209,
 	// +56 on 2026-08-04: each of the four fleet loadout entries gained m_shipId
 	// (14 bytes x 4). Without it the hangar loaded the LIGHT bay for every owned
 	// ship -- all four starters are Mediums -- while tech tree ships, which

@@ -2292,26 +2292,11 @@ func TestPlayerGetPayloadUsesSquadObjectShape(t *testing.T) {
 	if bytes.Contains(shipXps, appendFieldMarker("ShipID", 0x56)) {
 		t.Fatal("ShipXps should not fabricate ship XP entries")
 	}
-	customRoom := extractNamedMmogObject(t, payload, "CustomRoom")
-	for _, field := range []struct {
-		name  string
-		value string
-	}{
-		{name: "roomId", value: ""},
-		{name: "hostPid", value: ""},
-		{name: "gameMode", value: ""},
-		{name: "mapName", value: ""},
-		{name: "chatRoomId", value: ""},
-	} {
-		if !bytes.Contains(customRoom, protocol.AppendStringField(nil, field.name, field.value)) {
-			t.Fatalf("CustomRoom missing %s=%q", field.name, field.value)
-		}
-	}
-	for _, field := range []string{"teams", "settings", "supportedModes", "supportedMaps"} {
-		container := extractNamedMmogArray(t, customRoom, field)
-		if bytes.Contains(container, appendFieldMarker("PID", 0x09)) {
-			t.Fatalf("CustomRoom.%s should not fabricate entries", field)
-		}
+	// No CustomRoom: its presence alone sets the client's in-room flag
+	// (0x2A70DA0, mmog +0x3B08), which hides the end-of-match rewards page
+	// (response_builders.go). Absent is the client's "not in a room" branch.
+	if bytes.Contains(payload, []byte("CustomRoom")) {
+		t.Fatal("YA_PlayerGet must not send a CustomRoom object: the client then thinks the player is in a custom room")
 	}
 }
 

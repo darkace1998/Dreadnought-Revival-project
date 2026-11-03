@@ -1879,21 +1879,18 @@ func buildMmogPlayerDataPayload(rt string, playerPID string) []byte {
 	b = protocol.AppendStringField(b, "PublicIP", "")
 	b = protocol.AppendStringField(b, "Country", "")
 	b = protocol.AppendStringField(b, "Platform", "steam")
-	b, stack = protocol.AppendObjectStart(b, stack, "CustomRoom")
-	b = protocol.AppendStringField(b, "roomId", "")
-	b = protocol.AppendStringField(b, "hostPid", "")
-	b, stack = protocol.AppendArrayStart(b, stack, "teams")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "settings")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b, stack = protocol.AppendArrayStart(b, stack, "supportedModes")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendStringField(b, "gameMode", "")
-	b = protocol.AppendStringField(b, "mapName", "")
-	b, stack = protocol.AppendArrayStart(b, stack, "supportedMaps")
-	b, stack = protocol.AppendObjectEnd(b, stack)
-	b = protocol.AppendStringField(b, "chatRoomId", "")
-	b, stack = protocol.AppendObjectEnd(b, stack)
+	// No "CustomRoom": its PRESENCE means "in a custom room". The parser
+	// (0x2A70DA0) copies any CustomRoom node into the room record (player
+	// data +0x1D0 = mmog +0x3A68, via 0x2A69BB0) and sets the in-room flag
+	// (+0x270 = mmog +0x3B08) to 1; absent, it takes the empty-room branch.
+	// We sent an empty one since 2026-05, so every login put the player in a
+	// custom room: the PvP end screen then skips the rewards (SetupUIWidgets
+	// 0x34B7E0 sets reward data only with the flag clear; 0x357080 goes
+	// Stats -> Scoreboard instead of -> Rewards), until LeaveCustomRoom
+	// (0x2A36060) zeroed the record on the way back to the hangar. Hence
+	// "no reward screen" on exactly the first match after each login
+	// (operator 2026-11-03: TDM, TE and Conquest after a login, Onslaught
+	// without one showed it).
 	// NOTE: unlike appendMmogFleetRawFields/appendMmogPlayerFleetEntry (the
 	// YA_PlayerFleets/Fleets-array entry versions, which the client parses
 	// through FUN_142a77910's restrictive int32-blind union and therefore
