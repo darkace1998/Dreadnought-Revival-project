@@ -1269,6 +1269,7 @@ static tGameModeTimer g_origGameModeTimer = nullptr;
 
 static void PlayersTick(uint8_t *gm);
 static void ClassTimeTick(uint8_t *gm);
+static void NetStatsTick(uint8_t *gm);
 
 // Bots in every multiplayer mode. Added 2026-09-28 at the operator's request. The spawner only fills a team from the
 // mode's own bot list (gm+0x968, count gm+0x970) up to its team size
@@ -1357,6 +1358,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   NpcAiStartTick(gm);
   PlayersTick(gm);
   ClassTimeTick(gm);
+  NetStatsTick(gm);
   FlushPendingEomStats();
 }
 
@@ -3541,6 +3543,36 @@ static void ConquestTick(uint8_t *gm) {
     }
     if (g_ter.ended)
       return;
+    // The capture points are set up as soon as they exist, BEFORE the match
+    // starts. CHANGED 2026-11-02: this waited for the match to run, and the
+    // client's Conquest HUD never showed a point (player report, Gorge 18:19:
+    // "A and B don't even show on mini-map", no team base flags, and their own
+    // capture of A at 18:22:07 showed nothing). Verified in the exe:
+    //   - a client registers a point with its player controller only from
+    //     OnRep_StationIndex (0x54FD60 -> the point's vtable +0x5E0 =
+    //     0x554680 -> AYPlayerController_TER vtable +0xFD8 = 0x5BEBB0, filed by
+    //     m_stationIndex); the point's BeginPlay (0x535660) registers only in
+    //     standalone;
+    //   - AYPlayerController_TER::SetYPawn (0x5C33E0) hands that list to the
+    //     HUD once, on the first pawn (UYHUDWidget_Territory::
+    //     PostInitializeFromPC 0x48D330, "received %d capture points"; the
+    //     widget's +0x498 flag), and the HUD builds every minimap and viewport
+    //     marker, the team bases included, from that copy (0x484040).
+    // Players get their first (orbit) pawn during the pre-match countdown, so
+    // an index given at match start came after every HUD was built: host log
+    // 18:19, first pawn 18:20:25, points indexed 18:21:45. Activating a point
+    // early changes nothing on the server: its tick captures only while the
+    // match runs (0x55F030), and the score below starts with the match.
+    if (!g_ter.pointsReady && !gs[OFF_GS_MATCH_OVER] && now - g_ter.lastPointScan >= 1000) {
+      g_ter.lastPointScan = now;
+      g_ter.pointsReady = SetUpCapturePoints(gs);
+      if (g_ter.pointsReady) {
+        Logf("conquest: capture points set up %s the match started", gs[OFF_GS_MATCH_RUNNING] ? "after" : "before");
+        if (ConquestCaptureLogEnabled())
+          for (int i = 0; i < g_ter.numCps; ++i)
+            LogCapturePointTuning(g_ter.cps[i], NameText(((UObjectMin *)g_ter.cps[i])->Name));
+      }
+    }
     if (!gs[OFF_GS_MATCH_RUNNING] || gs[OFF_GS_MATCH_OVER]) {
       // Test switch for a headless host with no player
       // (dn_host_conquest_smoke.txt): start the match 20 s after arming
@@ -3560,13 +3592,6 @@ static void ConquestTick(uint8_t *gm) {
       }
       g_ter.lastScore = now; // the score clock runs only while the match does
       return;
-    }
-    if (!g_ter.pointsReady && now - g_ter.lastPointScan >= 1000) {
-      g_ter.lastPointScan = now;
-      g_ter.pointsReady = SetUpCapturePoints(gs);
-      if (g_ter.pointsReady && ConquestCaptureLogEnabled())
-        for (int i = 0; i < g_ter.numCps; ++i)
-          LogCapturePointTuning(g_ter.cps[i], NameText(((UObjectMin *)g_ter.cps[i])->Name));
     }
     if (g_ter.pointsReady && ConquestCaptureLogEnabled()) {
       CaptureWatch(gs, g_ter.cps, g_ter.numCps);
@@ -7767,6 +7792,141 @@ static int TeHumanPCs(uint8_t *gs, uint8_t **out, int max) {
   return n;
 }
 
+// ---------------------------------------------------------------------------
+// Network quality per player, once a minute (operator 2026-11-03: an
+// Onslaught match "was a bit laggy in the later stage"; host and client both
+// held ~60 fps, and nothing in the logs measured the network).
+//
+// UNetConnection::Tick (0x1A71830-, the UE 4.13 code) ends each stat period
+// (StatPeriod +0x348, ~1 s; StatUpdateTime +0x340) with AvgLag = LagAcc /
+// LagCount (+0x350 = +0x354 / +0x35C, seconds, round trip), the per-second
+// rates (+0x394 InBytesPerSecond, +0x398 OutBytesPerSecond, from InBytes
+// +0x384 / OutBytes +0x388) and then zeroes InPackets +0x38C, OutPackets
+// +0x390, InPacketsLost +0x3A4 and OutPacketsLost +0x3A8 (offsets from the
+// disassembly). So the counters are read just before the call and kept when
+// the period ended in it. Same game thread as the game-mode timer.
+#define RVA_NETCONN_TICK 0x1A71830
+#define OFF_NC_STAT_UPDATE_TIME 0x340
+#define OFF_NC_AVG_LAG 0x350
+#define OFF_NC_IN_PACKETS 0x38C
+#define OFF_NC_OUT_PACKETS 0x390
+#define OFF_NC_IN_BPS 0x394
+#define OFF_NC_OUT_BPS 0x398
+#define OFF_NC_IN_LOST 0x3A4
+#define OFF_NC_OUT_LOST 0x3A8
+#define NET_STATS_PERIOD_MS 60000
+
+struct NetStat {
+  void *conn;
+  int64_t inPk, outPk, inLost, outLost, inBps, outBps;
+  int periods, worstLostPeriod;
+  float lagSum, lagMax;
+};
+static NetStat g_netStats[32];
+
+typedef void(__fastcall *tNetConnTick)(void *conn);
+static tNetConnTick g_origNetConnTick = nullptr;
+
+static void __fastcall HookNetConnTick(void *conn) {
+  uint8_t *c = (uint8_t *)conn;
+  double before = 0;
+  int32_t inPk = 0, outPk = 0, inLost = 0, outLost = 0;
+  bool ok = false;
+  __try {
+    before = *(double *)(c + OFF_NC_STAT_UPDATE_TIME);
+    inPk = *(int32_t *)(c + OFF_NC_IN_PACKETS);
+    outPk = *(int32_t *)(c + OFF_NC_OUT_PACKETS);
+    inLost = *(int32_t *)(c + OFF_NC_IN_LOST);
+    outLost = *(int32_t *)(c + OFF_NC_OUT_LOST);
+    ok = true;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+  g_origNetConnTick(conn);
+  if (!ok)
+    return;
+  __try {
+    if (*(double *)(c + OFF_NC_STAT_UPDATE_TIME) == before)
+      return; // the period goes on
+    NetStat *s = nullptr;
+    for (NetStat &e : g_netStats)
+      if (e.conn == conn) {
+        s = &e;
+        break;
+      }
+    if (!s)
+      for (NetStat &e : g_netStats)
+        if (!e.conn) {
+          e = NetStat{};
+          e.conn = conn;
+          s = &e;
+          break;
+        }
+    if (!s)
+      return;
+    float lag = *(float *)(c + OFF_NC_AVG_LAG);
+    s->inPk += inPk;
+    s->outPk += outPk;
+    s->inLost += inLost;
+    s->outLost += outLost;
+    s->inBps += *(int32_t *)(c + OFF_NC_IN_BPS);
+    s->outBps += *(int32_t *)(c + OFF_NC_OUT_BPS);
+    if (inLost + outLost > s->worstLostPeriod)
+      s->worstLostPeriod = inLost + outLost;
+    s->lagSum += lag;
+    if (lag > s->lagMax)
+      s->lagMax = lag;
+    s->periods++;
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+  }
+}
+
+static double NetPct(int64_t lost, int64_t total) { return total > 0 ? 100.0 * (double)lost / (double)total : 0.0; }
+
+// One line per connected player: round trip (the connection's AvgLag, and the
+// replicated PlayerState Ping, which UE stores as ms / 4), packets lost each
+// way and bandwidth, over the last minute.
+static void NetStatsTick(uint8_t *gm) {
+  static DWORD s_last = 0;
+  DWORD now = GetTickCount();
+  if (!g_origNetConnTick || now - s_last < NET_STATS_PERIOD_MS)
+    return;
+  s_last = now;
+  __try {
+    uint8_t *gs = IsReadable(gm + OFF_GM_GAMESTATE, 8) ? *(uint8_t **)(gm + OFF_GM_GAMESTATE) : nullptr;
+    uint8_t *pcs[32];
+    int n = gs ? TeHumanPCs(gs, pcs, 32) : 0;
+    for (int i = 0; i < n; ++i) {
+      void *conn = *(void **)(pcs[i] + OFF_PC_NETCONNECTION);
+      NetStat *s = nullptr;
+      for (NetStat &e : g_netStats)
+        if (e.conn == conn)
+          s = &e;
+      char pid[64];
+      if (!UrlOptionForController(pcs[i], L"DNPID=", pid, sizeof pid))
+        strcpy(pid, "?");
+      uint8_t *pri = *(uint8_t **)(pcs[i] + OFF_PC_PLAYER_STATE);
+      static int s_pingOff = -2;
+      if (s_pingOff == -2 && IsReadable(pri, sizeof(UObjectMin)))
+        s_pingOff = PropOffset((UObjectMin *)pri, "Ping"); // APlayerState::Ping
+      int repPing = s_pingOff >= 0 && IsReadable(pri + s_pingOff, 1) ? 4 * pri[s_pingOff] : -1;
+      if (!s || s->periods == 0) {
+        Logf("net: %s -- no stat period completed (PlayerState ping %d ms)", pid, repPing);
+        continue;
+      }
+      Logf("net: %s ping %d ms avg / %d ms worst (PlayerState %d ms) | lost in %lld of %lld (%.1f%%), "
+           "out %lld of %lld (%.1f%%), worst second %d | %lld / %lld KB/s in / out | %d s",
+           pid, (int)(1000.f * s->lagSum / s->periods), (int)(1000.f * s->lagMax), repPing,
+           (long long)s->inLost, (long long)(s->inPk + s->inLost), NetPct(s->inLost, s->inPk + s->inLost),
+           (long long)s->outLost, (long long)s->outPk, NetPct(s->outLost, s->outPk), s->worstLostPeriod,
+           (long long)(s->inBps / s->periods / 1024), (long long)(s->outBps / s->periods / 1024), s->periods);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("net: EXCEPTION while logging");
+  }
+  // Start every minute afresh; a connection that is gone drops out here.
+  memset(g_netStats, 0, sizeof g_netStats);
+}
+
 // RPC parameters by type, in order; the names are logged once per function.
 struct TeRpcArgs {
   const wchar_t *fn;
@@ -9611,6 +9771,14 @@ static DWORD WINAPI Startup(LPVOID) {
   InstallSwitchedHook("game-mode timer (bc ai, teams, names, bot balance)",
                       RVA_GAMEMODE_MP_TIMER, (void *)&HookGameModeTimer,
                       (void **)&g_origGameModeTimer);
+  // Off with dn_host_no_net_stats.txt / DN_HOST_NO_NET_STATS=1: the one hook
+  // on the engine's per-frame network path. Drop the switch once a live
+  // match has logged sensible "net:" lines.
+  if (!SwitchOn("DN_HOST_NO_NET_STATS", "dn_host_no_net_stats.txt"))
+    InstallSwitchedHook("net stats per player (UNetConnection::Tick)", RVA_NETCONN_TICK,
+                        (void *)&HookNetConnTick, (void **)&g_origNetConnTick);
+  else
+    Logf("net stats: OFF (dn_host_no_net_stats.txt / DN_HOST_NO_NET_STATS=1)");
 
   InstallSwitchedHook("original match xp (AssignScoringReward)", RVA_ASSIGN_SCORING_REWARD,
                       (void *)&HookAssignScoringReward, (void **)&g_origAssignScoringReward);

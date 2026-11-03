@@ -71,6 +71,7 @@ files (beside the executable, or the matching `DN_HOST_*=1` variable) remain:
 | `dn_host_no_ceres_buff_end.txt` | Off-switch for the Ceres buff end, not yet verified live |
 | `dn_host_no_ons_ability_slots.txt`, `dn_host_no_ons_gun_log.txt` | Off-switches for the Onslaught ability guard and command ship gun log (new) |
 | `dn_host_no_conquest_capture_log.txt` | Turns off the Conquest capture/speed diagnostic |
+| `dn_host_no_net_stats.txt` | Turns off the per-player network log (a hook on the engine's per-frame network path; new) |
 
 A new feature gets no switch unless it is genuinely risky, and an off-switch
 is removed once a live match has confirmed its feature. The 38 removed
@@ -706,6 +707,51 @@ every bot entry of another tier. `YNPCAIController::GetAIDifficultyLevel`
 (`0x28AA40`) returns the same fleet type, but no Blueprint in the content
 calls it. The host also runs at about 60 frames per second (frame counter in
 the Skybridge log).
+
+## Capture points on the client HUD (2026-11-02)
+
+Player report, Gorge (Red Sands), Legendary, 2026-11-02 18:19: A and B do not
+show on the minimap, the team bases have no flags, and sitting in a capture
+sphere does nothing. The host log disagrees: the player captured A at 18:22:07
+(`CapturePoint_TER_A ... owner 0 -> 1`, capturer `VH_YPlayerCtrl_TER_BP_C`), and
+bots captured A and B after that. The server captured; the client was never
+told where the points were.
+
+Verified in the exe:
+
+- A client adds a point to its player controller only from
+  `OnRep_StationIndex` (`0x54FD60`). That calls the point's vtable `+0x5E0`
+  (`0x554680`), which calls `AYPlayerController_TER` vtable `+0xFD8`
+  (`0x5BEBB0`), which files the point by `m_stationIndex`. The point's
+  BeginPlay (`0x535660`) registers it only in standalone.
+- `AYPlayerController_TER::SetYPawn` (`0x5C33E0`) hands that list to the HUD
+  once, for the first pawn (`UYHUDWidget_Territory::PostInitializeFromPC`
+  `0x48D330`, "received %d capture points"; flag at widget `+0x498`).
+- The HUD builds every minimap and viewport marker, team bases included, from
+  that copy (`0x484040`).
+
+The mod gave the points their index only once the match ran, after the
+pre-match countdown. Every player already had their orbit pawn by then (host
+log: first pawn 18:20:25, points indexed 18:21:45), so every HUD got 0 points.
+
+The mod now sets the points up as soon as they exist, before the match
+starts. This is safe on the server: a point's tick captures only while the
+match runs (`0x55F030`), and the score starts with the match.
+
+New log line: `conquest: capture points set up before|after the match started`.
+
+Smoke host, Gorge, nobody joined:
+
+- the points are set up 10 s after the host arms, before the match starts;
+- after the match starts, territory counts from the point map;
+- the smoke flip of A to team 1 claims its tiles (point map 5 -> 96);
+- the score climbs, and no exception is logged.
+
+Not verified in a played match. The player should see A, B and both base
+flags on the minimap, and capture progress on screen.
+
+Not looked at yet: enemy ship icons drawn blue on the minimap after a
+respawn (same report, 2026-10-29).
 
 ## Bots spawned before the match starts
 
@@ -1615,6 +1661,28 @@ only stores a list that no blueprint or HUD code reads. The PRI "last wave"
 kill/death/assist/XP getters are likewise not called by any widget. (An
 earlier note here put `ClientUpdateRewards` in this group. That was wrong: its
 reader is the getter `0x36E940`, which an offset search could not find.)
+
+## Network quality per player (added 2026-11-03; `dn_host_no_net_stats.txt` turns it off)
+
+Once a minute, one line per connected player in the host log:
+
+```text
+net: <pid> ping 62 ms avg / 140 ms worst (PlayerState 60 ms) | lost in 3 of 1800 (0.2%), out 0 of 1790 (0.0%), worst second 2 | 14 / 38 KB/s in / out | 60 s
+```
+
+Added after a report of lag late in an Onslaught match, where the host and
+the client both held ~60 fps and nothing in the logs measured the network.
+
+`UNetConnection::Tick` (0x1A71830, the UE 4.13 code) closes a stat period
+(~1 s) by computing `AvgLag` (+0x350, round trip in seconds) and the
+per-second byte rates (+0x394/+0x398), then zeroes `InPackets` (+0x38C),
+`OutPackets` (+0x390), `InPacketsLost` (+0x3A4) and `OutPacketsLost`
+(+0x3A8). The hook reads the counters just before the call and keeps them
+when a period ended inside it, so each minute sums ~60 complete periods.
+"PlayerState" is the replicated `APlayerState::Ping` (reflection, ms / 4) as
+a cross-check of `AvgLag`. Offsets are from the disassembly; the smoke host
+proved only that the hook installs, since no connection exists without a
+player.
 
 ## PvE season episodes: no multiplayer bot fill (not switchable)
 
