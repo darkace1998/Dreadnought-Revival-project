@@ -29,7 +29,8 @@ import (
 //
 //	entry   eid (string, the assignment's own id), id (the quest's m_id, matched
 //	        case-insensitively against the collection), act (activation time,
-//	        Unix s), cpl (bool),
+//	        Unix s), cpl (bool; as a string the client reads it as true iff
+//	        NON-EMPTY, so false is sent as ""),
 //	        prg (progress), dif (index into the quest's per-difficulty
 //	        target/reward arrays, also handed to the quest via vtable +0x1E0),
 //	        ran. Entries past m_numBaseContractSlots are the elite slot.
@@ -567,7 +568,17 @@ func appendContractEntries(b []byte, stack []int, name string, entries []dailyCo
 		// contract look a day older than the reset -- hidden at login, then
 		// acknowledged as finished on the next refresh (operator 2026-10-09).
 		b = protocol.AppendStringField(b, "act", strconv.FormatInt(c.assignedAt, 10))
-		b = protocol.AppendStringField(b, "cpl", boolToOneZero(c.state == "completed"))
+		// "cpl" is the one bool in the entry, and the client reads a string
+		// bool as "non-empty" (0x2A706F0: true iff Num-1 > 0), so "0" meant
+		// COMPLETED. Every contract showed Claim (IsContractCompleted =
+		// progress slot >= target, and a completed entry's progress slot is the
+		// target, 0x306700), and players acknowledged unfinished contracts for
+		// nothing: 58 of 88 removes in the week to 2026-11-03. Empty = false.
+		cpl := ""
+		if c.state == "completed" {
+			cpl = "1"
+		}
+		b = protocol.AppendStringField(b, "cpl", cpl)
 		b = protocol.AppendStringField(b, "prg", strconv.Itoa(int(c.progress)))
 		b = protocol.AppendStringField(b, "dif", strconv.Itoa(int(c.difficulty)))
 		b = protocol.AppendStringField(b, "ran", "0")

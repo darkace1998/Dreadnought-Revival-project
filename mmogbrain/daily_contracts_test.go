@@ -265,6 +265,27 @@ func TestContractEntryCarriesItsActivationTime(t *testing.T) {
 	}
 }
 
+// "cpl" read as a string is true iff non-empty (0x2A706F0), so "0" showed
+// every unfinished contract as ready to claim.
+func TestContractEntryCompletedFlag(t *testing.T) {
+	database := contractTestDB(t)
+	now := time.Now()
+	setContracts(t, database, now, "YMPQ_CompleteMatches", "YMPQ_WinMatches")
+	applyContractProgress(contractTestPID, contractMatch{mode: "TDM", outcome: "win"}, now) // completes slot 1 only
+	entries := readContractState(database, contractTestPID).entries
+	active, _ := appendContractEntries(nil, nil, "Quests", entries[:1])
+	completed, _ := appendContractEntries(nil, nil, "Quests", entries[1:2])
+	if entries[0].state != "active" || entries[1].state != "completed" {
+		t.Fatalf("setup: states %q/%q", entries[0].state, entries[1].state)
+	}
+	if !bytes.Contains(active, protocol.AppendStringField(nil, "cpl", "")) {
+		t.Error("an unfinished contract must send an empty cpl")
+	}
+	if !bytes.Contains(completed, protocol.AppendStringField(nil, "cpl", "1")) {
+		t.Error("a completed contract must send cpl 1")
+	}
+}
+
 // The admin reset drops the current contracts (finished or not), gives back
 // the reroll and fills every slot again at once -- also slots already
 // acknowledged today.

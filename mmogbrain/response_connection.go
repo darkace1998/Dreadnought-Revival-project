@@ -281,7 +281,11 @@ type mmogConnState struct {
 	// registered before it.
 	registeredAt time.Time
 	// contractPeriod is the daily contract period this connection last saw.
-	contractPeriod           int64
+	contractPeriod int64
+	// playerGetAt is when YA_PlayerGet was answered; loginContractPushes
+	// counts the contract refreshes sent since (loginContractPushDelays).
+	playerGetAt              time.Time
+	loginContractPushes      int
 	loginResponseSent        bool
 	playerGetResponded       bool
 	pendingPlayerPurchases   []protocol.AppFrame // delayed until YA_PlayerGet marks bootstrap ready
@@ -365,6 +369,9 @@ func flushPendingTechTree(log *logrus.Logger, conn net.Conn, remote string, appE
 }
 
 func handlePlayerGetSatisfied(log *logrus.Logger, conn net.Conn, remote string, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState, source string) error {
+	if !state.playerGetResponded {
+		state.playerGetAt = time.Now()
+	}
 	state.playerGetResponded = true
 	if len(state.pendingStaticFleetData) > 0 {
 		pending := state.pendingStaticFleetData
@@ -975,6 +982,31 @@ func processMmogAppFrames(log *logrus.Logger, conn net.Conn, remote string, fram
 // at "Searching" -- because the client sent nothing at all in that window and
 // the timeout path just continued. Driving it from the timeout as well bounds
 // the wait by the read deadline instead of by the client's whim.
+// loginContractPushDelays are when, after YA_PlayerGet, the player's contracts
+// go out again as a YA_ContractRefresh push.
+//
+// At login the contract screen showed every slot in cooldown ("new contracts
+// in 3 hours") although the player had four active contracts (operator
+// 2026-11-03, a test account: the four were assigned at login, in the same
+// second YA_PlayerGet was answered). UI_Screen_Contracts.UpdateContracts sets
+// SetStateCooldown on every slot past the end of GetListOfContracts, so the
+// client's list was EMPTY. That list is built by
+// UYContractsManager::HandleOnPlayerContractsUpdated (0x306700, named in its
+// binder 0x306A50), which looks every entry up in the quest collection's map
+// (+0x98, 0x3FC150) and drops the ones it cannot find. The map is filled from
+// YA_GetDailyContractsData's ContractTable, and that reply goes out AFTER
+// YA_PlayerGet (the deferral in handleMmogConn), so when the player data
+// arrives no entry resolves. Nothing rebuilt the list until a match changed
+// a contract (battle_result.go's refresh push): all 13 sessions with a claim,
+// reroll or remove from 2026-11-01 to 11-03 had played a match first.
+// YA_ContractRefresh (0x2A391E0) re-reads the entries into +0x39C0 and fires
+// +0x10E0, which the manager binds to 0x306700 (0x308120).
+//
+// GUESS: the two delays. The manager is a lazily created singleton
+// (0x2FE190) that binds +0x10E0 when first asked for, and when that happens
+// in the login flow is not traced; the second push covers a late one.
+var loginContractPushDelays = []time.Duration{3 * time.Second, 30 * time.Second}
+
 func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType uint16, appEncoder *protocol.StreamCipher, encryptResponses bool, state *mmogConnState) error {
 	// Squad pushes queued for this player by other players' requests
 	// (squads.go). Runs on every client ping (5 s) and idle tick.
@@ -997,6 +1029,13 @@ func pushMatchProgress(log *logrus.Logger, conn net.Conn, remote string, msgType
 				squadHubInstance.push(state.squadRegistered, buildMmogContractRefreshPush(state.squadRegistered))
 			}
 			state.contractPeriod = period
+		}
+		// The contracts at login: re-sent once the quest catalogue is on the
+		// client (loginContractPushDelays).
+		if state.playerGetResponded && state.loginContractPushes < len(loginContractPushDelays) &&
+			time.Since(state.playerGetAt) >= loginContractPushDelays[state.loginContractPushes] {
+			squadHubInstance.push(state.squadRegistered, buildMmogContractRefreshPush(state.squadRegistered))
+			state.loginContractPushes++
 		}
 		switch squadHubInstance.takeArm(state.squadRegistered) {
 		case 1: // queued by their squad's leader
