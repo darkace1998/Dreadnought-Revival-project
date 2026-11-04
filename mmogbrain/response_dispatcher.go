@@ -111,6 +111,7 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		squadHubInstance.cancelSquadMatchmaking(playerPID)
 		return buildMmogLeaveMatchmakingPayload(requestName, playerPID)
 	case "YA_QueryRooms":
+		logCustomRoomRequest(requestName, playerPID, payload)
 		return buildMmogQueryRoomsPayload()
 	case "YA_RoomStart", "YA_CustomRoomCreate", "YA_CustomRoomStartMatch",
 		"YA_CustomRoomStartMatchCountdown", "YA_CustomRoomCancelMatchCountdown",
@@ -120,6 +121,10 @@ func buildMmogRequestResponsePayload(requestName string, playerPID string, paylo
 		"YA_CustomRoomInvite", "YA_CustomRoomAnalyticsInvite",
 		"YA_CustomRoomEnterFleetSelect", "YA_CustomRoomExitFleetSelect",
 		"YA_RequeuingRoomStart":
+		logCustomRoomRequest(requestName, playerPID, payload) // custom_rooms.go
+		if reply, ok := handleCustomRoomRequest(requestName, playerPID, payload); ok {
+			return reply
+		}
 		return buildMmogRoomSuccessPayload(mmogRoomResponseName(requestName))
 
 	// --- Squads ---

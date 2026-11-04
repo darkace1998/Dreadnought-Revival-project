@@ -139,3 +139,24 @@ func TestBuildArgsUsesTheClassPathForPvEModes(t *testing.T) {
 		t.Fatalf("map URL %q does not name the Horde game mode class", args[0])
 	}
 }
+
+// Escalation is a mod-made TDM: the engine hosts TDM, and battle-server-mod
+// recognises the match by -GameMode=Escalation (with the trailing space it
+// matches on, so the flag must not be the last argument).
+func TestBuildArgsEscalationHostsATDM(t *testing.T) {
+	mode, err := gamedata.NormalizeGameMode("Escalation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := BuildArgs(LaunchConfig{
+		Map:      gamedata.Map{Name: "Gorge", Path: "/Game/Maps/MP/Gorge/MP_Gorge_P"},
+		GameMode: mode,
+		Port:     7777,
+	}, "match-1")
+	if !strings.Contains(args[0], "?game=TDM") {
+		t.Fatalf("map URL %q should host a TDM", args[0])
+	}
+	if !strings.Contains(strings.Join(args, " ")+" ", "-GameMode=Escalation ") {
+		t.Fatalf("argv %q lacks -GameMode=Escalation for the mod", args)
+	}
+}

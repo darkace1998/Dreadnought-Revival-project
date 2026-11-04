@@ -228,8 +228,26 @@ func GameModeConfigs() []GameModeConfig {
 	if havocListed() {
 		out = append(out, GameModeConfig{Name: havocClientName, TeamSize: pveTeamSize})
 	}
+	if customGameListed() {
+		out = append(out, GameModeConfig{Name: CustomGameClientName, TeamSize: 5})
+	}
 	return out
 }
+
+// Custom Game: the client's mode list (GlobalUI m_gameModeList) has a
+// "CustomGame" entry (YGMT_CUSTOMGAME, UI_GameMode_Icon_CustomMatch). The
+// client keeps only the entries whose name the server lists (0x1404FE2A0
+// filters the built-in list by the mmog mode names at +0x3810; a name with no
+// built-in entry makes no tile). Clicking it does not queue:
+// UI_Screen_SelectGameMode's GameModeButtonClicked sends type 20 (CUSTOMGAME)
+// to NavigateToScreen(29), the custom match lobby (UI_Screen_CustomMatchLobby),
+// and type 7 (TUTORIAL) to StartTutorial; every other type queues. Listed only
+// with DN_CUSTOM_GAME_TILE=1, to explore what the lobby asks the server for
+// (operator 2026-11-04); the custom rooms behind it are not implemented.
+// GUESS: team size 5.
+const CustomGameClientName = "CustomGame"
+
+func customGameListed() bool { return os.Getenv("DN_CUSTOM_GAME_TILE") == "1" }
 
 // Havoc: the wave-defence mode (GameMode_Havoc_BP, YGMT_HAVOC). The client's
 // own mode list (GlobalUI.uasset) has an entry named "HAVOC" with
@@ -930,6 +948,25 @@ func substituteBrokenGameMode(queued string) string {
 	return queued
 }
 
+// EscalationGameMode is our own Team Deathmatch variant, run by
+// battle-server-mod: everyone starts as a fighter and unlocks light, medium
+// and then heavy ships and dreadnoughts by match score. The client has no
+// entry for it, so it takes over one of its queues: DN_ESCALATION_QUEUE names
+// the queued mode as the client sends it -- the Proving Grounds button sends
+// "BC" (live 2026-11-04: every Proving Grounds queue that day was mode=BC, and
+// TM, which the comments above call Proving Grounds, never appeared) -- whose
+// matches run as Escalation, on the TDM maps; unset, no queue does. The match
+// keeps the queued mode's record and teams (BC: all humans on team 1 against
+// bots).
+const EscalationGameMode = "Escalation"
+
+// IsEscalationQueue reports whether matches queued for this mode run as
+// Escalation.
+func IsEscalationQueue(queued string) bool {
+	q := strings.TrimSpace(os.Getenv("DN_ESCALATION_QUEUE"))
+	return q != "" && strings.EqualFold(q, queued)
+}
+
 // DefaultSpawnableGameMode is what DN_FORCE_GAME_MODE selects when it is set to
 // "1" or "on" rather than to a mode name. It is NOT applied by default -- see
 // runnableGameMode.
@@ -1038,6 +1075,7 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 
 	// The mode the battle server is actually told to run, which is not always
 	// the one the player queued for. See runnableGameMode.
+	queuedMode := gameMode
 	runMode := runnableGameMode(gameMode)
 	if runMode != gameMode {
 		m.Log.WithFields(logrus.Fields{
@@ -1061,11 +1099,16 @@ func (m *Matchmaker) formMatchOfSize(gameMode string, tierMin int, fleetType int
 		}
 		pveMap = &GameMap{Name: ev.ID, Path: ev.MapPath}
 		launchMode = ev.HostMode
+	} else if IsEscalationQueue(queuedMode) {
+		launchMode = EscalationGameMode
+		m.Log.WithField("queued", queuedMode).Info("matchmaking: Escalation match (fighters first, ships by score)")
 	}
 
 	// Pick a map
 	maps := availableMaps
-	if modeMaps, ok := mapsByGameMode[gameMode]; ok {
+	if launchMode == EscalationGameMode {
+		maps = mapsByGameMode["TDM"] // it hosts a TDM
+	} else if modeMaps, ok := mapsByGameMode[gameMode]; ok {
 		maps = modeMaps
 	} else {
 		for _, pveMode := range []string{"Onslaught", "BC"} {
@@ -1324,4 +1367,33 @@ func (m *Matchmaker) StopInstance(instanceID string) error {
 		return fmt.Errorf("stop instance %s: control plane answered %d", instanceID, resp.StatusCode)
 	}
 	return nil
+}
+
+// CustomRoomMode is one game mode a custom room offers, with its maps.
+type CustomRoomMode struct {
+	Mode string
+	Maps []string
+}
+
+// CustomRoomModes are the modes and maps a custom room offers: the PvP queue
+// modes on the maps their matches use (mapsByGameMode, else availableMaps),
+// plus Escalation on the TDM maps. GUESS: the original's custom room list is
+// unknown; this offers what the battle servers here can host.
+func CustomRoomModes() []CustomRoomMode {
+	names := func(maps []GameMap) []string {
+		out := make([]string, 0, len(maps))
+		for _, m := range maps {
+			out = append(out, m.Name)
+		}
+		return out
+	}
+	var out []CustomRoomMode
+	for _, mode := range []string{"TDM", "TE", "TER", "PodTDM", "TurboTDM", "Onslaught"} {
+		maps, ok := mapsByGameMode[mode]
+		if !ok {
+			maps = availableMaps
+		}
+		out = append(out, CustomRoomMode{Mode: mode, Maps: names(maps)})
+	}
+	return append(out, CustomRoomMode{Mode: EscalationGameMode, Maps: names(mapsByGameMode["TDM"])})
 }

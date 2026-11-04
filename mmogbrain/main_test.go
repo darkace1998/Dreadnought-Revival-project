@@ -1373,10 +1373,26 @@ func TestMmogCustomRoomActionsUseResponseRTs(t *testing.T) {
 		if !bytes.Contains(result, protocol.AppendInt32Field(nil, "Code", 0)) {
 			t.Fatalf("%s missing Code=0", expectedRT)
 		}
-		if !bytes.Contains(result, appendFieldMarker("Room", 0x0c)) {
-			t.Fatalf("%s missing Room object", expectedRT)
+		// The client reads a created room from the ROOT "roomInfo" node
+		// (dispatcher 0x142A2AF87 -> parser 0x142A69BB0, custom_rooms.go); the
+		// "result" Room object is the generic reply's, and the order of this
+		// map decides whether a room exists yet for the settings requests.
+		// The ChangeSettings reply has no room object at all: its reader
+		// (YA_CustomRoomSettingsUpdateResponse) takes gameMode/mapName/settings
+		// from the ROOT (buildCustomRoomSettingsPayload).
+		if requestName == "YA_CustomRoomChangeSettings" && protocol.ExtractStringField(payload, "gameMode") != "" {
+			continue
+		}
+		if !bytes.Contains(result, appendFieldMarker("Room", 0x0c)) &&
+			!bytes.Contains(payload, appendFieldMarker("roomInfo", 0x0c)) {
+			t.Fatalf("%s has neither a roomInfo nor a Room object", expectedRT)
 		}
 	}
+	if requestName := "YA_CustomRoomCreate"; !bytes.Contains(buildMmogRequestResponsePayload(requestName, defaultMmogPlayerPID, nil),
+		appendFieldMarker("roomInfo", 0x0c)) {
+		t.Fatal("YA_CustomRoomCreateResponse missing roomInfo")
+	}
+	handleCustomRoomRequest("YA_CustomRoomUserLeave", defaultMmogPlayerPID, nil)
 
 	payload := buildMmogRequestResponsePayload("YA_CustomRoomInvite", defaultMmogPlayerPID, nil)
 	if rt := protocol.ExtractStringField(payload, "RT"); rt != "YA_CustomRoomInvite" {

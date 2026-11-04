@@ -1292,6 +1292,8 @@ static bool ClassChainContains(UObjectMin *obj, const char *needle);
 static void TeRoundsTick(uint8_t *gm);
 static void TeOnShipKilled(void *gameMode, void *victimCtrl, int victimClass);
 static void TeFixLeader(uint8_t *gm);
+static void EscalationTick(uint8_t *gm);
+static void EscOnShipKilled(void *victimCtrl, void *victimPawn);
 
 static void __fastcall HookGameModeTimer(void *gameMode) {
   uint8_t *gm = (uint8_t *)gameMode;
@@ -1357,6 +1359,7 @@ static void __fastcall HookGameModeTimer(void *gameMode) {
   ConquestTick(gm);
   NpcAiStartTick(gm);
   PlayersTick(gm);
+  EscalationTick(gm);
   ClassTimeTick(gm);
   NetStatsTick(gm);
   FlushPendingEomStats();
@@ -1669,6 +1672,11 @@ static void __fastcall HookTdmKilled(void *gameMode, void *killer, void *victimC
     CeresOnShipKilled(victimPawn); // before the original: the pawn is still whole
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     Logf("ceres: EXCEPTION ending a collector's buffs");
+  }
+  __try {
+    EscOnShipKilled(victimCtrl, victimPawn);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("escalation: EXCEPTION resetting a destroyed ship's level");
   }
   __try {
     gs = InvasionGameState(gm);
@@ -8912,6 +8920,401 @@ static void TeFixLeader(uint8_t *gm) {
 }
 
 // ---------------------------------------------------------------------------
+// Escalation: a custom Team Deathmatch (operator 2026-11-04: "a team death
+// match were u start as fighters and can upgrade to other ship types if u have
+// set amount of points"). NOT an original mode -- the rules are ours; the
+// mechanics are the game's own. Hosted as ?game=TDM with -GameMode=Escalation
+// (mmogbrain DN_ESCALATION_QUEUE names the client queue that runs it, e.g.
+// BC = Proving Grounds), so the clients and the scoring table see a TDM.
+//
+// The ladder, by the player's match score (PRI m_score +0x7FC; a TDM kill is
+// 35-95, an assist 35) since their last ship was lost -- a destroyed ship puts
+// the player back in a fighter (operator 2026-11-04: "if u get destroyed u get
+// reset to a jet"); a destroyed fighter keeps the points (our rule):
+//     0  fighters only (the respawn jets)
+//    50  light ships
+//   150  medium ships
+//   300  heavy ships and the dreadnoughts (all three sizes)
+// A player whose fleet has nothing at their level may fly their smallest ships
+// once out of the fighter (our rule: a fleet of five heavies would otherwise
+// stay a fighter until 300).
+//
+// The game's parts, verified in the exe (2026-11-04):
+//   - Fighters: the jets filter /Game/Generic/Loadouts/Filter/
+//     VH_LoadoutFilter_Jets_DA (TE's and Havoc's respawn filter). TDM's game
+//     state has none, so it is loaded here (StaticLoadObject 0xD78110). Its
+//     loadouts are per manager: LoadLoadoutFilterLoadouts 0x34F4F0(mgr,
+//     filter) rebuilds filter +0x40 from m_specialLoadouts (+0x60) as objects
+//     outered to that manager, which SetLoadoutsFilter 0x35B090 then adds
+//     (type 4) and activates.
+//   - Ship sizes: UYLoadoutManager's validity gate 0x33C680 checks the
+//     loadout's EYShipClass (+0xD8) against the filter's per-class bytes
+//     (+0x29 dreadnought, +0x2D assault, +0x31 scout, +0x35 sniper, +0x39
+//     support, each followed by light/medium/heavy). After the fighter the
+//     filter is cleared and the hook on that gate refuses ships above the
+//     player's level, which keeps a pick from the ship screen to what is
+//     unlocked (the client draws every fleet ship; a refused pick keeps the
+//     ship the player had).
+//   - Out of the fighter: ReplaceShipWithActiveLoadoutForNewRound 0x590B80 (as
+//     TE's rounds and Havoc's wave ends) swaps a living jet for the ship.
+//     Higher levels take effect at the next respawn.
+// Bots fly their usual ships. NOT verified live: all of it.
+#define ESC_STATIC_LOAD_OBJECT 0xD78110
+#define RVA_LOAD_FILTER_LOADOUTS 0x34F4F0
+#define OFF_LOADOUT_MGR_ENTRIES 0x108 // {TArray loadouts, ..., uint8 type +0x28}, 0x30 each
+#define OFF_LOADOUT_CLASS 0xD8
+#define OFF_FILTER_LOADOUTS 0x40
+typedef void(__fastcall *tLoadFilterLoadouts)(void *mgr, void *filter);
+static const int kEscLevelScore[4] = {0, 50, 150, 300};
+struct EscPlayer {
+  void *pc, *mgr;
+  int level; // by score since base, 0-3
+  int cap;   // the biggest ship class level allowed, 0 = fighters
+  int base;  // the score when the last ship was lost
+  bool seen;
+};
+static EscPlayer g_esc[16];
+static tSpawnPlayer g_origEscSpawnPlayer = nullptr;
+static void *g_escJets = nullptr;
+
+static bool HostIsEscalation() {
+  static int s_is = -1;
+  if (s_is < 0) {
+    const wchar_t *cmd = GetCommandLineW();
+    s_is = cmd && wcsstr(cmd, L"-GameMode=Escalation ") ? 1 : 0;
+  }
+  return s_is == 1;
+}
+// The level an EYShipClass needs: light 1 (1-5), medium 2, heavy 3; the
+// dreadnoughts (1, 6, 7) all 3.
+static int EscClassLevel(int cls) {
+  if (cls == 1 || cls == 6 || cls == 7)
+    return 3;
+  if (cls >= 1 && cls <= 5)
+    return 1;
+  return cls % 2 == 0 ? 2 : 3; // 8/10/12/14 medium, 9/11/13/15 heavy
+}
+static const char *EscLevelName(int level) {
+  static const char *const k[] = {"fighters", "light ships", "medium ships", "heavy ships and dreadnoughts"};
+  return level >= 0 && level <= 3 ? k[level] : "?";
+}
+static EscPlayer *EscByMgr(void *mgr) {
+  for (EscPlayer &e : g_esc)
+    if (e.pc && e.mgr == mgr)
+      return &e;
+  return nullptr;
+}
+static EscPlayer *EscFor(void *pc) {
+  for (EscPlayer &e : g_esc)
+    if (e.pc == pc)
+      return &e;
+  void *mgr = HavocLoadoutManager(pc);
+  if (!mgr)
+    return nullptr;
+  for (EscPlayer &e : g_esc)
+    if (!e.pc) {
+      e = EscPlayer{pc, mgr, 0, 0, 0, true};
+      Logf("escalation: %p joins as a fighter (loadout manager %p)", pc, mgr);
+      return &e;
+    }
+  return nullptr;
+}
+
+// The jets filter, loaded once (game thread: the timer and SpawnPlayer).
+static void *EscJetsFilter() {
+  static bool s_tried = false;
+  if (g_escJets || s_tried)
+    return g_escJets;
+  s_tried = true;
+  UObjectMin *uclass = ResolveUClassClass();
+  FUObjectArrayMin *arr = GObjects();
+  UObjectMin *filterClass = nullptr;
+  if (uclass && IsReadable(arr, sizeof(*arr)))
+    for (int32_t i = 0; i < arr->NumElements && !filterClass; ++i) {
+      __try {
+        UObjectMin *o = arr->Objects[i].Object;
+        if (o && o->Class == uclass) {
+          const char *n = NameText(o->Name);
+          if (n && !strcmp(n, "YLoadoutFilter"))
+            filterClass = o;
+        }
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+      }
+    }
+  if (filterClass) {
+    __try {
+      g_escJets = ((tStaticLoadClass)(g_base + ESC_STATIC_LOAD_OBJECT))(
+          filterClass, nullptr, L"/Game/Generic/Loadouts/Filter/VH_LoadoutFilter_Jets_DA.VH_LoadoutFilter_Jets_DA",
+          nullptr, 0, nullptr, false);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+      g_escJets = nullptr;
+    }
+    if (g_escJets)
+      PinToRootSet((UObjectMin *)g_escJets);
+  }
+  Logf("escalation: jets filter %p (class YLoadoutFilter %p)%s", g_escJets, filterClass,
+       g_escJets ? "" : " -- NOT LOADED, players keep their ships");
+  return g_escJets;
+}
+
+// The gate: the game's answer, then nothing above the player's level.
+static bool __fastcall HookEscGate(void *mgr, void *loadout) {
+  bool ok = g_origLoadoutGate(mgr, loadout);
+  if (!ok || !loadout)
+    return ok;
+  EscPlayer *e = EscByMgr(mgr);
+  if (!e || e->cap == 0)
+    return ok; // a fighter: the jets filter decides
+  int cls = ((uint8_t *)loadout)[OFF_LOADOUT_CLASS];
+  return cls < 1 || cls > 15 || EscClassLevel(cls) <= e->cap;
+}
+
+// Calls fn on every loadout the player brought (manager entries of type 2).
+template <typename F> static void EscForEachShip(uint8_t *mgr, F fn) {
+  if (!IsReadable(mgr + OFF_LOADOUT_MGR_ENTRIES, 12))
+    return;
+  uint8_t *entries = *(uint8_t **)(mgr + OFF_LOADOUT_MGR_ENTRIES);
+  int n = *(int32_t *)(mgr + OFF_LOADOUT_MGR_ENTRIES + 8);
+  if (n <= 0 || n > 64 || !IsReadable(entries, (size_t)n * 0x30))
+    return;
+  for (int i = 0; i < n; ++i) {
+    uint8_t *en = entries + i * 0x30;
+    void **los = *(void ***)en;
+    int cnt = *(int32_t *)(en + 8);
+    if (en[0x28] != 2 || cnt <= 0 || cnt > 64 || !IsReadable(los, (size_t)cnt * 8))
+      continue;
+    for (int k = 0; k < cnt; ++k)
+      if (los[k] && IsReadable((uint8_t *)los[k] + OFF_LOADOUT_CLASS, 1)) {
+        int cls = ((uint8_t *)los[k])[OFF_LOADOUT_CLASS];
+        if (cls >= 1 && cls <= 15)
+          fn(los[k], cls);
+      }
+  }
+}
+
+static void EscSetLevel(EscPlayer *e, int level) {
+  e->level = level;
+  int smallest = 4;
+  EscForEachShip((uint8_t *)e->mgr, [&](void *, int cls) {
+    if (EscClassLevel(cls) < smallest)
+      smallest = EscClassLevel(cls);
+  });
+  e->cap = level == 0 ? 0 : (smallest <= 3 && smallest > level ? smallest : level);
+}
+
+// A fighter: the jets filter on, its loadouts made for this manager.
+static void EscApplyJets(void *pc, EscPlayer *e) {
+  uint8_t *mgr = (uint8_t *)e->mgr;
+  uint8_t *jets = (uint8_t *)EscJetsFilter();
+  if (!jets || !IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8))
+    return;
+  void *have = *(void **)(mgr + OFF_LOADOUT_MGR_FILTER);
+  void *active = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+  bool valid = active && ((tLoadoutGate)(g_base + RVA_LOADOUT_IS_REGISTERED))(mgr, active);
+  if (have == jets && valid)
+    return;
+  if (have == jets)
+    ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, nullptr);
+  int made = IsReadable(jets + OFF_FILTER_LOADOUTS, 12) ? *(int32_t *)(jets + OFF_FILTER_LOADOUTS + 8) : 0;
+  UObjectMin *first = made > 0 ? **(UObjectMin ***)(jets + OFF_FILTER_LOADOUTS) : nullptr;
+  if (!first || !IsReadable(first, sizeof(*first)) || first->Outer != (UObjectMin *)mgr)
+    ((tLoadFilterLoadouts)(g_base + RVA_LOAD_FILTER_LOADOUTS))(mgr, jets);
+  ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, jets);
+  void *now = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+  Logf("escalation: %p a fighter -- filter %s, %d jet loadout(s), active %p -> %p %s", pc,
+       have == jets ? "re-applied" : "applied", IsReadable(jets + OFF_FILTER_LOADOUTS, 12) ?
+       *(int32_t *)(jets + OFF_FILTER_LOADOUTS + 8) : -1, active, now,
+       now && IsReadable(now, sizeof(UObjectMin)) ? NameText(((UObjectMin *)now)->Name) : "none");
+}
+
+// Past the fighter: no filter, and an active ship the player may fly -- the
+// biggest one allowed when the current one is not.
+static void EscApplyShips(void *pc, EscPlayer *e) {
+  uint8_t *mgr = (uint8_t *)e->mgr;
+  if (!IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8))
+    return;
+  void *had = *(void **)(mgr + OFF_LOADOUT_MGR_FILTER);
+  if (had)
+    ((tSetLoadoutsFilter)(g_base + RVA_SET_LOADOUTS_FILTER))(mgr, nullptr);
+  void *active = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+  tLoadoutGate gate = (tLoadoutGate)(g_base + RVA_LOADOUT_IS_REGISTERED);
+  if (active && gate(mgr, active)) {
+    if (had)
+      Logf("escalation: %p filter cleared, keeps ship %p (class %u)", pc, active,
+           ((uint8_t *)active)[OFF_LOADOUT_CLASS]);
+    return;
+  }
+  void *best = nullptr;
+  int bestLevel = 0;
+  EscForEachShip(mgr, [&](void *lo, int cls) {
+    if (EscClassLevel(cls) > bestLevel && gate(mgr, lo)) {
+      best = lo;
+      bestLevel = EscClassLevel(cls);
+    }
+  });
+  if (best)
+    ((tActivateLoadout)(g_base + RVA_ACTIVATE_LOADOUT))(mgr, best, 1);
+  void *now = *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE);
+  Logf("escalation: %p level %d (%s, cap %d): ship %p -> %p (%s, class %u)%s", pc, e->level,
+       EscLevelName(e->level), e->cap, active, now,
+       now && IsReadable(now, sizeof(UObjectMin)) ? NameText(((UObjectMin *)now)->Name) : "none",
+       now && IsReadable((uint8_t *)now + OFF_LOADOUT_CLASS, 1) ? ((uint8_t *)now)[OFF_LOADOUT_CLASS] : 0,
+       best ? "" : " -- NO SHIP IN THE FLEET FITS");
+}
+
+static bool EscIsHuman(void *pc) {
+  uint8_t *p = (uint8_t *)pc;
+  return IsReadable(p, OFF_PC_NETCONNECTION + 8) && ClassChainContains((UObjectMin *)p, "PlayerController") &&
+         *(void **)(p + OFF_PC_NETCONNECTION);
+}
+
+static void __fastcall HookEscSpawnPlayer(void *pc) {
+  __try {
+    if (EscPlayer *e = EscIsHuman(pc) ? EscFor(pc) : nullptr) {
+      if (e->level == 0)
+        EscApplyJets(pc, e);
+      else
+        EscApplyShips(pc, e);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("escalation: EXCEPTION before the spawn of %p", pc);
+  }
+  g_origEscSpawnPlayer(pc);
+}
+
+// AYGameMode::SpawnDefaultPawn (0x382530-0x382603: gm, pc, loadout, location,
+// rotation; returns the pawn) -- EVERY spawn: both callers (0x3827D0,
+// 0x382870) pass the loadout they looked up. The first spawn from orbit does
+// not go through SpawnPlayer (live 2026-11-04 17:28:59: "Spawning a pawn for
+// player", no SpawnPlayer). The player's level decides the active loadout,
+// and that is what spawns. Should a jet fail to spawn (its ship class not
+// loaded yet: "Could not find valid ship class", null pawn), the ship the
+// game chose spawns instead.
+#define RVA_GM_SPAWN_DEFAULT_PAWN 0x382530
+typedef void *(__fastcall *tSpawnDefaultPawn)(void *gm, void *pc, void *loadout, void *loc, void *rot);
+static tSpawnDefaultPawn g_origEscSpawnDefaultPawn = nullptr;
+static void *__fastcall HookEscSpawnDefaultPawn(void *gm, void *pc, void *loadout, void *loc, void *rot) {
+  void *use = loadout;
+  __try {
+    if (EscPlayer *e = EscIsHuman(pc) ? EscFor(pc) : nullptr) {
+      if (e->level == 0)
+        EscApplyJets(pc, e);
+      else
+        EscApplyShips(pc, e);
+      uint8_t *mgr = (uint8_t *)e->mgr;
+      void *active = IsReadable(mgr + OFF_LOADOUT_MGR_ACTIVE, 8) ? *(void **)(mgr + OFF_LOADOUT_MGR_ACTIVE) : nullptr;
+      if (active)
+        use = active;
+      Logf("escalation: %p spawns at level %d -- game chose %p (class %u), spawning %p (%s, class %u)", pc, e->level,
+           loadout, loadout && IsReadable((uint8_t *)loadout + OFF_LOADOUT_CLASS, 1) ? ((uint8_t *)loadout)[OFF_LOADOUT_CLASS] : 0,
+           use, use && IsReadable(use, sizeof(UObjectMin)) ? NameText(((UObjectMin *)use)->Name) : "?",
+           use && IsReadable((uint8_t *)use + OFF_LOADOUT_CLASS, 1) ? ((uint8_t *)use)[OFF_LOADOUT_CLASS] : 0);
+    }
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("escalation: EXCEPTION choosing the spawn of %p", pc);
+    use = loadout;
+  }
+  void *pawn = g_origEscSpawnDefaultPawn(gm, pc, use, loc, rot);
+  if (!pawn && use != loadout) {
+    Logf("escalation: %p -- loadout %p did not spawn, falling back to %p", pc, use, loadout);
+    pawn = g_origEscSpawnDefaultPawn(gm, pc, loadout, loc, rot);
+  }
+  return pawn;
+}
+
+// A ship (EYShipClass 1-15, not a respawn jet) destroyed: back to the fighter,
+// and the points count again from here. Called from the TDM kill hook
+// (0x375F30) before the original runs, while the pawn is whole.
+static void EscOnShipKilled(void *victimCtrl, void *victimPawn) {
+  if (!HostIsEscalation() || !victimCtrl || !victimPawn)
+    return;
+  EscPlayer *e = nullptr;
+  for (EscPlayer &x : g_esc)
+    if (x.pc && x.pc == victimCtrl)
+      e = &x;
+  uint8_t *pawn = (uint8_t *)victimPawn;
+  if (!e || !IsReadable(pawn + OFF_PAWN_SHIP_CLASS, 1))
+    return;
+  int cls = pawn[OFF_PAWN_SHIP_CLASS];
+  uint8_t *pri = IsReadable((uint8_t *)victimCtrl + OFF_PC_PLAYER_STATE, 8)
+                     ? *(uint8_t **)((uint8_t *)victimCtrl + OFF_PC_PLAYER_STATE) : nullptr;
+  int score = pri && IsReadable(pri + OFF_PRI_SCORE, 4) ? *(int32_t *)(pri + OFF_PRI_SCORE) : e->base;
+  if (cls < 1 || cls > 15) {
+    Logf("escalation: %p lost a fighter (class %d) at score %d -- keeps level %d", victimCtrl, cls, score - e->base,
+         e->level);
+    return;
+  }
+  Logf("escalation: %p lost its ship (class %d) at level %d -- back to a fighter, points count from %d", victimCtrl,
+       cls, e->level, score);
+  e->base = score;
+  EscSetLevel(e, 0); // the next spawn applies the jets filter
+}
+
+// On the game-mode timer: score -> level; a fighter reaching 50 gets a ship.
+// A fighter's filter goes on as soon as the player is seen, so the jets'
+// assets load before the first spawn (17:28:36 seen, 17:28:59 spawned live).
+static void EscalationTick(uint8_t *gm) {
+  if (!HostIsEscalation())
+    return;
+  __try {
+    EscJetsFilter();
+    uint8_t *gs = IsReadable(gm + OFF_GM_GAMESTATE, 8) ? *(uint8_t **)(gm + OFF_GM_GAMESTATE) : nullptr;
+    if (!gs || !IsReadable(gs + OFF_GS_PLAYER_ARRAY, 16))
+      return;
+    uint8_t **arr = *(uint8_t ***)(gs + OFF_GS_PLAYER_ARRAY);
+    int count = *(int32_t *)(gs + OFF_GS_PLAYER_ARRAY + 8);
+    if (count <= 0 || count > 256 || !IsReadable(arr, (size_t)count * 8))
+      return;
+    for (EscPlayer &e : g_esc)
+      e.seen = false;
+    for (int i = 0; i < count; ++i) {
+      uint8_t *pri = arr[i];
+      if (!IsReadable(pri, OFF_PRI_SCORE + 4))
+        continue;
+      uint8_t *pc = *(uint8_t **)(pri + OFF_ACTOR_OWNER);
+      if (!IsReadable(pc, OFF_PC_NETCONNECTION + 8) || !ClassChainContains((UObjectMin *)pc, "PlayerController") ||
+          !*(void **)(pc + OFF_PC_NETCONNECTION))
+        continue;
+      EscPlayer *e = EscFor(pc);
+      if (!e)
+        continue;
+      e->seen = true;
+      // Only when the filter is off (the spawn hooks also re-check the
+      // active loadout): a filter whose jets could not be made would be
+      // re-applied every second.
+      if (e->level == 0 && IsReadable((uint8_t *)e->mgr + OFF_LOADOUT_MGR_FILTER, 8) &&
+          *(void **)((uint8_t *)e->mgr + OFF_LOADOUT_MGR_FILTER) != g_escJets)
+        EscApplyJets(pc, e);
+      int score = *(int32_t *)(pri + OFF_PRI_SCORE) - e->base;
+      int level = 0;
+      while (level < 3 && score >= kEscLevelScore[level + 1])
+        ++level;
+      if (level <= e->level)
+        continue;
+      int was = e->level;
+      EscSetLevel(e, level);
+      Logf("escalation: %p score %d -> level %d, %s unlocked (cap %d)", pc, score, level, EscLevelName(level), e->cap);
+      if (was != 0)
+        continue;
+      // Out of the fighter now, if one is flying.
+      EscApplyShips(pc, e);
+      uint8_t *pawn = IsReadable(pc + OFF_CONTROLLER_PAWN, 8) ? *(uint8_t **)(pc + OFF_CONTROLLER_PAWN) : nullptr;
+      if (pawn && IsReadable(pawn + OFF_PAWN_STATE, 1) && pawn[OFF_PAWN_STATE] != 2 && pawn[OFF_PAWN_STATE] != 3 &&
+          pawn[OFF_PAWN_SHIP_CLASS] > 15) {
+        ((tPcVoid)(g_base + RVA_REPLACE_SHIP_NEW_ROUND))(pc);
+        void *now = IsReadable(pc + OFF_CONTROLLER_PAWN, 8) ? *(void **)(pc + OFF_CONTROLLER_PAWN) : nullptr;
+        Logf("escalation: %p fighter %p replaced -> %p %s", pc, pawn, now, now ? ClassNameOf(now) : "none");
+      }
+    }
+    for (EscPlayer &e : g_esc)
+      if (e.pc && !e.seen)
+        e = EscPlayer{};
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    Logf("escalation: EXCEPTION on the timer");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Havoc team HUD (stage 4, 2026-10-19). AYGameState_Havoc::
 // ClientHavocPlayersChanged(teamsInfo) (thunk 0x745410, NetMulticast) carries
 // ONE YHavocHUDTeamInfo of parallel arrays (0x38 bytes: +0x08 TArray<FString>
@@ -9842,6 +10245,16 @@ static DWORD WINAPI Startup(LPVOID) {
                         (void *)&HookExecUnReadyNextWave, (void **)&g_origExecUnReadyNextWave);
     Logf("te: winners keep their ship %s; team HUD %s", TeWinnerLockOn() ? "ON" : "OFF (dn_host_no_te_winner_lock.txt)",
          TeHudOn() ? "ON" : "OFF (dn_host_no_te_hud.txt)");
+  }
+  if (HostIsEscalation()) {
+    InstallSwitchedHook("escalation fighters (AYPlayerController::SpawnPlayer)", RVA_SPAWN_PLAYER,
+                        (void *)&HookEscSpawnPlayer, (void **)&g_origEscSpawnPlayer);
+    InstallSwitchedHook("escalation spawns (AYGameMode::SpawnDefaultPawn)", RVA_GM_SPAWN_DEFAULT_PAWN,
+                        (void *)&HookEscSpawnDefaultPawn, (void **)&g_origEscSpawnDefaultPawn);
+    InstallSwitchedHook("escalation ship levels (UYLoadoutManager loadout validity)", RVA_LOADOUT_IS_REGISTERED,
+                        (void *)&HookEscGate, (void **)&g_origLoadoutGate);
+    Logf("escalation: ON -- fighters, then light %d / medium %d / heavy+dreadnought %d points", kEscLevelScore[1],
+         kEscLevelScore[2], kEscLevelScore[3]);
   }
   bool ceres = HostIsPodTDM() && CeresBuffEndOn();
   if (ceres)

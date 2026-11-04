@@ -128,6 +128,10 @@ var gameModes = []struct {
 	// YGMT_HAVOC) on its own maps /Game/Maps/Havoc/Map1|Map2/HVC_MapN_P. From
 	// PR #80.
 	{"Havoc", 5},
+	// Escalation: our own Team Deathmatch variant (fighters first, bigger
+	// ships by score), run by battle-server-mod. The engine hosts a TDM
+	// (GameOption); -GameMode=Escalation is what the mod keys on.
+	{"Escalation", 5},
 }
 
 // gameOptionClasses is the ?game= value for a mode the client's
@@ -139,9 +143,18 @@ var gameOptionClasses = map[string]string{
 	"Havoc":  "/Game/Generic/GameModes/Horde/Havoc/GameMode_Havoc_BP.GameMode_Havoc_BP_C",
 }
 
+// modsOfGameModes are modes the battle-server mod makes out of a game mode:
+// the engine is told the base mode, the mod reads -GameMode=.
+var modsOfGameModes = map[string]string{
+	"Escalation": "TDM",
+}
+
 // GameOption is the ?game= value for a mode: its alias short name, or its
 // class path when the game has no alias for it.
 func GameOption(mode string) string {
+	if base, ok := modsOfGameModes[mode]; ok {
+		mode = base
+	}
 	if class, ok := gameOptionClasses[mode]; ok {
 		return class
 	}

@@ -1455,6 +1455,59 @@ added to the player's ship and every bot class, and the operator reported the
 match "faster and smooth, no stutter" -- the client moves with the replicated
 speed feat, no position corrections.
 
+## Escalation: fighters first, ships by score (Escalation hosts only, added 2026-11-04)
+
+Our own mode, not an original one: a Team Deathmatch where everyone starts in a
+respawn fighter and unlocks bigger ships with their match score (PRI `m_score`;
+a TDM kill is worth 35-95, an assist 35) since their last ship was lost. A
+destroyed ship puts the player back in a fighter, and the points count again
+from there; a destroyed fighter keeps them (from the TDM kill hook `0x375F30`,
+victim class at pawn `+0x940`: 1-15 is a ship, 16+ a respawn jet):
+
+| Score | May fly |
+| --- | --- |
+| 0 | fighters (the four respawn jets) |
+| 50 | light ships |
+| 150 | medium ships |
+| 300 | heavy ships and the dreadnoughts |
+
+A player whose fleet has nothing at their level may fly their smallest ships
+once out of the fighter. Bots fly their usual ships.
+
+The host runs `?game=TDM` with `-GameMode=Escalation`; mmogbrain's
+`DN_ESCALATION_QUEUE` names the client queue whose matches run it (e.g. `BC`:
+the Proving Grounds button queues BC, not TM), on the TDM maps, so the clients
+and the scoring table see a TDM. Everything is the game's own machinery:
+
+- Fighters: `VH_LoadoutFilter_Jets_DA`, loaded with `StaticLoadObject`
+  (`0xD78110`; TDM's game state has no fighter filter). Its loadouts are made per
+  loadout manager by `LoadLoadoutFilterLoadouts` (`0x34F4F0`), then
+  `SetLoadoutsFilter` (`0x35B090`) adds and activates them. Applied as soon as
+  the player is seen (so the jets load before the first spawn), and checked at
+  every spawn: `AYGameMode::SpawnDefaultPawn` (`0x382530`, which both spawn
+  paths call -- the first spawn from orbit does not pass through
+  `AYPlayerController::SpawnPlayer` `0x5998A0`, live 2026-11-04) spawns the
+  loadout the player's level allows; if that does not spawn, the game's own
+  choice does.
+- Ship sizes: the manager's validity gate (`0x33C680`) checks a loadout's
+  EYShipClass (`+0xD8`) against the filter's per-class bytes; past the fighter
+  the filter is cleared and the hook on that gate refuses ships above the
+  player's level. The ship screen still draws every fleet ship; a refused pick
+  keeps the ship the player had, and a spawn with a locked ship active takes the
+  biggest allowed one.
+- 50 points in a fighter: `ReplaceShipWithActiveLoadoutForNewRound` (`0x590B80`)
+  swaps it for a ship at once. Later levels apply at the next respawn.
+
+Logs: `escalation: ON`, `escalation: jets filter …`, `… joins as a fighter`,
+`… a fighter -- filter applied, 4 jet loadout(s)`, `… spawns at level L -- game
+chose … spawning …`, `… score N -> level L`,
+`… fighter … replaced -> …`, `… level L (…): ship … -> …`, `… lost its ship …
+back to a fighter, points count from N`, `… lost a fighter … keeps level L`.
+Host log 2026-11-04 17:44 (Gorge): jet at the first spawn, score 95 -> the jet
+replaced by the Scout Light, 165 and 365 unlocked medium and heavy, a medium
+picked later spawned, the match ended and reported normally. The reset on a
+destroyed ship is not verified live.
+
 ## Ceres Awakens: buffs end with their collector (on, PodTDM hosts only; `dn_host_no_ceres_buff_end.txt` turns it off; added 2026-10-29)
 
 Grey Box's Ceres Awakens posts (2017 and 2020): "A pod's effect will expire
