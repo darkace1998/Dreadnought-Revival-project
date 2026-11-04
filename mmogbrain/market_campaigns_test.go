@@ -19,7 +19,7 @@ func TestHalloweenCampaign(t *testing.T) {
 
 	covered := map[int32]bool{}
 	discounted := map[int32]int32{}
-	for _, s := range vanityCatalogSeeds(nil) {
+	for _, s := range vanityCatalogSeeds(nil, nil) {
 		e := gatewayMarketEntity(s, true)
 		d, has := e["discounts"]
 		onSale := halloweenSaleItems[campaignSeedItem(s)]
@@ -74,7 +74,7 @@ func TestHalloweenCampaign(t *testing.T) {
 
 	// After 24 November (CET) the sale is gone.
 	withMarketClock(t, time.Date(2026, 11, 24, 23, 0, 0, 0, time.UTC))
-	for _, s := range vanityCatalogSeeds(nil) {
+	for _, s := range vanityCatalogSeeds(nil, nil) {
 		if _, has := gatewayMarketEntity(s, true)["discounts"]; has {
 			t.Fatalf("offer %d still discounted after the sale", s.itemID)
 		}

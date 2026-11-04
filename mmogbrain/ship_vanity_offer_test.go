@@ -8,7 +8,7 @@ import "testing"
 // A ship cosmetic offer must reference its own item and carry ShipVanity;
 // captain cosmetics, whose section works, stay as they were.
 func TestShipCosmeticOffersReferenceTheirItem(t *testing.T) {
-	seeds := vanityCatalogSeeds(map[int32]struct{}{})
+	seeds := vanityCatalogSeeds(map[int32]struct{}{}, nil)
 	var shipSeen, captainSeen bool
 	for _, s := range seeds {
 		c := (s.itemID >> 24) & 0xff
@@ -38,7 +38,7 @@ func TestShipCosmeticOffersReferenceTheirItem(t *testing.T) {
 		t.Fatalf("need both a ship and a captain cosmetic in the catalog (ship %v captain %v)", shipSeen, captainSeen)
 	}
 	t.Setenv("DN_SHIP_VANITY_OFFER_FIX", "0")
-	for _, s := range vanityCatalogSeeds(map[int32]struct{}{}) {
+	for _, s := range vanityCatalogSeeds(map[int32]struct{}{}, nil) {
 		if c := (s.itemID >> 24) & 0xff; c >= 20 && c <= 24 {
 			e := gatewayMarketEntity(s, true)
 			if ids, _ := e["ItemIDs"].([]any); len(ids) != 0 || e["PromotionFlags"] != 0 {

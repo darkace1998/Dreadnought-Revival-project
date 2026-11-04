@@ -98,8 +98,17 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 		// empty real-money catalog is fine. Bundles is the one that is
 		// length-checked (0 < count) and it is checked on "bundles", not here.
 		payload["entities"] = catalog["entities"]
-		payload["Items"] = catalog["Items"]
-		payload["ItemOffers"] = catalog["ItemOffers"]
+		// Items and ItemOffers are NOT sent (2026-11-04): the catalog rebuild
+		// (0x142A5C800) writes its own ItemOffers, Items, ForexOffers and
+		// Campaigns from the entities (SetArrayField at +0x91, +0x189,
+		// +0x273, +0x317 of the decompile), so ours were never read -- and
+		// they were two of the three copies of every item, ~2/3 of a 15.6 MB
+		// download. DN_CATALOG_DUPLICATES=1 sends them again, as does the
+		// DN_CATALOG_ENTITIES=empty debug mode (then they are the only copy).
+		if os.Getenv("DN_CATALOG_DUPLICATES") == "1" || os.Getenv("DN_CATALOG_ENTITIES") == "empty" {
+			payload["Items"] = catalog["Items"]
+			payload["ItemOffers"] = catalog["ItemOffers"]
+		}
 		payload["ForexOffers"] = catalog["ForexOffers"]
 	}
 	if requestedCatalog == "bundles" {
@@ -724,8 +733,13 @@ func gatewayItemCatalogSeeds(playerID string) []gatewayCatalogEntitySeed {
 			seeds = append(seeds, seed)
 		}
 	}
-	// Cosmetics: see vanity_store.go.
-	for _, seed := range vanityCatalogSeeds(purchased) {
+	// Cosmetics: see vanity_store.go. Per-class offers for the classes the
+	// player owns a ship of.
+	var shipClasses []int32
+	if playerID != "" {
+		shipClasses = ownedShipClasses(playerID)
+	}
+	for _, seed := range vanityCatalogSeeds(purchased, shipClasses) {
 		if !emitted[seed.itemID] {
 			emitted[seed.itemID] = true
 			seeds = append(seeds, seed)

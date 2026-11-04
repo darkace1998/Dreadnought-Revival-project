@@ -174,7 +174,7 @@ func TestCustomizerCanBuyHullCosmetic(t *testing.T) {
 	setPremium(t, pid, 1000)
 	perShip := shipVanityClientID(vanityDreadMPatter, eyShipClassByKey["DreadnoughtMedium"])
 	var sku string
-	for _, s := range vanityCatalogSeeds(nil) {
+	for _, s := range vanityCatalogSeeds(nil, nil) {
 		if s.itemID == perShip {
 			sku = s.externalID
 		}
@@ -264,7 +264,7 @@ func TestOnlyWearableCaptainItems(t *testing.T) {
 		t.Errorf("refunded %d rows, premium %d; want the bought spring outfit back (1, 100)", n, premium(t, pid))
 	}
 	// The store names the head as the game does, in every language.
-	for _, s := range vanityCatalogSeeds(nil) {
+	for _, s := range vanityCatalogSeeds(nil, nil) {
 		if s.itemID == headA02 {
 			if s.localizedName["en"] != "Facial Alteration 8" || s.localizedDescription["en"] == "" || s.displayName != "Facial Alteration 8" {
 				t.Errorf("head A02 offer: name %v description %v display %q", s.localizedName, s.localizedDescription, s.displayName)

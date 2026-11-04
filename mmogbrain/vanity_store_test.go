@@ -56,7 +56,7 @@ func credits(t *testing.T, pid string) int {
 }
 
 func TestVanityStoreListsEveryPublicCosmeticAtItsPrice(t *testing.T) {
-	seeds := vanityCatalogSeeds(map[int32]struct{}{vanityPaidEmblem: {}})
+	seeds := vanityCatalogSeeds(map[int32]struct{}{vanityPaidEmblem: {}}, nil)
 	if len(seeds) < 1000 {
 		t.Fatalf("%d cosmetics listed, want the ~1027 public-ready ones", len(seeds))
 	}
@@ -216,7 +216,7 @@ func TestPurchaseQuantityCannotOverflowThePrice(t *testing.T) {
 // real-money offer and the store showed 0.
 func TestCosmeticOfferIsPricedInTheClientsPremiumCurrency(t *testing.T) {
 	var seed gatewayCatalogEntitySeed
-	for _, s := range vanityCatalogSeeds(nil) {
+	for _, s := range vanityCatalogSeeds(nil, nil) {
 		if s.itemID == vanityPaidEmblem {
 			seed = s
 		}
@@ -232,5 +232,54 @@ func TestCosmeticOfferIsPricedInTheClientsPremiumCurrency(t *testing.T) {
 	}
 	if entity["SPCurrency"] != "SP_regular" || entity["SPPrice"] != vanityPrice || entity["CRPrice"] != 0 {
 		t.Errorf("offer SPCurrency=%v SPPrice=%v CRPrice=%v, want SP_regular %d 0", entity["SPCurrency"], entity["SPPrice"], entity["CRPrice"], vanityPrice)
+	}
+}
+
+// A cosmetic that fits every ship (a coating, decal or emblem) gets an offer
+// per ship class the player owns, keyed by its per-ship id: the customizer
+// only sells from such offers (0 coatings/decals/emblems ever bought from the
+// shared ones). Each references the shared item first and carries English
+// text only; the purchase charges the shared item's price.
+func TestAllShipCosmeticsGetPerClassOffers(t *testing.T) {
+	classes := []int32{1, 5}
+	const wildHunt = 385810656 // VAN_PN_Halloween001_DA, a coating
+	got := map[int32]gatewayCatalogEntitySeed{}
+	shared := 0
+	for _, s := range vanityCatalogSeeds(nil, classes) {
+		if campaignSeedItem(s) != wildHunt {
+			continue
+		}
+		if s.itemID == wildHunt {
+			shared++
+			continue
+		}
+		got[s.itemID] = s
+	}
+	if shared != 1 {
+		t.Fatalf("shared Wild Hunt offers: %d, want 1", shared)
+	}
+	if len(got) != len(classes) {
+		t.Fatalf("per-class Wild Hunt offers: %d, want %d", len(got), len(classes))
+	}
+	for _, c := range classes {
+		s, ok := got[shipVanityClientID(wildHunt, c)]
+		if !ok {
+			t.Fatalf("no offer for class %d", c)
+		}
+		if len(s.offerItemIDs) == 0 || s.offerItemIDs[0] != wildHunt {
+			t.Errorf("class %d offer references %v, want the shared item first", c, s.offerItemIDs)
+		}
+		if len(s.localizedName) > 1 {
+			t.Errorf("class %d offer carries %d languages", c, len(s.localizedName))
+		}
+		if p, _ := purchasePriceForItemChecked(s.itemID); p != s.priceAmount && p != s.priceAmount/2 {
+			t.Errorf("class %d offer shows %d, purchase charges %d", c, s.priceAmount, p)
+		}
+	}
+	// No owned classes, no per-class offers (the old behaviour).
+	for _, s := range vanityCatalogSeeds(nil, nil) {
+		if campaignSeedItem(s) == wildHunt && s.itemID != wildHunt {
+			t.Fatalf("per-class offer %d without owned classes", s.itemID)
+		}
 	}
 }

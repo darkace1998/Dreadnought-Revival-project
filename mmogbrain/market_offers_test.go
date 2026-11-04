@@ -157,7 +157,7 @@ func TestBuyingABundleGrantsItsContents(t *testing.T) {
 // Prices from the documented store: coatings 350 GP, heroes by tier, and the
 // GP-to-credits rate 1:105.
 func TestDocumentedMarketPrices(t *testing.T) {
-	for _, v := range vanityCatalogSeeds(map[int32]struct{}{}) {
+	for _, v := range vanityCatalogSeeds(map[int32]struct{}{}, nil) {
 		if (v.itemID>>24)&0xff == 22 {
 			if v.priceAmount != coatingPrice {
 				t.Errorf("coating %d costs %d, want %d", v.itemID, v.priceAmount, coatingPrice)

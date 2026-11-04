@@ -99,14 +99,16 @@ func vanityCategoryName(v dreadconfig.VanityItem) string {
 }
 
 // vanityCatalogSeeds is the store entry for every listed cosmetic. owned marks
-// the ones the player has bought.
+// the ones the player has bought; classes are the ship classes the player owns
+// a ship of (ownedShipClasses), for the per-class offers of cosmetics that fit
+// every ship (see below).
 //
 // It adds ~1000 entries to the store catalog: the catalog JSON grows from ~0.25
 // to ~4.9 MB (each entity goes out three times, as entities/Items/ItemOffers).
 // That is HTTP, not the mmog receive ring, but if the store turns slow or
 // misbehaves, DN_VANITY_STORE=0 lists no cosmetics; owned ones and purchases
 // keep working.
-func vanityCatalogSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
+func vanityCatalogSeeds(owned map[int32]struct{}, classes []int32) []gatewayCatalogEntitySeed {
 	if os.Getenv("DN_VANITY_STORE") == "0" {
 		return nil
 	}
@@ -196,8 +198,36 @@ func vanityCatalogSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
 			seed.offerItemIDs = append(seed.offerItemIDs, shipVanityClientID(v.ItemID, c))
 		}
 		seeds = append(seeds, seed)
+		// ...and, ADDED 2026-11-04, an offer per ship class the player owns,
+		// like the hull-specific ones above. The customizer sells only from
+		// an offer whose main item is the per-ship id; with the shared offer
+		// alone no coating, decal or emblem was ever bought (0 purchases of
+		// 580 listed, against 266 hull parts and 92 patterns), and the
+		// customizer listed only the owned ones. The original sold a coating
+		// "for one manufacturer and class line" (Steam forum, "Skin
+		// Coatings"). Only the owned classes and English text, to keep the
+		// download down (~1.8 KB per offer; all 15 classes of all 580 would
+		// be ~16 MB). A purchase records the shared item (vanityOffer).
+		for _, c := range classes {
+			one := seed
+			one.itemID = shipVanityClientID(v.ItemID, c)
+			one.externalID = "999" + strconv.Itoa(int(one.itemID))
+			one.offerItemIDs = []int32{v.ItemID}
+			one.localizedName = englishOnly(seed.localizedName)
+			one.localizedDescription = englishOnly(seed.localizedDescription)
+			seeds = append(seeds, one)
+		}
 	}
 	return seeds
+}
+
+// englishOnly keeps a localized text's English (the per-class copies'
+// download), or nil when it has none.
+func englishOnly(text dreadconfig.Localized) dreadconfig.Localized {
+	if en := text["en"]; en != "" {
+		return dreadconfig.Localized{"en": en}
+	}
+	return nil
 }
 
 // isVanityItemID is the category law for cosmetics: 20-24 ship, 50-55 captain.

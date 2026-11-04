@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -157,11 +158,14 @@ func gatewayCatalogEntities(t *testing.T, payload map[string]any, key string) []
 func gatewayExpectedCatalogAliasCount(catalogKey string, alias string, entityCount int) int {
 	switch catalogKey {
 	case gatewayKeyItemCatalogReal, gatewayKeyItemCatalogVC:
-		// Items is the definition list and ItemOffers is what the store
-		// presents; the client's market grid and per-ship purchase data come
-		// from the offers, so both carry every entity.
+		// Items and ItemOffers are rebuilt by the client from the entities
+		// (0x142A5C800) and not sent (gatewayBootstrapPayload), unless a
+		// debug switch asks for them.
 		if alias == "Items" || alias == "ItemOffers" {
-			return entityCount
+			if os.Getenv("DN_CATALOG_DUPLICATES") == "1" || os.Getenv("DN_CATALOG_ENTITIES") == "empty" {
+				return entityCount
+			}
+			return 0
 		}
 	case gatewayKeyCurrencyVC:
 		// The virtual currency catalog is the Market's bundle listing: its
@@ -184,6 +188,16 @@ func gatewayJSONMap(t *testing.T, value any, field string) map[string]any {
 		t.Fatalf("%s has unexpected type %T", field, value)
 	}
 	return entry
+}
+
+// gatewayOptionalArrayLen is the length of an array field that may be absent
+// (Items/ItemOffers are only sent with a debug switch).
+func gatewayOptionalArrayLen(t *testing.T, payload map[string]any, field string) int {
+	t.Helper()
+	if v, ok := payload[field]; ok && v != nil {
+		return len(gatewayJSONArray(t, v, field))
+	}
+	return 0
 }
 
 func gatewayJSONArray(t *testing.T, value any, field string) []any {
@@ -543,10 +557,10 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 				}
 				nestedEntities := gatewayCatalogEntities(t, payload, tc.requestedKey)
 				for _, alias := range []string{"Items", "ItemOffers", "ForexOffers"} {
-					topLevelAlias := gatewayJSONArray(t, payload[alias], alias)
+					got := gatewayOptionalArrayLen(t, payload, alias)
 					wantCount := gatewayExpectedCatalogAliasCount(tc.requestedKey, alias, len(nestedEntities))
-					if len(topLevelAlias) != wantCount {
-						t.Fatalf("top-level %s count = %d, want %d for %s", alias, len(topLevelAlias), wantCount, tc.name)
+					if got != wantCount {
+						t.Fatalf("top-level %s count = %d, want %d for %s", alias, got, wantCount, tc.name)
 					}
 				}
 			}
@@ -565,7 +579,7 @@ func TestGatewayBootstrapPayloadsStayStructurallyComplete(t *testing.T) {
 					}
 				}
 				for _, alias := range []string{"Items", "ItemOffers", "ForexOffers"} {
-					got := len(gatewayJSONArray(t, payload[alias], alias))
+					got := gatewayOptionalArrayLen(t, payload, alias)
 					want := gatewayExpectedCatalogAliasCount(key, alias, len(gatewayCatalogEntities(t, payload, key)))
 					if got != want {
 						t.Fatalf("%s.%s count = %d, want %d in %s payload", key, alias, got, want, tc.name)
