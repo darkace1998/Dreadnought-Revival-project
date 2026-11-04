@@ -189,6 +189,7 @@ func vanityCatalogSeeds(owned map[int32]struct{}, classes []int32) []gatewayCata
 				one.itemID = shipVanityClientID(v.ItemID, c)
 				one.externalID = "999" + strconv.Itoa(int(one.itemID))
 				one.offerItemIDs = []int32{v.ItemID}
+				one.slim = true
 				seeds = append(seeds, one)
 			}
 			continue
@@ -215,6 +216,7 @@ func vanityCatalogSeeds(owned map[int32]struct{}, classes []int32) []gatewayCata
 			one.offerItemIDs = []int32{v.ItemID}
 			one.localizedName = englishOnly(seed.localizedName)
 			one.localizedDescription = englishOnly(seed.localizedDescription)
+			one.slim = true
 			seeds = append(seeds, one)
 		}
 	}

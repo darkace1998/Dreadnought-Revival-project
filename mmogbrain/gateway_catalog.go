@@ -57,6 +57,9 @@ type gatewayCatalogEntitySeed struct {
 	isNew                bool
 	gateIdentity         bool
 	bundleItems          []gatewayCatalogEntitySeed
+	// slim marks a per-class cosmetic offer, sent without the fields no
+	// catalog reader names (slimMarketEntity).
+	slim bool
 }
 
 func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDataReady bool) map[string]any {
@@ -1248,7 +1251,56 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 		entity["granted_currency_id"] = seed.grantedCurrency
 		entity["granted_currency_amount"] = seed.grantedAmount
 	}
+	if seed.slim {
+		slimMarketEntity(entity)
+	}
 	return entity
+}
+
+// slimMarketEntityFields are the entity fields no catalog reader names, dropped
+// from the per-class cosmetic offers (seed.slim, vanity_store.go). Those offers
+// are ~9000 of the ~10000 entities of a player who owns all 15 ship classes, and
+// at ~1.7 KB each they took digital_items_vc to 20.4 MB -- past the client's
+// HttpTimeout=180 (DefaultEngine.ini [HTTP], the WHOLE request) on one player's
+// link: 5/5 downloads cut at 184-187 s on 2026-11-04 evening, after 15.6 MB had
+// gone through in 3 s that morning, and with no catalog the tech tree showed
+// every price as 0 and nothing could be bought.
+//
+// None of these names is a literal anywhere in the catalog rebuild's call tree
+// (0x142A5C800 and its converters 0x142A7D7E0/0x142A7E1A0/0x142A81CA0/...),
+// FYItemData::Load (0x142A6D020) or FYItemOfferData::Load (0x142A6D760).
+// CurrencyAmount/CurrencyCode/CurrencySymbol/ImageURL are read only by
+// FYForexOfferData::Load (0x142A6BFF0, the currency packs), the rest by no JSON
+// reader at all. Ship and module offers keep every field: their prices are the
+// tech tree's, and the 2026-10-15 "entities" episode showed how easily those
+// break. ~1.7 -> ~1.0 KB per offer.
+var slimMarketEntityFields = []string{
+	"ActionAvailabilityIndex", "AdditionalTextArray",
+	"CategoryDescription", "CategoryIcon", "CategoryName", "ParentCategoryName",
+	"CurrencyAmount", "CurrencyCode", "CurrencySymbol", "Price",
+	"HasVeteranStatus", "HasVideoPreview", "IsHeroShip", "OnSale", "ImageURL",
+	"ItemStatsArray", "HeroShipStatsArray", "PreviousItemStatsArray",
+	"LoadoutID", "loadout_id", "ShipID", "ship_id", "Manufacturer",
+	"display_name", "item_id", "item_type", "entities", "entitlements",
+}
+
+// slimMarketEntity drops slimMarketEntityFields, and from each price the
+// spellings its readers do not use: they read PriceID (0x142A81CA0), amount and
+// currency_id (0x142A82350), currency (0x142A82880) and region_id (0x142A81A40),
+// not id, price_id or currency_code.
+func slimMarketEntity(entity map[string]any) {
+	for _, key := range slimMarketEntityFields {
+		delete(entity, key)
+	}
+	if prices, ok := entity["prices"].([]any); ok {
+		for _, p := range prices {
+			if price, ok := p.(map[string]any); ok {
+				delete(price, "id")
+				delete(price, "price_id")
+				delete(price, "currency_code")
+			}
+		}
+	}
 }
 
 func gatewayWeaponStatsArray(itemID int32) []any {

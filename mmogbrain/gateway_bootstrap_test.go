@@ -265,11 +265,21 @@ func assertGatewayMarketIdentity(t *testing.T, entry map[string]any, fieldPrefix
 	if sku := gatewayJSONString(t, entry, "Sku"); strings.ContainsAny(sku, `/\."'`) {
 		t.Fatalf("%s Sku = %q, want client-safe non-asset identifier", fieldPrefix, sku)
 	}
-	itemID := gatewayJSONInt32(t, entry["item_id"], fieldPrefix+".item_id")
+	itemID := gatewayJSONInt32(t, gatewayEntityItemID(entry), fieldPrefix+".item_id")
 	entityID := gatewayJSONString(t, entry, "entity_id")
 	if entityID != strconv.Itoa(int(itemID)) {
 		t.Fatalf("%s entity_id = %q, want %d", fieldPrefix, entityID, itemID)
 	}
+}
+
+// gatewayEntityItemID is an entity's item id: "item_id", or "ItemID" on the
+// slimmed per-class cosmetic offers, which drop "item_id" (no catalog reader
+// names it; FYItemOfferData::Load reads ItemID -- see slimMarketEntity).
+func gatewayEntityItemID(entry map[string]any) any {
+	if id, ok := entry["item_id"]; ok {
+		return id
+	}
+	return entry["ItemID"]
 }
 
 func assertGatewayMarketMatchesOwned(t *testing.T, entry map[string]any, fieldPrefix string, owned gatewayOwnedItemIdentity) {
@@ -636,7 +646,7 @@ func TestGatewayBootstrapOwnedInventoryAlignsWithMarketEntities(t *testing.T) {
 					if entry["entity_type"] != "item" {
 						continue
 					}
-					itemID := gatewayJSONInt32(t, entry["item_id"], "catalog item.item_id")
+					itemID := gatewayJSONInt32(t, gatewayEntityItemID(entry), "catalog item.item_id")
 					owned, ok := ownedByItemID[itemID]
 					if !ok {
 						continue
