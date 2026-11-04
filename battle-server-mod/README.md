@@ -708,6 +708,25 @@ every bot entry of another tier. `YNPCAIController::GetAIDifficultyLevel`
 calls it. The host also runs at about 60 frames per second (frame counter in
 the Skybridge log).
 
+## Captured territory on the players' minimaps (2026-11-04)
+
+A player on Gorge: "Capturing A and B does not give visibly marked team-color
+territory on the minimap, though points do still apply and increase" -- in the
+original, a captured point coloured a large area around it. The host counted
+that territory (point map T1 5 -> 131 tiles after B); the clients never got it.
+
+Each player's game state keeps its own copy of every point's team in its
+influence sources, and only `OnCapturePointHasBeenCaptured` (0x3A2610) updates
+it. That is a reliable NetMulticast RPC of YGameState_TER (exec 0x7629E0,
+flags 0x24CC0; params team byte +0, cpIdx int +4, capturePointName FString +8,
+objectiveCompletedController TArray +0x18). The mod called its body on the
+host only; it now sends the RPC through ProcessEvent, so every client rebuilds
+its territory (and hears the "secured" voice lines), and calls the body itself
+only if the host's copy did not change. Log: `multicast
+OnCapturePointHasBeenCaptured sent (ran here too)`. Smoke host: a bot capture
+of A sent it, host map T1 5 -> 96 tiles, no exception. Not yet seen on a
+player's minimap.
+
 ## Capture points on the client HUD (2026-11-02)
 
 Player report, Gorge (Red Sands), Legendary, 2026-11-02 18:19: A and B do not

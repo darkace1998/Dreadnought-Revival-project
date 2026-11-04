@@ -2874,6 +2874,19 @@ static bool SetUpCapturePoints(uint8_t *gs) {
 //     only through the FIRST LOCAL player controller's CapturePointOwnerChanged
 //     (vtable +0x1008, an empty `ret` in YPlayerController) -- the client's
 //     minimap path, not the server's.
+// CORRECTED 2026-11-04: 0x3A2610 is the body of a UFunction,
+// YGameState_TER::OnCapturePointHasBeenCaptured (exec 0x7629E0, registered
+// with flags 0x24CC0 = Net | NetReliable | Native | Event | NetMulticast |
+// Public; params team byte +0, cpIdx int +4, capturePointName FString +8,
+// objectiveCompletedController TArray<AController*> +0x18, reflection
+// 0x8E5C90). So the server build MULTICAST it, and every client rebuilt its
+// own copy: calling the body on the host left the players' minimaps without
+// A/B territory (player report 2026-11-04, Gorge: "capturing A and B does not
+// give visibly marked team-color territory", while the host counted it). The
+// mod now sends the RPC through ProcessEvent and calls the body itself only if
+// the host's own copy did not change (a dedicated net mode multicasts without
+// running it locally).
+//
 // So after a capture this calls 0x3A2610 with the point's owner (+0x450),
 // station index (+0x3E4), m_UILetter (+0x3D0, FString) and the capturing
 // team's ships' controllers in range; and once a second any point whose copy
@@ -2891,6 +2904,12 @@ struct TArrayPtrMin {
 };
 typedef void(__fastcall *tGsCpOwnerChanged)(void *gs, uint32_t team, int32_t index, void *letter,
                                             TArrayPtrMin *capturers);
+// ProcessEvent and FindFunctionChecked, as defined with the end-of-match
+// stats below (same values).
+#define RVA_FIND_FUNCTION_CHECKED_CP 0xD57C90
+#define VT_PROCESS_EVENT_CP 0x1A8
+typedef void *(__fastcall *tFindFunctionCheckedCp)(void *obj, uint64_t name);
+typedef void(__fastcall *tProcessEventVirtCp)(void *obj, void *fn, void *parms);
 
 // Sync one point's influence-source team with its owner. Returns true when it
 // called the GameState (the copy disagreed).
@@ -2915,13 +2934,44 @@ static bool SyncPointOwner(uint8_t *gs, uint8_t *cp, void **capturers, int numCa
   int before1 = 0, before2 = 0, tiles = 0;
   CountTerritoryTiles(gs, OFF_GS_TER_TILE_MAP, &before1, &before2, &tiles);
   TArrayPtrMin arr = {capturers, numCapturers, numCapturers};
-  ((tGsCpOwnerChanged)vt[VT_GS_TER_CP_OWNER_CHANGED / 8])(gs, owner, idx, cp + OFF_CP_UI_LETTER, &arr);
+  // The multicast, for the clients (and the host where it runs locally).
+  // Shallow copies of the letter and the capturer list: ProcessEvent does
+  // not destroy the caller's parameter block.
+  bool sent = false;
+  {
+    static void *s_fn = nullptr;
+    if (!s_fn) {
+      FNameMin n = {};
+      ((tFNameCtor)(g_base + RVA_FNAME_CTOR_WIDE))(&n, L"OnCapturePointHasBeenCaptured", 1 /* FNAME_Add */);
+      s_fn = ((tFindFunctionCheckedCp)(g_base + RVA_FIND_FUNCTION_CHECKED_CP))(gs, *(uint64_t *)&n);
+    }
+    if (s_fn) {
+      alignas(16) uint8_t parms[0x28] = {};
+      parms[0] = (uint8_t)owner;
+      *(int32_t *)(parms + 4) = idx;
+      memcpy(parms + 8, cp + OFF_CP_UI_LETTER, 16);
+      memcpy(parms + 0x18, &arr, 16);
+      __try {
+        ((tProcessEventVirtCp)vt[VT_PROCESS_EVENT_CP / 8])(gs, s_fn, parms);
+        sent = true;
+      } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Logf("conquest: EXCEPTION sending OnCapturePointHasBeenCaptured");
+      }
+    }
+  }
+  bool ranHere = *(uint32_t *)(src + (size_t)idx * TER_SOURCE_SIZE) == owner;
+  if (!ranHere)
+    ((tGsCpOwnerChanged)vt[VT_GS_TER_CP_OWNER_CHANGED / 8])(gs, owner, idx, cp + OFF_CP_UI_LETTER, &arr);
   int after1 = 0, after2 = 0;
   CountTerritoryTiles(gs, OFF_GS_TER_TILE_MAP, &after1, &after2, &tiles);
   ++g_ter.ownerSyncs;
   const char *nm = NameText(((UObjectMin *)cp)->Name);
-  Logf("conquest: %s (index %d) owner %u -> %u (%s, %d capturer(s)) -- GameState told (0x3A2610); point map T1 %d -> "
-       "%d, T2 %d -> %d tiles", nm ? nm : "?", idx, had, owner, why, numCapturers, before1, after1, before2, after2);
+  Logf("conquest: %s (index %d) owner %u -> %u (%s, %d capturer(s)) -- %s; point map T1 %d -> "
+       "%d, T2 %d -> %d tiles", nm ? nm : "?", idx, had, owner, why, numCapturers,
+       !sent ? "multicast NOT sent, GameState told directly (0x3A2610)"
+             : ranHere ? "multicast OnCapturePointHasBeenCaptured sent (ran here too)"
+                       : "multicast OnCapturePointHasBeenCaptured sent, host told directly (0x3A2610)",
+       before1, after1, before2, after2);
   return true;
 }
 
