@@ -79,7 +79,7 @@ func gatewayBootstrapPayload(playerID string, requestedCatalog string, playerDat
 	// conversion rate is the one with a visible effect: it is what the market's
 	// GP-to-credits exchange divides by, and it read 0 without this.
 	payload["Gp2CreditsConversion"] = gatewayGpToCreditsRate
-	payload["Campaigns"] = []any{}
+	payload["Campaigns"] = []any{} // rebuilt by the client from the entities' "discounts" (market_campaigns.go)
 	payload["CustomSettings"] = map[string]any{}
 	payload["FoundersPackUrl"] = ""
 	if catalog := gatewayRequestedCatalogCollection(playerID, requestedCatalog, playerDataReady); catalog != nil {
@@ -1160,6 +1160,11 @@ func gatewayMarketEntity(seed gatewayCatalogEntitySeed, playerDataReady bool) ma
 	// out and the display name stands.
 	if entity["name"] == "" {
 		delete(entity, "name")
+	}
+	// A running sale (market_campaigns.go). Only when there is one: an empty
+	// "discounts" clears the entity's Market sections.
+	if d := campaignDiscounts(seed); d != nil {
+		entity["discounts"] = d
 	}
 	// The original store's catalog spelled an offer's text as objects keyed
 	// by locale ({"en": ..., "de": ...}), and the client still reads it so:

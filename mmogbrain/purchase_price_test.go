@@ -17,8 +17,9 @@ func TestEveryCatalogItemIsChargedThePriceItAdvertises(t *testing.T) {
 
 	mismatches := 0
 	for _, seed := range gatewayItemCatalogSeeds("") {
+		// A running sale shows its campaign price (market_campaigns.go).
 		charged := purchasePriceForItem(seed.itemID)
-		if charged == seed.priceAmount {
+		if charged == campaignShelfPrice(seed) {
 			continue
 		}
 		mismatches++

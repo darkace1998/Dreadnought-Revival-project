@@ -75,7 +75,7 @@ func TestCatalogShelfPriceEqualsDerivedTillPrice(t *testing.T) {
 		if !derived {
 			continue // reported by TestEveryCatalogItemHasADerivedPrice
 		}
-		if seed.priceAmount != price {
+		if campaignShelfPrice(seed) != price { // a running sale: its campaign price
 			t.Errorf("item %d: store advertises %d, purchase charges %d",
 				seed.itemID, seed.priceAmount, price)
 		}

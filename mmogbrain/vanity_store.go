@@ -114,6 +114,7 @@ func vanityCatalogSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
 	// restores the plain shared-id offers (isShipVanityOffer).
 	perShip := os.Getenv("DN_VANITY_PERSHIP_OFFERS") != "0" && os.Getenv("DN_SHIP_VANITY_OFFER_FIX") != "0"
 	var seeds []gatewayCatalogEntitySeed
+	now := marketClock()
 	for _, v := range dreadconfig.VanityItems() {
 		_, sold, price := vanityOffer(v.ItemID)
 		if !sold {
@@ -154,6 +155,10 @@ func vanityCatalogSeeds(owned map[int32]struct{}) []gatewayCatalogEntitySeed {
 			priceAmount:     price,
 			quantity:        1,
 			owned:           have,
+		}
+		if _, onSale := campaignForItem(v.ItemID, now); onSale {
+			// Also carried by the campaign's tags (market_campaigns.go).
+			seed.promotionFlags |= promotionFlagOnSale
 		}
 		if !perShip || !isShipVanityItemID(v.ItemID) {
 			seeds = append(seeds, seed)

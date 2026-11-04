@@ -6401,6 +6401,10 @@ func purchasePriceForItem(itemID int32) int32 {
 // rather than defaulted.
 func purchasePriceForItemChecked(itemID int32) (price int32, derived bool) {
 	if isVanity, sold, p := vanityOffer(itemID); isVanity && sold {
+		// The campaign price the Market shows (market_campaigns.go).
+		if c, ok := campaignForItem(itemID, marketClock()); ok {
+			return c.discounted(p), true
+		}
 		return p, true
 	}
 	// A per-ship weapon/module id is offered by perShipResearchOfferSeeds at
@@ -6549,6 +6553,15 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	if offer == "" && itemID != 0 {
 		offer = "999" + strconv.Itoa(int(itemID))
 	}
+	// A cosmetic on sale (market_campaigns.go): the reply names its campaign,
+	// and the balance is pushed after the purchase, in case the client's own
+	// deduction used the full price.
+	saleCampaign := ""
+	if isVanity, sold, _ := vanityOffer(itemID); isVanity && sold {
+		if c, ok := campaignForItem(itemID, marketClock()); ok {
+			saleCampaign = c.id
+		}
+	}
 	reply := func(result, detail string, price int32, balance int32) []byte {
 		logrus.WithFields(logrus.Fields{"player": playerPID, "offer": offer, "item_id": itemID,
 			"result": result, "detail": detail, "price": price}).Info("mmog: " + requestName)
@@ -6560,7 +6573,7 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 		b = protocol.AppendStringField(b, "offer", offer)
 		b = protocol.AppendStringField(b, "quantity", strconv.Itoa(int(quantity)))
 		b = protocol.AppendStringField(b, "currency", currency)
-		b = protocol.AppendStringField(b, "campaign", "")
+		b = protocol.AppendStringField(b, "campaign", saleCampaign)
 		b = protocol.AppendStringField(b, "itemID", strconv.Itoa(int(itemID)))
 		b = protocol.AppendStringField(b, "pricePaid", strconv.Itoa(int(price)))
 		b = protocol.AppendStringField(b, "softCurrency", strconv.Itoa(int(balance)))
@@ -6755,6 +6768,9 @@ func buildMmogPurchasePayload(requestName string, playerPID string, payload []by
 	committed = true
 	if isHero {
 		pushShipGrants(pid, []int32{itemID})
+	}
+	if saleCampaign != "" {
+		squadHubInstance.push(pid, buildMmogRewardCurrenciesPayload(pid))
 	}
 	return reply("bought", "ok", price, creditsLeft)
 }

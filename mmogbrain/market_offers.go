@@ -23,6 +23,10 @@ import (
 // CaptainVanity 6, HavocReward 7.
 const promotionFlagFeatured = 1 << 0
 
+// promotionFlagOnSale puts an offer in the Market's On Sale section; set on
+// the offers of a running campaign (market_campaigns.go).
+const promotionFlagOnSale = 1 << 2
+
 // promotionFlagNames are the names the client's PromotionFlagSet parser
 // (0x142a62a50) accepts, by bit. Ship and captain vanity (bits 5-6) have no
 // name there: the client derives them from the items an offer references.
