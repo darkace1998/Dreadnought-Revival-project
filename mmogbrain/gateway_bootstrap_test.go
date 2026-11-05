@@ -3,7 +3,10 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/binary"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1100,5 +1103,57 @@ func TestGatewayMarketOfferCarriesTheFieldsTheClientReads(t *testing.T) {
 		if gatewayMarketItemIsDevelopmentAsset(name) && entry["DoNotDisplayInStore"] != true {
 			t.Fatalf("development asset %q is displayed in the store", name)
 		}
+	}
+}
+
+// The market's gzip form is the client's own, not HTTP's: asked with
+// "Accept-Encoding: application/gzip", the reply is a raw gzip body under
+// "Content-Type: application/gzip" and no Content-Encoding. The client picks
+// its reader by that exact Content-Type (0x142AB32F0) and inflates the body
+// itself into a buffer of the gzip trailer's ISIZE (0x142ABC390); WinInet
+// never decodes. Asked without it, the reply stays plain JSON.
+func TestGatewayCatalogGzipIsTheClientsOwnForm(t *testing.T) {
+	claims := gatewayTestClaims()
+	resetGatewayPlayerDataReady(t, testGatewayUserID)
+	setGatewayPlayerDataReadyState(testGatewayUserID, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/catalog/digital_items_rmt", nil)
+	req.Header.Set("Accept-Encoding", "application/gzip")
+	rec := httptest.NewRecorder()
+	handleGWCatalog(rec, req, claims)
+	if got := rec.Header().Get("Content-Type"); got != "application/gzip" {
+		t.Fatalf("Content-Type = %q, want application/gzip (the client's decompress trigger)", got)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want none", got)
+	}
+	raw := rec.Body.Bytes()
+	if len(raw) < 5 {
+		t.Fatalf("gzip body is %d bytes", len(raw))
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("gzip header: %v", err)
+	}
+	plain, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("gunzip: %v", err)
+	}
+	if isize := binary.LittleEndian.Uint32(raw[len(raw)-4:]); int(isize) != len(plain) {
+		t.Fatalf("gzip ISIZE = %d, body inflates to %d: the client sizes its buffer by ISIZE", isize, len(plain))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(plain, &payload); err != nil {
+		t.Fatalf("inflated body is not JSON: %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/catalog/digital_items_rmt", nil)
+	rec = httptest.NewRecorder()
+	handleGWCatalog(rec, req, claims)
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("plain fetch Content-Type = %q, want application/json", got)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("plain fetch is not JSON: %v", err)
 	}
 }

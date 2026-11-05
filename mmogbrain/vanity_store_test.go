@@ -282,4 +282,19 @@ func TestAllShipCosmeticsGetPerClassOffers(t *testing.T) {
 			t.Fatalf("per-class offer %d without owned classes", s.itemID)
 		}
 	}
+	// An owned one keeps its shared offer but gets no per-class copies: the
+	// customizer lists it without one, and they cost download time.
+	shared = 0
+	for _, s := range vanityCatalogSeeds(map[int32]struct{}{wildHunt: {}}, classes) {
+		if campaignSeedItem(s) != wildHunt {
+			continue
+		}
+		if s.itemID != wildHunt {
+			t.Fatalf("per-class offer %d for an owned cosmetic", s.itemID)
+		}
+		shared++
+	}
+	if shared != 1 {
+		t.Fatalf("shared offers for an owned cosmetic: %d, want 1", shared)
+	}
 }

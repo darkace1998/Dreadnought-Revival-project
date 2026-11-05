@@ -538,18 +538,25 @@ func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 	// price as 0 and buys nothing ("cost 0", 2026-10-10). Compressed when the
 	// client asks for it; every fetch is logged with what it took, so a
 	// download that a slow connection never finishes is visible.
-	// NOT gzipped, whatever the client says it accepts (CHANGED 2026-10-15).
-	// It sends "Accept-Encoding: application/gzip" on the login fetch, but it
-	// cannot read the result: every gzipped catalog logged "Could not turn
-	// response into json object. / Could not handle response. Unknown
-	// response." (client log 2026-10-15), so the login round of the market
-	// never completed and the market was built only by the uncompressed
-	// re-fetch on entering the hangar. Where that one failed (slow link, the
-	// old 15 s cut) or never happened (a reconnect straight into a match),
-	// every price stayed 0 until a restart. The 2026-10-10 "verified" gzip
-	// purchase was paid from that hangar re-fetch, not the gzipped one.
-	// DN_CATALOG_GZIP=1 turns it back on for experiments.
-	gzipped := os.Getenv("DN_CATALOG_GZIP") == "1" && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+	// Gzipped the way the client unpacks it (CHANGED 2026-11-05): a raw gzip
+	// body under "Content-Type: application/gzip", and NO Content-Encoding.
+	// The market requests send "Accept-Encoding: application/gzip" (request
+	// flag +0xF5, 0x142AB8080), and every market response handler
+	// (0x142AB32F0 for this one) reads the reply's Content-Type: exactly
+	// "application/gzip" makes the JSON reader 0x142ABC390 take the last 4
+	// bytes as the gzip ISIZE and inflate the body itself (UncompressMemory
+	// 0x140C63950, COMPRESS_ZLIB, BitWindow 31 = gzip); "application/json"
+	// or none reads it as text; anything else is rejected. The HTTP layer
+	// never decodes: the client runs WinInet ([Networking] UseLibCurl=false
+	// in BaseEngine.ini, read at 0x1300984) and sets no
+	// INTERNET_OPTION_HTTP_DECODING (options set: 2/5/6/0x1F/0x49/0x4A/0x4D).
+	// So the original backend must have answered this way, and the
+	// 2026-10-15 attempt failed only because it sent the standard form
+	// (Content-Encoding: gzip + application/json): the client parsed gzip
+	// bytes as JSON ("Could not turn response into json object"). Unverified
+	// live. A fetch without that Accept-Encoding gets plain JSON;
+	// DN_CATALOG_GZIP=0 sends plain JSON to everyone.
+	gzipped := os.Getenv("DN_CATALOG_GZIP") != "0" && strings.EqualFold(strings.TrimSpace(r.Header.Get("Accept-Encoding")), "application/gzip")
 	// The server's 15 s WriteTimeout covers the whole response, and it is too
 	// short for this one: every client fetches the catalog a second time
 	// without asking for compression (the full ~10 MB), and on slow links
@@ -563,9 +570,9 @@ func handleGWCatalog(w http.ResponseWriter, r *http.Request, claims jwt.MapClaim
 	w.Header().Set("Content-Type", "application/json")
 	var werr error
 	if gzipped {
-		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "application/gzip")
 		var buf bytes.Buffer
-		zw, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+		zw, _ := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
 		_, _ = zw.Write(body)
 		_ = zw.Close()
 		sent = buf.Len()

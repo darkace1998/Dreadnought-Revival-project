@@ -209,6 +209,16 @@ func vanityCatalogSeeds(owned map[int32]struct{}, classes []int32) []gatewayCata
 		// Coatings"). Only the owned classes and English text, to keep the
 		// download down (~1.8 KB per offer; all 15 classes of all 580 would
 		// be ~16 MB). A purchase records the shared item (vanityOffer).
+		//
+		// Not for one the player already owns (CHANGED 2026-11-05): the
+		// customizer lists owned ones without an offer (it did before these
+		// offers existed), and a 15-class owner's catalog had passed the
+		// client's 180 s HttpTimeout on a slow link (20.4 MB, 5/5 fetches cut,
+		// 2026-11-04). The client fetches the market only at login, so the
+		// offers cannot be sent later instead (0x1403D2F40 and its callers).
+		if have {
+			continue
+		}
 		for _, c := range classes {
 			one := seed
 			one.itemID = shipVanityClientID(v.ItemID, c)

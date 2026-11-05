@@ -1287,7 +1287,10 @@ var slimMarketEntityFields = []string{
 // slimMarketEntity drops slimMarketEntityFields, and from each price the
 // spellings its readers do not use: they read PriceID (0x142A81CA0), amount and
 // currency_id (0x142A82350), currency (0x142A82880) and region_id (0x142A81A40),
-// not id, price_id or currency_code.
+// not price_id or currency_code. CORRECTED 2026-11-05: "id" IS read (client
+// log, below) although the literal scan did not find it -- a two-letter key is
+// too common a literal to place by search, so a scan's "not read" is weakest
+// for short names.
 func slimMarketEntity(entity map[string]any) {
 	for _, key := range slimMarketEntityFields {
 		delete(entity, key)
@@ -1295,7 +1298,10 @@ func slimMarketEntity(entity map[string]any) {
 	if prices, ok := entity["prices"].([]any); ok {
 		for _, p := range prices {
 			if price, ok := p.(map[string]any); ok {
-				delete(price, "id")
+				// Not "id": the market rebuild reads it from every price
+				// (7882 x "Field id was not found" + "Json Value of type
+				// 'Null' used as a 'String'", one per slimmed offer, client
+				// log 2026-11-05; it was put back the same day).
 				delete(price, "price_id")
 				delete(price, "currency_code")
 			}
