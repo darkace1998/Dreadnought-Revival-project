@@ -1459,17 +1459,23 @@ speed feat, no position corrections.
 
 Our own mode, not an original one: a Team Deathmatch where everyone starts in a
 respawn fighter and unlocks bigger ships with their match score (PRI `m_score`;
-a TDM kill is worth 35-95, an assist 35) since their last ship was lost. A
-destroyed ship puts the player back in a fighter, and the points count again
-from there; a destroyed fighter keeps them (from the TDM kill hook `0x375F30`,
-victim class at pawn `+0x940`: 1-15 is a ship, 16+ a respawn jet):
+a TDM kill is worth 35-95, an assist 35):
 
-| Score | May fly |
-| --- | --- |
-| 0 | fighters (the four respawn jets) |
-| 50 | light ships |
-| 150 | medium ships |
-| 300 | heavy ships and the dreadnoughts |
+| Score | Level | May fly |
+| --- | --- | --- |
+| 0 | 0 | fighters (the four respawn jets) |
+| 50 | 1 | light ships |
+| 150 | 2 | medium ships |
+| 300 | 3 | heavy ships |
+| 500 | 4 | the dreadnoughts (all three sizes) |
+
+A destroyed ship drops the player two levels below that ship's level
+(dreadnought -> medium, heavy -> light, medium or light -> fighter; never above
+the player's own level), and the points count on from that level's threshold.
+A destroyed fighter keeps its points. This is from the TDM kill hook
+(`0x375F30`, victim class at pawn `+0x940`: 1-15 is a ship, 16+ a respawn jet).
+Until 2026-11-04 evening the dreadnoughts shared level 3 and any lost ship meant
+a fighter again.
 
 A player whose fleet has nothing at their level may fly their smallest ships
 once out of the fighter. Bots fly their usual ships.
@@ -1501,12 +1507,14 @@ and the scoring table see a TDM. Everything is the game's own machinery:
 Logs: `escalation: ON`, `escalation: jets filter …`, `… joins as a fighter`,
 `… a fighter -- filter applied, 4 jet loadout(s)`, `… spawns at level L -- game
 chose … spawning …`, `… score N -> level L`,
-`… fighter … replaced -> …`, `… level L (…): ship … -> …`, `… lost its ship …
-back to a fighter, points count from N`, `… lost a fighter … keeps level L`.
+`… fighter … replaced -> …`, `… level L (…): ship … -> …`, `… lost its ship
+(class C, level S) at level L -> level T (…), points count from N`,
+`… lost a fighter … keeps level L`.
 Host log 2026-11-04 17:44 (Gorge): jet at the first spawn, score 95 -> the jet
 replaced by the Scout Light, 165 and 365 unlocked medium and heavy, a medium
 picked later spawned, the match ended and reported normally. The reset on a
-destroyed ship is not verified live.
+destroyed ship (the fighter reset, and now the two-level drop and the
+dreadnought level) is not verified live.
 
 ## Ceres Awakens: buffs end with their collector (on, PodTDM hosts only; `dn_host_no_ceres_buff_end.txt` turns it off; added 2026-10-29)
 

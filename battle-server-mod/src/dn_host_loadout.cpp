@@ -8928,13 +8928,19 @@ static void TeFixLeader(uint8_t *gm) {
 // BC = Proving Grounds), so the clients and the scoring table see a TDM.
 //
 // The ladder, by the player's match score (PRI m_score +0x7FC; a TDM kill is
-// 35-95, an assist 35) since their last ship was lost -- a destroyed ship puts
-// the player back in a fighter (operator 2026-11-04: "if u get destroyed u get
-// reset to a jet"); a destroyed fighter keeps the points (our rule):
+// 35-95, an assist 35), counted from a base that a lost ship moves:
 //     0  fighters only (the respawn jets)
 //    50  light ships
 //   150  medium ships
-//   300  heavy ships and the dreadnoughts (all three sizes)
+//   300  heavy ships
+//   500  the dreadnoughts (all three sizes; their own level and 500 are ours,
+//        operator 2026-11-04)
+// A destroyed ship drops the player two levels below that ship's (operator
+// 2026-11-04: "go 2 ship class lower ... from a dreadnought to a destroyer"):
+// dreadnought -> medium, heavy -> light, medium/light -> fighter. The points
+// then count on from that level's threshold. It replaced "a destroyed ship
+// puts you back in a fighter" (same day). A destroyed fighter keeps the points
+// (our rule).
 // A player whose fleet has nothing at their level may fly their smallest ships
 // once out of the fighter (our rule: a fleet of five heavies would otherwise
 // stay a fighter until 300).
@@ -8965,12 +8971,14 @@ static void TeFixLeader(uint8_t *gm) {
 #define OFF_LOADOUT_CLASS 0xD8
 #define OFF_FILTER_LOADOUTS 0x40
 typedef void(__fastcall *tLoadFilterLoadouts)(void *mgr, void *filter);
-static const int kEscLevelScore[4] = {0, 50, 150, 300};
+#define ESC_TOP_LEVEL 4
+#define ESC_DEATH_DROP 2
+static const int kEscLevelScore[ESC_TOP_LEVEL + 1] = {0, 50, 150, 300, 500};
 struct EscPlayer {
   void *pc, *mgr;
-  int level; // by score since base, 0-3
+  int level; // by score since base, 0-ESC_TOP_LEVEL
   int cap;   // the biggest ship class level allowed, 0 = fighters
-  int base;  // the score when the last ship was lost
+  int base;  // the score the ladder counts from (moved by a lost ship)
   bool seen;
 };
 static EscPlayer g_esc[16];
@@ -8986,17 +8994,17 @@ static bool HostIsEscalation() {
   return s_is == 1;
 }
 // The level an EYShipClass needs: light 1 (1-5), medium 2, heavy 3; the
-// dreadnoughts (1, 6, 7) all 3.
+// dreadnoughts (1, 6, 7) all 4.
 static int EscClassLevel(int cls) {
   if (cls == 1 || cls == 6 || cls == 7)
-    return 3;
+    return 4;
   if (cls >= 1 && cls <= 5)
     return 1;
   return cls % 2 == 0 ? 2 : 3; // 8/10/12/14 medium, 9/11/13/15 heavy
 }
 static const char *EscLevelName(int level) {
-  static const char *const k[] = {"fighters", "light ships", "medium ships", "heavy ships and dreadnoughts"};
-  return level >= 0 && level <= 3 ? k[level] : "?";
+  static const char *const k[] = {"fighters", "light ships", "medium ships", "heavy ships", "dreadnoughts"};
+  return level >= 0 && level <= ESC_TOP_LEVEL ? k[level] : "?";
 }
 static EscPlayer *EscByMgr(void *mgr) {
   for (EscPlayer &e : g_esc)
@@ -9094,12 +9102,12 @@ template <typename F> static void EscForEachShip(uint8_t *mgr, F fn) {
 
 static void EscSetLevel(EscPlayer *e, int level) {
   e->level = level;
-  int smallest = 4;
+  int smallest = ESC_TOP_LEVEL + 1;
   EscForEachShip((uint8_t *)e->mgr, [&](void *, int cls) {
     if (EscClassLevel(cls) < smallest)
       smallest = EscClassLevel(cls);
   });
-  e->cap = level == 0 ? 0 : (smallest <= 3 && smallest > level ? smallest : level);
+  e->cap = level == 0 ? 0 : (smallest <= ESC_TOP_LEVEL && smallest > level ? smallest : level);
 }
 
 // A fighter: the jets filter on, its loadouts made for this manager.
@@ -9222,9 +9230,11 @@ static void *__fastcall HookEscSpawnDefaultPawn(void *gm, void *pc, void *loadou
   return pawn;
 }
 
-// A ship (EYShipClass 1-15, not a respawn jet) destroyed: back to the fighter,
-// and the points count again from here. Called from the TDM kill hook
-// (0x375F30) before the original runs, while the pawn is whole.
+// A ship (EYShipClass 1-15, not a respawn jet) destroyed: ESC_DEATH_DROP levels
+// below that ship's (no higher than the player's own level: a fleet's smallest
+// ships may be above it), and the points count on from that level's threshold.
+// Called from the TDM kill hook (0x375F30) before the original runs, while the
+// pawn is whole.
 static void EscOnShipKilled(void *victimCtrl, void *victimPawn) {
   if (!HostIsEscalation() || !victimCtrl || !victimPawn)
     return;
@@ -9244,10 +9254,12 @@ static void EscOnShipKilled(void *victimCtrl, void *victimPawn) {
          e->level);
     return;
   }
-  Logf("escalation: %p lost its ship (class %d) at level %d -- back to a fighter, points count from %d", victimCtrl,
-       cls, e->level, score);
-  e->base = score;
-  EscSetLevel(e, 0); // the next spawn applies the jets filter
+  int from = EscClassLevel(cls) < e->level ? EscClassLevel(cls) : e->level;
+  int to = from > ESC_DEATH_DROP ? from - ESC_DEATH_DROP : 0;
+  e->base = score - kEscLevelScore[to];
+  Logf("escalation: %p lost its ship (class %d, level %d) at level %d -> level %d (%s), points count from %d",
+       victimCtrl, cls, EscClassLevel(cls), e->level, to, EscLevelName(to), score - kEscLevelScore[to]);
+  EscSetLevel(e, to); // the next spawn applies it: the jets filter at 0, else the biggest ship allowed
 }
 
 // On the game-mode timer: score -> level; a fighter reaching 50 gets a ship.
@@ -9287,7 +9299,7 @@ static void EscalationTick(uint8_t *gm) {
         EscApplyJets(pc, e);
       int score = *(int32_t *)(pri + OFF_PRI_SCORE) - e->base;
       int level = 0;
-      while (level < 3 && score >= kEscLevelScore[level + 1])
+      while (level < ESC_TOP_LEVEL && score >= kEscLevelScore[level + 1])
         ++level;
       if (level <= e->level)
         continue;
@@ -10253,8 +10265,8 @@ static DWORD WINAPI Startup(LPVOID) {
                         (void *)&HookEscSpawnDefaultPawn, (void **)&g_origEscSpawnDefaultPawn);
     InstallSwitchedHook("escalation ship levels (UYLoadoutManager loadout validity)", RVA_LOADOUT_IS_REGISTERED,
                         (void *)&HookEscGate, (void **)&g_origLoadoutGate);
-    Logf("escalation: ON -- fighters, then light %d / medium %d / heavy+dreadnought %d points", kEscLevelScore[1],
-         kEscLevelScore[2], kEscLevelScore[3]);
+    Logf("escalation: ON -- fighters, then light %d / medium %d / heavy %d / dreadnought %d points, a lost ship "
+         "drops %d levels", kEscLevelScore[1], kEscLevelScore[2], kEscLevelScore[3], kEscLevelScore[4], ESC_DEATH_DROP);
   }
   bool ceres = HostIsPodTDM() && CeresBuffEndOn();
   if (ceres)
