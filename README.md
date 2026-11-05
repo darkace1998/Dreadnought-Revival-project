@@ -1,5 +1,12 @@
 # Dreadnought Revival Project
 
+> [!IMPORTANT]
+> **This repository has moved.** Development continues at
+> [Dreadnought-Revival/Dreadnought-Revival-server](https://github.com/Dreadnought-Revival/Dreadnought-Revival-server)
+> (full history kept), and the launcher now has its own repository,
+> [Dreadnought-Revival/Dreadnought-Revival-Launcher](https://github.com/Dreadnought-Revival/Dreadnought-Revival-Launcher).
+> This one is archived (read-only) as of 2026-11-05; its issues and pull requests stay here for reference.
+
 [![GitHub](https://img.shields.io/badge/GitHub-darkace1998/Dreadnought--Revival--project-blue?logo=github)](https://github.com/darkace1998/Dreadnought-Revival-project)
 
 A community-operated private server for the discontinued game **Dreadnought** (UE4 4.13.1, Steam App 835860). The goal is to run the **unmodified game client** against our own backend: everything is emulated server-side, and the only thing a player installs is a replacement launcher.
